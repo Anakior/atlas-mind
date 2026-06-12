@@ -209,10 +209,12 @@ class TestVendoringSources(unittest.TestCase):
         self.assertIn("return DOMPurify.sanitize(marked.parse(md || ''));", text)
         self.assertIn("rendu bloqué", text)
 
-    def test_sw_precaches_vendor_and_bumped_version(self):
+    def test_sw_precaches_vendor_and_versioned_cache(self):
         text = SW_JS.read_text(encoding="utf-8")
-        self.assertNotIn("atlas-cache-v1", text)
-        self.assertIn("atlas-cache-v2", text)
+        # CACHE_VERSION carries the engine version via the __ENGINE_VERSION__
+        # placeholder, stamped at serve time (see test_browse.test_pwa_assets) so
+        # every release busts the worker cache. The raw file keeps the placeholder.
+        self.assertIn("atlas-cache-__ENGINE_VERSION__", text)
         for asset in ("/vendor/tailwind.css", "/vendor/fonts.css",
                       "/vendor/marked.min.js", "/vendor/purify.min.js",
                       "/vendor/highlight.min.js", "/vendor/minisearch.min.js",

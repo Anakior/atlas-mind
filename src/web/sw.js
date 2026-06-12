@@ -8,14 +8,14 @@
  *   - assets /vendor/ / .md / JSON   → stale-while-revalidate
  *   - /api/*, login, share, SSE      → bypass total (jamais caché : dynamique / auth)
  *
- * Bump CACHE_VERSION quand on modifie CE fichier : `activate` purge alors les
- * anciens caches. Pas besoin de le bumper pour le contenu : le shell est en
- * network-first et les .md sont versionnés par ?v=<mtime> (URL = cache-buster).
- *
- * v2 : libs et fontes vendorées (plus aucun CDN) — le precache embarque
- * /vendor/ pour que le shell soit complet hors-ligne dès l'install.
+ * CACHE_VERSION embarque la version du moteur (__ENGINE_VERSION__ est remplacé
+ * à la volée quand le serveur sert ce fichier). À chaque release le nom de cache
+ * change donc, `activate` purge l'ancien cache et `install` reprécache des assets
+ * frais — sinon les fichiers vendored non versionnés (tailwind.css, fonts…)
+ * restaient bloqués sur leur ancienne copie après un déploiement. Le shell HTML
+ * est en network-first et les .md sont versionnés par ?v=<mtime> (URL = cache-buster).
  */
-const CACHE_VERSION = 'atlas-cache-v2';
+const CACHE_VERSION = 'atlas-cache-__ENGINE_VERSION__';
 const PRECACHE = [
   '/', '/manifest.json', '/icon.svg',
   // Libs vendorées (chargées par le shell — voir web/viewer.html).

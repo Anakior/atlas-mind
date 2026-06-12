@@ -4099,13 +4099,20 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _serve_sw(self):
         """Serves sw.js: no-cache (so the browser quickly detects a new
-        version of the SW) and explicit root scope."""
+        version of the SW) and explicit root scope.
+
+        __ENGINE_VERSION__ is stamped into the worker's CACHE_VERSION so every
+        release uses a fresh cache name: `activate` then purges the old cache and
+        unversioned vendored assets (tailwind.css, fonts) are re-fetched instead
+        of being served stale forever after a deploy."""
         target = (CONFIG.web_dir / "sw.js")
         if not target.is_file():
             self.send_error(404)
             return
+        source = target.read_text(encoding="utf-8")
+        stamped = source.replace("__ENGINE_VERSION__", current_version() or "dev")
         self._send_bytes(
-            200, target.read_bytes(), "application/javascript; charset=utf-8",
+            200, stamped.encode("utf-8"), "application/javascript; charset=utf-8",
             [("Cache-Control", "no-cache"), ("Service-Worker-Allowed", "/")],
         )
 
