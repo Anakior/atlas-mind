@@ -1,0 +1,45 @@
+/* ============================================================================
+ * Extension d'exemple : THÈME CSS PERSONNALISÉ pour Atlas
+ * ----------------------------------------------------------------------------
+ * Installation :
+ *   1. Copie ce fichier dans  <ton-mind>/.atlas/extensions/
+ *   2. Rebuild le viewer  (atlas build <ton-mind>)  ou redémarre le serveur.
+ * Tout fichier .css du dossier .atlas/extensions/ est INLINÉ dans le viewer au
+ * build (online ET offline), par ordre alphabétique, APRÈS le CSS du moteur —
+ * d'où le !important pour surcharger les classes Tailwind compilées.
+ *
+ * Ici : on remplace la couleur d'accent d'Atlas (bleu #1d9bd1) par un violet.
+ * L'accent pilote les boutons, les états de focus, les liens d'action et les
+ * titres de panneaux ("Sur ce doc", "To-do"…).
+ * ==========================================================================*/
+
+:root { --my-accent: #8b5cf6; }   /* change juste cette valeur pour re-teinter */
+
+/* Texte en accent (titres de panneaux, icônes, liens d'action) */
+.text-accent { color: var(--my-accent) !important; }
+
+/* Aplats en accent (boutons pleins : nouveau doc, sauvegarder, "+") */
+.bg-accent { background-color: var(--my-accent) !important; }
+
+/* Bordures en accent (champs au focus) */
+.border-accent { border-color: var(--my-accent) !important; }
+
+/* Astuce — les variantes d'opacité sont des classes distinctes ; pour une
+ * reteinte complète, cible-les aussi (le "/" se échappe avec un backslash) : */
+/* .bg-accent\/20  { background-color: rgb(139 92 246 / 0.20) !important; } */
+/* .bg-accent\/40  { background-color: rgb(139 92 246 / 0.40) !important; } */
+/* .ring-accent\/40 { --tw-ring-color: rgb(139 92 246 / 0.40) !important; } */
+
+/* ---------------------------------------------------------------------------
+ * Autres pistes (décommente / adapte) :
+ * -------------------------------------------------------------------------*/
+
+/* Fond global légèrement différent */
+/* body { background: #0c0b10 !important; } */
+
+/* Police personnalisée (importe-la d'abord, puis applique-la) */
+/* @import url('https://fonts.bunny.net/css?family=inter:400,600,700'); */
+/* body { font-family: 'Inter', system-ui, sans-serif !important; } */
+
+/* Coins plus ronds sur les cartes */
+/* .panel-card { border-radius: 16px !important; } */

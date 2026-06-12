@@ -1,0 +1,5 @@
+/* Entrée de la précompilation Tailwind (équivalent de ce qu'injectait le
+ * Play CDN : preflight + composants + utilités). Voir tailwind.config.cjs. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -1,0 +1,10 @@
+# Contexte de build = racine du repo. L'image embarque le MOTEUR autonome :
+# src/ + web/ (viewer + assets vendorés) + templates/ + requirements.txt. Le
+# contenu (le "mind") arrive au runtime via git clone dans /app/repo — PAS via
+# l'image. On exclut donc tout le reste : contexte minimal, et surtout .git
+# (dont .git/config peut contenir le PAT GitHub) hors de l'image.
+*
+!src
+!web
+!templates
+!requirements.txt

@@ -1,0 +1,814 @@
+"""Administration backend (cloud mode, KB_AUTH_ENABLED=1, ATLAS_STORE=file).
+
+Covers batch 2c:
+- First-boot: an install token (setup-token) is printed on stderr when no admin
+  exists; /api/setup requires it (wrong token → 403, drive-by without a token →
+  refused), correct token → admin created + session; the /setup window then
+  closes (404 + 409).
+- Account CRUD: /api/admin/users (admin OK, viewer → 403, last admin not
+  deletable, hash never exposed).
+- API tokens: /api/admin/tokens (creation → working Bearer on /api/v1/search,
+  revocation → 401, listing without the secret).
+- Basic CSRF: non-JSON Content-Type refused, third-party origin refused (403).
+
+Cloud harness identical to test_cloud_filestore: KB_AUTH_ENABLED=1, non-default
+SESSION_SECRET, git clone bypassed via KB_REPO_PATH={root}. The file registry
+(.atlas/) is seeded/read directly by a FileStore pointed at srv.root/.atlas.
+"""
+import hashlib
+import re
+import sys
+import time
+import unittest
+from pathlib import Path
+
+from harness import AtlasServer
+
+REPO_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(REPO_SRC) not in sys.path:
+    sys.path.insert(0, str(REPO_SRC))
+
+import store  # noqa: E402
+
+SESSION_SECRET = "atlas-test-admin-secret-0123456789abcdef"
+
+ADMIN_EMAIL = "admin@test.local"
+ADMIN_PASSWORD = "correct-horse-battery"
+VIEWER_EMAIL = "viewer@test.local"
+VIEWER_PASSWORD = "viewer-password-42"
+
+
+def cloud_env() -> dict:
+    return {
+        "KB_AUTH_ENABLED": "1",
+        "SESSION_SECRET": SESSION_SECRET,
+        "KB_REPO_PATH": "{root}",   # bypasses the git clone at boot
+        "ATLAS_STORE": "file",
+        "GIT_PULL_INTERVAL": "3600",
+    }
+
+
+def file_store_of(srv: AtlasServer) -> store.FileStore:
+    return store.FileStore(srv.root / ".atlas")
+
+
+def seed_admin_and_viewer(fs: store.FileStore) -> None:
+    fs.upsert_user(ADMIN_EMAIL, {
+        "password_hash": store.hash_password(ADMIN_PASSWORD),
+        "role": "admin",
+    })
+    fs.upsert_user(VIEWER_EMAIL, {
+        "password_hash": store.hash_password(VIEWER_PASSWORD),
+        "role": "viewer",
+    })
+
+
+def login(srv: AtlasServer, email: str, password: str):
+    return srv.post("/login", json_body={"email": email, "password": password})
+
+
+def session_cookie(srv: AtlasServer, email: str, password: str) -> str:
+    """Login → valid Cookie header. The 0x2e cookie bug is fixed (batch 2d), no
+    more retry/sleep: a single login is enough. Returns the kb_session header."""
+    resp = login(srv, email, password)
+    assert resp.status == 303, f"login {email}: {resp.status}"
+    cookie = (resp.headers.get("Set-Cookie") or "").split(";", 1)[0]
+    me = srv.get("/api/me", headers={"Cookie": cookie}).json()
+    assert me.get("authenticated"), f"invalid cookie for {email}"
+    return cookie
+
+
+def csrf_token_for(srv: AtlasServer, cookie: str) -> str:
+    """Session CSRF token (batch 2d): exposed by /api/me, to be replayed in the
+    X-CSRF-Token header on authenticated mutating requests."""
+    return srv.get("/api/me", headers={"Cookie": cookie}).json()["csrf_token"]
+
+
+def wait_for_setup_token(srv: AtlasServer, timeout: float = 5.0) -> str:
+    """Retrieve the setup-token printed on stderr (server.log) at boot."""
+    deadline = time.monotonic() + timeout
+    pattern = re.compile(r"Atlas setup token:\s*(\S+)")
+    while time.monotonic() < deadline:
+        match = pattern.search(srv.read_log())
+        if match:
+            return match.group(1)
+        time.sleep(0.05)
+    raise AssertionError("setup-token never printed on stderr")
+
+
+class TestFirstBoot(unittest.TestCase):
+    """First start: no admin → /setup window protected by a token."""
+
+    def test_setup_token_printed_and_setup_page_open(self):
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            token = wait_for_setup_token(srv)
+            self.assertTrue(token)
+            page = srv.get("/setup")
+            self.assertEqual(page.status, 200)
+            self.assertIn("text/html", page.headers.get("Content-Type", ""))
+            self.assertIn("/api/setup", page.text)
+
+    def test_root_redirects_to_setup_before_any_admin(self):
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            wait_for_setup_token(srv)
+            resp = srv.get("/")
+            self.assertEqual(resp.status, 303)
+            self.assertEqual(resp.headers.get("Location"), "/setup")
+
+    def test_drive_by_without_token_refused(self):
+        # Reaching the URL is not enough: without a token, no admin is created.
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            wait_for_setup_token(srv)
+            resp = srv.post("/api/setup", json_body={
+                "email": "intruder@test.local", "password": "x" * 12})
+            self.assertEqual(resp.status, 403)
+            self.assertFalse(file_store_of(srv).has_admin())
+
+    def test_wrong_token_403(self):
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            wait_for_setup_token(srv)
+            resp = srv.post("/api/setup", json_body={
+                "email": "intruder@test.local", "password": "x" * 12,
+                "setup_token": "wrong-token"})
+            self.assertEqual(resp.status, 403)
+            self.assertFalse(file_store_of(srv).has_admin())
+
+    def test_short_password_400(self):
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            token = wait_for_setup_token(srv)
+            resp = srv.post("/api/setup", json_body={
+                "email": "boss@test.local", "password": "short",
+                "setup_token": token})
+            self.assertEqual(resp.status, 400)
+            self.assertFalse(file_store_of(srv).has_admin())
+
+    def test_good_token_creates_admin_and_session_then_window_closes(self):
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            token = wait_for_setup_token(srv)
+            resp = srv.post("/api/setup", json_body={
+                "email": "boss@test.local",
+                "password": "boss-strong-password",
+                "setup_token": token})
+            self.assertEqual(resp.status, 200)
+            self.assertTrue(resp.json()["ok"])
+            # A session is opened (cookie set). The cookie may be one of the
+            # ~12% self-invalid ones from the known HMAC bug (batch 2d): we do
+            # not rely on it for /api/me — we re-check via a retried login.
+            set_cookie = resp.headers.get("Set-Cookie") or ""
+            self.assertTrue(set_cookie.startswith("kb_session="))
+            self.assertIn("HttpOnly", set_cookie)
+            self.assertIn("Secure", set_cookie)
+
+            fs = file_store_of(srv)
+            self.assertTrue(fs.has_admin())
+            created = fs.get_user_by_email("boss@test.local")
+            self.assertEqual(created["role"], "admin")
+            # Password stored hashed (native scrypt), never in cleartext.
+            self.assertTrue(created["password_hash"].startswith("scrypt$"))
+
+            # The created account can log in and access the viewer as admin.
+            cookie = session_cookie(srv, "boss@test.local", "boss-strong-password")
+            me = srv.get("/api/me", headers={"Cookie": cookie}).json()
+            self.assertTrue(me["authenticated"])
+            self.assertEqual(me["role"], "admin")
+
+            # Window closed: /setup → 404, /api/setup → 409.
+            self.assertEqual(srv.get("/setup").status, 404)
+            again = srv.post("/api/setup", json_body={
+                "email": "second@test.local", "password": "another-strong-pw",
+                "setup_token": token})
+            self.assertEqual(again.status, 409)
+
+    def test_no_setup_window_when_admin_already_seeded(self):
+        # An admin seeded before the 1st request: the window does not open (boot
+        # already noticed it; even if the token was printed, setup_is_open
+        # re-checks the existence of an admin).
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            seed_admin_and_viewer(file_store_of(srv))
+            self.assertEqual(srv.get("/setup").status, 404)
+            # Normal login available.
+            self.assertEqual(srv.get("/login").status, 200)
+
+
+class TestAdminUsers(unittest.TestCase):
+    """Account CRUD via /api/admin/users."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer(extra_env=cloud_env())
+        cls.srv.start()
+        cls.fs = file_store_of(cls.srv)
+        seed_admin_and_viewer(cls.fs)
+        cls.admin_cookie = session_cookie(cls.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+        cls.admin_csrf = csrf_token_for(cls.srv, cls.admin_cookie)
+        cls.viewer_cookie = session_cookie(cls.srv, VIEWER_EMAIL, VIEWER_PASSWORD)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def _admin(self):
+        return {"Cookie": self.admin_cookie, "X-CSRF-Token": self.admin_csrf}
+
+    def test_list_users_admin_only_no_hash(self):
+        resp = self.srv.get("/api/admin/users", headers=self._admin())
+        self.assertEqual(resp.status, 200)
+        users = resp.json()
+        emails = {u["email"] for u in users}
+        self.assertIn(ADMIN_EMAIL, emails)
+        self.assertIn(VIEWER_EMAIL, emails)
+        # Never a password hash in the response.
+        self.assertNotIn("password_hash", resp.text)
+
+    def test_viewer_forbidden_on_list(self):
+        resp = self.srv.get("/api/admin/users",
+                            headers={"Cookie": self.viewer_cookie})
+        self.assertEqual(resp.status, 403)
+
+    def test_anonymous_unauthorized_on_list(self):
+        resp = self.srv.get("/api/admin/users")
+        self.assertEqual(resp.status, 401)
+
+    def test_create_user_then_login(self):
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": "new@test.local",
+                                        "password": "new-user-password",
+                                        "role": "viewer"})
+        self.assertEqual(resp.status, 201)
+        self.assertEqual(resp.json()["role"], "viewer")
+        # The new account can log in.
+        cookie = session_cookie(self.srv, "new@test.local", "new-user-password")
+        me = self.srv.get("/api/me", headers={"Cookie": cookie}).json()
+        self.assertEqual(me["email"], "new@test.local")
+
+    def test_create_duplicate_409(self):
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": ADMIN_EMAIL,
+                                        "password": "whatever-strong",
+                                        "role": "admin"})
+        self.assertEqual(resp.status, 409)
+
+    def test_create_invalid_role_400(self):
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": "weird@test.local",
+                                        "password": "long-enough-pw",
+                                        "role": "superuser"})
+        self.assertEqual(resp.status, 400)
+
+    def test_create_short_password_400(self):
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": "tiny@test.local",
+                                        "password": "short", "role": "viewer"})
+        self.assertEqual(resp.status, 400)
+
+    def test_reset_password(self):
+        self.srv.post("/api/admin/users", headers=self._admin(),
+                      json_body={"email": "reset@test.local",
+                                 "password": "first-password-x",
+                                 "role": "viewer"})
+        resp = self.srv.post("/api/admin/users/password", headers=self._admin(),
+                             json_body={"email": "reset@test.local",
+                                        "password": "second-password-y"})
+        self.assertEqual(resp.status, 200)
+        # The old password no longer works, the new one does.
+        old = login(self.srv, "reset@test.local", "first-password-x")
+        self.assertEqual(old.status, 401)
+        cookie = session_cookie(self.srv, "reset@test.local", "second-password-y")
+        self.assertTrue(cookie.startswith("kb_session="))
+
+    def test_delete_user(self):
+        self.srv.post("/api/admin/users", headers=self._admin(),
+                      json_body={"email": "doomed@test.local",
+                                 "password": "doomed-password",
+                                 "role": "viewer"})
+        resp = self.srv.delete("/api/admin/users", headers=self._admin(),
+                               json_body={"email": "doomed@test.local"})
+        self.assertEqual(resp.status, 200)
+        self.assertIsNone(self.fs.get_user_by_email("doomed@test.local"))
+
+    def test_cannot_delete_last_admin(self):
+        # ADMIN_EMAIL is the only admin of this mind: deletion refused (409).
+        self.assertEqual(self.fs.count_admins(), 1)
+        resp = self.srv.delete("/api/admin/users", headers=self._admin(),
+                               json_body={"email": ADMIN_EMAIL})
+        self.assertEqual(resp.status, 409)
+        self.assertIn("last admin", resp.json()["error"])
+        self.assertIsNotNone(self.fs.get_user_by_email(ADMIN_EMAIL))
+
+    def test_viewer_cannot_create_user(self):
+        resp = self.srv.post("/api/admin/users",
+                             headers={"Cookie": self.viewer_cookie},
+                             json_body={"email": "x@test.local",
+                                        "password": "pw-long-enough",
+                                        "role": "viewer"})
+        self.assertEqual(resp.status, 403)
+
+    def test_create_user_null_byte_email_400(self):
+        # Repro 2c: a NUL (0x00) slipped through the [^@\s] pattern (\s only
+        # covers whitespace) and landed in users.json.
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": "a\x00b@evil.z",
+                                        "password": "long-enough-pw",
+                                        "role": "viewer"})
+        self.assertEqual(resp.status, 400)
+        self.assertIsNone(self.fs.get_user_by_email("a\x00b@evil.z"))
+        # No email with a control character in the durable registry.
+        for user in self.fs.list_users():
+            self.assertFalse(any(ord(c) < 0x20 or ord(c) == 0x7f
+                                 for c in (user.get("email") or "")))
+
+    def test_create_user_del_char_email_400(self):
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": "a\x7fb@evil.z",
+                                        "password": "long-enough-pw",
+                                        "role": "viewer"})
+        self.assertEqual(resp.status, 400)
+
+    def test_create_user_overlong_email_400(self):
+        # Repro 2c: no length bound (5000 chars accepted). RFC 5321 caps at 254.
+        huge = ("a" * 5000) + "@x.z"
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": huge,
+                                        "password": "long-enough-pw",
+                                        "role": "viewer"})
+        self.assertEqual(resp.status, 400)
+        self.assertIsNone(self.fs.get_user_by_email(huge))
+
+    def test_create_token_overlong_label_400(self):
+        # Repro 2c: a 5000-char label became a giant <slug>@api.local email in
+        # the registry.
+        huge = "x" * 5000
+        resp = self.srv.post("/api/admin/tokens", headers=self._admin(),
+                             json_body={"label": huge})
+        self.assertEqual(resp.status, 400)
+
+    def test_create_token_control_char_label_400(self):
+        resp = self.srv.post("/api/admin/tokens", headers=self._admin(),
+                             json_body={"label": "tok\x00en"})
+        self.assertEqual(resp.status, 400)
+
+    def test_delete_user_refuses_last_admin_at_store_level(self):
+        # The anti-lockout guard lives INSIDE delete_user(protect_last_admin=True),
+        # not only in the handler's pre-check: a FileStore with a single admin
+        # must raise LastAdminError even when called directly.
+        with self.assertRaises(store.LastAdminError):
+            self.fs.delete_user(ADMIN_EMAIL, protect_last_admin=True)
+        self.assertIsNotNone(self.fs.get_user_by_email(ADMIN_EMAIL))
+        # Without the guard (CLI recovery path), deletion is allowed.
+        self.fs.upsert_user("cli-admin@test.local", {
+            "password_hash": store.hash_password("cli-admin-pw"),
+            "role": "admin",
+        })
+        self.assertTrue(self.fs.delete_user("cli-admin@test.local"))
+
+
+class TestAdminTokens(unittest.TestCase):
+    """API tokens via /api/admin/tokens."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer(extra_env=cloud_env())
+        cls.srv.start()
+        cls.fs = file_store_of(cls.srv)
+        seed_admin_and_viewer(cls.fs)
+        cls.admin_cookie = session_cookie(cls.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+        cls.admin_csrf = csrf_token_for(cls.srv, cls.admin_cookie)
+        cls.viewer_cookie = session_cookie(cls.srv, VIEWER_EMAIL, VIEWER_PASSWORD)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def _admin(self):
+        return {"Cookie": self.admin_cookie, "X-CSRF-Token": self.admin_csrf}
+
+    def test_create_token_bearer_works_then_revoke_401(self):
+        resp = self.srv.post("/api/admin/tokens", headers=self._admin(),
+                             json_body={"label": "claude"})
+        self.assertEqual(resp.status, 201)
+        body = resp.json()
+        token = body["token"]
+        self.assertEqual(len(token), 64)  # 32 bytes hex
+        self.assertIn("/mcp/" + token, body["mcp_url"])
+        self.assertEqual(body["label"], "claude")
+
+        # Working Bearer on /api/v1/search.
+        bearer = {"Authorization": f"Bearer {token}"}
+        search = self.srv.get("/api/v1/search?q=alpha", headers=bearer)
+        self.assertEqual(search.status, 200)
+
+        # Revocation → 401.
+        revoke = self.srv.delete("/api/admin/tokens", headers=self._admin(),
+                                 json_body={"label": "claude"})
+        self.assertEqual(revoke.status, 200)
+        after = self.srv.get("/api/v1/search?q=alpha", headers=bearer)
+        self.assertEqual(after.status, 401)
+
+    def test_list_tokens_no_secret(self):
+        self.srv.post("/api/admin/tokens", headers=self._admin(),
+                      json_body={"label": "lister"})
+        resp = self.srv.get("/api/admin/tokens", headers=self._admin())
+        self.assertEqual(resp.status, 200)
+        identities = resp.json()
+        entry = next(i for i in identities if i["label"] == "lister")
+        self.assertEqual(entry["email"], "lister@api.local")
+        self.assertEqual(entry["role"], "api")
+        # Neither cleartext token nor hash exposed.
+        self.assertNotIn("token", entry)
+        self.assertNotIn("api_token_hash", entry)
+        self.assertNotIn("token_hash", entry)
+        self.assertNotIn("api_token_hash", resp.text)
+
+    def test_revoke_unknown_404(self):
+        resp = self.srv.delete("/api/admin/tokens", headers=self._admin(),
+                               json_body={"label": "never-emitted"})
+        self.assertEqual(resp.status, 404)
+
+    def test_create_token_missing_label_400(self):
+        resp = self.srv.post("/api/admin/tokens", headers=self._admin(),
+                             json_body={})
+        self.assertEqual(resp.status, 400)
+
+    def test_viewer_forbidden_on_tokens(self):
+        create = self.srv.post("/api/admin/tokens",
+                               headers={"Cookie": self.viewer_cookie},
+                               json_body={"label": "nope"})
+        self.assertEqual(create.status, 403)
+        listing = self.srv.get("/api/admin/tokens",
+                               headers={"Cookie": self.viewer_cookie})
+        self.assertEqual(listing.status, 403)
+
+
+class TestAdminCsrf(unittest.TestCase):
+    """Basic CSRF defense on mutating admin endpoints."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer(extra_env=cloud_env())
+        cls.srv.start()
+        cls.fs = file_store_of(cls.srv)
+        seed_admin_and_viewer(cls.fs)
+        cls.admin_cookie = session_cookie(cls.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+        cls.admin_csrf = csrf_token_for(cls.srv, cls.admin_cookie)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def _admin(self):
+        return {"Cookie": self.admin_cookie, "X-CSRF-Token": self.admin_csrf}
+
+    def test_non_json_content_type_refused_415(self):
+        # A cross-site HTML <form> only emits urlencoded: refused even with a
+        # valid admin cookie (the browser would send it on a CSRF attack).
+        resp = self.srv.post(
+            "/api/admin/users",
+            data=b"email=x@test.local&password=long-enough-pw&role=viewer",
+            headers={**self._admin(),
+                     "Content-Type": "application/x-www-form-urlencoded"})
+        self.assertEqual(resp.status, 415)
+        self.assertIsNone(self.fs.get_user_by_email("x@test.local"))
+
+    def test_cross_origin_refused_403(self):
+        resp = self.srv.post(
+            "/api/admin/users",
+            json_body={"email": "evil@test.local",
+                       "password": "evil-strong-pw", "role": "admin"},
+            headers={**self._admin(), "Origin": "https://evil.example.com"})
+        self.assertEqual(resp.status, 403)
+        self.assertIn("cross-origin", resp.json()["error"])
+        self.assertIsNone(self.fs.get_user_by_email("evil@test.local"))
+
+    def test_same_origin_accepted(self):
+        host = self.srv.base_url.split("://", 1)[1]
+        resp = self.srv.post(
+            "/api/admin/users",
+            json_body={"email": "ok-origin@test.local",
+                       "password": "good-strong-pw", "role": "viewer"},
+            headers={**self._admin(), "Origin": f"http://{host}"})
+        self.assertEqual(resp.status, 201)
+
+    def test_cross_origin_refused_on_token_delete(self):
+        self.srv.post("/api/admin/tokens", headers=self._admin(),
+                      json_body={"label": "csrf-target"})
+        resp = self.srv.delete(
+            "/api/admin/tokens",
+            json_body={"label": "csrf-target"},
+            headers={**self._admin(), "Referer": "https://evil.example.com/x"})
+        self.assertEqual(resp.status, 403)
+        # The token was NOT revoked.
+        identities = self.srv.get("/api/admin/tokens",
+                                  headers=self._admin()).json()
+        entry = next(i for i in identities if i["label"] == "csrf-target")
+        self.assertFalse(entry["revoked"])
+
+
+class TestAdminUiPanel(unittest.TestCase):
+    """Frontend of batch 2c: the Settings panel is present in the built viewer
+    (dist/index.html), bilingual (fr AND en keys in the single STRINGS), and its
+    entry point only appears in an admin+cloud context.
+
+    We read dist/index.html from disk (like test_branding): the viewer's markup
+    and STRINGS are independent of auth — no session is needed to check they
+    were emitted."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        # Local mode is enough: the panel lives in the template, the build is the
+        # same. (The admin-cloud runtime gating is checked on the CSS/JS side below.)
+        cls.srv = AtlasServer()
+        cls.srv.start()
+        cls.index = (cls.srv.dist_dir / "index.html").read_text(encoding="utf-8")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_settings_panel_markup_present(self):
+        # Panel container + its three tabs + the gear entry point.
+        self.assertIn('id="settings-backdrop"', self.index)
+        self.assertIn('id="settings-panel"', self.index)
+        self.assertIn('id="settings-btn"', self.index)
+        # Batch 2d: a fourth "Security" tab (2FA + sessions) is added.
+        for tab in ("users", "tokens", "shares", "security"):
+            self.assertIn(f'data-tab="{tab}"', self.index)
+        # The corresponding panes.
+        for pane in ("users", "tokens", "shares", "security"):
+            self.assertIn(f'id="settings-pane-{pane}"', self.index)
+
+    def test_settings_token_one_time_display_present(self):
+        # One-time display of the cleartext token + MCP connector URL.
+        self.assertIn('id="settings-token-result"', self.index)
+        self.assertIn('id="settings-token-plain"', self.index)
+        self.assertIn('id="settings-token-mcp"', self.index)
+        self.assertIn('data-i18n="settingsTokenOnce"', self.index)
+        self.assertIn('data-i18n="settingsMcpUrl"', self.index)
+
+    def test_settings_i18n_keys_in_both_languages(self):
+        # The viewer's STRINGS embeds fr AND en: both labels of the tabs (and
+        # of the title) must be present in the same file.
+        for fr_value in ("settingsTitle: 'Paramètres'",
+                         "settingsTabUsers: 'Utilisateurs'",
+                         "settingsTabTokens: 'Tokens'",
+                         "settingsTabShares: 'Partages'"):
+            self.assertIn(fr_value, self.index)
+        for en_value in ("settingsTitle: 'Settings'",
+                         "settingsTabUsers: 'Users'",
+                         "settingsTabShares: 'Shares'",
+                         "settingsMcpUrl: 'MCP connector URL'"):
+            self.assertIn(en_value, self.index)
+
+    def test_settings_entry_point_gated_on_admin_cloud(self):
+        # Batch 2d change: the gear is now revealed for ANY authenticated account
+        # in cloud mode (body.cloud-authed class) — a reader finds the Security
+        # tab there (their 2FA + their sessions). The administration tabs stay
+        # reserved for the admin (body.admin-cloud).
+        self.assertIn('id="settings-btn"', self.index)
+        self.assertIn("body.cloud-authed #settings-btn", self.index)
+        self.assertIn("classList.add('cloud-authed')", self.index)
+        # body.admin-cloud stays set to manage the visibility of admin tabs.
+        self.assertIn("classList.add('admin-cloud')", self.index)
+        self.assertIn("data.role === 'admin'", self.index)
+        # The admin tabs are hidden outside admin-cloud.
+        self.assertIn('body:not(.admin-cloud) .settings-tab[data-tab="users"]', self.index)
+
+    def test_settings_uses_admin_endpoints_via_fetch(self):
+        # The panel talks to the admin endpoints (no CLI-only logic).
+        self.assertIn("/api/admin/users", self.index)
+        self.assertIn("/api/admin/users/password", self.index)
+        self.assertIn("/api/admin/tokens", self.index)
+        self.assertIn("/api/share/list", self.index)
+
+    def test_settings_panel_is_mobile_responsive(self):
+        # Fullscreen on mobile: the media query rule targets #settings-panel.
+        self.assertIn("#settings-panel {", self.index)
+        # Only one mobile media query in the viewer; the fullscreen rule lives there.
+        mobile_block = self.index.split("@media (max-width: 767px)", 1)[1]
+        self.assertIn("#settings-panel", mobile_block)
+
+    def test_no_native_prompt_in_admin_viewer(self):
+        # Anti-regression guard from the UX batch: password reset used to go
+        # through a native window.prompt(). No native prompt must remain in the
+        # built viewer (an in-app modal instead).
+        self.assertNotIn("window.prompt", self.index)
+
+    def test_reset_password_modal_markup_present(self):
+        # The in-app reset modal replaces the native prompt: field + confirmation
+        # field, show/hide toggle, role=dialog, success feedback.
+        self.assertIn('id="reset-pw-backdrop"', self.index)
+        self.assertIn('role="dialog"', self.index)
+        self.assertIn('id="reset-pw-input"', self.index)
+        self.assertIn('id="reset-pw-confirm"', self.index)
+        self.assertIn('id="reset-pw-toggle"', self.index)
+        self.assertIn('id="reset-pw-success"', self.index)
+        # The "Reset" click handler opens the modal (no more prompt).
+        self.assertIn("openResetPassword(", self.index)
+
+    def test_reset_password_i18n_keys_in_both_languages(self):
+        # Every added label is bilingual (fr AND en in the single STRINGS).
+        for fr_value in ("settingsConfirmPasswordLabel: 'Confirmer le mot de passe'",
+                         "settingsPasswordMismatch:",
+                         "settingsPasswordUpdated: 'Mot de passe mis à jour.'"):
+            self.assertIn(fr_value, self.index)
+        for en_value in ("settingsConfirmPasswordLabel: 'Confirm password'",
+                         "settingsPasswordMismatch:",
+                         "settingsPasswordUpdated: 'Password updated.'"):
+            self.assertIn(en_value, self.index)
+
+    def test_token_reveal_has_close_and_warning(self):
+        # The one-time token reveal: strong warning + Close button + the secret
+        # is purged from the DOM when hidden (hideTokenResult).
+        self.assertIn('id="settings-token-close"', self.index)
+        self.assertIn("function hideTokenResult", self.index)
+        self.assertIn("token-warning-text", self.index)
+
+
+class TestSecurityUi(unittest.TestCase):
+    """Frontend of the auth hardening (batch 2d): Security tab (2FA + sessions),
+    in-app 2FA modal with a client-side rendered QR (no external lib), CSRF token
+    wiring on all mutating requests, zero native dialogs. We read the built
+    viewer (dist/index.html) — markup and JS independent of auth."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer()
+        cls.srv.start()
+        cls.index = (cls.srv.dist_dir / "index.html").read_text(encoding="utf-8")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_security_pane_and_actions_present(self):
+        # Security tab + pane, 2FA status, enable/disable buttons, sign out of
+        # all sessions.
+        self.assertIn('data-tab="security"', self.index)
+        self.assertIn('id="settings-pane-security"', self.index)
+        self.assertIn('id="security-totp-status"', self.index)
+        self.assertIn('id="security-totp-enable"', self.index)
+        self.assertIn('id="security-totp-disable"', self.index)
+        self.assertIn('id="security-logout-all"', self.index)
+
+    def test_totp_modal_markup_present(self):
+        # In-app 2FA modal: QR, copyable secret, verification code, recovery
+        # codes shown once, disable step.
+        self.assertIn('id="totp-backdrop"', self.index)
+        self.assertIn('id="totp-qr"', self.index)
+        self.assertIn('id="totp-secret-value"', self.index)
+        self.assertIn('id="totp-verify-code"', self.index)
+        self.assertIn('id="totp-recovery-list"', self.index)
+        self.assertIn('id="totp-disable-code"', self.index)
+
+    def test_account_endpoints_wired(self):
+        # The frontend talks to the three account routes of batch 2d.
+        self.assertIn('/api/account/totp/init', self.index)
+        self.assertIn('/api/account/totp/enable', self.index)
+        self.assertIn('/api/account/totp/disable', self.index)
+        self.assertIn('/api/account/logout-all', self.index)
+
+    def test_csrf_token_wired_into_fetch(self):
+        # The CSRF token is read (kb_csrf cookie + /api/me csrf_token) and set as
+        # the X-CSRF-Token header on mutating requests via a fetch wrapper.
+        self.assertIn('X-CSRF-Token', self.index)
+        self.assertIn('kb_csrf', self.index)
+        self.assertIn('csrf_token', self.index)
+        # The wrapper wraps window.fetch (centralized wiring, not scattered).
+        self.assertIn('window.fetch =', self.index)
+
+    def test_qr_generator_is_self_contained(self):
+        # QR rendered client-side WITHOUT an external lib (Reed-Solomon +
+        # homemade mask): no CDN dependency, the QR code lives in the viewer.
+        self.assertIn('const QR = (function', self.index)
+        self.assertIn('rsEncode', self.index)
+        # No QR via a third-party lib/CDN.
+        self.assertNotIn('qrcode.min.js', self.index)
+        self.assertNotIn('cdn.', self.index.split('const QR =')[1][:6000])
+
+    def test_no_native_dialogs_for_security_actions(self):
+        # logout-all and the confirmations go through the in-app confirmDialog,
+        # not through native confirm()/alert()/prompt().
+        self.assertNotIn('window.confirm', self.index)
+        self.assertNotIn('window.alert', self.index)
+        self.assertNotIn('window.prompt', self.index)
+        self.assertIn('confirmDialog(', self.index)
+
+    def test_security_i18n_keys_in_both_languages(self):
+        for fr_value in ("settingsTabSecurity: 'Sécurité'",
+                         "securityTotpEnable: 'Activer le 2FA'",
+                         "securityLogoutAll: 'Déconnecter toutes mes sessions'",
+                         "totpRecoveryWarn:"):
+            self.assertIn(fr_value, self.index)
+        for en_value in ("settingsTabSecurity: 'Security'",
+                         "securityTotpEnable: 'Enable 2FA'",
+                         "securityLogoutAll: 'Sign out all my sessions'",
+                         "totpRecoveryWarn:"):
+            self.assertIn(en_value, self.index)
+
+
+class TestLoginPageTwoStepUi(unittest.TestCase):
+    """Server-rendered /login page: 2-step flow (password then second factor
+    TOTP / recovery code), bilingual, JS-driven JSON submission with a form
+    fallback."""
+
+    def test_login_page_has_two_step_markup(self):
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            seed_admin_and_viewer(file_store_of(srv))
+            page = srv.get("/login")
+            self.assertEqual(page.status, 200)
+            html = page.text
+            # Step 1 (credentials) + step 2 (TOTP) + recovery step.
+            self.assertIn('id="login-step-credentials"', html)
+            self.assertIn('id="login-step-totp"', html)
+            self.assertIn('id="login-step-recovery"', html)
+            self.assertIn('id="login-totp-code"', html)
+            self.assertIn('id="login-recovery-code"', html)
+            # The "use a recovery code" link.
+            self.assertIn('id="login-to-recovery"', html)
+            # JS-driven JSON submission (reads totp_required from the backend).
+            self.assertIn('totp_required', html)
+            self.assertIn('submitLogin', html)
+            # Step 2 subtitle (FR by default).
+            self.assertIn('Vérification en deux étapes', html)
+
+
+class TestSetupPageUi(unittest.TestCase):
+    """Redesign of the /setup page (first boot): polished card, labelled fields,
+    explanation of the setup-token, bilingual. We check the HTML served by
+    /setup (French by default)."""
+
+    def test_setup_page_has_labelled_fields_and_token_help(self):
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            wait_for_setup_token(srv)
+            page = srv.get("/setup")
+            self.assertEqual(page.status, 200)
+            html = page.text
+            # Labelled fields (each input has a <label for=…>).
+            self.assertIn('for="setup-token"', html)
+            self.assertIn('for="setup-email"', html)
+            self.assertIn('for="setup-password"', html)
+            # Explanation of where to find the token (server logs).
+            self.assertIn("Atlas setup token", html)
+            # Atlas wordmark + JSON submission preserved.
+            self.assertIn("atlas", html.lower())
+            self.assertIn("/api/setup", html)
+
+
+class TestLastAdminConcurrency(unittest.TestCase):
+    """Targeted repro of the batch 2c TOCTOU: two concurrent deletions of the
+    LAST TWO admins must NEVER leave zero admins (total lockout).
+
+    At the store level (not HTTP) to target exactly the count→delete window on a
+    fresh FileStore with exactly 2 admins — the only case where the race can
+    actually lead to a lockout."""
+
+    def _fresh_store(self, tmp):
+        fs = store.FileStore(Path(tmp) / ".atlas")
+        for name in ("admin-a@x.local", "admin-b@x.local"):
+            fs.upsert_user(name, {
+                "password_hash": store.hash_password("strong-admin-pw"),
+                "role": "admin",
+            })
+        return fs
+
+    def test_two_concurrent_deletes_never_zero_admin(self):
+        import tempfile
+        import threading
+        for _ in range(20):  # barrier + repetitions: we force the race
+            with tempfile.TemporaryDirectory() as tmp:
+                fs = self._fresh_store(tmp)
+                self.assertEqual(fs.count_admins(), 2)
+                barrier = threading.Barrier(2)
+                refused = []
+
+                def attempt(email):
+                    barrier.wait()
+                    try:
+                        fs.delete_user(email, protect_last_admin=True)
+                    except store.LastAdminError:
+                        refused.append(email)
+
+                threads = [threading.Thread(target=attempt, args=(e,))
+                           for e in ("admin-a@x.local", "admin-b@x.local")]
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join()
+
+                # Hard invariant: there is ALWAYS at least one admin left.
+                self.assertGreaterEqual(
+                    fs.count_admins(), 1,
+                    f"lockout: zero admin after race (refused={refused})")
+
+
+if __name__ == "__main__":
+    unittest.main()

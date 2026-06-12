@@ -1,0 +1,5 @@
+# The engine is pure standard library (auth/store/TOTP/CSRF via hmac/hashlib/secrets).
+# The only optional dependency is bcrypt, used solely to verify LEGACY ("$2…")
+# password hashes, the time for each such account to log in once (opportunistic
+# scrypt re-hash on first login). Once every account uses scrypt, it can be dropped.
+bcrypt>=4.1

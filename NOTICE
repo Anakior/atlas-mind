@@ -1,0 +1,57 @@
+Atlas Mind
+Copyright (C) 2026 The Atlas Mind authors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program. If not, see <https://www.gnu.org/licenses/>. The full text
+is in the LICENSE file at the root of this repository.
+
+As required by section 7 of the AGPL, and per the "Appropriate Legal Notices"
+the program already displays, the following applies to all copies and modified
+versions.
+
+
+BRAND NOTICE
+------------
+
+"Atlas Mind" is the name of this engine, and its visual wordmark (the stylised
+"Atlas" + "Mind" badge shown in the viewer and on the login page) is a fixed
+part of it. The software licence (AGPL-3.0) does not grant you rights to the
+name or the wordmark.
+
+The engine exposes a configurable `prefix` (in atlas.toml, key `prefix`, or the
+derived site name) so that each instance can display its own name in front of
+the fixed wordmark, for example:
+
+    prefix = "Acme"   ->   "Acme Atlas Mind"
+    prefix = ""       ->   "Atlas Mind"
+
+You are free to fork and modify the source under the AGPL. When you do:
+
+  - Keep this brand notice intact in your distribution.
+  - Use the `prefix` mechanism to brand your instance, rather than removing or
+    replacing the "Atlas Mind" wordmark.
+  - Do not present a modified version as the official or canonical Atlas Mind in
+    a way that could mislead its users.
+
+
+THIRD-PARTY COMPONENTS
+----------------------
+
+This software vendors third-party frontend libraries and fonts, each under its
+own licence (MIT, Apache-2.0 OR MPL-2.0, BSD-3-Clause, BSD-2-Clause, MIT AND
+Zlib, SIL Open Font License, ...). Their licence banners are preserved, and a
+full inventory with versions and upstream URLs is maintained in
+web/vendor/LICENSES.md.
+
+bcrypt (optional, used only to verify legacy password hashes) is a separate
+package installed at runtime under its own licence and is not distributed as
+part of this source tree.

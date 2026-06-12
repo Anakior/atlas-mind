@@ -1,0 +1,48 @@
+# Default Fly.io config for an Atlas Mind instance (cloud mode + file store
+# on a persistent volume — the recommended setup). Deploy with:
+#
+#     deploy/update.sh <your-fly-app>          # e.g. deploy/update.sh my-kb-app
+#
+# The app name is provided via `-a` (no need to edit it here). One-time
+# prerequisite: create the volume that holds the accounts/tokens/2FA registry:
+#     fly volumes create atlas_store --region cdg --size 1 -a <your-app>
+# and set the secrets: SESSION_SECRET (long, random), GITHUB_REPO_URL
+# (content clone), GITHUB_WEBHOOK_SECRET (optional).
+app = 'atlas-mind'
+primary_region = 'cdg'
+# Give the SIGTERM handler time to push pending writes before Fly kills the
+# machine (deploy/scale/restart).
+kill_timeout = '30s'
+
+[build]
+
+[env]
+  PORT = '8765'
+  # Registry (accounts, tokens, shares) as JSON on the volume — never committed
+  # with the content; since the Fly rootfs is ephemeral, the volume makes it persistent.
+  ATLAS_STORE = 'file'
+  ATLAS_STORE_DIR = '/data/atlas-store'
+
+[mounts]
+  source = 'atlas_store'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8765
+  force_https = true
+  auto_stop_machines = 'suspend'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    # Wide enough to cover the cold boot (repo clone + build) before the first check.
+    grace_period = '40s'
+    method = 'GET'
+    path = '/healthz'
+
+[[vm]]
+  memory = '256mb'
+  cpus = 1

@@ -1,0 +1,122 @@
+/* Extension PoB — fiche de build Path of Exile (HTML généré par pob.js).
+   Sélecteurs préfixés .prose : le conteneur de doc du viewer ET l'article de
+   la page de partage portent cette classe. Installé via
+   <mind>/.atlas/extensions/pob.css (inliné au build par build.py et injecté
+   dans les pages de partage par server.py). */
+
+/* ── Fiche de build Path of Exile (HTML généré par l'import PoB) ───────────
+   Palette restreinte façon Atlas : accent #1d9bd1, or #fbc678, gris ink. */
+.prose .poe-card { position: relative; z-index: 1; background: linear-gradient(135deg, rgba(255,255,255,.05) 0%, rgba(255,255,255,0) 45%), rgba(35,34,42,.55); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); box-shadow: 0 18px 48px -16px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08); border-radius: 16px; padding: 1.4rem 1.5rem; margin: 0.25rem 0 1.75rem; }
+/* Quand le popover config est ouvert, la carte passe au-dessus des sections suivantes. */
+.prose .poe-card:has(.poe-cog:focus-within) { z-index: 30; }
+/* Liseré accent dégradé en anneau (technique mask) : suit les coins arrondis,
+   plus accentué à gauche, sans overflow:hidden (le popover reste libre). */
+.prose .poe-card::before { content: ""; position: absolute; inset: 0; border-radius: 16px; padding: 2px; background: linear-gradient(145deg, #fbc678 0%, #1d9bd1 28%, rgba(255,255,255,.05) 62%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+.prose .poe-hero-name { font-family: 'Manrope', system-ui, sans-serif; font-weight: 800; font-size: 1.85rem; color: #fbc678; letter-spacing: -.02em; line-height: 1.05; margin: 0; padding: 0; border: 0; }
+.prose .poe-hero-meta { font-family: 'Manrope', system-ui, sans-serif; color: #b0b1b5; font-size: .95rem; margin-top: .2rem; }
+.prose .poe-hero-imported { font-family: 'Manrope', system-ui, sans-serif; font-size: .66rem; text-transform: uppercase; letter-spacing: .07em; color: #5e6066; margin-top: .35rem; }
+.prose .poe-asc { color: #fff; font-weight: 700; }
+.prose .poe-strip { display: flex; flex-wrap: wrap; gap: 0; margin-top: 1.2rem; border-top: 1px solid rgba(255,255,255,.08); padding-top: 1rem; }
+.prose .poe-stat { flex: 1; min-width: 74px; text-align: center; padding: 0 .6rem; border-right: 1px solid rgba(255,255,255,.07); }
+.prose .poe-stat:last-child { border-right: 0; }
+.prose .poe-stat-v { font-family: 'Manrope', system-ui, sans-serif; font-weight: 800; font-size: 1.5rem; color: #fff; line-height: 1; }
+.prose .poe-stat-k { font-family: 'Manrope', system-ui, sans-serif; font-size: .62rem; text-transform: uppercase; letter-spacing: .09em; color: #868a90; margin-top: .25rem; }
+.prose .poe-res { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: 1.05rem; }
+.prose .poe-r { font-family: 'Manrope', system-ui, sans-serif; font-size: .8rem; font-weight: 600; color: #b0b1b5; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.08); padding: .2em .65em; border-radius: 7px; }
+.prose .poe-r b { margin-left: .35em; }
+.prose .poe-r-fire b { color: #ff8a5c; } .prose .poe-r-cold b { color: #5fd0ff; } .prose .poe-r-light b { color: #ffd24a; } .prose .poe-r-chaos b { color: #c98bff; }
+.prose .poe-r-under { border-color: #c0392b; border-style: dashed; } .prose .poe-r-under b { color: #e74c3c; }
+/* Variantes de skill : onglets (handler JS délégué → classe is-active) + bandeaux
+   par variante. Switch sans id/name (robuste DOMPurify). Anciennes fiches : leur
+   strip n'a PAS de [data-var] → la règle de masquage ne les touche pas. */
+.prose .poe-var-tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: 1rem; }
+.prose .poe-var-tab { font-family: 'Manrope', system-ui, sans-serif; font-size: .78rem; font-weight: 600; color: #9aa3ab; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 7px; padding: .3em .7em; cursor: pointer; transition: color .12s, background .12s, border-color .12s; }
+.prose .poe-var-tab:hover { color: #fff; background: rgba(255,255,255,.1); }
+.prose .poe-var-tab.is-active { color: #fff; background: rgba(29,155,209,.18); border-color: rgba(29,155,209,.5); }
+.prose .poe-strip[data-var], .prose .poe-res[data-var] { display: none; }
+.prose .poe-strip[data-var].is-active, .prose .poe-res[data-var].is-active { display: flex; }
+/* Arbre */
+.prose .poe-node { display: block; padding: .55rem .85rem; margin: .4rem 0; border-radius: 9px; background: rgba(255,255,255,.03); border-left: 3px solid #2f2d36; }
+.prose .poe-node-n { display: block; font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; color: #fff; font-size: .98rem; }
+.prose .poe-node-s { display: block; font-size: .9rem; color: #9aa3ab; margin-top: .12rem; line-height: 1.45; }
+.prose .poe-key { border-left-color: #fbc678; background: rgba(251,198,120,.06); }
+.prose .poe-ascn { border-left-color: #c98bff; }
+.prose .poe-link { margin: .8rem 0 0; }
+.prose .poe-link a { font-family: 'Manrope', system-ui, sans-serif; font-size: .88rem; font-weight: 600; color: #36c5f0; text-decoration: none; background: rgba(54,197,240,.1); border: 1px solid rgba(54,197,240,.28); border-radius: 7px; padding: .35em .8em; }
+.prose .poe-link a:hover { background: rgba(54,197,240,.2); }
+.prose .poe-notables { margin: .6rem 0 1rem; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.02); padding: .1rem .9rem; }
+.prose .poe-notables summary { cursor: pointer; font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; color: #87cdee; padding: .55rem 0; }
+.prose .poe-notables ul { margin: .2rem 0 .7rem; padding-left: 1.1rem; columns: 2; column-gap: 1.4rem; }
+.prose .poe-notables li { margin: .1rem 0; font-size: .95rem; break-inside: avoid; }
+.prose .poe-notables li span { color: #868a90; font-size: .86rem; }
+/* Compétences */
+.prose .poe-skills { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: .7rem; margin-top: .6rem; }
+.prose .poe-skill { position: relative; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.07); border-radius: 9px; padding: .7rem .85rem; }
+.prose .poe-skill-main { border-color: rgba(251,198,120,.4); background: rgba(251,198,120,.05); }
+.prose .poe-skill-tag { position: absolute; top: .55rem; right: .6rem; font-family: 'Manrope', system-ui, sans-serif; font-size: .55rem; text-transform: uppercase; letter-spacing: .07em; color: #fbc678; border: 1px solid rgba(251,198,120,.4); border-radius: 5px; padding: .05em .4em; }
+.prose .poe-gem-main { font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; color: #fff; font-size: .95rem; line-height: 1.2; text-wrap: balance; }
+.prose .poe-skill-main .poe-gem-main { padding-right: 4.5rem; }
+.prose .poe-gem-lvl { font-family: 'Manrope', system-ui, sans-serif; font-size: .64rem; text-transform: uppercase; letter-spacing: .06em; color: #868a90; margin-top: .2rem; }
+.prose .poe-gem-2nd { font-family: 'Manrope', system-ui, sans-serif; font-size: .86rem; color: #cfe0ea; margin-top: .1rem; }
+.prose .poe-chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .55rem; }
+.prose .poe-chip { font-family: 'Manrope', system-ui, sans-serif; font-size: .72rem; color: #9aa3ab; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 999px; padding: .12em .6em; }
+/* Équipement — cartes par rareté (couleurs PoE canoniques, tunées dark) */
+.prose .poe-eq { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .7rem; margin-top: .6rem; }
+.prose .poe-item { background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.07); border-left: 3px solid #555; border-radius: 9px; padding: .7rem .85rem; }
+.prose .poe-item-slot { font-family: 'Manrope', system-ui, sans-serif; font-size: .6rem; text-transform: uppercase; letter-spacing: .1em; color: #5e6066; margin-bottom: .2rem; }
+.prose .poe-item-name { font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; font-size: 1rem; line-height: 1.2; }
+.prose .poe-item-base { color: #868a90; font-size: .82rem; margin-top: .05rem; }
+.prose .poe-item-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .45rem; }
+.prose .poe-tag { font-family: 'Manrope', system-ui, sans-serif; font-size: .6rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #868a90; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 5px; padding: .1em .45em; }
+.prose .poe-tag-corr { color: #e07a6a; border-color: rgba(224,122,106,.4); background: rgba(224,122,106,.08); }
+.prose .poe-mods { list-style: none; margin: .5rem 0 0; padding: 0; }
+.prose .poe-mods li { font-size: .82rem; color: #aebdc7; line-height: 1.45; padding: .06rem 0; }
+.prose .poe-mods .poe-v { color: #7fc7ec; font-weight: 600; }
+.prose .poe-impl { margin-top: .5rem; padding-top: .4rem; border-top: 1px dashed rgba(255,255,255,.1); }
+.prose .poe-impl li { color: #8a93a0; font-style: italic; }
+.prose .poe-impl + .poe-mods { margin-top: .4rem; padding-top: .4rem; border-top: 1px solid rgba(255,255,255,.06); }
+.prose .poe-norm { border-left-color: #c8c8c8; } .prose .poe-norm .poe-item-name { color: #e8e8e8; }
+.prose .poe-mag { border-left-color: #7c8cff; } .prose .poe-mag .poe-item-name { color: #9aa6ff; }
+.prose .poe-rare { border-left-color: #d4c34a; } .prose .poe-rare .poe-item-name { color: #e6d873; }
+.prose .poe-uniq { border-left-color: #c87a3a; } .prose .poe-uniq .poe-item-name { color: #d98e4a; }
+.prose .poe-details { margin: 1.15rem 0 0; border-top: 1px solid rgba(255,255,255,.1); }
+.prose .poe-details summary { cursor: pointer; font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; color: #87cdee; padding: .8rem 0 .2rem; list-style: none; }
+.prose .poe-details summary::-webkit-details-marker { display: none; }
+.prose .poe-details-label::before { content: "\25b8"; display: inline-block; margin-right: .45em; color: #5e6066; transition: transform .15s; }
+.prose .poe-details[open] .poe-details-label::before { transform: rotate(90deg); }
+.prose .poe-statgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem 1.6rem; margin: .4rem 0 .8rem; }
+.prose .poe-statgrp-h { font-family: 'Manrope', system-ui, sans-serif; font-size: .68rem; text-transform: uppercase; letter-spacing: .09em; color: #fbc678; margin-bottom: .25rem; }
+.prose .poe-tbl { display: table; width: 100%; border-collapse: collapse; margin: 0; }
+.prose .poe-tbl td { padding: .22rem 0; border: 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: .84rem; }
+.prose .poe-tbl td:first-child { color: #9aa3ab; }
+.prose .poe-tbl td:last-child { text-align: right; color: #fff; font-family: 'Manrope', system-ui, sans-serif; font-weight: 600; }
+.prose .poe-statgrp--wide { grid-column: 1 / -1; }
+/* Roue crantée (config de calcul) près du pseudo, popover au survol/focus */
+.prose .poe-cog { position: absolute; top: .8rem; right: .9rem; z-index: 6; cursor: pointer; color: #b0b1b5; font-size: 1.05rem; line-height: 1; padding: .3rem .42rem; border-radius: 8px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); outline: none; transition: color .12s, background .12s, border-color .12s; }
+.prose .poe-cog:hover, .prose .poe-cog:focus-within { color: #fff; background: rgba(255,255,255,.13); border-color: rgba(255,255,255,.22); }
+.prose .poe-cog-pop { position: absolute; top: calc(100% + .35rem); right: 0; width: min(340px, 86vw); max-height: 340px; overflow-y: auto; overscroll-behavior: contain; background: rgba(20,19,24,.98); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; box-shadow: 0 18px 48px -12px rgba(0,0,0,.7); padding: .7rem .9rem; opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .12s, transform .12s; }
+.prose .poe-cog:focus-within .poe-cog-pop { opacity: 1; visibility: visible; transform: none; }
+/* La page de partage a un `* { max-width:100% }` global qui écraserait le popover
+   (contenu dans la roue ~2rem) → on neutralise avec une spécificité supérieure. */
+.prose .poe-card .poe-cog-pop { max-width: none; }
+.prose .poe-cog-h { font-family: 'Manrope', system-ui, sans-serif; font-size: .62rem; text-transform: uppercase; letter-spacing: .09em; color: #fbc678; margin-bottom: .4rem; }
+/* Lignes config empilées : clé au-dessus (petite/grise), valeur en dessous
+   (peut wrapper librement sans imposer de largeur au popover). */
+.prose .poe-cfg-row { border-bottom: 1px solid rgba(255,255,255,.05); padding: .35rem 0; }
+.prose .poe-cfg-row span { display: block; color: #868a90; font-size: .72rem; line-height: 1.3; }
+.prose .poe-cfg-row b { display: block; color: #fff; font-family: 'Manrope', system-ui, sans-serif; font-weight: 600; font-size: .85rem; line-height: 1.35; margin-top: .1rem; }
+/* Partager (code PoB + bouton copier, accessible sans déplier) */
+.prose .poe-share { margin-top: .6rem; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.02); padding: .1rem .9rem; }
+.prose .poe-share summary { cursor: pointer; font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; color: #87cdee; padding: .55rem 0; display: flex; align-items: center; justify-content: space-between; gap: 1rem; list-style: none; }
+.prose .poe-share summary::-webkit-details-marker { display: none; }
+.prose .poe-share-label::before { content: "▸"; display: inline-block; margin-right: .45em; color: #5e6066; transition: transform .15s; }
+.prose .poe-share[open] .poe-share-label::before { transform: rotate(90deg); }
+.prose .poe-share-box { margin: .2rem 0 .7rem; }
+.prose .poe-share-box code { display: block; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: .72rem; color: #9fb6c4; background: #13141a; border: 1px solid #2a2c36; border-radius: 8px; padding: .8rem 1rem; word-break: break-all; line-height: 1.5; max-height: 8rem; overflow: auto; }
+.prose .poe-copy { flex-shrink: 0; font-family: 'Manrope', system-ui, sans-serif; font-size: .72rem; font-weight: 600; color: #fff; background: #1d9bd1; border: 0; border-radius: 6px; padding: .4em .85em; cursor: pointer; }
+.prose .poe-copy:hover { filter: brightness(1.1); }
+/* Partager multi-variantes : une ligne par code (libellé du skill + Copier). */
+.prose .poe-share-row { padding: .5rem 0; border-top: 1px solid rgba(255,255,255,.06); }
+.prose .poe-share-row:first-child { border-top: 0; }
+.prose .poe-share-rh { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.prose .poe-share-rl { font-family: 'Manrope', system-ui, sans-serif; font-weight: 600; color: #cfe0ea; font-size: .85rem; }

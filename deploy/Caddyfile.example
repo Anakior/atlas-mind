@@ -1,0 +1,19 @@
+# Caddyfile — HTTPS reverse proxy in front of Atlas (port 8765 by default).
+# Caddy obtains the certificate automatically and forwards the client IP in
+# X-Forwarded-For: set trusted_ip_header = "X-Forwarded-For" in the
+# [server] section of atlas.toml (or ATLAS_TRUSTED_IP_HEADER) so that the
+# login rate limit sees the real IP and not the proxy's.
+#
+# `header_up X-Forwarded-For {client_ip}` OVERWRITES the header (a single,
+# canonical value) instead of appending the value received from the client. Atlas also
+# defends itself on the server side (it takes the LAST element of a list, the only one set
+# by the trusted proxy), but overwriting remains the best practice:
+# keep this pattern as is, including when adapting it to nginx
+# (`proxy_set_header X-Forwarded-For $remote_addr;` rather than
+# `$proxy_add_x_forwarded_for`).
+
+atlas.example.com {
+	reverse_proxy 127.0.0.1:8765 {
+		header_up X-Forwarded-For {client_ip}
+	}
+}

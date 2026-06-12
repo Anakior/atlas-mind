@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+dist/
+.venv/
+content/
+.notes/
+.atlas/

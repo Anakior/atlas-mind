@@ -1,0 +1,50 @@
+# fly.toml app configuration file — neutral example for the Atlas engine.
+# Replace `app` with the name of YOUR Fly application before deploying.
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'atlas'
+primary_region = 'cdg'
+
+# Give the SIGTERM handler (server.py) time to push pending writes to GitHub
+# before Fly kills the machine (deploy/scale/restart).
+kill_timeout = "30s"
+
+[build]
+
+[env]
+  PORT = '8765'
+  # ATLAS_STORE=file mode: the users/shares registry (password and token
+  # hashes) is NEVER committed/pushed with the content repo. Since the Fly
+  # rootfs is ephemeral, a persistent volume is then required, otherwise the
+  # registry is LOST every time the machine is recreated:
+  #   fly volumes create atlas_store --region cdg --size 1
+  # then uncomment [mounts] below and:
+  # ATLAS_STORE = 'file'
+  # ATLAS_STORE_DIR = '/data/atlas-store'
+
+# [mounts]
+#   source = 'atlas_store'
+#   destination = '/data'
+
+[http_service]
+  internal_port = 8765
+  force_https = true
+  auto_stop_machines = 'suspend'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    # Wide enough to cover the cold boot (repo clone + build.py) before the first check.
+    grace_period = "30s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  memory = '256mb'
+  cpus = 1
+  memory_mb = 256

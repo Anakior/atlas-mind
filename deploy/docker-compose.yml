@@ -1,0 +1,40 @@
+# docker-compose.yml — self-hosting the Atlas engine with the image from the
+# neighboring Dockerfile (port 8765, non-root user `app` uid 10001).
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+# The mind (atlas.toml, content/, .atlas/) is mounted at /app/repo, where
+# the image expects it (KB_REPO_PATH=/app/repo). It must be an already
+# initialized git repo (the server commits after each write; a present .git =
+# the GitHub clone at boot is bypassed) and readable/writable by
+# uid 10001.
+services:
+  atlas:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    # …or an already-built image instead of the build:
+    # image: atlas:latest
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      # Mind volume: replace ../mind with the path to YOUR mind.
+      # Note: the image does not bundle web/ (viewer template) — the mind must
+      # provide it (<mind>/web, historical fallback of AtlasConfig.web_dir).
+      - ../mind:/app/repo
+    environment:
+      # File-based accounts/tokens/shares registry (<mind>/.atlas):
+      # persists in the mind volume, no database required.
+      ATLAS_STORE: file
+      # The image already enables auth (KB_AUTH_ENABLED=1 in the Dockerfile).
+      # Auth enabled = session secret REQUIRED (long and random):
+      # SESSION_SECRET: "change-me-secret-long-and-random"
+      # For local use WITHOUT login, disable auth (empty value):
+      # KB_AUTH_ENABLED: ""
+      # Optional GitHub sync (periodic pull + push of writes):
+      # GITHUB_REPO_URL: "https://x-access-token:<PAT>@github.com/user/mind.git"
+      # Behind a reverse proxy (see Caddyfile.example — the proxy must
+      # OVERWRITE the header, not append to the value received from the client; if a list,
+      # Atlas takes the last element, set by the trusted proxy):
+      # ATLAS_TRUSTED_IP_HEADER: "X-Forwarded-For"

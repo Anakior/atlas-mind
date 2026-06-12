@@ -1,0 +1,83 @@
+# Licenses of the vendored assets (web/vendor/)
+
+Inventory of the bundled third-party libraries and fonts, with their version and
+license. The license banners of the minified files are preserved as-is; this file
+supplements the ones that were missing upstream (MiniSearch served without a
+banner by jsDelivr, mammoth shipped without a banner, .woff2 fonts with no
+accompanying OFL text).
+
+## JavaScript / CSS libraries
+
+| File | Library | Version | License | Upstream |
+|---|---|---|---|---|
+| `marked.min.js` | marked | 15.0.12 | MIT | https://github.com/markedjs/marked |
+| `purify.min.js` | DOMPurify | 3.0.9 | Apache-2.0 OR MPL-2.0 | https://github.com/cure53/DOMPurify |
+| `highlight.min.js` | highlight.js | 11.9.0 | BSD-3-Clause | https://github.com/highlightjs/highlight.js |
+| `highlight-github-dark.min.css` | highlight.js (github-dark theme) | 11.9.0 | BSD-3-Clause | https://github.com/highlightjs/highlight.js |
+| `minisearch.min.js` | MiniSearch | 7.2.0 | MIT — Copyright 2022 Luca Ongaro | https://github.com/lucaong/minisearch |
+| `pako.min.js` | pako | 2.1.0 | MIT AND Zlib | https://github.com/nodeca/pako |
+| `mammoth.min.js` | mammoth.js (DOCX → HTML) | 1.8.0 | BSD-2-Clause | https://github.com/mwilliamson/mammoth.js |
+| `tailwind.css` | Tailwind CSS (compiled output) + @tailwindcss/typography | 3.4.19 / 0.5.20 | MIT | https://github.com/tailwindlabs/tailwindcss |
+
+MiniSearch (full MIT text — jsDelivr does not preserve the banner):
+
+> Copyright 2022 Luca Ongaro
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to
+> deal in the Software without restriction, including without limitation the
+> rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+> sell copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in
+> all copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+> FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+> DEALINGS IN THE SOFTWARE.
+
+mammoth.js (full BSD-2-Clause text — the minified bundle carries no banner):
+
+> Copyright (c) 2013, Michael Williamson
+> All rights reserved.
+>
+> Redistribution and use in source and binary forms, with or without
+> modification, are permitted provided that the following conditions are met:
+>
+> 1. Redistributions of source code must retain the above copyright notice,
+>    this list of conditions and the following disclaimer.
+>
+> 2. Redistributions in binary form must reproduce the above copyright notice,
+>    this list of conditions and the following disclaimer in the documentation
+>    and/or other materials provided with the distribution.
+>
+> THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+> AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+> IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+> ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+> LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+> CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+> SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+> INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+> CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+> ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+> POSSIBILITY OF SUCH DAMAGE.
+
+## Fonts (`fonts/*.woff2`)
+
+All under the **SIL Open Font License 1.1** — full text and per-family copyright
+notices in [`fonts/OFL.txt`](fonts/OFL.txt) (verbatim reproduction of the
+upstream OFL.txt files):
+
+| Family | Files | Upstream |
+|---|---|---|
+| Corinthia | `corinthia-*.woff2` | https://github.com/googlefonts/corinthia |
+| Rubik 80s Fade (Rubik Filtered) | `rubik-80s-fade-*.woff2` | https://github.com/NaN-xyz/Rubik-Filtered |
+| Manrope | `manrope-*.woff2` | https://github.com/sharanda/manrope |
+| Lora | `lora-*.woff2` | https://github.com/cyrealtype/Lora-Cyrillic |
+| JetBrains Mono | `jetbrains-mono-*.woff2` | https://github.com/JetBrains/JetBrainsMono |
