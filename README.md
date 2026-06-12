@@ -14,7 +14,7 @@ It is built on three ideas:
   place whatever its shape.
 - **AI-native.** Atlas Mind is meant to be the memory your AI assistant reads and
   enriches: it exposes an **MCP** endpoint (six tools) and `atlas init` scaffolds
-  the conventions (`AGENTS.md`, `agents/`, `save-ia/`) so an assistant knows how
+  the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how
   to use your mind. See [Use it with your AI](#use-it-with-your-ai-mcp).
 - **Lightweight & self-contained.** A single Python HTTP server plus a build step,
   written entirely on the standard library — **no database required**, accounts
@@ -134,7 +134,7 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
   mind directly.
 - A **REST API v1** (Bearer tokens, create-only writes) with a published
   **OpenAPI 3.1** spec.
-- `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `save-ia/`). See
+- `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`). See
   [Use it with your AI](#use-it-with-your-ai-mcp).
 
 ### Offline, PWA & sync
@@ -176,8 +176,7 @@ git clone https://github.com/Anakior/atlas-mind.git && cd atlas-mind && pip inst
 ```
 
 Without installing, the engine also runs straight from the source tree as
-`python3 src/cli.py <command>` (the form used by the systemd unit:
-`python3 -m src.cli serve <mind>`). All examples below use the `atlas` command;
+`python3 src/cli.py <command>`. All examples below use the `atlas` command;
 substitute `python3 src/cli.py` if you did not install.
 
 ## Quick start
@@ -190,9 +189,11 @@ atlas serve ~/my-mind
 ```
 
 `init` creates `atlas.toml`, a `.gitignore`, example documents under `content/`,
-the AI-native scaffolding (`AGENTS.md`, `content/agents/`, `content/save-ia/`),
-an empty `.atlas/extensions/` hook directory, and runs `git init -b main`. It
-never overwrites existing files: it refuses a non-empty directory unless you pass
+the AI-native scaffolding (`AGENTS.md`, `content/agents/`, `content/ai-sessions/`),
+an empty `.atlas/extensions/` hook directory, and runs `git init -b main`. On a
+terminal it asks a few questions (interface language, brand prefix, tagline) —
+pass `--lang`, `--prefix`, `--tagline`, or `--yes` to skip the prompts. It never
+overwrites existing files: it refuses a non-empty directory unless you pass
 `--force`, and keeps any file already present.
 
 `serve` builds the viewer once if it is missing, then becomes the HTTP server.
@@ -208,13 +209,15 @@ atlas build ~/my-mind --offline  # dist/index-offline.html (monolith)
 
 ### CLI commands
 
-All commands take the mind directory as a positional argument.
+Every command takes the mind directory as a positional argument; it **defaults to
+the current directory**, so you can omit it from inside the mind.
 
 | Command | Purpose |
 |---|---|
-| `init <dir> [--force]` | Scaffold a new mind (never destructive). |
+| `init <dir> [--force] [--lang en\|fr] [--prefix P] [--tagline T] [--yes]` | Scaffold a new mind (never destructive; prompts for personalization on a TTY). |
 | `serve <dir> [--port N]` | Build if needed, then run the HTTP server. |
 | `build <dir> [--offline]` | Build the static viewer (`--offline` for the monolith). |
+| `deploy <dir> [--target compose\|systemd\|fly] [--app NAME] [--wizard]` | Scaffold deployment files + guide; `fly --wizard` deploys end-to-end. |
 | `user add <dir> --email <e> [--role admin\|viewer] [--password ...]` | Create an account in the file store. |
 | `user list <dir>` | List accounts (and token state for API accounts). |
 | `user remove <dir> --email <e>` | Remove an account. |
@@ -235,8 +238,8 @@ Atlas Mind is designed to be the external memory your AI assistant reads and
 writes. `atlas init` scaffolds an **`AGENTS.md`** at the mind root (read by Claude
 Code and AGENTS.md-aware tools) that tells the assistant how to use your mind —
 adapt it to your conventions. Two folders come scaffolded: `content/agents/`
-(reusable AI agent definitions) and `content/save-ia/` (session saves, with a
-`MODELE.md` template).
+(reusable AI agent definitions) and `content/ai-sessions/` (session saves, with a
+`TEMPLATE.md` template).
 
 The engine exposes an **MCP endpoint** with six tools — `search_docs`,
 `read_doc`, `list_tree`, `recent_docs`, `create_doc`, `edit_doc`. Mint a token
@@ -325,8 +328,8 @@ take effect when the variable is set (even empty); keys marked *or* fall back to
 | `atlas.toml` key | Env var | Env semantics | Default | Notes |
 |---|---|---|---|---|
 | `prefix` (root) | — | — | `""` | Prefix before the fixed `Atlas Mind` wordmark. |
-| `tagline` (root) | — | — | `Base de connaissances personnelle.` | Home page tagline. |
-| `lang` (root) | — | — | `fr` | `fr` or `en` only. |
+| `tagline` (root) | — | — | `Personal knowledge base.` | Home page tagline. |
+| `lang` (root) | — | — | `en` | `en` or `fr` only. |
 | `[server] port` | `PORT` | presence | `8765` | Validated 0–65535. |
 | `[server] auth_enabled` | `KB_AUTH_ENABLED` | presence | `false` | Any non-empty value enables; empty disables. |
 | `[server] session_secret` | `SESSION_SECRET` | presence | `dev-secret-change-me` | Cloud mode refuses to boot on the default. |
@@ -356,7 +359,7 @@ Engine and content are decoupled, so there are two independent update channels.
 Edit your documents and push to your mind's git repository. In cloud mode the
 running instance picks the change up by **two means**: a periodic `git pull`
 every `GIT_PULL_INTERVAL` seconds (default **300 s = 5 min**), and an instant
-**GitHub webhook** (`POST /api/webhook`, HMAC-verified with
+**GitHub webhook** (`POST /webhook/github`, HMAC-verified with
 `GITHUB_WEBHOOK_SECRET`) for push-to-update. On each sync the instance rebuilds
 the viewer and the open page **live-reloads** over SSE.
 
@@ -392,42 +395,50 @@ token is never pushed with your content.
 
 ### Updating the engine
 
-When a new engine version ships, redeploy the image — **content and the `.atlas`
-store/volume are preserved**, only the code changes. On Fly.io it is one command:
+When a new engine version ships, redeploy — **content and the `.atlas`
+store/volume are preserved**, only the code changes. The generated images install
+`atlas-mind` from PyPI, so a plain redeploy rebuilds with the latest:
 
 ```bash
-deploy/update.sh <your-fly-app>     # e.g. deploy/update.sh my-atlas
+fly deploy -c deploy/fly.toml         # Fly.io
+docker compose up -d --build          # Docker Compose
 ```
 
-That script pulls the latest engine, then rebuilds and redeploys the image
-(config lives in `deploy/fly.toml`). For other hosts, rebuild and restart the
-container / service the same way you first deployed it.
+Pin a version in the Dockerfile (`pip install "atlas-mind[bcrypt]==X.Y.Z"`) for
+reproducible builds. On a venv/systemd install, update in place with
+`pip install -U atlas-mind` and restart the service.
 
 ## Deployment
 
-The `deploy/` directory covers four modes. The local/cloud split is driven by
-`KB_AUTH_ENABLED`: any non-empty value enables authentication, empty disables it.
-The Docker image enables auth by default (`KB_AUTH_ENABLED=1`); the local CLI
-leaves it off. When auth is on, a real `SESSION_SECRET` is mandatory — the server
-refuses to boot on the default secret.
+`atlas deploy <mind> --target <compose|systemd|fly>` scaffolds ready-to-use
+deployment files into `<mind>/deploy/` and prints a step-by-step guide. The
+local/cloud split is driven by `KB_AUTH_ENABLED`: any non-empty value enables
+authentication (the cloud-mode default), empty disables it. When auth is on a
+real `SESSION_SECRET` is mandatory — the server refuses to boot on the default.
 
-- **Local (CLI)** — `atlas serve <mind>` (or `python3 src/cli.py serve <mind>`
-  without installing): binds `127.0.0.1`, auth off, no secret required. The
-  everyday local mode.
-- **Docker Compose** — `deploy/docker-compose.yml` builds the image and serves a
-  mounted mind (`ATLAS_STORE: file`, accounts under `<mind>/.atlas`):
-  `docker compose -f deploy/docker-compose.yml up -d`.
-- **Fly.io** — `deploy/fly.toml` (cloud + file store on a persistent volume).
-  Create the volume once (`fly volumes create atlas_store --region <r> --size 1`),
-  set `GITHUB_REPO_URL` and `SESSION_SECRET` as secrets, then deploy /
-  update with `deploy/update.sh <app>`.
-- **systemd (no Docker)** — `deploy/atlas.service` runs `python3 -m src.cli serve
-  <mind>` as a dedicated non-root user. Configure port/auth in `atlas.toml`, pass
-  secrets via `Environment=` / `EnvironmentFile=`.
+- **Local (CLI)** — `atlas serve <mind>`: binds `127.0.0.1`, auth off, no secret
+  required. The everyday local mode — nothing to deploy.
+- **Fly.io — one command** — `atlas deploy <mind> --target fly --wizard` runs the
+  whole thing interactively: creates the app + volume, generates and sets
+  `SESSION_SECRET`, asks for your private content repo + token (`GITHUB_REPO_URL`),
+  deploys, and creates the admin account — no setup token, no manual juggling.
+  Drop `--wizard` to only scaffold `deploy/fly.toml` + `deploy/Dockerfile.fly` and
+  follow the printed steps; `--app <name>` overrides the auto-derived app name.
+  The mind is cloned from your private GitHub repo at boot and the account
+  registry lives on a persistent volume.
+- **Docker Compose** — `atlas deploy <mind> --target compose` scaffolds a
+  `Dockerfile` + `docker-compose.yml` + `Caddyfile` + `.env.example` (engine
+  installed from PyPI, your mind mounted, Caddy for automatic HTTPS): then
+  `cd <mind>/deploy && cp .env.example .env`, set `SESSION_SECRET`, point the
+  `Caddyfile` at your domain, and `docker compose up -d`.
+- **systemd (no Docker)** — `atlas deploy <mind> --target systemd` scaffolds
+  `deploy/atlas.service`, which runs `atlas serve` from a venv as a dedicated
+  non-root user. Front it with a TLS reverse proxy.
 
-Behind a reverse proxy, `deploy/Caddyfile.example` terminates HTTPS and forwards
-to `127.0.0.1:8765`, setting `X-Forwarded-For` to the real client IP; set
-`trusted_ip_header = "X-Forwarded-For"` so the login rate limiter sees it.
+Behind a reverse proxy, set `trusted_ip_header = "X-Forwarded-For"` (or the header
+your proxy sets) so the login rate limiter sees the real client IP — the bundled
+Caddyfile already sets it. The registry under `.atlas/` is gitignored and (on Fly)
+lives on the volume, so it is never committed with your content.
 
 ## Extensions
 
