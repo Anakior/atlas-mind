@@ -563,6 +563,25 @@ def _derive_site_name(site_prefix: str) -> str:
     return f"{site_prefix} {SITE_WORDMARK}"
 
 
+def _engine_version() -> str:
+    """Running atlas-mind version, shown in the sidebar footer. Installed →
+    package metadata; source run → parse __version__ from the sibling
+    __init__.py. Empty string if neither is available (footer just omits it)."""
+    try:
+        from importlib.metadata import version
+        return version("atlas-mind")
+    except Exception:
+        pass
+    try:
+        init = (Path(__file__).resolve().parent / "__init__.py").read_text(encoding="utf-8")
+        match = re.search(r'__version__\s*=\s*"([^"]+)"', init)
+        if match:
+            return match.group(1)
+    except OSError:
+        pass
+    return ""
+
+
 def render_template(*, tree: dict, embed_content: dict | None,
                     embed_backlinks: dict | None, embed_notes: dict | None,
                     build_ts: str, template_path: Path | None = None,
@@ -586,6 +605,7 @@ def render_template(*, tree: dict, embed_content: dict | None,
     site_name = _derive_site_name(site_prefix)
     replacements = {
         "__BUILD_TS__": build_ts,
+        "__VERSION__": _html.escape(_engine_version(), quote=True),
         "__SITE_NAME__": _html.escape(site_name, quote=True),
         "__SITE_SHORT_NAME__": _html.escape(SITE_WORDMARK, quote=True),
         "__SITE_PREFIX_JSON__": _enc(site_prefix),

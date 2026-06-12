@@ -395,18 +395,24 @@ token is never pushed with your content.
 
 ### Updating the engine
 
-When a new engine version ships, redeploy — **content and the `.atlas`
-store/volume are preserved**, only the code changes. The generated images install
-`atlas-mind` from PyPI, so a plain redeploy rebuilds with the latest:
+Engine updates are **not automatic** — only your *content* syncs on its own (the
+git pull + webhook above). When a new engine version ships (the admin Settings
+**update banner** flags it), you redeploy by hand. Content and the `.atlas`
+store/volume are preserved; only the code changes.
+
+The generated images install `atlas-mind` from PyPI. **Docker caches the
+`pip install` layer**, so a *plain* redeploy can silently reuse the old version —
+force a fresh fetch:
 
 ```bash
-fly deploy -c deploy/fly.toml         # Fly.io
-docker compose up -d --build          # Docker Compose
+fly deploy -c deploy/fly.toml --no-cache              # Fly.io
+docker compose build --no-cache && docker compose up -d   # Docker Compose
 ```
 
-Pin a version in the Dockerfile (`pip install "atlas-mind[bcrypt]==X.Y.Z"`) for
-reproducible builds. On a venv/systemd install, update in place with
-`pip install -U atlas-mind` and restart the service.
+Cleaner and reproducible: **pin** the version in the Dockerfile
+(`pip install "atlas-mind[bcrypt]==X.Y.Z"`) and bump it — a normal `fly deploy`
+then rebuilds that layer because the Dockerfile changed. On a venv/systemd
+install, update in place with `pip install -U atlas-mind` and restart the service.
 
 ## Deployment
 
