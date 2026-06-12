@@ -1,5 +1,16 @@
 # Atlas Mind
 
+> **It's your mind, not someone else's.**
+
+Notion, and every hosted notes app, ask you to pour your thinking into
+*their* structure, on *their* servers, in *their* format. You rent the space;
+they hold the keys. Atlas Mind inverts that: your knowledge is **plain files in
+your own git repository**, served by an **engine you can read line by line** and
+throw away without losing a single note. Your AI comes to *your* library through
+an open protocol — it never pulls your brain into its own.
+
+Own the data. Own the engine. Own the mind.
+
 **Atlas Mind** is a self-hostable wiki / knowledge base engine — and an external
 brain you share with your AI. It serves a single-page viewer from a folder of
 documents (a *mind*), and keeps the **engine** (the code) cleanly decoupled from
