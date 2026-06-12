@@ -1,0 +1,13 @@
+{
+  "name": "atlas-tailwind-build",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dev-only toolchain that precompiles web/vendor/tailwind.css. NOT shipped with the engine — the Atlas runtime is Python stdlib only. Install once (npm install), then `npm run build` after changing Tailwind classes in web/viewer.html.",
+  "scripts": {
+    "build": "python3 extract-safelist.py && tailwindcss -c tailwind.config.cjs -i input.css -o ../vendor/tailwind.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.19",
+    "@tailwindcss/typography": "0.5.20"
+  }
+}

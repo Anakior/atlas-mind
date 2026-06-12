@@ -727,13 +727,16 @@ __EXTENSIONS_CSS__
       </div>
       <div>
         <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="templateLabel">Template</label>
-        <select id="new-file-template" class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
-          <option value="blank" data-i18n="tplBlank">Vide</option>
-          <!-- The document skeletons (DOC_TEMPLATES, injected at build time from
-               the engine's templates/ + <mind>/templates/) are inserted here by
-               populateTemplateOptions(); extensions add their own
-               via Atlas.registerTemplate. blank stays fixed. -->
-        </select>
+        <div class="relative">
+          <select id="new-file-template" class="w-full appearance-none px-3 pr-9 py-2 bg-navy-900 border subtle-border rounded text-ink-100 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+            <option value="blank" data-i18n="tplBlank">Vide</option>
+            <!-- The document skeletons (DOC_TEMPLATES, injected at build time from
+                 the engine's templates/ + <mind>/templates/) are inserted here by
+                 populateTemplateOptions(); extensions add their own
+                 via Atlas.registerTemplate. blank stays fixed. -->
+          </select>
+          <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+        </div>
       </div>
       <!-- Form blocks of extension templates (Atlas.registerTemplate
            with `block`): the viewer shows only the one of the selected template. -->
@@ -800,10 +803,13 @@ __EXTENSIONS_CSS__
           </div>
           <div>
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsRoleLabel">R&ocirc;le</label>
-            <select id="settings-user-role" class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
-              <option value="viewer" data-i18n="settingsRoleViewer">Lecteur</option>
-              <option value="admin" data-i18n="settingsRoleAdmin">Admin</option>
-            </select>
+            <div class="relative">
+              <select id="settings-user-role" class="w-full appearance-none px-3 pr-9 py-2 bg-navy-900 border subtle-border rounded text-ink-100 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+                <option value="viewer" data-i18n="settingsRoleViewer">Lecteur</option>
+                <option value="admin" data-i18n="settingsRoleAdmin">Admin</option>
+              </select>
+              <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </div>
           </div>
           <div>
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsPasswordLabel">Mot de passe</label>
@@ -825,7 +831,7 @@ __EXTENSIONS_CSS__
             <input id="settings-token-label" type="text" autocomplete="off" placeholder="claude, mcp-perso&hellip;" data-i18n-placeholder="settingsTokenLabelPlaceholder"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
-          <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsCreateToken">Cr&eacute;er un token</button>
+          <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsCreateToken">Cr&eacute;er un token</button>
         </form>
         <!-- One-time display of the token in plain text + MCP connector URL. Strong
              warning banner (the secret NEVER reappears), Close button,
@@ -874,7 +880,7 @@ __EXTENSIONS_CSS__
             <input id="settings-node-path" type="text" autocomplete="off" placeholder="equipe/onboarding" data-i18n-placeholder="settingsNodePathPlaceholder"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
-          <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsNodePublish">Publier</button>
+          <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsNodePublish">Publier</button>
         </form>
         <!-- One-time link: the token is stored hashed, it never reappears. -->
         <div id="settings-node-result" class="hidden mb-5 rounded-lg overflow-hidden">
@@ -908,7 +914,7 @@ __EXTENSIONS_CSS__
               <input id="settings-remote-link" type="text" autocomplete="off" placeholder="atlas-node:&hellip;" data-i18n-placeholder="settingsRemoteLinkPlaceholder"
                 class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
             </div>
-            <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsRemoteAdd">S&rsquo;abonner</button>
+            <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsRemoteAdd">S&rsquo;abonner</button>
           </form>
           <ul id="settings-remotes-list" class="space-y-2"></ul>
         </div>

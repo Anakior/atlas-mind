@@ -475,6 +475,23 @@ your proxy sets) so the login rate limiter sees the real client IP — the bundl
 Caddyfile already sets it. The registry under `.atlas/` is gitignored and (on Fly)
 lives on the volume, so it is never committed with your content.
 
+## Building from source
+
+Running and deploying Atlas needs no build step — the package ships ready to run.
+The one exception is the viewer's stylesheet: `src/web/vendor/tailwind.css` is a
+**precompiled** Tailwind bundle containing only the classes the viewer uses. If you
+edit `src/web/viewer.html` and add a Tailwind class that was not already on the page,
+it will not exist in the compiled CSS (a silent no-op) until you regenerate it:
+
+```bash
+cd src/web/tailwind
+npm install      # once — dev-only toolchain, into a gitignored node_modules
+npm run build    # after every change to classes in viewer.html
+```
+
+Commit the regenerated CSS with your HTML change. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for details; the toolchain is never bundled into the published package.
+
 ## Extensions
 
 Atlas Mind has two minimal hooks rather than a plugin system, both anchored on a
