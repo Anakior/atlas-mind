@@ -2,8 +2,8 @@
 must reach the viewer.
 
 Historical bug: the backend (parse_todos/config) was configurable, but the
-viewer hardcoded the "travail" / "personnel" tabs and a tcat() that forced any
-cat ≠ 'personnel' to 'travail' → custom categories (e.g. taff/perso) had ALL
+viewer hardcoded the "work" / "personal" tabs and a tcat() that forced any
+cat ≠ 'personal' to 'work' → custom categories (e.g. taff/perso) had ALL
 their todos filed into a single tab.
 """
 import sys
@@ -51,9 +51,9 @@ class TestTodoCategoriesReachViewer(unittest.TestCase):
         self.assertIn('"label": "Taff"', html)
         self.assertIn('"label": "Perso"', html)
         # The default categories are NOT injected when others are configured
-        # (we target the categories JSON, not the word "travail" which may live elsewhere).
-        self.assertNotIn('"cat": "travail"', html)
-        self.assertNotIn('"cat": "personnel"', html)
+        # (we target the categories JSON, not the word "work" which may live elsewhere).
+        self.assertNotIn('"cat": "work"', html)
+        self.assertNotIn('"cat": "personal"', html)
         # The placeholder was indeed substituted (no raw __TODO_CATEGORIES_JSON__).
         self.assertNotIn("__TODO_CATEGORIES_JSON__", html)
 
@@ -62,15 +62,15 @@ class TestTodoCategoriesReachViewer(unittest.TestCase):
             tree={"name": "content", "type": "dir", "children": []},
             embed_content=None, embed_backlinks=None, embed_notes=None,
             build_ts="2026-01-01T00:00:00Z")  # no todo_categories
-        self.assertIn('"cat": "travail"', html)
-        self.assertIn('"cat": "personnel"', html)
+        self.assertIn('"cat": "work"', html)
+        self.assertIn('"cat": "personal"', html)
 
     def test_no_hardcoded_static_filter_buttons(self):
         # The tabs are generated in JS from the config: the template must no
-        # longer contain a static <button data-cat="travail">.
+        # longer contain a static <button data-cat="work">.
         html = _render([{"cat": "a", "label": "A"}, {"cat": "b", "label": "B"}])
-        self.assertNotIn('data-cat="travail"', html)
-        self.assertNotIn('data-cat="personnel"', html)
+        self.assertNotIn('data-cat="work"', html)
+        self.assertNotIn('data-cat="personal"', html)
 
 
 class TestTodoCategoriesEndToEnd(unittest.TestCase):
@@ -91,8 +91,8 @@ class TestTodoCategoriesEndToEnd(unittest.TestCase):
         text = self.srv.get("/").text
         self.assertIn('"cat": "alpha"', text)
         self.assertIn('"cat": "beta"', text)
-        self.assertNotIn('"cat": "travail"', text)
-        self.assertNotIn('"cat": "personnel"', text)
+        self.assertNotIn('"cat": "work"', text)
+        self.assertNotIn('"cat": "personal"', text)
 
 
 if __name__ == "__main__":

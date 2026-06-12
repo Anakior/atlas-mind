@@ -1,16 +1,16 @@
 """Characterization tests for the /api/todos endpoints (src/server.py).
 
 Scope: GET/POST /api/todos, PATCH/DELETE /api/todos/:id, persistence in
-content/notes/quick.md (H2 Travail/Personnel sections, GFM checkboxes).
+content/notes/quick.md (H2 Work/Personal sections, GFM checkboxes).
 
 Behaviors ENCODED AS-IS (bugs/quirks included):
 - A todo's id is its INDEX in the file order (parse_todos reassigns
   id = position on every read): any write can renumber the others.
-- write_todos groups by section (Travail first, then Personnel): a "travail"
-  POST is inserted BEFORE the personnel items -> their ids are shifted.
+- write_todos groups by section (Work first, then Personal): a "work"
+  POST is inserted BEFORE the personal items -> their ids are shifted.
 - A PATCH cat moves the item to another section -> its own id changes in the
   response.
-- Unknown category (POST or PATCH) -> silently falls back to "travail".
+- Unknown category (POST or PATCH) -> silently falls back to "work".
 - A text containing a newline + "- [ ]" injects extra todos into the markdown
   (no sanitization).
 """
@@ -21,7 +21,7 @@ from harness import AtlasServer, DEFAULT_MIND, TODO_REL
 
 TODO_HEADER = (
     "# To-do\n\n"
-    "Liste éditable depuis le widget en bas à droite du viewer.\n\n"
+    "Editable from the widget in the bottom-right of the viewer.\n\n"
 )
 
 
@@ -46,11 +46,11 @@ class TestReadTodos(unittest.TestCase):
         # The ids are positions in the file (0..n-1), not stable identifiers.
         self.assertEqual(resp.json(), [
             {"id": 0, "text": "Préparer le bilan mensuel", "done": False,
-             "cat": "travail"},
+             "cat": "work"},
             {"id": 1, "text": "Review the draft", "done": True,
-             "cat": "travail"},
+             "cat": "work"},
             {"id": 2, "text": "Tester le build PoE", "done": False,
-             "cat": "personnel"},
+             "cat": "personal"},
         ])
 
     def test_get_item_url_is_not_routed(self):
@@ -69,12 +69,12 @@ class TestParseQuirks(unittest.TestCase):
     QUICK_MD = (
         "# To-do\n\n"
         "- [ ] avant toute section\n\n"
-        "## PERSONNEL\n\n"
-        "- [ ] sous personnel en majuscules\n\n"
+        "## PERSONAL\n\n"
+        "- [ ] sous personal en majuscules\n\n"
         "## Divers\n\n"
         "- [x] sous un header inconnu\n\n"
-        "## Travail\n\n"
-        "- [ ] sous travail\n"
+        "## Work\n\n"
+        "- [ ] sous work\n"
     )
 
     @classmethod
@@ -86,58 +86,58 @@ class TestParseQuirks(unittest.TestCase):
         cls.srv.start()
         cls.todos = cls.srv.get("/api/todos").json()
 
-    def test_items_before_any_section_default_to_travail(self):
+    def test_items_before_any_section_default_to_work(self):
         self.assertEqual(self.todos[0]["text"], "avant toute section")
-        self.assertEqual(self.todos[0]["cat"], "travail")
+        self.assertEqual(self.todos[0]["cat"], "work")
 
     def test_section_header_matching_is_case_insensitive(self):
-        # "## PERSONNEL" is recognized as the personnel section.
-        self.assertEqual(self.todos[1]["text"], "sous personnel en majuscules")
-        self.assertEqual(self.todos[1]["cat"], "personnel")
+        # "## PERSONAL" is recognized as the personal section.
+        self.assertEqual(self.todos[1]["text"], "sous personal en majuscules")
+        self.assertEqual(self.todos[1]["cat"], "personal")
 
     def test_unknown_section_header_keeps_previous_category(self):
-        # "## Divers" is neither Travail nor Personnel: the CURRENT category is
-        # kept (personnel, inherited from the previous section) -- it does NOT
-        # fall back to the travail default.
+        # "## Divers" is neither Work nor Personal: the CURRENT category is
+        # kept (personal, inherited from the previous section) -- it does NOT
+        # fall back to the work default.
         self.assertEqual(self.todos[2]["text"], "sous un header inconnu")
-        self.assertEqual(self.todos[2]["cat"], "personnel")
+        self.assertEqual(self.todos[2]["cat"], "personal")
         self.assertTrue(self.todos[2]["done"])
-        self.assertEqual(self.todos[3]["cat"], "travail")
+        self.assertEqual(self.todos[3]["cat"], "work")
 
 
 class TestCreateTodo(unittest.TestCase):
     """POST /api/todos -- one server per test (each test writes)."""
 
-    def test_post_without_cat_defaults_to_travail_and_shifts_personnel_ids(self):
+    def test_post_without_cat_defaults_to_work_and_shifts_personal_ids(self):
         with AtlasServer() as srv:
             resp = srv.post("/api/todos", json_body={"text": "Nouvelle tâche"})
             self.assertEqual(resp.status, 200)
             todos = resp.json()
             self.assertEqual(len(todos), 4)
-            # The new "travail" item is written at the end of the Travail
-            # section, hence BEFORE the personnel items: it takes id 2 and the
-            # existing personnel item moves from id 2 to id 3 (silent
+            # The new "work" item is written at the end of the Work
+            # section, hence BEFORE the personal items: it takes id 2 and the
+            # existing personal item moves from id 2 to id 3 (silent
             # renumbering).
             self.assertEqual(todos[2], {"id": 2, "text": "Nouvelle tâche",
-                                        "done": False, "cat": "travail"})
+                                        "done": False, "cat": "work"})
             self.assertEqual(todos[3], {"id": 3, "text": "Tester le build PoE",
-                                        "done": False, "cat": "personnel"})
+                                        "done": False, "cat": "personal"})
 
-    def test_post_personnel_category_accepts_mixed_case(self):
+    def test_post_personal_category_accepts_mixed_case(self):
         with AtlasServer() as srv:
             # _norm_cat strips and lowercases the received category.
             todos = srv.post("/api/todos", json_body={
-                "text": "Course du soir", "cat": "  PerSonNel "}).json()
+                "text": "Course du soir", "cat": "  PerSonAl "}).json()
             self.assertEqual(todos[-1], {"id": 3, "text": "Course du soir",
-                                         "done": False, "cat": "personnel"})
+                                         "done": False, "cat": "personal"})
 
-    def test_post_unknown_cat_falls_back_to_travail(self):
+    def test_post_unknown_cat_falls_back_to_work(self):
         with AtlasServer() as srv:
             todos = srv.post("/api/todos", json_body={
                 "text": "Catégorie exotique", "cat": "boulot"}).json()
             created = [t for t in todos if t["text"] == "Catégorie exotique"]
             self.assertEqual(len(created), 1)
-            self.assertEqual(created[0]["cat"], "travail")
+            self.assertEqual(created[0]["cat"], "work")
 
     def test_post_empty_or_blank_text_returns_400(self):
         with AtlasServer() as srv:
@@ -154,12 +154,12 @@ class TestCreateTodo(unittest.TestCase):
         with AtlasServer() as srv:
             srv.post("/api/todos", json_body={"text": "Nouvelle tâche"})
             self.assertEqual(read_quick_md(srv), TODO_HEADER + (
-                "## Travail\n\n"
+                "## Work\n\n"
                 "- [ ] Préparer le bilan mensuel\n"
                 "- [x] Review the draft\n"
                 "- [ ] Nouvelle tâche\n"
                 "\n"
-                "## Personnel\n\n"
+                "## Personal\n\n"
                 "- [ ] Tester le build PoE\n"
                 "\n"
             ))
@@ -172,12 +172,12 @@ class TestCreateTodo(unittest.TestCase):
             todos = srv.post("/api/todos",
                              json_body={"text": "Premier item"}).json()
             self.assertEqual(todos, [{"id": 0, "text": "Premier item",
-                                      "done": False, "cat": "travail"}])
+                                      "done": False, "cat": "work"}])
             self.assertEqual(read_quick_md(srv), TODO_HEADER + (
-                "## Travail\n\n"
+                "## Work\n\n"
                 "- [ ] Premier item\n"
                 "\n"
-                "## Personnel\n\n"
+                "## Personal\n\n"
                 "\n"
             ))
 
@@ -245,39 +245,39 @@ class TestPatchTodo(unittest.TestCase):
 
     def test_patch_cat_moves_item_and_changes_its_id(self):
         with AtlasServer() as srv:
-            # SURPRISE: moving id 0 (travail) to personnel relocates it into the
-            # Personnel section, hence AFTER the remaining travail item -> its id
+            # SURPRISE: moving id 0 (work) to personal relocates it into the
+            # Personal section, hence AFTER the remaining work item -> its id
             # becomes 1 in the response, and the old id 1 becomes id 0.
             todos = srv.patch("/api/todos/0",
-                              json_body={"cat": "personnel"}).json()
+                              json_body={"cat": "personal"}).json()
             self.assertEqual(todos[0]["text"], "Review the draft")
             self.assertEqual(todos[1], {"id": 1,
                                         "text": "Préparer le bilan mensuel",
-                                        "done": False, "cat": "personnel"})
+                                        "done": False, "cat": "personal"})
             self.assertEqual(read_quick_md(srv), TODO_HEADER + (
-                "## Travail\n\n"
+                "## Work\n\n"
                 "- [x] Review the draft\n"
                 "\n"
-                "## Personnel\n\n"
+                "## Personal\n\n"
                 "- [ ] Préparer le bilan mensuel\n"
                 "- [ ] Tester le build PoE\n"
                 "\n"
             ))
 
-    def test_patch_unknown_cat_recategorizes_to_travail(self):
+    def test_patch_unknown_cat_recategorizes_to_work(self):
         with AtlasServer() as srv:
-            # SURPRISE: PATCH {"cat": "inconnu"} on a personnel item silently
-            # flips it back to travail (_norm_cat falls back to the default).
+            # SURPRISE: PATCH {"cat": "inconnu"} on a personal item silently
+            # flips it back to work (_norm_cat falls back to the default).
             todos = srv.patch("/api/todos/2", json_body={"cat": "inconnu"}).json()
             moved = [t for t in todos if t["text"] == "Tester le build PoE"]
-            self.assertEqual(moved[0]["cat"], "travail")
+            self.assertEqual(moved[0]["cat"], "work")
 
     def test_patch_combines_done_and_text(self):
         with AtlasServer() as srv:
             todos = srv.patch("/api/todos/0", json_body={
                 "done": True, "text": "Bilan envoyé"}).json()
             self.assertEqual(todos[0], {"id": 0, "text": "Bilan envoyé",
-                                        "done": True, "cat": "travail"})
+                                        "done": True, "cat": "work"})
 
     def test_patch_invalid_ids_return_404(self):
         with AtlasServer() as srv:
@@ -301,23 +301,23 @@ class TestDeleteTodo(unittest.TestCase):
             # The survivors are renumbered: the old id 1 becomes id 0.
             self.assertEqual(todos, [
                 {"id": 0, "text": "Review the draft", "done": True,
-                 "cat": "travail"},
+                 "cat": "work"},
                 {"id": 1, "text": "Tester le build PoE", "done": False,
-                 "cat": "personnel"},
+                 "cat": "personal"},
             ])
 
     def test_delete_keeps_empty_section_in_markdown(self):
         with AtlasServer() as srv:
             resp = srv.delete("/api/todos/2")
             self.assertEqual(resp.status, 200)
-            # The Personnel section is re-emitted even when empty (header +
+            # The Personal section is re-emitted even when empty (header +
             # blank line).
             self.assertEqual(read_quick_md(srv), TODO_HEADER + (
-                "## Travail\n\n"
+                "## Work\n\n"
                 "- [ ] Préparer le bilan mensuel\n"
                 "- [x] Review the draft\n"
                 "\n"
-                "## Personnel\n\n"
+                "## Personal\n\n"
                 "\n"
             ))
 

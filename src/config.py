@@ -21,8 +21,8 @@ atlas.toml format (all keys optional):
 
     prefix = "Acme"            # optional prefix in front of the fixed "Atlas Mind"
                                # brand ("Acme" → "Acme Atlas Mind", empty → "Atlas")
-    tagline = "Base de connaissances personnelle."
-    lang = "fr"                # "fr" or "en" (consumed by the i18n phase)
+    tagline = "Personal knowledge base."
+    lang = "en"                # "en" or "fr" (consumed by the i18n phase)
 
     [server]
     port = 8765
@@ -40,15 +40,15 @@ atlas.toml format (all keys optional):
 
     [git]
     author_name = "Atlas Bot"
-    author_email = "kb-bot@fly.dev"
+    author_email = "atlas-bot@example.com"
     repo_url = "..."
 
     [todo]
     file = "notes/quick.md"            # relative to content/, or absolute
-    categories = ["travail", "personnel"]  # the first is the default category
+    categories = ["work", "personal"]  # the first is the default category
 
     [build]
-    excluded_names = ["skill", "quick.md"]
+    excluded_names = ["drafts", "quick.md"]
 """
 from pathlib import Path
 import difflib
@@ -71,8 +71,8 @@ CONFIG_FILENAME = "atlas.toml"
 # "Acme" → "Acme Atlas Mind", empty → "Atlas Mind".
 SITE_WORDMARK = "Atlas Mind"
 DEFAULT_SITE_PREFIX = ""
-DEFAULT_TAGLINE = "Base de connaissances personnelle."
-DEFAULT_LANG = "fr"
+DEFAULT_TAGLINE = "Personal knowledge base."
+DEFAULT_LANG = "en"
 VALID_LANGS = ("fr", "en")
 
 # Defaults = exact historical values.
@@ -88,10 +88,10 @@ DEFAULT_GIT_PULL_INTERVAL = 300
 DEFAULT_STORE_KIND = "file"
 DEFAULT_KB_REPO_PATH = "/app/repo"
 DEFAULT_GIT_AUTHOR_NAME = "Atlas Bot"
-DEFAULT_GIT_AUTHOR_EMAIL = "kb-bot@fly.dev"
+DEFAULT_GIT_AUTHOR_EMAIL = "atlas-bot@example.com"
 DEFAULT_TODO_FILE = "notes/quick.md"
-DEFAULT_TODO_CATEGORIES = ("travail", "personnel")
-DEFAULT_EXCLUDED_NAMES = frozenset({"skill", "quick.md"})
+DEFAULT_TODO_CATEGORIES = ("work", "personal")
+DEFAULT_EXCLUDED_NAMES = frozenset({"quick.md"})
 
 
 class AtlasConfigError(Exception):
@@ -108,7 +108,8 @@ VALID_STORE_KINDS = ("file",)
 _KNOWN_TOML_KEYS = {
     "server": frozenset({"port", "auth_enabled", "session_secret",
                          "session_max_age", "git_pull_interval",
-                         "github_webhook_secret", "trusted_ip_header"}),
+                         "github_webhook_secret", "trusted_ip_header",
+                         "allow_private_remotes"}),
     "store": frozenset({"kind", "dir"}),
     "git": frozenset({"author_name", "author_email", "repo_url"}),
     "todo": frozenset({"file", "categories"}),
@@ -141,12 +142,12 @@ def _warn_unknown_toml_keys(data: dict) -> None:
         renamed = _RENAMED_TOML_KEYS.get(unknown)
         suggestion = ([renamed] if renamed
                       else difflib.get_close_matches(unknown, sorted(known), n=1))
-        hint = f" (voulais-tu {suggestion[0]!r} ?)" if suggestion else ""
-        print(f"atlas.toml : {label} inconnue ignorée{hint}", file=sys.stderr)
+        hint = f" (did you mean {suggestion[0]!r}?)" if suggestion else ""
+        print(f"atlas.toml: unknown {label} ignored{hint}", file=sys.stderr)
 
     for key, value in data.items():
         if key not in _KNOWN_TOML_TOP_LEVEL:
-            label = f"section [{key}]" if isinstance(value, dict) else f"clé {key}"
+            label = f"section [{key}]" if isinstance(value, dict) else f"key {key}"
             warn(label, key, _KNOWN_TOML_TOP_LEVEL)
             continue
         known_keys = _KNOWN_TOML_KEYS.get(key)
@@ -154,7 +155,7 @@ def _warn_unknown_toml_keys(data: dict) -> None:
             continue  # known scalar key, or malformed table (_table will raise)
         for sub_key in value:
             if sub_key not in known_keys:
-                warn(f"clé {key}.{sub_key}", sub_key, known_keys)
+                warn(f"key {key}.{sub_key}", sub_key, known_keys)
 
 
 def resolve_mind_root(env=None) -> Path:
@@ -177,7 +178,7 @@ def _parse_int(raw, label: str) -> int:
     try:
         return int(raw)
     except (TypeError, ValueError):
-        raise AtlasConfigError(f"{label} doit être un entier (reçu {raw!r})")
+        raise AtlasConfigError(f"{label} must be an integer (got {raw!r})")
 
 
 def _table(data: dict, name: str) -> dict:
@@ -186,8 +187,8 @@ def _table(data: dict, name: str) -> dict:
         return {}
     if not isinstance(value, dict):
         raise AtlasConfigError(
-            f"atlas.toml : [{name}] doit être une table TOML "
-            f"(reçu {type(value).__name__})")
+            f"atlas.toml: [{name}] must be a TOML table "
+            f"(got {type(value).__name__})")
     return value
 
 
@@ -198,7 +199,7 @@ def _toml_str(table: dict, section: str, key: str, default: str) -> str:
     if not isinstance(value, str):
         # empty section = atlas.toml root key (site_name, tagline, lang).
         label = f"{section}.{key}" if section else key
-        raise AtlasConfigError(f"atlas.toml : {label} doit être une chaîne")
+        raise AtlasConfigError(f"atlas.toml: {label} must be a string")
     return value
 
 
@@ -207,7 +208,7 @@ def _toml_int(table: dict, section: str, key: str, default: int) -> int:
     if value is None:
         return default
     if isinstance(value, bool) or not isinstance(value, int):
-        raise AtlasConfigError(f"atlas.toml : {section}.{key} doit être un entier")
+        raise AtlasConfigError(f"atlas.toml: {section}.{key} must be an integer")
     return value
 
 
@@ -216,7 +217,7 @@ def _toml_bool(table: dict, section: str, key: str, default: bool) -> bool:
     if value is None:
         return default
     if not isinstance(value, bool):
-        raise AtlasConfigError(f"atlas.toml : {section}.{key} doit être un booléen")
+        raise AtlasConfigError(f"atlas.toml: {section}.{key} must be a boolean")
     return value
 
 
@@ -227,7 +228,7 @@ def _toml_str_list(table: dict, section: str, key: str):
         return None
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
         raise AtlasConfigError(
-            f"atlas.toml : {section}.{key} doit être une liste de chaînes")
+            f"atlas.toml: {section}.{key} must be a list of strings")
     return value
 
 
@@ -282,7 +283,7 @@ class AtlasConfig:
             # unsupported language must fail clearly, not show up as broken
             # English later on.
             raise AtlasConfigError(
-                f"lang doit valoir 'fr' ou 'en' (reçu {self.lang!r})")
+                f"lang must be 'fr' or 'en' (got {self.lang!r})")
         # Derived machine name (MCP serverInfo): "Acme Atlas" →
         # "acme-atlas", without a prefix → "atlas".
         self.site_slug = _slugify(self.site_name)
@@ -296,8 +297,8 @@ class AtlasConfig:
             # Without this bound, the bind blows up later as a raw OverflowError
             # — exactly the crash AtlasConfigError promises to avoid.
             raise AtlasConfigError(
-                f"PORT / server.port doit être entre 0 et 65535 "
-                f"(reçu {self.port})")
+                f"PORT / server.port must be between 0 and 65535 "
+                f"(got {self.port})")
 
         # Historical env semantics preserved: any NON-EMPTY value enables auth
         # (including "0"), an empty value disables it.
@@ -324,8 +325,8 @@ class AtlasConfig:
             # A cookie with Max-Age <= 0 would expire immediately (login loop);
             # we refuse rather than open an unusable instance.
             raise AtlasConfigError(
-                f"SESSION_MAX_AGE / server.session_max_age doit être positif "
-                f"(reçu {self.session_max_age})")
+                f"SESSION_MAX_AGE / server.session_max_age must be positive "
+                f"(got {self.session_max_age})")
 
         if "GIT_PULL_INTERVAL" in env:
             self.git_pull_interval = _parse_int(env["GIT_PULL_INTERVAL"],
@@ -338,8 +339,8 @@ class AtlasConfig:
             # time.sleep(negative) would silently kill the git_pull_loop thread
             # (periodic sync lost in the cloud).
             raise AtlasConfigError(
-                f"GIT_PULL_INTERVAL / server.git_pull_interval doit être "
-                f"positif ou nul (reçu {self.git_pull_interval})")
+                f"GIT_PULL_INTERVAL / server.git_pull_interval must be "
+                f"positive or zero (got {self.git_pull_interval})")
 
         if "GITHUB_WEBHOOK_SECRET" in env:
             webhook_secret = env["GITHUB_WEBHOOK_SECRET"]
@@ -352,13 +353,29 @@ class AtlasConfig:
         # limit). If it carries a list (X-Forwarded-For stacked by
         # nginx/Caddy), server.py takes the LAST element — the only one set by
         # the trusted proxy, the preceding ones being supplied by the client
-        # (forgeable). None (default) = server.py's historical chain:
-        # Fly-Client-IP, then X-Forwarded-For, then the peer.
+        # (forgeable). None (default): on Fly, server.py trusts Fly-Client-IP
+        # (platform-injected); otherwise it falls back to the socket peer and
+        # does NOT trust client headers (a forgeable X-Forwarded-First would let
+        # an attacker rotate it to bypass the login rate limit). Self-hosters
+        # behind a proxy should set this header explicitly.
         # `or` semantics: an EMPTY env value falls back to atlas.toml.
         trusted_ip_header = (env.get("ATLAS_TRUSTED_IP_HEADER")
                              or _toml_str(server, "server",
                                           "trusted_ip_header", ""))
         self.trusted_ip_header = trusted_ip_header.strip() or None
+
+        # Federation SSRF guard: by default a pasted node link may only point at
+        # a PUBLIC host (the subscribe client refuses URLs resolving to
+        # loopback/private/link-local/reserved addresses — cloud metadata,
+        # internal services). Set this True to also allow localhost/LAN remotes
+        # (home-lab federation between instances on a private network).
+        allow_private_env = env.get("ATLAS_ALLOW_PRIVATE_REMOTES", "").strip()
+        if allow_private_env:
+            self.allow_private_remotes = allow_private_env.lower() in (
+                "1", "true", "yes", "on")
+        else:
+            self.allow_private_remotes = _toml_bool(
+                server, "server", "allow_private_remotes", False)
 
         # ── identity/share registry ────────────────────────────────────────
         # `or` (and not presence): an EMPTY env value falls back to the next
@@ -370,8 +387,8 @@ class AtlasConfig:
             # Reject anything but 'file' explicitly: a typo must fail loudly at
             # boot rather than degrade into an unintelligible runtime error.
             raise AtlasConfigError(
-                f"store.kind / ATLAS_STORE doit être 'file' "
-                f"(reçu {self.store_kind!r})")
+                f"store.kind / ATLAS_STORE must be 'file' "
+                f"(got {self.store_kind!r})")
         raw_store_dir = (env.get("ATLAS_STORE_DIR")
                          or _toml_str(store, "store", "dir", ""))
         self.store_dir = (self._mind_path(raw_store_dir) if raw_store_dir
@@ -382,15 +399,15 @@ class AtlasConfig:
             # the content repo: all of content/ would become invisible to git,
             # and trigger_sync's git add -A would no longer push anything.
             raise AtlasConfigError(
-                "store.dir / ATLAS_STORE_DIR ne peut pas être la racine du "
-                f"mind ({self.store_dir}) — utilise un sous-dossier dédié "
-                "(ex: .atlas) ou un chemin hors du mind")
+                "store.dir / ATLAS_STORE_DIR cannot be the mind root "
+                f"({self.store_dir}) — use a dedicated subfolder "
+                "(e.g. .atlas) or a path outside the mind")
         if (store_dir_resolved == self.content_root
                 or self.content_root in store_dir_resolved.parents):
             raise AtlasConfigError(
-                "store.dir / ATLAS_STORE_DIR ne peut pas vivre sous content/ "
-                f"({self.store_dir}) — le registre (hashes de mots de passe, "
-                "tokens) serait servi et committé avec le contenu")
+                "store.dir / ATLAS_STORE_DIR cannot live under content/ "
+                f"({self.store_dir}) — the registry (password hashes, tokens) "
+                "would be served and committed together with the content")
 
         # ── git ────────────────────────────────────────────────────────────
         self.git_author_name = _toml_str(git, "git", "author_name",
@@ -410,16 +427,16 @@ class AtlasConfig:
         if categories is None:
             categories = list(DEFAULT_TODO_CATEGORIES)
         categories = [c.strip().lower() for c in categories if c.strip()]
-        # Deduplication (order preserved): a repeated category ("travail",
-        # "TRAVAIL") would make write_todos emit its section twice → each
+        # Deduplication (order preserved): a repeated category ("work",
+        # "WORK") would make write_todos emit its section twice → each
         # save/load round-trip would DOUBLE that category's todos.
         categories = list(dict.fromkeys(categories))
         if not categories:
             raise AtlasConfigError(
-                "atlas.toml : todo.categories ne peut pas être vide")
+                "atlas.toml: todo.categories cannot be empty")
         self.todo_categories = tuple(categories)
         self.todo_cat_default = self.todo_categories[0]
-        # "travail" → "Travail", "personnel" → "Personnel": derived H2 headers.
+        # "work" → "Work", "personal" → "Personal": derived H2 headers.
         self.todo_cat_headers = {c: c.capitalize() for c in self.todo_categories}
 
         # ── build ──────────────────────────────────────────────────────────
@@ -464,9 +481,9 @@ class AtlasConfig:
             try:
                 data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
             except (tomllib.TOMLDecodeError, UnicodeDecodeError) as e:
-                raise AtlasConfigError(f"atlas.toml invalide ({toml_path}) : {e}")
+                raise AtlasConfigError(f"invalid atlas.toml ({toml_path}): {e}")
             except OSError as e:
-                raise AtlasConfigError(f"atlas.toml illisible ({toml_path}) : {e}")
+                raise AtlasConfigError(f"unreadable atlas.toml ({toml_path}): {e}")
         return cls(resolved_root, toml_data=data, env=env)
 
     def __repr__(self) -> str:

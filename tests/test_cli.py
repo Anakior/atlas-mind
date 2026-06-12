@@ -66,6 +66,9 @@ def run_cli(*args, env: dict = None, timeout: float = 60):
     return subprocess.run(
         [sys.executable, str(CLI), *[str(a) for a in args]],
         capture_output=True, text=True, timeout=timeout,
+        # DEVNULL stdin → `atlas init` sees a non-TTY and stays non-interactive
+        # (never prompts/hangs), whatever terminal the test runs from.
+        stdin=subprocess.DEVNULL,
         env=env if env is not None else clean_env(),
     )
 
@@ -120,15 +123,15 @@ class TestCliInit(CliMindTest):
         result = run_cli("init", self.mind)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.mind / "atlas.toml").is_file())
-        self.assertTrue((self.mind / "content" / "bienvenue.md").is_file())
-        self.assertTrue((self.mind / "content" / "notes" / "exemple.md").is_file())
+        self.assertTrue((self.mind / "content" / "welcome.md").is_file())
+        self.assertTrue((self.mind / "content" / "notes" / "example.md").is_file())
         self.assertTrue((self.mind / "content" / "inbox").is_dir())
         gitignore = (self.mind / ".gitignore").read_text(encoding="utf-8")
         self.assertIn("dist/", gitignore)
         self.assertIn(".atlas/", gitignore)
         # The example docs reference each other via cross [[wikilinks]].
-        bienvenue = (self.mind / "content" / "bienvenue.md").read_text(encoding="utf-8")
-        self.assertIn("[[notes/exemple]]", bienvenue)
+        welcome = (self.mind / "content" / "welcome.md").read_text(encoding="utf-8")
+        self.assertIn("[[notes/example]]", welcome)
         # git init -b main
         branch = subprocess.run(
             ["git", "-C", str(self.mind), "symbolic-ref", "--short", "HEAD"],
@@ -144,12 +147,12 @@ class TestCliInit(CliMindTest):
         self.assertEqual(config.store_kind, "file")
         self.assertEqual(config.store_dir, self.mind / ".atlas")
         self.assertEqual(config.port, 8765)
-        self.assertEqual(config.excluded_names, {"skill", "quick.md"})
+        self.assertEqual(config.excluded_names, {"quick.md"})
         self.assertEqual(config.todo_file,
                          self.mind / "content" / "notes" / "quick.md")
         # The template's [todo].categories example is commented out: the engine
-        # defaults ("travail"/"personnel") apply as-is.
-        self.assertEqual(config.todo_categories, ("travail", "personnel"))
+        # defaults ("work"/"personal") apply as-is.
+        self.assertEqual(config.todo_categories, ("work", "personal"))
 
     def test_init_refuses_non_empty_dir(self):
         self.mind.mkdir(parents=True)
@@ -169,7 +172,7 @@ class TestCliInit(CliMindTest):
         self.assertEqual((self.mind / "atlas.toml").read_text(encoding="utf-8"),
                          custom_toml)
         self.assertIn("kept", result.stdout)
-        self.assertTrue((self.mind / "content" / "bienvenue.md").is_file())
+        self.assertTrue((self.mind / "content" / "welcome.md").is_file())
 
     def test_init_without_git_on_path(self):
         empty_bin = self.tmp / "empty-bin"
@@ -178,7 +181,115 @@ class TestCliInit(CliMindTest):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("git not found", result.stdout)
         self.assertFalse((self.mind / ".git").exists())
-        self.assertTrue((self.mind / "content" / "bienvenue.md").is_file())
+        self.assertTrue((self.mind / "content" / "welcome.md").is_file())
+
+    def test_init_default_scaffold_is_english(self):
+        self.init_mind()
+        toml = (self.mind / "atlas.toml").read_text(encoding="utf-8")
+        self.assertIn('lang = "en"', toml)
+        self.assertIn('tagline = "Personal knowledge base."', toml)
+        welcome = (self.mind / "content" / "welcome.md").read_text(encoding="utf-8")
+        self.assertIn("# Welcome", welcome)
+        # The going-online guide explains the private GitHub remote + push rights.
+        out = run_cli("init", self.tmp / "mind2").stdout
+        self.assertIn("PRIVATE", out)
+        self.assertIn("remote add origin", out)
+
+    def test_init_lang_and_flags_non_interactive(self):
+        # Flags fully drive the scaffold; --yes guarantees no prompt even on a TTY.
+        result = run_cli("init", self.mind, "--yes", "--lang", "fr",
+                         "--prefix", "Acme", "--tagline", "Ma base.")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        toml = (self.mind / "atlas.toml").read_text(encoding="utf-8")
+        self.assertIn('lang = "fr"', toml)
+        self.assertIn('prefix = "Acme"', toml)
+        self.assertIn('tagline = "Ma base."', toml)
+        # French scaffold variant: the welcome doc is in French.
+        welcome = (self.mind / "content" / "welcome.md").read_text(encoding="utf-8")
+        self.assertIn("# Bienvenue", welcome)
+
+
+# ─── deploy ──────────────────────────────────────────────────────────────────
+
+
+class TestCliDeploy(CliMindTest):
+
+    def test_deploy_compose_scaffolds_files_and_guide(self):
+        self.init_mind()
+        result = run_cli("deploy", self.mind)  # default target: compose
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for rel in ("deploy/Dockerfile", "deploy/docker-compose.yml",
+                    "deploy/Caddyfile", "deploy/.env.example"):
+            self.assertTrue((self.mind / rel).is_file(), rel)
+        # The image installs the engine from PyPI (self-contained for pip users).
+        self.assertIn("pip install", (self.mind / "deploy" / "Dockerfile").read_text(encoding="utf-8"))
+        self.assertIn("SESSION_SECRET", result.stdout)
+
+    def test_deploy_systemd_target(self):
+        self.init_mind()
+        result = run_cli("deploy", self.mind, "--target", "systemd")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.mind / "deploy" / "atlas.service").is_file())
+
+    def test_deploy_fly_target(self):
+        self.init_mind()
+        result = run_cli("deploy", self.mind, "--target", "fly")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.mind / "deploy" / "fly.toml").is_file())
+        dockerfile = (self.mind / "deploy" / "Dockerfile.fly").read_text(encoding="utf-8")
+        # Clone-at-boot entrypoint (NOT `atlas serve`, which needs content/ first).
+        self.assertIn("python", dockerfile)
+        self.assertIn("atlas_mind.server", dockerfile)
+        self.assertIn("GITHUB_REPO_URL", result.stdout)
+        # Non-interactive (no TTY, no --app): the app name defaults to a slug of
+        # the mind folder ("mind") — no placeholder left to edit by hand.
+        toml = (self.mind / "deploy" / "fly.toml").read_text(encoding="utf-8")
+        self.assertIn("app = 'mind'", toml)
+        self.assertNotIn("your-atlas-app", toml)
+        self.assertIn("fly apps create mind", result.stdout)
+
+    def test_deploy_fly_app_flag_overrides_name(self):
+        self.init_mind()
+        result = run_cli("deploy", self.mind, "--target", "fly", "--app", "My Cool Atlas")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        toml = (self.mind / "deploy" / "fly.toml").read_text(encoding="utf-8")
+        # The name is slugified to a DNS-safe Fly app name.
+        self.assertIn("app = 'my-cool-atlas'", toml)
+        self.assertIn("fly apps create my-cool-atlas", result.stdout)
+
+    def test_deploy_fly_wizard_refuses_non_interactive(self):
+        # run_cli pipes stdin (DEVNULL) → no TTY → the wizard must refuse cleanly
+        # rather than block on a prompt.
+        self.init_mind()
+        result = run_cli("deploy", self.mind, "--target", "fly", "--wizard")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("interactive terminal", result.stderr)
+
+
+    def test_deploy_keeps_existing_without_force(self):
+        self.init_mind()
+        run_cli("deploy", self.mind)
+        (self.mind / "deploy" / "Caddyfile").write_text("custom", encoding="utf-8")
+        again = run_cli("deploy", self.mind)
+        self.assertIn("kept", again.stdout)
+        self.assertEqual((self.mind / "deploy" / "Caddyfile").read_text(encoding="utf-8"),
+                         "custom")
+
+
+class TestGithubRepoUrl(unittest.TestCase):
+    """_build_github_repo_url normalizes repo references into the token URL."""
+
+    def test_accepted_forms_all_produce_token_url(self):
+        expected = "https://x-access-token:tok@github.com/me/repo.git"
+        for ref in ("https://github.com/me/repo.git",
+                    "https://github.com/me/repo",
+                    "git@github.com:me/repo.git",
+                    "me/repo"):
+            self.assertEqual(cli._build_github_repo_url(ref, "tok"), expected, ref)
+
+    def test_unrecognized_ref_raises(self):
+        with self.assertRaises(cli.CliError):
+            cli._build_github_repo_url("not a repo", "tok")
 
 
 # ─── build ─────────────────────────────────────────────────────────────────────
@@ -191,7 +302,7 @@ class TestCliBuild(CliMindTest):
         result = run_cli("build", self.mind)
         self.assertEqual(result.returncode, 0, result.stderr)
         index = (self.mind / "dist" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("bienvenue.md", index)
+        self.assertIn("welcome.md", index)
 
     def test_build_offline_generates_monolith(self):
         self.init_mind()
@@ -199,7 +310,7 @@ class TestCliBuild(CliMindTest):
         self.assertEqual(result.returncode, 0, result.stderr)
         offline = (self.mind / "dist" / "index-offline.html").read_text(encoding="utf-8")
         # Embedded content (not just the tree metadata).
-        self.assertIn("Une note ordinaire", offline)
+        self.assertIn("An ordinary note", offline)
 
     def test_build_unknown_mind_is_a_human_error(self):
         result = run_cli("build", self.tmp / "nexiste-pas")
@@ -445,20 +556,20 @@ class TestCliServe(CliMindTest):
         port, _ = self._launch_serve(self.mind)
         base = f"http://127.0.0.1:{port}"
 
-        status, body = http_get(f"{base}/api/v1/search?q=bienvenue",
+        status, body = http_get(f"{base}/api/v1/search?q=welcome",
                                 headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(status, 200, body[:300])
         paths = [hit["path"] for hit in json.loads(body)]
-        self.assertIn("bienvenue.md", paths)
+        self.assertIn("welcome.md", paths)
 
-        status, _ = http_get(f"{base}/api/v1/search?q=bienvenue",
+        status, _ = http_get(f"{base}/api/v1/search?q=welcome",
                              headers={"Authorization": "Bearer " + "0" * 64})
         self.assertEqual(status, 401)
 
         # serve built the missing viewer at startup (dist/index.html).
         status, body = http_get(f"{base}/")
         self.assertEqual(status, 200)
-        self.assertIn(b"bienvenue.md", body)
+        self.assertIn(b"welcome.md", body)
 
     def test_serve_unknown_mind_is_a_human_error(self):
         result = run_cli("serve", self.tmp / "nexiste-pas", "--port", "1")

@@ -151,7 +151,8 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
 
 ## Requirements
 
-- **Python 3** (standard library only; developed on 3.12+).
+- **Python >= 3.11** (standard library only; uses `tomllib`, added in 3.11;
+  developed on 3.12+).
 - **A git repository for your content** (the mind). For cloud mode with content
   sync, a GitHub repository.
 - **Somewhere to run it** — your machine for local use, or any host that can run
@@ -167,7 +168,7 @@ assets ship inside the package — no separate download). A virtualenv is
 recommended.
 
 ```bash
-pip install atlas-mind                                   # once published to PyPI
+pip install atlas-mind
 # or, straight from the repository:
 pip install "git+https://github.com/Anakior/atlas-mind.git"
 # or, for development (editable, from a clone):
@@ -294,7 +295,7 @@ A minimal `atlas.toml` (roughly what `init` scaffolds):
 ```toml
 # prefix = "Acme"          # "Acme" -> "Acme Atlas Mind"; empty/absent -> "Atlas Mind"
 tagline = "Personal knowledge base."
-lang = "fr"                # "fr" or "en"
+lang = "en"                # "fr" or "en"
 
 [server]
 # port = 8765
@@ -311,7 +312,7 @@ kind = "file"              # local JSON under .atlas/ (no database)
 # categories = ["work", "personal"]
 
 [build]
-# excluded_names = ["skill", "quick.md"]
+# excluded_names = ["drafts", "quick.md"]
 ```
 
 ### Key reference
@@ -336,11 +337,11 @@ take effect when the variable is set (even empty); keys marked *or* fall back to
 | `[store] kind` | `ATLAS_STORE` | or | `file` | Storage backend (local JSON). |
 | `[store] dir` | `ATLAS_STORE_DIR` | or | `<mind>/.atlas` | Cannot be the mind root or under `content/`. |
 | `[git] author_name` | — | — | `Atlas Bot` | Commit author for the bot. |
-| `[git] author_email` | — | — | `kb-bot@fly.dev` | Commit author email for the bot. |
-| `[git] repo_url` | `GITHUB_REPO_URL` | or | none | Content repo URL (initial clone reads the env var only). |
+| `[git] author_email` | — | — | `atlas-bot@example.com` | Commit author email for the bot. |
+| `[git] repo_url` | `GITHUB_REPO_URL` | or | none | Content repo URL **with the push token embedded** (used for the boot clone AND the content push-back) — see below. |
 | `[todo] file` | — | — | `notes/quick.md` | Todo file, relative to `content/`. |
-| `[todo] categories` | — | — | `["travail", "personnel"]` | First is the default category. |
-| `[build] excluded_names` | — | — | `{"skill", "quick.md"}` | Names hidden from the viewer (dotfiles always excluded). |
+| `[todo] categories` | — | — | `["work", "personal"]` | First is the default category. |
+| `[build] excluded_names` | — | — | `{"quick.md"}` | Names hidden from the viewer (dotfiles always excluded). |
 
 `ATLAS_MIND` (and, in cloud mode only, `KB_REPO_PATH`, default `/app/repo`) select
 the mind root. Resolution order: explicit `--dir`, then `ATLAS_MIND`, then
@@ -363,6 +364,31 @@ So a freshly-pushed note appears within five minutes by default, or immediately
 if the webhook is configured. Lower `GIT_PULL_INTERVAL` for snappier polling, or
 rely on the webhook and raise it. (Edits made *through* the viewer are committed
 and pushed by the instance itself, so they need no manual sync.)
+
+### The GitHub push token
+
+In cloud mode the instance both **clones** your private mind repo at boot and
+**pushes** content writes back to it. Both use a single setting: the repo URL
+**with the token embedded**, named `GITHUB_REPO_URL`:
+
+```
+GITHUB_REPO_URL="https://x-access-token:<TOKEN>@github.com/<you>/<your-mind>.git"
+```
+
+`<TOKEN>` is a GitHub **fine-grained personal access token** with **Contents:
+Read and write** on that one repo. Create it at **GitHub → your avatar →
+Settings → Developer settings → Personal access tokens → Fine-grained tokens →
+Generate new token** (direct link:
+`https://github.com/settings/personal-access-tokens/new`): under *Repository
+access* pick *Only select repositories* → your mind repo, then under
+*Permissions → Repository permissions* set **Contents → Read and write**. The
+token (`github_pat_…`) is shown once — copy it.
+
+Where to set `GITHUB_REPO_URL` depends on the host: **Fly** →
+`fly secrets set GITHUB_REPO_URL="…"`; **Docker Compose** → a line in `.env`;
+**systemd** → `Environment=GITHUB_REPO_URL="…"`. It is a secret (it carries the
+token) — never commit it. The registry under `.atlas/` is gitignored, so the
+token is never pushed with your content.
 
 ### Updating the engine
 
@@ -468,4 +494,4 @@ AGPL, but please do not present a modified version as the official Atlas Mind, a
 keep the brand notice intact.
 
 Bundled third-party frontend libraries and fonts are vendored under their own
-licences (MIT, Apache-2.0, BSD-3-Clause, OFL, …); see `web/vendor/LICENSES.md`.
+licences (MIT, Apache-2.0, BSD-3-Clause, OFL, …); see `src/web/vendor/LICENSES.md`.

@@ -7,7 +7,7 @@ under <ROOT>/.atlas/. The git clone at boot is bypassed via KB_REPO_PATH={root}
 
 Behaviors characterized here (current contract, not necessarily ideal):
 - A failed login (wrong password OR unknown email) returns the SAME 401
-  "Identifiants invalides" (anti-enumeration, dummy scrypt hash consumed).
+  "Invalid credentials" (anti-enumeration, dummy scrypt hash consumed).
 - An account with role 'api' CANNOT log in via password, even a correct one.
 - /api/share/list with a FileStore returns "token": null: the cleartext token
   is never stored (only its SHA256), the key stays present to preserve the
@@ -228,7 +228,7 @@ class TestCloudFileStoreAuth(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         self.assertIn("text/html", resp.headers.get("Content-Type", ""))
         self.assertIn('action="/login"', resp.text)
-        self.assertIn("Connexion", resp.text)
+        self.assertIn("Sign in", resp.text)
 
     def test_root_redirects_to_login_without_cookie(self):
         resp = self.srv.get("/")
@@ -250,7 +250,7 @@ class TestCloudFileStoreAuth(unittest.TestCase):
     def test_login_wrong_password_401(self):
         resp = login(self.srv, ADMIN_EMAIL, "wrong-password")
         self.assertEqual(resp.status, 401)
-        self.assertIn("Identifiants invalides", resp.text)
+        self.assertIn("Invalid credentials", resp.text)
         self.assertIsNone(resp.headers.get("Set-Cookie"))
 
     def test_login_unknown_email_same_401_as_wrong_password(self):
@@ -258,7 +258,7 @@ class TestCloudFileStoreAuth(unittest.TestCase):
         # 401 as the wrong password.
         resp = login(self.srv, "nobody@test.local", "x" * 12)
         self.assertEqual(resp.status, 401)
-        self.assertIn("Identifiants invalides", resp.text)
+        self.assertIn("Invalid credentials", resp.text)
 
     def test_login_success_sets_session_cookie(self):
         resp = login(self.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
@@ -273,7 +273,7 @@ class TestCloudFileStoreAuth(unittest.TestCase):
     def test_api_role_cannot_login_even_with_correct_password(self):
         resp = login(self.srv, API_EMAIL, API_PASSWORD)
         self.assertEqual(resp.status, 401)
-        self.assertIn("Identifiants invalides", resp.text)
+        self.assertIn("Invalid credentials", resp.text)
 
     def test_login_with_legacy_bcrypt_hash(self):
         try:
@@ -449,7 +449,7 @@ class TestCloudFileStoreShares(unittest.TestCase):
 
         gone = self.srv.get(f"/share/{token}")
         self.assertEqual(gone.status, 410)
-        self.assertIn("voqu", gone.text)  # "Lien r&eacute;voqu&eacute;" (revoked)
+        self.assertIn("revoked", gone.text)  # EN: "Link revoked"
 
         again = self.srv.delete(
             f"/api/share/{share_id}",
@@ -677,7 +677,7 @@ class TestCloudFileStoreCorruptRegistry(unittest.TestCase):
     503/401), never treated as an empty registry.
     Without this, corrupting shares.json re-served a REVOKED link (fail-open
     revocation) and corrupting users.json turned every login into a 401
-    "Identifiants invalides" (silent lockout) instead of a clean 503."""
+    "Invalid credentials" (silent lockout) instead of a clean 503."""
 
     srv: AtlasServer
     api_token: str
@@ -725,7 +725,7 @@ class TestCloudFileStoreCorruptRegistry(unittest.TestCase):
         try:
             resp = self.srv.get(f"/share/{token}")
             self.assertEqual(resp.status, 503)
-            self.assertIn("indisponible", resp.text)
+            self.assertIn("unavailable", resp.text)
         finally:
             self._registry_path("shares.json").write_text(
                 original, encoding="utf-8")
@@ -737,7 +737,7 @@ class TestCloudFileStoreCorruptRegistry(unittest.TestCase):
         try:
             resp = login(self.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
             self.assertEqual(resp.status, 503)
-            self.assertIn("indisponible", resp.text)
+            self.assertIn("unavailable", resp.text)
             # Unexpected root type (dict instead of list): same fail-closed.
             self._registry_path("users.json").write_text("{}", encoding="utf-8")
             resp = login(self.srv, ADMIN_EMAIL, ADMIN_PASSWORD)

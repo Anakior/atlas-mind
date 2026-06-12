@@ -40,6 +40,9 @@ CLOUD_ENV = {
     "KB_REPO_PATH": "{root}",
     "ATLAS_STORE": "file",
     "GIT_PULL_INTERVAL": "3600",
+    # Self-subscription tests fetch the node over loopback (127.0.0.1); opt in
+    # to private/loopback remotes so the SSRF guard does not block the harness.
+    "ATLAS_ALLOW_PRIVATE_REMOTES": "1",
 }
 
 
@@ -140,6 +143,14 @@ class TestNodePublishing(unittest.TestCase):
     def test_create_rejects_unknown_path(self):
         r = self._create_node("ghost", "does/not/exist")
         self.assertEqual(r.status, 400)
+
+    def test_create_rejects_unsafe_names(self):
+        # A node name becomes a directory under content/remotes/: '.', '..',
+        # separators and control chars must be refused (a "." name would
+        # collapse the mirror onto the whole remotes/ tree → sibling wipe).
+        for bad in (".", "..", "a/b", "x\\y", "", "  "):
+            r = self._create_node(bad, "team")
+            self.assertEqual(r.status, 400, f"name {bad!r} accepted ({r.status})")
 
     def test_admin_list_reflects_created_nodes(self):
         self._create_node("listed", "team")
@@ -253,6 +264,50 @@ class TestNodeSubscription(unittest.TestCase):
         r = self.srv.post("/api/admin/remotes",
                           json_body={"link": "not-a-node-link"}, headers=self._hdr())
         self.assertEqual(r.status, 400)
+
+    def test_appropriate_folder_refuses_overwrite(self):
+        # Regression: the folder branch must mirror the single-file 409 guard —
+        # never silently overwrite the admin's own (non-mirror) documents.
+        self._publish_and_subscribe("team", "team", "appr-dir")
+        r1 = self.srv.post("/api/admin/remotes/appropriate",
+                           json_body={"name": "appr-dir", "source": "", "dest": "copy1"},
+                           headers=self._hdr())
+        self.assertEqual(r1.status, 201, r1.body)
+        # A second appropriation onto the same dest collides → 409, no overwrite.
+        r2 = self.srv.post("/api/admin/remotes/appropriate",
+                           json_body={"name": "appr-dir", "source": "", "dest": "copy1"},
+                           headers=self._hdr())
+        self.assertEqual(r2.status, 409, r2.body)
+
+
+class TestFederationSSRFGuard(unittest.TestCase):
+    """Without ATLAS_ALLOW_PRIVATE_REMOTES, subscribing to a loopback/private
+    URL must be refused by the SSRF guard (the link is attacker-supplied)."""
+
+    @classmethod
+    def setUpClass(cls):
+        env = {k: v for k, v in CLOUD_ENV.items()
+               if k != "ATLAS_ALLOW_PRIVATE_REMOTES"}
+        cls.srv = AtlasServer(mind=dict(MIND), extra_env=env)
+        cls.srv.start()
+        fs = store.FileStore(cls.srv.root / ".atlas")
+        fs.upsert_user(ADMIN_EMAIL, {
+            "password_hash": store.hash_password(ADMIN_PW), "role": "admin"})
+        resp = cls.srv.post("/login", json_body={"email": ADMIN_EMAIL, "password": ADMIN_PW})
+        cls.admin = resp.headers.get("Set-Cookie", "").split(";", 1)[0]
+        cls.csrf = cls.srv.get("/api/me", headers={"Cookie": cls.admin}).json().get("csrf_token", "")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_loopback_remote_refused_by_default(self):
+        link = _encode_link("http://127.0.0.1:9/", "evil", "team", "tok")
+        r = self.srv.post("/api/admin/remotes", json_body={"link": link},
+                          headers={"Cookie": self.admin, "X-CSRF-Token": self.csrf})
+        self.assertEqual(r.status, 201, r.body)
+        self.assertFalse(r.json()["sync"]["ok"])           # sync blocked
+        self.assertIn("non-routable", r.json()["sync"]["error"])
 
 
 if __name__ == "__main__":

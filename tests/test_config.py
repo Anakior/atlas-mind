@@ -71,13 +71,13 @@ class TestDefaults(ConfigTestBase):
 
     def test_default_todo_build_git_values(self):
         cfg = self.load()
-        self.assertEqual(cfg.todo_categories, ("travail", "personnel"))
-        self.assertEqual(cfg.todo_cat_default, "travail")
+        self.assertEqual(cfg.todo_categories, ("work", "personal"))
+        self.assertEqual(cfg.todo_cat_default, "work")
         self.assertEqual(cfg.todo_cat_headers,
-                         {"travail": "Travail", "personnel": "Personnel"})
-        self.assertEqual(cfg.excluded_names, {"skill", "quick.md"})
+                         {"work": "Work", "personal": "Personal"})
+        self.assertEqual(cfg.excluded_names, {"quick.md"})
         self.assertEqual(cfg.git_author_name, "Atlas Bot")
-        self.assertEqual(cfg.git_author_email, "kb-bot@fly.dev")
+        self.assertEqual(cfg.git_author_email, "atlas-bot@example.com")
 
     def test_web_dir_is_engine_side(self):
         # web/ (viewer template + PWA assets) belongs to the ENGINE: even with a
@@ -181,8 +181,8 @@ excluded_names = ["secret.md"]
         self.assertEqual(cfg.port, 9100)
         self.assertEqual(cfg.session_secret, b"dev-secret-change-me")
         self.assertEqual(cfg.store_kind, "file")
-        self.assertEqual(cfg.todo_categories, ("travail", "personnel"))
-        self.assertEqual(cfg.excluded_names, {"skill", "quick.md"})
+        self.assertEqual(cfg.todo_categories, ("work", "personal"))
+        self.assertEqual(cfg.excluded_names, {"quick.md"})
 
     def test_env_beats_toml(self):
         self.write_toml(self.FULL_TOML)
@@ -544,18 +544,40 @@ class TestTrustedIpHeaderEndToEnd(unittest.TestCase):
                 "X-Forwarded-For": "198.51.100.99, 203.0.113.78"})
             self.assertEqual(resp.status, 401)
 
-    def test_default_keeps_fly_header_chain(self):
-        # Without trusted_ip_header: EXACT historical behavior —
-        # Fly-Client-IP identifies the client.
+    def test_default_ignores_forgeable_client_headers(self):
+        # Without trusted_ip_header and NOT on Fly: the socket peer identifies
+        # the client. Forgeable client headers (Fly-Client-IP, X-Forwarded-For)
+        # are IGNORED, so an attacker rotating them cannot mint fresh rate-limit
+        # buckets to bypass the login cap (the bug the fix closes).
         with AtlasServer(extra_env=dict(self.CLOUD_ENV)) as srv:
+            for i in range(10):
+                resp = self.attempt_login(srv, {
+                    "Fly-Client-IP": f"203.0.113.{i}",
+                    "X-Forwarded-For": f"198.51.100.{i}, 10.0.0.1",
+                })
+                self.assertEqual(resp.status, 401)
+            # 11th: brand-new forged headers, but the socket peer is unchanged
+            # → capped despite the rotation.
+            resp = self.attempt_login(srv, {
+                "Fly-Client-IP": "203.0.113.250",
+                "X-Forwarded-For": "198.51.100.250, 10.0.0.1",
+            })
+            self.assertEqual(resp.status, 429)
+
+    def test_fly_client_ip_trusted_only_on_fly(self):
+        # On Fly (FLY_APP_NAME set), Fly-Client-IP is platform-injected and
+        # authoritative: distinct values get independent buckets, the same value
+        # is capped.
+        env = dict(self.CLOUD_ENV)
+        env["FLY_APP_NAME"] = "atlas-test"
+        with AtlasServer(extra_env=env) as srv:
             for _ in range(10):
                 resp = self.attempt_login(srv, {"Fly-Client-IP": "203.0.113.50"})
                 self.assertEqual(resp.status, 401)
             resp = self.attempt_login(srv, {"Fly-Client-IP": "203.0.113.50"})
             self.assertEqual(resp.status, 429)
-            # X-Forwarded-For fallback (first element of the proxy's list).
-            resp = self.attempt_login(
-                srv, {"X-Forwarded-For": "203.0.113.51, 10.0.0.1"})
+            # A different client (distinct Fly-Client-IP) is not affected.
+            resp = self.attempt_login(srv, {"Fly-Client-IP": "203.0.113.99"})
             self.assertEqual(resp.status, 401)
 
 

@@ -1,45 +1,45 @@
 /* ============================================================================
- * Extension d'exemple : THÈME CSS PERSONNALISÉ pour Atlas
+ * Example extension: CUSTOM CSS THEME for Atlas
  * ----------------------------------------------------------------------------
- * Installation :
- *   1. Copie ce fichier dans  <ton-mind>/.atlas/extensions/
- *   2. Rebuild le viewer  (atlas build <ton-mind>)  ou redémarre le serveur.
- * Tout fichier .css du dossier .atlas/extensions/ est INLINÉ dans le viewer au
- * build (online ET offline), par ordre alphabétique, APRÈS le CSS du moteur —
- * d'où le !important pour surcharger les classes Tailwind compilées.
+ * Installation:
+ *   1. Copy this file into  <your-mind>/.atlas/extensions/
+ *   2. Rebuild the viewer  (atlas build <your-mind>)  or restart the server.
+ * Any .css file in the .atlas/extensions/ directory is INLINED into the viewer
+ * at build time (online AND offline), in alphabetical order, AFTER the engine's
+ * CSS — hence the !important to override the compiled Tailwind classes.
  *
- * Ici : on remplace la couleur d'accent d'Atlas (bleu #1d9bd1) par un violet.
- * L'accent pilote les boutons, les états de focus, les liens d'action et les
- * titres de panneaux ("Sur ce doc", "To-do"…).
+ * Here: we replace Atlas's accent color (blue #1d9bd1) with a purple. The
+ * accent drives the buttons, the focus states, the action links and the panel
+ * titles ("On this doc", "To-do"…).
  * ==========================================================================*/
 
-:root { --my-accent: #8b5cf6; }   /* change juste cette valeur pour re-teinter */
+:root { --my-accent: #8b5cf6; }   /* just change this value to re-tint */
 
-/* Texte en accent (titres de panneaux, icônes, liens d'action) */
+/* Accent-colored text (panel titles, icons, action links) */
 .text-accent { color: var(--my-accent) !important; }
 
-/* Aplats en accent (boutons pleins : nouveau doc, sauvegarder, "+") */
+/* Accent-colored fills (solid buttons: new doc, save, "+") */
 .bg-accent { background-color: var(--my-accent) !important; }
 
-/* Bordures en accent (champs au focus) */
+/* Accent-colored borders (fields on focus) */
 .border-accent { border-color: var(--my-accent) !important; }
 
-/* Astuce — les variantes d'opacité sont des classes distinctes ; pour une
- * reteinte complète, cible-les aussi (le "/" se échappe avec un backslash) : */
+/* Tip — the opacity variants are separate classes; for a full re-tint, target
+ * them too (the "/" is escaped with a backslash): */
 /* .bg-accent\/20  { background-color: rgb(139 92 246 / 0.20) !important; } */
 /* .bg-accent\/40  { background-color: rgb(139 92 246 / 0.40) !important; } */
 /* .ring-accent\/40 { --tw-ring-color: rgb(139 92 246 / 0.40) !important; } */
 
 /* ---------------------------------------------------------------------------
- * Autres pistes (décommente / adapte) :
+ * Other options (uncomment / adapt):
  * -------------------------------------------------------------------------*/
 
-/* Fond global légèrement différent */
+/* Slightly different global background */
 /* body { background: #0c0b10 !important; } */
 
-/* Police personnalisée (importe-la d'abord, puis applique-la) */
+/* Custom font (import it first, then apply it) */
 /* @import url('https://fonts.bunny.net/css?family=inter:400,600,700'); */
 /* body { font-family: 'Inter', system-ui, sans-serif !important; } */
 
-/* Coins plus ronds sur les cartes */
+/* Rounder corners on cards */
 /* .panel-card { border-radius: 16px !important; } */

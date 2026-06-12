@@ -1,9 +1,10 @@
 # atlas.service — systemd unit to serve an Atlas mind without Docker.
 #
 # Installation:
-#   1. Adjust WorkingDirectory (the ENGINE repo: src/ + web/), the mind
-#      path in ExecStart, and User/Group (dedicated NON-root user,
-#      owner of the mind — the server writes and commits to it).
+#   1. Adjust WorkingDirectory (the ENGINE repo: src/, which bundles the
+#      viewer assets under src/web/ and src/templates/), the mind path in
+#      ExecStart, and User/Group (dedicated NON-root user, owner of the
+#      mind — the server writes and commits to it).
 #   2. cp deploy/atlas.service /etc/systemd/system/atlas.service
 #   3. systemctl daemon-reload && systemctl enable --now atlas
 #
@@ -20,7 +21,7 @@ Wants=network-online.target
 Type=simple
 User=atlas
 Group=atlas
-# The Atlas engine repo (contains src/ and web/).
+# The Atlas engine repo (src/ bundles the viewer assets under src/web/ and src/templates/).
 WorkingDirectory=/opt/atlas
 # Serves the given mind (equivalent to ATLAS_MIND); port via atlas.toml or --port.
 ExecStart=/usr/bin/python3 -m src.cli serve /var/lib/atlas/mind

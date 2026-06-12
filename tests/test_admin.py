@@ -737,8 +737,8 @@ class TestLoginPageTwoStepUi(unittest.TestCase):
             # JS-driven JSON submission (reads totp_required from the backend).
             self.assertIn('totp_required', html)
             self.assertIn('submitLogin', html)
-            # Step 2 subtitle (FR by default).
-            self.assertIn('Vérification en deux étapes', html)
+            # Step 2 subtitle (EN by default).
+            self.assertIn('Two-step verification', html)
 
 
 class TestSetupPageUi(unittest.TestCase):

@@ -249,7 +249,7 @@ class TestMoveFile(unittest.TestCase):
         resp = self.srv.post("/api/file/move", json_body={
             "from": "projets/alpha.md", "to": "projets/beta.md"})
         self.assertEqual(resp.status, 409)
-        self.assertIn("existe déjà", resp.json()["error"])
+        self.assertIn("already exists", resp.json()["error"])
         # Nothing has moved.
         self.assertEqual(
             self.srv.path("projets/alpha.md").read_text(encoding="utf-8"),
@@ -262,7 +262,7 @@ class TestMoveFile(unittest.TestCase):
         resp = self.srv.post("/api/file/move", json_body={
             "from": "fantome.md", "to": "ailleurs.md"})
         self.assertEqual(resp.status, 404)
-        self.assertIn("Source introuvable", resp.json()["error"])
+        self.assertIn("Source not found", resp.json()["error"])
 
     def test_move_invalid_paths_400(self):
         cases = [
@@ -282,7 +282,7 @@ class TestMoveFile(unittest.TestCase):
         for body in cases:
             resp = self.srv.post("/api/file/move", json_body=body)
             self.assertEqual(resp.status, 400, body)
-            self.assertIn("Path invalide", resp.json()["error"])
+            self.assertIn("Invalid path", resp.json()["error"])
         # The source has never moved.
         self.assertTrue(self.srv.path("projets/beta.md").exists())
 

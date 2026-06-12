@@ -230,7 +230,7 @@ class TestMiscLocal(unittest.TestCase):
     def test_share_link_garbage_token_404_invalid_page(self):
         resp = self.srv.get("/share/pas-un-token")
         self.assertEqual(resp.status, 404)
-        self.assertIn("Lien invalide", resp.text)
+        self.assertIn("Invalid link", resp.text)
 
     def test_share_token_forgeable_with_default_secret_and_expired_410(self):
         # SURPRISING: locally SESSION_SECRET keeps its public default

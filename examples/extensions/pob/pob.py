@@ -1,16 +1,16 @@
-"""Extension PoB — résolution de l'arbre des passifs Path of Building.
+"""PoB extension — Path of Building passive-tree resolution.
 
-Les codes PoB ne stockent les nœuds alloués que comme des ids numériques
-opaques (nodes="13375,23471,..."). Les transformer en noms (keystones,
-notables, masteries) demande les données d'arbre par version, publiées en
-tables Lua par les repos Path of Building Community. Ce module les télécharge
-une fois, les met en cache à côté du fichier installé, les parse en regex
-(aucun runtime Lua) et résout le spec d'un build en ventilation structurée.
+PoB codes only store the allocated nodes as opaque numeric ids
+(nodes="13375,23471,..."). Turning them into names (keystones, notables,
+masteries) requires the per-version tree data, published as Lua tables by the
+Path of Building Community repositories. This module downloads them once,
+caches them next to the installed file, parses them with regex (no Lua runtime)
+and resolves a build's spec into a structured breakdown.
 
-Installation : copier pob.py (+ pob.js, pob.css) dans
-<mind>/.atlas/extensions/. Au boot, server.py appelle register(context), qui
-enregistre POST /api/pob-tree (rôle admin) — l'endpoint que pob.js appelle au
-moment d'importer un build PoB pour enrichir la section « Arbre des passifs ».
+Installation: copy pob.py (+ pob.js, pob.css) into
+<mind>/.atlas/extensions/. At boot, the server calls register(context), which
+registers POST /api/pob-tree (admin role) — the endpoint pob.js calls when
+importing a PoB build to enrich the "Passive tree" section.
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ import re
 import urllib.request
 from pathlib import Path
 
-# Cache des tree.lua téléchargés : à côté du module installé, donc
-# <mind>/.atlas/extensions/_tree_cache/ — .atlas/ est déjà hors git, et le
-# chargeur d'extensions ne lit que les *.py (le dossier de cache est ignoré).
+# Cache for the downloaded tree.lua files: next to the installed module, i.e.
+# <mind>/.atlas/extensions/_tree_cache/ — .atlas/ is already outside git, and
+# the extension loader only reads *.py files (the cache directory is ignored).
 CACHE_DIR = Path(__file__).resolve().parent / "_tree_cache"
 
 # Per-version passive-tree data as Lua tables.
@@ -220,7 +220,7 @@ def resolve_spec(
         return {"name": nd["name"] or "?", "stats": "; ".join(nd["stats"])}
 
     keystones, notables, asc_notables, jewels, smalls, unknown = [], [], [], [], [], []
-    small_stats = {}  # stat -> count (agrégation des petits passifs)
+    small_stats = {}  # stat -> count (aggregation of the small passives)
     for nid in node_ids:
         nd = tree_nodes.get(nid)
         if nd is None:
@@ -265,22 +265,22 @@ def resolve_spec(
         "notables": sorted(notables, key=lambda n: n["name"]),
         "ascNotables": asc_notables,
         "masteries": masteries,
-        # Petits passifs agrégés par stat : [{stat, count}] trié par count décroissant.
+        # Small passives aggregated by stat: [{stat, count}] sorted by descending count.
         "smallsBreakdown": [
             {"stat": s, "count": c}
             for s, c in sorted(small_stats.items(), key=lambda kv: (-kv[1], kv[0]))
         ],
     }
 
-# ─── Enregistrement de l'extension (crochet serveur Atlas) ────────────────────
+# ─── Extension registration (Atlas server hook) ───────────────────────────────
 
 
 def register(context):
-    """Enregistre POST /api/pob-tree (rôle admin, le défaut des POST).
+    """Register POST /api/pob-tree (admin role, the default for POSTs).
 
-    Corps JSON attendu : {game?, version, nodes, classId?, ascendClassId?,
-    masteryEffects?} — mêmes clés que l'ancien endpoint natif du moteur.
-    Réponse : le dict de resolve_spec (resolved True/False + ventilation)."""
+    Expected JSON body: {game?, version, nodes, classId?, ascendClassId?,
+    masteryEffects?} — the same keys as the engine's former native endpoint.
+    Response: the resolve_spec dict (resolved True/False + breakdown)."""
 
     def pob_tree_route(handler, match):
         data = handler._read_json()

@@ -1,40 +1,39 @@
-# Extension PoB — module Path of Exile
+# PoB extension — Path of Exile module
 
-Importe des builds Path of Building (PoE1/PoE2) dans Atlas : template
-« Import Path of Building » dans la modale Nouveau document (fiche stylée
-générée depuis le code PoB), bouton « Maj PoB » pour réimporter un code dans
-un doc existant, et endpoint serveur `POST /api/pob-tree` (rôle admin) qui
-résout les nœuds de l'arbre des passifs en noms.
+Imports Path of Building builds (PoE1/PoE2) into Atlas: an "Import Path of
+Building" template in the New document modal (a styled build sheet generated
+from the PoB code), an "Update PoB" button to re-import a code into an existing
+doc, and a server endpoint `POST /api/pob-tree` (admin role) that resolves the
+passive-tree nodes into names.
 
 ## Installation
 
-Copier les trois fichiers dans le dossier d'extensions du mind :
+Copy the three files into the mind's extensions directory:
 
 ```bash
 mkdir -p <mind>/.atlas/extensions
 cp pob.py pob.js pob.css <mind>/.atlas/extensions/
 ```
 
-Puis rebuilder le viewer et redémarrer le serveur :
+Then rebuild the viewer and restart the server:
 
 ```bash
-python3 src/build.py
-python3 src/server.py
+atlas build <mind>
+atlas serve <mind>
 ```
 
-- `pob.py` — chargé au boot par server.py (`register(context)`) : route
-  `POST /api/pob-tree`. Les données d'arbre (tree.lua des repos Path of
-  Building Community) sont téléchargées à la demande et mises en cache dans
-  `<mind>/.atlas/extensions/_tree_cache/` (hors git, hors viewer).
-- `pob.js` — inliné dans le viewer au build, injecté aussi dans les pages de
-  partage publiques : décodeur PoB (pako 2.1.0 chargé en lazy depuis
-  `/vendor/pako.min.js`, vendoré dans `web/vendor/`),
-  générateur de fiche markdown, modales et bouton, traductions fr/en
-  embarquées.
-- `pob.css` — styles `.poe-*` de la fiche (viewer + pages de partage).
+- `pob.py` — loaded at boot by the server (`register(context)`): route
+  `POST /api/pob-tree`. The tree data (tree.lua from the Path of Building
+  Community repositories) is downloaded on demand and cached in
+  `<mind>/.atlas/extensions/_tree_cache/` (outside git, outside the viewer).
+- `pob.js` — inlined into the viewer at build time, also injected into the
+  public share pages: PoB decoder (pako 2.1.0 loaded lazily from
+  `/vendor/pako.min.js`, vendored in `src/web/vendor/`), markdown sheet
+  generator, modals and button, with fr/en translations embedded.
+- `pob.css` — `.poe-*` styles for the sheet (viewer + share pages).
 
-## Désinstallation
+## Uninstall
 
-Supprimer les trois fichiers (et `_tree_cache/`) puis rebuilder : le viewer
-revient strictement au moteur nu. Les fiches déjà générées restent des docs
-markdown valides, simplement sans styles ni boutons.
+Delete the three files (and `_tree_cache/`), then rebuild: the viewer reverts
+strictly to the bare engine. The sheets already generated remain valid markdown
+docs, simply without styles or buttons.

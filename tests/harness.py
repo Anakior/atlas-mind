@@ -52,16 +52,16 @@ TEMPLATES_DIR = SRC_DIR / "templates"
 TODO_REL = "notes/quick.md"  # engine default (config.DEFAULT_TODO_FILE, [todo].file)
 
 # Exact reproduction of the format written by write_todos() (TODO_HEADER + H2
-# Travail/Personnel sections): a quick.md already in this format is stable at
+# Work/Personal sections): a quick.md already in this format is stable at
 # boot (migrate_legacy_format does not touch a file containing "- [ ]").
 DEFAULT_QUICK_MD = (
     "# To-do\n\n"
-    "Liste éditable depuis le widget en bas à droite du viewer.\n\n"
-    "## Travail\n\n"
+    "Editable from the widget in the bottom-right of the viewer.\n\n"
+    "## Work\n\n"
     "- [ ] Préparer le bilan mensuel\n"
     "- [x] Review the draft\n"
     "\n"
-    "## Personnel\n\n"
+    "## Personal\n\n"
     "- [ ] Tester le build PoE\n"
     "\n"
 )

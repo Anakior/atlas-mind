@@ -1,20 +1,20 @@
-// Extension PoB — module Path of Exile pour Atlas (viewer).
+// PoB extension — Path of Exile module for Atlas (viewer).
 //
-// Installé via <mind>/.atlas/extensions/pob.js (avec pob.css et pob.py) :
-// build.py inline ce fichier dans dist/index.html, et server.py l'injecte
-// aussi dans les pages de partage publiques.
+// Installed via <mind>/.atlas/extensions/pob.js (alongside pob.css and pob.py):
+// the build inlines this file into dist/index.html, and the server also injects
+// it into the public share pages.
 //
-// Autonome : i18n, helpers et DOM embarqués. Deux contextes d'exécution :
-//   - page de partage : seul le délégué de clics (.poe-var-tab / .poe-copy)
-//     est actif — il n'y a ni modale ni API window.Atlas ;
-//   - viewer : enregistre le template « Import Path of Building » via
-//     window.Atlas.registerTemplate, injecte le bouton « Maj PoB » et sa
-//     modale, et suit le doc courant via les évènements atlas:doc-rendered /
-//     atlas:edit-enter.
+// Self-contained: i18n, helpers and DOM embedded. Two execution contexts:
+//   - share page: only the click delegate (.poe-var-tab / .poe-copy) is
+//     active — there is no modal and no window.Atlas API;
+//   - viewer: registers the "Import Path of Building" template via
+//     window.Atlas.registerTemplate, injects the "Update PoB" button and its
+//     modal, and tracks the current doc via the atlas:doc-rendered /
+//     atlas:edit-enter events.
 (function () {
 'use strict';
 
-// ─── i18n embarquée (même mécanique que le viewer : fr par défaut) ───────────
+// ─── Embedded i18n (same mechanism as the viewer: fr by default) ─────────────
 const LANG = (document.documentElement.lang || 'fr').toLowerCase().startsWith('en') ? 'en' : 'fr';
 const STRINGS = {
   fr: {
@@ -97,7 +97,7 @@ function t(key, ...args) {
   return typeof entry === 'function' ? entry(...args) : entry;
 }
 
-// ─── Helpers embarqués (copies locales : la page de partage n'a pas ceux du viewer) ──
+// ─── Embedded helpers (local copies: the share page doesn't have the viewer's) ──
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -106,14 +106,14 @@ function slugify(s) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-// ─── Partie commune viewer + page de partage : interactions de la fiche ──────
-// Délégation sur #content (présent dans les deux pages) : onglets de variante
-// de skill et boutons « Copier » du code PoB (DOMPurify retire les onclick
-// inline → délégation obligatoire).
+// ─── Shared viewer + share page part: sheet interactions ─────────────────────
+// Delegation on #content (present on both pages): skill-variant tabs and the
+// "Copy" buttons for the PoB code (DOMPurify strips inline onclick → delegation
+// is mandatory).
 const contentRoot = document.getElementById('content');
 if (contentRoot) {
   contentRoot.addEventListener('click', (e) => {
-    // Onglet de variante : montre le bandeau de stats correspondant.
+    // Variant tab: show the corresponding stats strip.
     const vtab = e.target.closest('.poe-var-tab');
     if (vtab) {
       e.preventDefault();
@@ -122,8 +122,8 @@ if (contentRoot) {
         .forEach(el => el.classList.toggle('is-active', el.dataset.var === v));
       return;
     }
-    // Bouton « Copier » du code PoB. Scope sur la ligne de variante si présente
-    // (sinon le 1er code du <details>).
+    // "Copy" button for the PoB code. Scoped to the variant row if present
+    // (otherwise the first code in the <details>).
     const copy = e.target.closest('.poe-copy');
     if (!copy) return;
     e.preventDefault(); e.stopPropagation();
@@ -136,19 +136,19 @@ if (contentRoot) {
   });
 }
 
-// ─── Partie viewer uniquement ────────────────────────────────────────────────
-// Page de partage (ou API absente) : rien d'autre à brancher.
+// ─── Viewer-only part ─────────────────────────────────────────────────────────
+// Share page (or API absent): nothing else to wire up.
 const btnEdit = document.getElementById('btn-edit');
 if (!window.Atlas || typeof window.Atlas.registerTemplate !== 'function' || !btnEdit) return;
 
-// Doc markdown affiché en dernier (suivi via atlas:doc-rendered) ; les codes
-// PoB qu'il contient pilotent la visibilité du bouton « Maj PoB ».
+// Markdown doc displayed last (tracked via atlas:doc-rendered); the PoB codes
+// it contains drive the visibility of the "Update PoB" button.
 let currentDocPath = null;
 let _pobCodes = [];
 let _pobCode = null;
 let _pobCharName = '';
 
-// Bouton « Maj PoB » dans la barre d'actions, juste avant « Éditer ».
+// "Update PoB" button in the action bar, just before "Edit".
 const btnUpdatePob = document.createElement('button');
 btnUpdatePob.id = 'btn-update-pob';
 btnUpdatePob.className = 'hidden px-2.5 py-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded flex items-center gap-1';
@@ -157,8 +157,8 @@ btnUpdatePob.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor"
 btnUpdatePob.querySelector('span').textContent = t('updatePobBtn');
 btnEdit.parentElement.insertBefore(btnUpdatePob, btnEdit);
 
-// Modale « Maj PoB » (data-atlas-modal : bloque le soft-reload du viewer tant
-// qu'elle est ouverte, comme les modales natives).
+// "Update PoB" modal (data-atlas-modal: blocks the viewer's soft-reload while
+// it is open, like the native modals).
 const updatePobBackdrop = document.createElement('div');
 updatePobBackdrop.id = 'update-pob-backdrop';
 updatePobBackdrop.className = 'hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm';
@@ -182,8 +182,8 @@ updatePobBackdrop.innerHTML = `
   </div>`;
 document.body.appendChild(updatePobBackdrop);
 
-// Bloc de formulaire du template « Import PoB » (affiché par le viewer quand
-// l'option est sélectionnée dans la modale « Nouveau document »).
+// Form block for the "Import PoB" template (shown by the viewer when the option
+// is selected in the "New document" modal).
 const pobBlock = document.createElement('div');
 pobBlock.className = 'flex flex-col gap-3';
 pobBlock.innerHTML = `
@@ -200,16 +200,16 @@ pobBlock.innerHTML = `
 const newFilePobCodes = pobBlock.querySelector('#new-file-pob-codes');
 const newFilePobCharname = pobBlock.querySelector('#new-file-pob-charname');
 
-// Nouveau format fiche : code dans <div class="poe-share-box"><code class="poe-pob-code">…</code>.
-// Ancien format (rétro-compat) : <summary>Code PoB…</summary> + bloc ``` fence.
+// New sheet format: code in <div class="poe-share-box"><code class="poe-pob-code">…</code>.
+// Old format (backward compat): <summary>Code PoB…</summary> + a ``` fence block.
 const POB_MARKER_RE = /poe-share-box"><code[^>]*>([A-Za-z0-9_\-=]+)<\/code>|<summary>Code PoB[^<]*<\/summary>\s*\n+```\s*\n([A-Za-z0-9_\-=\s]+?)\n```/;
 function extractPobCodeFromMarkdown(md) {
   const m = md && md.match(POB_MARKER_RE);
   return m ? (m[1] || m[2] || '').trim().replace(/\s+/g, '') : null;
 }
 
-// TOUS les codes (1 par variante) — regex global ANCRÉ sur le markup Partager (ne
-// ramasse pas des <code> ailleurs). Fallback : extractPobCodeFromMarkdown (ancien format).
+// ALL codes (1 per variant) — global regex ANCHORED on the Share markup (does
+// not pick up <code> elsewhere). Fallback: extractPobCodeFromMarkdown (old format).
 function extractAllPobCodes(md) {
   if (!md) return [];
   const codes = [];
@@ -219,9 +219,9 @@ function extractAllPobCodes(md) {
   return one ? [one] : [];
 }
 
-// Sépare des codes PoB collés dans une SAISIE utilisateur (jamais sur le markdown
-// stocké). Inclut + et / (base64 standard) pour ne pas tronquer un code ; la
-// normalisation base64url est faite au stockage (clean() dans le générateur).
+// Splits PoB codes pasted into a user INPUT (never on the stored markdown).
+// Includes + and / (standard base64) so a code isn't truncated; the base64url
+// normalization is done at storage time (clean() in the generator).
 function pobCodesFromText(txt) {
   return (txt || '').match(/[A-Za-z0-9_+/\-=]{50,}/g) || [];
 }
@@ -234,7 +234,7 @@ function detectPobImport(markdown) {
   btnUpdatePob.classList.toggle('hidden', !codes.length || window.__viewerMode);
 }
 
-// ── Liste de champs de code PoB (1 par variante de skill) avec bouton « + » ───
+// ── List of PoB code fields (1 per skill variant) with a "+" button ──────────
 function pobMakeCodeRow(value) {
   const row = document.createElement('div');
   row.className = 'pob-code-row flex gap-2 items-start';
@@ -244,7 +244,7 @@ function pobMakeCodeRow(value) {
   row.querySelector('.pob-code-rm').addEventListener('click', () => {
     const rows = row.parentElement.querySelectorAll('.pob-code-row');
     if (rows.length > 1) row.remove();
-    else row.querySelector('textarea').value = '';  // garde toujours >= 1 champ
+    else row.querySelector('textarea').value = '';  // always keep >= 1 field
   });
   return row;
 }
@@ -271,7 +271,7 @@ async function loadPakoLib() {
   if (typeof pako !== 'undefined') return;
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = '/vendor/pako.min.js';  // pako 2.1.0 vendoré (web/vendor/)
+    s.src = '/vendor/pako.min.js';  // pako 2.1.0 vendored (src/web/vendor/)
     s.onload = resolve;
     s.onerror = () => reject(new Error(t('cdnFailPako')));
     document.head.appendChild(s);
@@ -305,7 +305,7 @@ function fmtNum(n) {
 
 function pobSlugifyTitle(s) { return (slugify(s) || 'build').slice(0, 60); }
 
-// Notation compacte pour les cartes de stats : 1.24M, 25.2k, 980.
+// Compact notation for the stat cards: 1.24M, 25.2k, 980.
 function pobCompact(n) {
   const num = Number(n);
   if (!isFinite(num)) return String(n);
@@ -317,9 +317,9 @@ function pobCompact(n) {
   return num % 1 === 0 ? String(num) : num.toFixed(1);
 }
 
-// Clés de config PoB → libellé lisible. PoB n'exporte que des clés internes
-// (pas de label humain) : on prettifie (camelCase/snake → mots, Title Case).
-// Les passifs de quête (questActN…) ont une valeur déjà parlante → label générique.
+// PoB config keys → readable label. PoB only exports internal keys (no
+// human-readable label): we prettify (camelCase/snake → words, Title Case).
+// Quest passives (questActN…) already have a meaningful value → generic label.
 function prettyCfgKey(k) {
   const q = k.match(/^questAct\s*(\d+)/i);
   if (q) return 'Quête · Acte ' + q[1];
@@ -329,7 +329,7 @@ function prettyCfgKey(k) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// Libellé du skill principal (label du groupe, sinon 1re gemme).
+// Label of the main skill (group label, otherwise first gem).
 function mainSocketGroupSkillLabel(skillGroups, mainSocketGroup) {
   const sg = mainSocketGroup && skillGroups[mainSocketGroup - 1];
   if (!sg) return '';
@@ -338,7 +338,7 @@ function mainSocketGroupSkillLabel(skillGroups, mainSocketGroup) {
   return lbl || (g ? (g.getAttribute('nameSpec') || g.getAttribute('skillId') || '') : '');
 }
 
-// Groupes de skills d'un doc PoB (format SkillSet/activeSkillSet ou flat).
+// Skill groups of a PoB doc (SkillSet/activeSkillSet format or flat).
 function pobSkillGroups(doc) {
   const sets = Array.from(doc.querySelectorAll('Skills > SkillSet'));
   if (sets.length) {
@@ -349,7 +349,7 @@ function pobSkillGroups(doc) {
   return Array.from(doc.querySelectorAll('Skills > Skill'));
 }
 
-// Stats (<PlayerStat>) + libellé du skill principal d'un doc PoB décodé.
+// Stats (<PlayerStat>) + main-skill label of a decoded PoB doc.
 function pobStatsAndSkill(doc) {
   const build = doc.querySelector('Build');
   const stats = {};
@@ -359,16 +359,16 @@ function pobStatsAndSkill(doc) {
   return { stats, label };
 }
 
-// Décode un code PoB (variante) → {ok, stats, label}. Variante invalide → {ok:false}.
+// Decodes a PoB code (variant) → {ok, stats, label}. Invalid variant → {ok:false}.
 function pobVariantData(code) {
   try {
     const doc = new DOMParser().parseFromString(decodePobCode(code), 'text/xml');
     if (doc.querySelector('parsererror') || !doc.querySelector('Build')) return { ok: false };
     return { ok: true, ...pobStatsAndSkill(doc) };
-  } catch (e) { console.warn('Variante PoB ignorée :', e && e.message); return { ok: false }; }
+  } catch (e) { console.warn('PoB variant skipped:', e && e.message); return { ok: false }; }
 }
 
-// `codes` = tableau de codes PoB (1 par variante de skill) ; `xml` = décodage de codes[0] (primaire).
+// `codes` = array of PoB codes (1 per skill variant); `xml` = decoding of codes[0] (primary).
 async function pobXmlToMarkdown(xml, codes, charName) {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   const parseErr = doc.querySelector('parsererror');
@@ -392,7 +392,7 @@ async function pobXmlToMarkdown(xml, codes, charName) {
   const targetVersion = build.getAttribute('targetVersion') || '';
   const viewMode = build.getAttribute('viewMode') || '';
 
-  // Tree spec (premier Spec du Tree actif)
+  // Tree spec (first Spec of the active Tree)
   const treeActive = parseInt(doc.querySelector('Tree')?.getAttribute('activeSpec') || '1', 10);
   const specs = Array.from(doc.querySelectorAll('Tree > Spec'));
   const activeSpec = specs[treeActive - 1] || specs[0];
@@ -405,17 +405,17 @@ async function pobXmlToMarkdown(xml, codes, charName) {
   const treeClassId = activeSpec?.getAttribute('classId') || '';
   const treeAscendClassId = activeSpec?.getAttribute('ascendClassId') || '';
 
-  // PoE2 detection : treeVersion 2_x (PoE1 = 3_x) ou classes connues PoE2
+  // PoE2 detection: treeVersion 2_x (PoE1 = 3_x) or known PoE2 classes
   const poe2Classes = new Set(['Sorceress', 'Warrior', 'Mercenary', 'Monk', 'Druid', 'Huntress']);
   const isPoe2 = treeVersion.startsWith('2_') || poe2Classes.has(className);
   const gameLabel = isPoe2 ? 'PoE2' : 'PoE1';
 
-  // Skills (parcourt SkillSet > Skill > Gem)
+  // Skills (walks SkillSet > Skill > Gem)
   const skillSets = Array.from(doc.querySelectorAll('Skills > SkillSet'));
   const flatSkillsRoot = doc.querySelector('Skills');
   let skillGroups = [];
   if (skillSets.length) {
-    // Format moderne : on prend l'activeSkillSet
+    // Modern format: we take the activeSkillSet
     const activeSkillSet = flatSkillsRoot?.getAttribute('activeSkillSet') || '1';
     const set = skillSets.find(s => s.getAttribute('id') === activeSkillSet) || skillSets[0];
     skillGroups = Array.from(set.querySelectorAll('Skill'));
@@ -423,7 +423,7 @@ async function pobXmlToMarkdown(xml, codes, charName) {
     skillGroups = Array.from(doc.querySelectorAll('Skills > Skill'));
   }
 
-  // Items et slots
+  // Items and slots
   const items = {};
   doc.querySelectorAll('Items > Item').forEach(it => {
     items[it.getAttribute('id')] = it.textContent.trim();
@@ -433,8 +433,8 @@ async function pobXmlToMarkdown(xml, codes, charName) {
   const itemSet = itemSets.find(s => s.getAttribute('id') === activeItemSet) || itemSets[0];
   const slots = itemSet ? Array.from(itemSet.querySelectorAll('Slot')) : [];
 
-  // Parsing + carte d'item (rareté, mods) — partagé par l'équipement ET les jewels
-  // de l'arbre (qui sont des items référencés par les <Socket> du spec).
+  // Parsing + item card (rarity, mods) — shared by the equipment AND the tree
+  // jewels (which are items referenced by the spec's <Socket> elements).
   const ITEM_RAR = { NORMAL: 'norm', MAGIC: 'mag', RARE: 'rare', UNIQUE: 'uniq', RELIC: 'uniq' };
   const ITEM_META = new Set(['Unique ID','LevelReq','Selected Variant','Has Variants','League','Source',
     'Requires','Crucible','Catalyst','Crafted','Prefix','Suffix','Implicit']);
@@ -483,32 +483,32 @@ async function pobXmlToMarkdown(xml, codes, charName) {
 
   const notes = doc.querySelector('Notes')?.textContent?.trim() || '';
 
-  // Variantes de skill : PoB ne calcule le DPS que d'UN skill → 1 code = 1 DPS.
-  // Primaire = codes[0] (build/arbre/équipement partagés) ; les autres n'apportent
-  // que leur bandeau de stats. Variante secondaire invalide → ignorée.
+  // Skill variants: PoB only computes DPS for ONE skill → 1 code = 1 DPS.
+  // Primary = codes[0] (shared build/tree/equipment); the others only contribute
+  // their own stats strip. Invalid secondary variant → skipped.
   const primaryLabel = mainSocketGroupSkillLabel(skillGroups, mainSocketGroup) || className;
   const variants = [{ code: codes[0], stats, label: primaryLabel }];
   for (let i = 1; i < codes.length; i++) {
     const vd = pobVariantData(codes[i]);
     if (vd.ok) variants.push({ code: codes[i], stats: vd.stats, label: vd.label });
   }
-  // Pas de cap : le switch est en JS (data-var) → gère N variantes ; les onglets wrap.
+  // No cap: the switch is in JS (data-var) → handles N variants; the tabs wrap.
 
-  // Construction du markdown
+  // Markdown construction
   const title = `Build ${className}${ascendClassName ? ' / ' + ascendClassName : ''} (lvl ${level})`;
   const importDate = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
   const lines = [];
-  // Pas de H1 ni de blockquote d'import : redondant avec la carte du perso. La
-  // date d'import est affichée discrètement dans le hero (voir plus bas).
+  // No H1 nor import blockquote: redundant with the character card. The import
+  // date is shown discreetly in the hero (see below).
 
-  // ── Bandeau « fiche » (HTML stylé façon Atlas, voir CSS .poe-* dans viewer) ─
-  // Hero (identité + bandeau de stats clés + chips résistances). HTML pur :
-  // marked ne parse PAS le markdown dans un bloc HTML → on écrit <strong>/<span>.
+  // ── "Sheet" banner (Atlas-styled HTML, see .poe-* CSS in the viewer) ────────
+  // Hero (identity + key-stats strip + resistance chips). Pure HTML: marked does
+  // NOT parse markdown inside an HTML block → we write <strong>/<span>.
   {
     const eh = escapeHtml;
     let hero = '<div class="poe-card"><div class="poe-hero">';
-    // <h2> (et non <div>) pour que le nom du perso apparaisse dans le sommaire
-    // (le TOC se construit depuis les h2/h3 du contenu).
+    // <h2> (not <div>) so the character name appears in the table of contents
+    // (the TOC is built from the content's h2/h3).
     hero += `<h2 class="poe-hero-name">${eh(charName || className)}</h2>`;
     let meta = eh(className);
     if (ascendClassName) meta += ` <span class="poe-asc">${eh(ascendClassName)}</span>`;
@@ -517,15 +517,15 @@ async function pobXmlToMarkdown(xml, codes, charName) {
     hero += `<div class="poe-hero-imported">${eh(gameLabel)} &middot; importé le ${eh(importDate)}</div>`;
     hero += `</div>`;
 
-    // Onglets de variante (si plusieurs skills) — switch via handler délégué (.poe-var-tab).
+    // Variant tabs (if several skills) — switched via the delegated handler (.poe-var-tab).
     if (variants.length > 1) {
       hero += '<div class="poe-var-tabs">'
         + variants.map((vv, i) => `<button type="button" class="poe-var-tab${i === 0 ? ' is-active' : ''}" data-var="${i}">${eh(vv.label)}</button>`).join('')
         + '</div>';
     }
-    // Bandeau de stats (DPS/EHP/res) PAR variante ; le 1er est is-active. Le CSS
-    // masque [data-var] non actif. Les anciennes fiches (strip sans data-var) restent
-    // visibles (la règle de masquage ne cible que [data-var]).
+    // Stats strip (DPS/EHP/res) PER variant; the first is is-active. The CSS
+    // hides inactive [data-var]. Old sheets (strip without data-var) stay
+    // visible (the hiding rule only targets [data-var]).
     const stripResFor = (vstats, idx, active) => {
       const numv = (k) => (vstats[k] !== undefined && vstats[k] !== '' ? Number(vstats[k]) : undefined);
       const cells = [];
@@ -552,9 +552,9 @@ async function pobXmlToMarkdown(xml, codes, charName) {
     };
     variants.forEach((vv, i) => { hero += stripResFor(vv.stats, i, i === 0); });
 
-    // Aperçu & stats détaillées : repliable, DANS la carte (séparateur en bas).
-    // Caché par défaut ; gardé pour le theorycraft. Le pseudo n'est PAS répété ici
-    // (déjà dans le hero) ; un marqueur commenté sert au ré-import (invisible).
+    // Overview & detailed stats: collapsible, INSIDE the card (separator at the
+    // bottom). Hidden by default; kept for theorycrafting. The name is NOT
+    // repeated here (already in the hero); a commented marker is used for re-import (invisible).
     const v = (k, suffix) => (stats[k] !== undefined ? fmtNum(stats[k]) + (suffix || '') : null);
     const resV = (capKey, overKey) => {
       if (stats[capKey] === undefined) return null;
@@ -568,9 +568,9 @@ async function pobXmlToMarkdown(xml, codes, charName) {
         .map(pp => `<tr><td>${eh(pp[0])}</td><td>${eh(String(pp[1]))}</td></tr>`).join('');
       return body ? `<div class="poe-statgrp"><div class="poe-statgrp-h">${eh(title)}</div><table class="poe-tbl"><tbody>${body}</tbody></table></div>` : '';
     };
-    // Config de calcul (hypothèses ennemi, buffs supposés…) : ce ne sont PAS des
-    // stats du perso, mais c'est pris en compte dans les chiffres → on l'expose
-    // via une roue crantée près du pseudo, contenu affiché au survol (popover CSS).
+    // Calculation config (enemy assumptions, presumed buffs…): these are NOT
+    // character stats, but they are factored into the numbers → we expose it
+    // via a cog near the name, content shown on hover (CSS popover).
     const cfgPairs = [];
     doc.querySelectorAll('Config > ConfigSet > Placeholder, Config > Placeholder, Config > ConfigSet > Input, Config > Input').forEach(el => {
       const k = el.getAttribute('name');
@@ -581,13 +581,13 @@ async function pobXmlToMarkdown(xml, codes, charName) {
     });
     if (cfgPairs.length) {
       const cfgRows = cfgPairs.map(p => `<div class="poe-cfg-row"><span>${eh(prettyCfgKey(p[0]))}</span><b>${eh(String(p[1]))}</b></div>`).join('');
-      // Pattern :focus-within (CSS pur) : clic = focus → ouvre ; clic dehors = blur
-      // → ferme ; molette = reste ouvert. Pas de survol (capricieux), pas de JS.
+      // :focus-within pattern (pure CSS): click = focus → opens; click outside =
+      // blur → closes; scroll wheel = stays open. No hover (finicky), no JS.
       hero += `<div class="poe-cog" tabindex="0" role="button" aria-label="Config de calcul">⚙︎<div class="poe-cog-pop"><div class="poe-cog-h">Config de calcul</div><div class="poe-cfg">${cfgRows}</div></div></div>`;
     }
 
-    // Pas de groupe « Aperçu » : jeu/classe/niveau sont déjà dans le hero,
-    // le skill principal dans Compétences → redondant.
+    // No "Overview" group: game/class/level are already in the hero, the main
+    // skill is in Skills → redundant.
     const grps = [
       group('Offensif', [
         ['Total DPS', v('TotalDPS')], ['Combined DPS', v('CombinedDPS')], ['Full DPS', v('FullDPS')],
@@ -624,7 +624,7 @@ async function pobXmlToMarkdown(xml, codes, charName) {
     lines.push(hero);
     lines.push('');
   }
-  // ── Compétences (cartes par groupe de gemmes, HTML stylé) ─────────────────
+  // ── Skills (cards per gem group, styled HTML) ─────────────────────────────
   if (skillGroups.length) {
     const eh = escapeHtml;
     const gemName = (g) => g.getAttribute('nameSpec') || g.getAttribute('skillId') || g.getAttribute('gemId') || '?';
@@ -633,8 +633,8 @@ async function pobXmlToMarkdown(xml, codes, charName) {
       const gems = Array.from(sg.querySelectorAll('Gem'))
         .filter(g => g.getAttribute('enabled') !== 'false' && (g.getAttribute('nameSpec') || g.getAttribute('skillId') || g.getAttribute('gemId')));
       if (!gems.length) return;
-      // PoE2 : « Support » peut être au milieu du skillId (ex. ProlongedDurationSupportPlayerTwo)
-      // → on teste la présence n'importe où, pas seulement startsWith.
+      // PoE2: "Support" can be in the middle of the skillId (e.g. ProlongedDurationSupportPlayerTwo)
+      // → we test for its presence anywhere, not just startsWith.
       const isSupport = (g) => /support/i.test((g.getAttribute('skillId') || '') + ' ' + (g.getAttribute('gemId') || ''));
       let actives = gems.filter(g => !isSupport(g));
       let sups = gems.filter(g => isSupport(g));
@@ -663,10 +663,10 @@ async function pobXmlToMarkdown(xml, codes, charName) {
     }
   }
 
-  // ── Arbre passif ────────────────────────────────────────────────────────
-  // Les nodes du PoB ne sont que des IDs : on demande au serveur de les résoudre
-  // en noms (keystones/notables/masteries) via les données d'arbre de la version.
-  // Si le serveur ne répond pas ou ne résout pas, on retombe sur le résumé minimal.
+  // ── Passive tree ──────────────────────────────────────────────────────────
+  // The PoB nodes are only IDs: we ask the server to resolve them into names
+  // (keystones/notables/masteries) via the version's tree data. If the server
+  // doesn't respond or can't resolve, we fall back to the minimal summary.
   let treeRes = null;
   if (nodesStr) {
     try {
@@ -683,7 +683,7 @@ async function pobXmlToMarkdown(xml, codes, charName) {
         }),
       });
       if (r.ok) treeRes = await r.json();
-    } catch (e) { /* hors-ligne / serveur indispo → fallback minimal */ }
+    } catch (e) { /* offline / server unavailable → minimal fallback */ }
   }
 
   if (treeUrl || nodesCount) {
@@ -701,7 +701,7 @@ async function pobXmlToMarkdown(xml, codes, charName) {
     lines.push('');
 
     if (treeRes && treeRes.resolved) {
-      // Encadré nommé avec sa description. HTML pur (pas de markdown dans un bloc HTML).
+      // Named callout with its description. Pure HTML (no markdown in an HTML block).
       const callout = (cls, name, stat) =>
         `<div class="poe-node ${cls}"><span class="poe-node-n">${eh(name)}</span>`
         + (stat ? `<span class="poe-node-s">${eh(stat)}</span>` : '') + `</div>`;
@@ -725,15 +725,15 @@ async function pobXmlToMarkdown(xml, codes, charName) {
         lines.push('');
       }
       if (treeRes.notables && treeRes.notables.length) {
-        // Liste repliable (souvent 20-30 entrées) avec description, en 2 colonnes.
-        // HTML pur : le markdown n'est pas parsé dans un <details>.
+        // Collapsible list (often 20-30 entries) with description, in 2 columns.
+        // Pure HTML: markdown is not parsed inside a <details>.
         const items = treeRes.notables.map(n =>
           `<li><strong>${eh(n.name)}</strong>${n.stats ? ` <span>${eh(n.stats)}</span>` : ''}</li>`).join('');
         lines.push(`<details class="poe-notables"><summary>Notables (${treeRes.notables.length})</summary>\n<ul>${items}</ul>\n</details>`);
         lines.push('');
       }
       if (treeRes.smallsBreakdown && treeRes.smallsBreakdown.length) {
-        // Petits passifs agrégés par stat : « 12× +10 to Strength ». Repliable.
+        // Small passives aggregated by stat: "12× +10 to Strength". Collapsible.
         const tot = treeRes.smallsBreakdown.reduce((a, s) => a + s.count, 0);
         const items = treeRes.smallsBreakdown.map(s =>
           `<li><strong>${s.count}×</strong> <span>${eh(s.stat)}</span></li>`).join('');
@@ -742,9 +742,9 @@ async function pobXmlToMarkdown(xml, codes, charName) {
       }
     }
 
-    // Jewels sertis dans l'arbre : items référencés par les <Socket nodeId itemId>
-    // du spec. Mêmes cartes que l'équipement (rareté + mods). Indépendant de la
-    // résolution serveur (donnée présente dans le PoB).
+    // Jewels socketed in the tree: items referenced by the spec's
+    // <Socket nodeId itemId>. Same cards as the equipment (rarity + mods).
+    // Independent of the server resolution (data present in the PoB).
     const jewelCards = (activeSpec ? Array.from(activeSpec.querySelectorAll('Socket')) : [])
       .map(s => s.getAttribute('itemId') || '0')
       .filter(iid => iid !== '0' && items[iid])
@@ -758,16 +758,16 @@ async function pobXmlToMarkdown(xml, codes, charName) {
       lines.push('');
     }
 
-    // Lien vers l'arbre (pratique pour ouvrir dans le site / PoB).
+    // Link to the tree (handy to open on the site / in PoB).
     if (treeUrl) {
       lines.push(`<p class="poe-link"><a href="${eh(treeUrl)}" target="_blank" rel="noopener">↗ Ouvrir l'arbre sur pathofexile.com</a></p>`);
       lines.push('');
     }
   }
 
-  // (La config de calcul est désormais intégrée dans le bloc « Stats détaillées ».)
+  // (The calculation config is now integrated into the "Detailed stats" block.)
 
-  // ── Équipement / Flasks / Charms (cartes par rareté, HTML stylé) ──────────
+  // ── Equipment / Flasks / Charms (cards per rarity, styled HTML) ───────────
   if (slots.length) {
     const SLOT_FR = { 'Weapon 1':'Arme','Weapon 2':'Arme 2','Helmet':'Casque','Body Armour':'Torse',
       'Gloves':'Gants','Boots':'Bottes','Belt':'Ceinture','Amulet':'Amulette','Ring 1':'Anneau 1',
@@ -811,26 +811,26 @@ async function pobXmlToMarkdown(xml, codes, charName) {
     lines.push('');
   }
 
-  // ── Partager (un code PoB par variante de skill) ──────────────────────────
-  // Copie câblée par délégation (voir handler contentEl click + page de partage).
+  // ── Share (one PoB code per skill variant) ────────────────────────────────
+  // Copy wired up by delegation (see the contentEl click handler + share page).
   {
     const eh = escapeHtml;
-    // Normalise en base64url (- _) : decodePobCode accepte les deux, et le regex de
-    // relecture (extractAllPobCodes) ne couvre que [A-Za-z0-9_-=] → évite la troncature
-    // d'un code collé en base64 standard (avec + ou /).
+    // Normalize to base64url (- _): decodePobCode accepts both, and the re-read
+    // regex (extractAllPobCodes) only covers [A-Za-z0-9_-=] → avoids truncating a
+    // code pasted in standard base64 (with + or /).
     const clean = (c) => eh(c.trim().replace(/\s+/g, '').replace(/\+/g, '-').replace(/\//g, '_'));
     lines.push('## Partager');
     lines.push('');
     if (variants.length === 1) {
-      // Layout simple : bouton Copier dans le summary (copie sans déplier).
+      // Simple layout: Copy button in the summary (copies without expanding).
       lines.push(
         '<details class="poe-share"><summary>'
         + '<span class="poe-share-label">Code PoB (pour ré-importer / partager)</span>'
         + '<button class="poe-copy" type="button">Copier</button></summary>'
         + `<div class="poe-share-box"><code class="poe-pob-code">${clean(variants[0].code)}</code></div></details>`);
     } else {
-      // Une ligne par variante : libellé du skill + son propre bouton Copier
-      // (1 <code> = 1 variante réimportable isolément).
+      // One row per variant: the skill label + its own Copy button
+      // (1 <code> = 1 variant re-importable on its own).
       const rows = variants.map(vv =>
         '<div class="poe-share-row"><div class="poe-share-rh">'
         + `<span class="poe-share-rl">${eh(vv.label)}</span>`
@@ -852,15 +852,15 @@ async function pobXmlToMarkdown(xml, codes, charName) {
   };
 }
 
-// Nom du perso : marqueur commenté (nouveau format fiche) ou ancienne ligne de
-// table « | **Personnage** | … | » (rétro-compat avec les fiches déjà générées).
+// Character name: commented marker (new sheet format) or the old table row
+// "| **Personnage** | … |" (backward compat with already-generated sheets).
 const POB_CHARNAME_RE = /<!--\s*charName:\s*([^\n>]+?)\s*-->|^\|\s*\*\*Personnage\*\*\s*\|\s*([^|\n]+?)\s*\|/m;
 function extractCharNameFromMarkdown(md) {
   const m = md && md.match(POB_CHARNAME_RE);
   return m ? (m[1] || m[2] || '').trim() : '';
 }
 
-// ── Modale « Maj PoB » (réimport d'un code dans le doc courant) ──────────────
+// ── "Update PoB" modal (re-import a code into the current doc) ────────────────
 const updatePobForm = updatePobBackdrop.querySelector('#update-pob-form');
 const updatePobCodes = updatePobBackdrop.querySelector('#update-pob-codes');
 const updatePobError = updatePobBackdrop.querySelector('#update-pob-error');
@@ -869,8 +869,8 @@ const updatePobCancel = updatePobBackdrop.querySelector('#update-pob-cancel');
 function openUpdatePobModal() {
   if (window.__viewerMode || !currentDocPath) return;
   updatePobError.classList.add('hidden');
-  // Pré-rempli avec TOUS les codes actuels (un champ par variante) ; la liste est
-  // la source de vérité au submit (ajouter via «+», retirer via «×»).
+  // Pre-filled with ALL the current codes (one field per variant); the list is
+  // the source of truth on submit (add via "+", remove via "×").
   const cur = (_pobCodes && _pobCodes.length)
     ? _pobCodes
     : (_pobCode ? [_pobCode] : ['']);
@@ -912,7 +912,7 @@ updatePobForm.addEventListener('submit', async (e) => {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     closeUpdatePobModal();
-    // Force le re-fetch du contenu : le viewer invalide son cache et la mtime.
+    // Force a content re-fetch: the viewer invalidates its cache and the mtime.
     window.Atlas.invalidateDoc(currentDocPath);
     window.Atlas.setStatus(t('pobUpdated'), 'ok');
     await window.Atlas.refresh();
@@ -922,7 +922,7 @@ updatePobForm.addEventListener('submit', async (e) => {
   }
 });
 
-// ─── Enregistrement du template « Import PoB » auprès du viewer ──────────────
+// ─── Registration of the "Import PoB" template with the viewer ───────────────
 window.Atlas.registerTemplate('pob', {
   label: t('tplPob'),
   block: pobBlock,
@@ -946,14 +946,14 @@ window.Atlas.registerTemplate('pob', {
   },
 });
 
-// ─── Suivi du doc courant (évènements génériques du viewer) ──────────────────
+// ─── Tracking the current doc (generic viewer events) ────────────────────────
 document.addEventListener('atlas:doc-rendered', (e) => {
   currentDocPath = (e.detail && e.detail.path) || null;
   detectPobImport((e.detail && e.detail.markdown) || '');
 });
 document.addEventListener('atlas:edit-enter', () => btnUpdatePob.classList.add('hidden'));
 
-// Échap ferme la modale « Maj PoB » (les modales natives ont leur propre handler).
+// Escape closes the "Update PoB" modal (the native modals have their own handler).
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!updatePobBackdrop.classList.contains('hidden')) closeUpdatePobModal();

@@ -104,7 +104,7 @@ from config import AtlasConfig, AtlasConfigError, resolve_mind_root
 # see src/config.py).
 CONFIG = None  # type: AtlasConfig
 
-TODO_HEADER = "# To-do\n\nListe éditable depuis le widget en bas à droite du viewer.\n\n"
+TODO_HEADER = "# To-do\n\nEditable from the widget in the bottom-right of the viewer.\n\n"
 
 
 def _norm_cat(value):
@@ -164,7 +164,7 @@ def _exclude_store_dir_from_git(store_dir):
                 handle.write("\n")
             handle.write(pattern + "\n")
     except OSError as e:
-        print(f"[get_store] exclusion git du registre impossible: {e}",
+        print(f"[get_store] could not git-exclude the registry: {e}",
               file=sys.stderr)
 
 
@@ -329,8 +329,8 @@ def maybe_init_setup_token() -> None:
         if store_has_admin():
             return
     except Exception as e:
-        print(f"[setup] registre injoignable au boot, fenêtre /setup non "
-              f"ouverte: {e}", file=sys.stderr)
+        print(f"[setup] registry unreachable at boot, /setup window not "
+              f"opened: {e}", file=sys.stderr)
         return
     import secrets
     with _setup_lock:
@@ -338,7 +338,7 @@ def maybe_init_setup_token() -> None:
             _setup_token = secrets.token_urlsafe(32)
     sys.stderr.write(
         f"\nAtlas setup token: {_setup_token}\n"
-        f"  → ouvrez /setup pour créer le compte admin\n\n")
+        f"  -> open /setup to create the admin account\n\n")
     sys.stderr.flush()
 
 
@@ -819,6 +819,9 @@ def git(*args, cwd=None, check=False, timeout=60):
         text=True,
         timeout=timeout,
         check=check,
+        # Never block on an interactive credential prompt: a bad/unset token
+        # must fail fast and loud (not hang until the timeout).
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
     )
 
 
@@ -836,7 +839,7 @@ def ensure_repo_cloned(root: Path) -> bool:
         return False
     repo_url = os.environ.get("GITHUB_REPO_URL")
     if not repo_url:
-        sys.exit("FATAL: GITHUB_REPO_URL manquant pour cloner le mind (mode cloud)")
+        sys.exit("FATAL: GITHUB_REPO_URL missing to clone the mind (cloud mode)")
     root.parent.mkdir(parents=True, exist_ok=True)
     try:
         result = subprocess.run(
@@ -933,7 +936,7 @@ def _graceful_flush(signum, frame):
     DURING the grace period (kill_timeout in deploy/fly.toml.example), closing the
     only durability gap that neither the pull loop nor the non-suspend covers
     (deploy/migration during the not-yet-pushed window)."""
-    print("[shutdown] SIGTERM → flush git (commit + push) avant arrêt", flush=True)
+    print("[shutdown] SIGTERM -> flushing git (commit + push) before exit", flush=True)
     try:
         pull_and_rebuild()
     except Exception as e:
@@ -1169,7 +1172,7 @@ STRINGS = {
         "setup_subtitle": "Premier démarrage",
         "setup_intro": "Crée le compte administrateur de cette instance. Tu n'auras à le faire qu'une seule fois.",
         "setup_token_label": "Jeton d'installation",
-        "setup_token_help": "Affiché dans les logs du serveur au démarrage, sur la ligne « Atlas setup token: … ».",
+        "setup_token_help": "Affiché une fois dans les logs du serveur au démarrage, sur la ligne « Atlas setup token: … ». Lis-les avec `fly logs`, `docker logs` ou `journalctl` selon ton hébergement.",
         "setup_token_placeholder": "Colle le jeton ici",
         "setup_email_label": "Email administrateur",
         "setup_email_placeholder": "toi@exemple.com",
@@ -1827,11 +1830,104 @@ def _is_readonly_path(rel: str) -> bool:
     return len(parts) >= 1 and parts[0] == REMOTES_DIR
 
 
+def _is_safe_node_name(name: str) -> bool:
+    """A node/remote name becomes a single directory under content/remotes/, so
+    it must be a safe single path segment: no separator, no path-collapsing
+    component ('.', '..'), no control char, bounded length. A name like '.'
+    would collapse content/remotes/. onto content/remotes/ itself, letting a
+    sync wipe every sibling mirror or a delete rmtree the whole tree."""
+    if not name or len(name) > 60:
+        return False
+    if name in (".", ".."):
+        return False
+    if "/" in name or "\\" in name or ".." in name:
+        return False
+    return not _has_control_chars(name)
+
+
+def _mirror_is_under_remotes(mirror) -> bool:
+    """Defense in depth: the resolved mirror must be a DIRECT child of
+    content/remotes/ (never the remotes/ dir itself, never outside it)."""
+    try:
+        remotes_root = (CONFIG.content_root / REMOTES_DIR).resolve()
+        return mirror.resolve().parent == remotes_root
+    except OSError:
+        return False
+
+
+def _atomic_write_bytes(dest, body: bytes) -> None:
+    """Write a mirror file atomically (temp + os.replace) so a concurrent
+    `git add -A` (trigger_sync) never stages a half-written file."""
+    fd, tmp = tempfile.mkstemp(dir=str(dest.parent), prefix=".sync-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(body)
+        os.replace(tmp, dest)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+MAX_NODE_FILE_BYTES = 25 * 1024 * 1024  # cap a single remote fetch (manifest or file)
+
+
+def _is_blocked_ip(ip_str: str) -> bool:
+    import ipaddress
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return True
+    return (ip.is_private or ip.is_loopback or ip.is_link_local
+            or ip.is_multicast or ip.is_reserved or ip.is_unspecified)
+
+
+def _validate_remote_url(url: str) -> None:
+    """Guards the SSRF surface of node subscriptions: the URL comes from a
+    pasted atlas-node: link, so before fetching we require http/https and refuse
+    any host that resolves to a private/loopback/link-local/reserved address
+    (cloud metadata, internal services). Raises ValueError if disallowed."""
+    import socket
+    from urllib.parse import urlsplit
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https"):
+        raise ValueError(f"unsupported scheme: {parts.scheme!r}")
+    host = parts.hostname
+    if not host:
+        raise ValueError("missing host")
+    if getattr(CONFIG, "allow_private_remotes", False):
+        return  # opt-in: localhost/LAN federation (home lab) — scheme still checked
+    try:
+        infos = socket.getaddrinfo(
+            host, parts.port or (443 if parts.scheme == "https" else 80))
+    except socket.gaierror as error:
+        raise ValueError(f"cannot resolve host: {error}")
+    for info in infos:
+        if _is_blocked_ip(info[4][0]):
+            raise ValueError("host resolves to a non-routable address")
+
+
 def _http_get_bearer(url: str, token: str, timeout: float = 15.0) -> bytes:
+    """Fetch a remote node URL with the Bearer token. Hardened against the
+    federation SSRF surface: scheme/host are validated, redirects are NOT
+    followed (a redirect could escape the validation into an internal target),
+    and the response is capped at MAX_NODE_FILE_BYTES."""
     import urllib.request
+    _validate_remote_url(url)
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None  # never follow redirects (would bypass URL validation)
+
+    opener = urllib.request.build_opener(_NoRedirect)
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
+    with opener.open(req, timeout=timeout) as resp:
+        data = resp.read(MAX_NODE_FILE_BYTES + 1)
+    if len(data) > MAX_NODE_FILE_BYTES:
+        raise ValueError("remote response exceeds size limit")
+    return data
 
 
 def _prune_empty_dirs(root) -> None:
@@ -1842,58 +1938,78 @@ def _prune_empty_dirs(root) -> None:
             path.rmdir()
 
 
+_remotes_sync_lock = threading.Lock()
+
+
 def sync_remote(remote: dict) -> dict:
     """Pulls the manifest + the delta of a remote node into remotes/<name>/.
 
     Best-effort: any error (network, publisher offline, revoked token) is
     captured in last_error without crashing — the subscriber keeps its last
-    copy."""
+    copy. Serialized by _remotes_sync_lock so the periodic loop and a manual
+    admin /sync cannot corrupt the same mirror concurrently."""
     from urllib.parse import quote
     name = remote["name"]
     url = (remote.get("url") or "").rstrip("/")
     token = remote.get("token", "")
     mirror = _remote_mirror_root(name)
-    mirror_resolved = None
-    try:
-        manifest = json.loads(_http_get_bearer(url + "/api/node/manifest", token))
-        files = manifest.get("files", [])
-        manifest_hash = hashlib.sha256(json.dumps(
-            sorted((f.get("path", ""), f.get("sha256", "")) for f in files)
-        ).encode()).hexdigest()
-        wanted = {}
-        for f in files:
-            rel = f.get("path", "")
-            if not rel or rel.startswith("/") or ".." in rel.split("/"):
-                continue  # anti-traversal guard on paths coming from the remote
-            wanted[rel] = f.get("sha256", "")
-        mirror.mkdir(parents=True, exist_ok=True)
-        mirror_resolved = mirror.resolve()
-        # 1. Download the delta (file missing or sha differs).
-        for rel, sha in wanted.items():
-            dest = mirror / rel
-            try:
-                dest.resolve().relative_to(mirror_resolved)
-            except (ValueError, OSError):
-                continue
-            if dest.exists() and hashlib.sha256(dest.read_bytes()).hexdigest() == sha:
-                continue
-            body = _http_get_bearer(url + "/api/node/file?path=" + quote(rel), token)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(body)
-        # 2. Delete locally whatever disappeared from the remote manifest.
-        for path in [p for p in mirror.rglob("*") if p.is_file()]:
-            if path.relative_to(mirror).as_posix() not in wanted:
-                path.unlink()
-        _prune_empty_dirs(mirror)
-        get_store().update_remote_status(name, {
-            "last_sync_at": int(time.time()),
-            "last_manifest_hash": manifest_hash,
-            "last_error": "",
-        })
-        return {"ok": True, "files": len(wanted)}
-    except Exception as e:
-        get_store().update_remote_status(name, {"last_error": str(e)[:200]})
-        return {"ok": False, "error": str(e)}
+    # A malformed/hostile name must never let the mirror escape its own subdir:
+    # a "." name would make the mirror the whole remotes/ tree, so the delete
+    # pass below would wipe every sibling subscription.
+    if not _is_safe_node_name(name) or not _mirror_is_under_remotes(mirror):
+        get_store().update_remote_status(name, {"last_error": "unsafe remote name"})
+        return {"ok": False, "error": "unsafe remote name"}
+    with _remotes_sync_lock:
+        try:
+            manifest = json.loads(_http_get_bearer(url + "/api/node/manifest", token))
+            files = manifest.get("files", [])
+            manifest_hash = hashlib.sha256(json.dumps(
+                sorted((f.get("path", ""), f.get("sha256", "")) for f in files)
+            ).encode()).hexdigest()
+            wanted = {}
+            for f in files:
+                rel = f.get("path", "")
+                if not rel or rel.startswith("/") or ".." in rel.split("/"):
+                    continue  # anti-traversal guard on paths coming from the remote
+                wanted[rel] = f.get("sha256", "")
+            mirror.mkdir(parents=True, exist_ok=True)
+            mirror_resolved = mirror.resolve()
+            # 1. Download the delta (file missing or sha differs).
+            for rel, sha in wanted.items():
+                dest = mirror / rel
+                try:
+                    dest.resolve().relative_to(mirror_resolved)
+                except (ValueError, OSError):
+                    continue
+                if dest.exists() and hashlib.sha256(dest.read_bytes()).hexdigest() == sha:
+                    continue
+                body = _http_get_bearer(url + "/api/node/file?path=" + quote(rel), token)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                _atomic_write_bytes(dest, body)
+            # 2. Delete locally whatever disappeared from the remote manifest.
+            #    Guard: an empty manifest while the mirror still holds files is
+            #    almost always a transient publisher error (offline read, mid
+            #    git-rebase, renamed source) — keep the last good copy rather
+            #    than wiping it (the deletion would otherwise be committed and
+            #    pushed). It self-heals on the next good sync.
+            existing = [p for p in mirror.rglob("*") if p.is_file()]
+            if wanted or not existing:
+                for path in existing:
+                    if path.relative_to(mirror).as_posix() not in wanted:
+                        path.unlink()
+                _prune_empty_dirs(mirror)
+            else:
+                print(f"[sync] {name}: empty manifest, keeping "
+                      f"{len(existing)} existing file(s)", file=sys.stderr)
+            get_store().update_remote_status(name, {
+                "last_sync_at": int(time.time()),
+                "last_manifest_hash": manifest_hash,
+                "last_error": "",
+            })
+            return {"ok": True, "files": len(wanted)}
+        except Exception as e:
+            get_store().update_remote_status(name, {"last_error": str(e)[:200]})
+            return {"ok": False, "error": str(e)}
 
 
 def sync_all_remotes() -> bool:
@@ -2074,11 +2190,11 @@ MCP_PROTOCOL_VERSION = "2025-03-26"
 MCP_TOOLS = [
     {
         "name": "search_docs",
-        "description": "Recherche full-text dans la knowledge base. Retourne les documents qui matchent la query, triés par pertinence. Utilise des termes en français ou anglais selon le contenu indexé.",
+        "description": "Full-text search across the knowledge base. Returns the documents matching the query, ranked by relevance. Use terms in the language of the indexed content.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "q": {"type": "string", "description": "Termes recherchés"},
+                "q": {"type": "string", "description": "Search terms"},
                 "limit": {"type": "integer", "default": 10, "minimum": 1, "maximum": 50},
             },
             "required": ["q"],
@@ -2086,27 +2202,27 @@ MCP_TOOLS = [
     },
     {
         "name": "read_doc",
-        "description": "Lit le contenu intégral et brut d'un document (.md OU .html). Pour un .html on récupère le HTML source complet (pas le texte extrait).",
+        "description": "Read the full raw content of a document (.md OR .html). For a .html you get the complete HTML source (not extracted text).",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Chemin relatif du .md ou .html (ex: notes/exemple.md, projets/deck-mai.html). Utilise list_tree ou search_docs pour découvrir les paths."},
+                "path": {"type": "string", "description": "Relative path of the .md or .html (e.g. notes/example.md, projects/deck-may.html). Use list_tree or search_docs to discover paths."},
             },
             "required": ["path"],
         },
     },
     {
         "name": "list_tree",
-        "description": "Liste l'arborescence complète de la knowledge base (metadata uniquement, sans contenu). Pratique pour comprendre l'organisation des dossiers avant de naviguer.",
+        "description": "List the full tree of the knowledge base (metadata only, no content). Handy to understand the folder organization before navigating.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "recent_docs",
-        "description": "Documents modifiés récemment, du plus récent au plus ancien. Pratique pour savoir ce sur quoi l'utilisateur a travaillé dernièrement.",
+        "description": "Recently modified documents, newest first. Handy to know what the user has worked on lately.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "days": {"type": "integer", "default": 7, "description": "Fenêtre en jours", "minimum": 1},
+                "days": {"type": "integer", "default": 7, "description": "Window in days", "minimum": 1},
                 "limit": {"type": "integer", "default": 20, "minimum": 1, "maximum": 100},
             },
         },
@@ -2114,20 +2230,20 @@ MCP_TOOLS = [
     {
         "name": "create_doc",
         "description": (
-            "Crée un nouveau document. Deux formats possibles, choisis selon le contenu :\n"
-            "• .md — prose, notes, recaps, CDC, bilans markdown (rendu marked dans le viewer). Défaut.\n"
-            "• .html — document AUTONOME stylé : deck de slides, dashboard, page à mise en page "
-            "riche avec son propre CSS/JS. Rendu TEL QUEL dans une iframe isolée du viewer.\n"
-            "RÈGLE : n'emballe JAMAIS un document HTML complet (<!DOCTYPE html>…) dans un bloc de "
-            "code ```html d'un .md — il s'afficherait comme du code source brut. Crée un .html à la place.\n"
-            "Refuse si le path existe déjà (create-only, pas d'écrasement). Le path doit terminer par "
-            ".md ou .html et être dans un dossier valide (notes/, projets/, inbox/, etc.)."
+            "Create a new document. Two formats, pick by content:\n"
+            "• .md — prose, notes, recaps, specs, markdown reports (rendered with marked in the viewer). Default.\n"
+            "• .html — a SELF-CONTAINED styled document: slide deck, dashboard, richly laid-out "
+            "page with its own CSS/JS. Rendered AS-IS in a viewer iframe sandbox.\n"
+            "RULE: NEVER wrap a full HTML document (<!DOCTYPE html>…) inside a ```html code block "
+            "of a .md — it would show as raw source. Create a .html instead.\n"
+            "Refuses if the path already exists (create-only, no overwrite). The path must end in "
+            ".md or .html and be in a valid folder (notes/, projects/, inbox/, etc.)."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Chemin relatif terminant par .md ou .html (ex: inbox/note.md, projets/deck-bilan.html)"},
-                "content": {"type": "string", "description": "Pour un .md : corps markdown complet avec titre H1. Pour un .html : page HTML complète et autonome (<!DOCTYPE html>…</html>), CSS/JS inline inclus."},
+                "path": {"type": "string", "description": "Relative path ending in .md or .html (e.g. inbox/note.md, projects/deck-report.html)"},
+                "content": {"type": "string", "description": "For a .md: full markdown body with an H1 title. For a .html: a complete self-contained HTML page (<!DOCTYPE html>…</html>), inline CSS/JS included."},
             },
             "required": ["path", "content"],
         },
@@ -2135,21 +2251,21 @@ MCP_TOOLS = [
     {
         "name": "edit_doc",
         "description": (
-            "Édite un document EXISTANT (.md OU .html). Deux modes mutuellement exclusifs :\n"
-            "1. Remplacement ciblé : passe 'old_string' + 'new_string'. 'old_string' doit "
-            "apparaître exactement une fois dans le document (sinon erreur) — ajoute du contexte "
-            "autour pour la rendre unique. Économe en tokens, à privilégier sur les gros docs (et sur les .html, souvent volumineux).\n"
-            "2. Réécriture complète : passe 'content' (remplace tout le fichier).\n"
-            "Au moins un des deux modes est requis. Le document doit déjà exister "
-            "(utilise create_doc pour en créer un nouveau). Lis le doc avec read_doc avant d'éditer."
+            "Edit an EXISTING document (.md OR .html). Two mutually exclusive modes:\n"
+            "1. Targeted replacement: pass 'old_string' + 'new_string'. 'old_string' must "
+            "appear exactly once in the document (otherwise an error) — add surrounding context "
+            "to make it unique. Token-efficient, preferred on large docs (and .html, often big).\n"
+            "2. Full rewrite: pass 'content' (replaces the whole file).\n"
+            "At least one of the two modes is required. The document must already exist "
+            "(use create_doc to create a new one). Read the doc with read_doc before editing."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Chemin relatif du .md ou .html existant (ex: notes/recap.md, projets/deck-mai.html)"},
-                "old_string": {"type": "string", "description": "Mode patch : texte exact à remplacer, doit être unique dans le document."},
-                "new_string": {"type": "string", "description": "Mode patch : texte de remplacement (requis si old_string est fourni)."},
-                "content": {"type": "string", "description": "Mode réécriture : nouveau contenu markdown complet. Ignoré si old_string est fourni."},
+                "path": {"type": "string", "description": "Relative path of the existing .md or .html (e.g. notes/recap.md, projects/deck-may.html)"},
+                "old_string": {"type": "string", "description": "Patch mode: the exact text to replace, must be unique in the document."},
+                "new_string": {"type": "string", "description": "Patch mode: the replacement text (required if old_string is provided)."},
+                "content": {"type": "string", "description": "Rewrite mode: the full new markdown content. Ignored if old_string is provided."},
             },
             "required": ["path"],
         },
@@ -2157,17 +2273,16 @@ MCP_TOOLS = [
     {
         "name": "move_doc",
         "description": (
-            "Déplace OU renomme un document existant (.md ou .html), en réécrivant "
-            "AUTOMATIQUEMENT les [[wikilinks]] entrants qui le visent (aucun backlink "
-            "cassé). Le renommage = un déplacement dans le même dossier (change juste "
-            "le nom de fichier dans 'to'). Refuse si la cible existe déjà (pas d'écrasement). "
-            "Lis d'abord list_tree/search_docs pour connaître le path exact."
+            "Move OR rename an existing document (.md or .html), AUTOMATICALLY rewriting "
+            "the incoming [[wikilinks]] that point at it (no broken backlinks). Renaming = "
+            "a move within the same folder (just change the filename in 'to'). Refuses if the "
+            "target already exists (no overwrite). Read list_tree/search_docs first for the exact path."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "from": {"type": "string", "description": "Chemin relatif ACTUEL du .md (ex: notes/brouillon.md)"},
-                "to": {"type": "string", "description": "NOUVEAU chemin relatif .md (ex: projets/brouillon-final.md). Même dossier + nouveau nom = simple renommage."},
+                "from": {"type": "string", "description": "CURRENT relative path of the .md (e.g. notes/draft.md)"},
+                "to": {"type": "string", "description": "NEW relative .md path (e.g. projects/draft-final.md). Same folder + new name = a plain rename."},
             },
             "required": ["from", "to"],
         },
@@ -2208,11 +2323,11 @@ def _move_md_with_relink(src_rel: str, dst_rel: str):
     src = _validate_doc_path(src_rel)
     dst = _validate_doc_path(dst_rel)
     if not src or not dst:
-        return ("invalid", "Path invalide (from et to doivent être des .md ou .html relatifs, sans '..')")
+        return ("invalid", "Invalid path (from and to must be relative .md or .html, no '..')")
     if not src.exists():
-        return ("not_found", f"Source introuvable : {src_rel}")
+        return ("not_found", f"Source not found: {src_rel}")
     if dst.exists():
-        return ("exists", f"La cible existe déjà : {dst_rel} (pas d'écrasement)")
+        return ("exists", f"Target already exists: {dst_rel} (no overwrite)")
     src_canon = src.relative_to(CONFIG.content_root).as_posix()
     dst_canon = dst.relative_to(CONFIG.content_root).as_posix()
     dst_stem = re.sub(r"\.md$", "", dst.name, flags=re.I)
@@ -2266,7 +2381,9 @@ def _move_md_with_relink(src_rel: str, dst_rel: str):
     try:
         src.rename(dst)
     except OSError as e:
-        return ("error", f"Échec du déplacement : {e}")
+        print(f"[move_doc] rename failed {src_canon} -> {dst_canon}: {e}",
+              file=sys.stderr)
+        return ("error", "Move failed")
     rewrites = []
     for rel, new_body, count in pending:
         try:
@@ -2289,21 +2406,21 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
     if name == "search_docs":
         q = (args.get("q") or "").strip()
         if not q:
-            return text_result("Erreur : paramètre 'q' manquant", is_error=True)
+            return text_result("Error: missing 'q' parameter", is_error=True)
         try:
             limit = min(50, max(1, int(args.get("limit", 10))))
         except (ValueError, TypeError):
             limit = 10
         hits = _api_search(q, limit)
         if not hits:
-            return text_result(f"Aucun résultat pour: {q}")
+            return text_result(f"No results for: {q}")
         return text_result(json.dumps(hits, ensure_ascii=False, indent=2))
 
     if name == "read_doc":
         rel = (args.get("path") or "").strip()
         target = _validate_doc_path(rel)
         if not target or not target.exists():
-            return text_result(f"Document introuvable : {rel}", is_error=True)
+            return text_result(f"Document not found: {rel}", is_error=True)
         text = target.read_text(encoding="utf-8")
         return text_result(text)
 
@@ -2312,7 +2429,8 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             tree = _import_build().walk(CONFIG.content_root)
             return text_result(json.dumps(tree, ensure_ascii=False, indent=2))
         except Exception as e:
-            return text_result(f"Erreur lors du listage : {e}", is_error=True)
+            print(f"[mcp] list_tree failed: {e}", file=sys.stderr)
+            return text_result("Error listing the tree", is_error=True)
 
     if name == "recent_docs":
         try:
@@ -2322,7 +2440,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             days, limit = 7, 20
         hits = _api_recent(days, limit)
         if not hits:
-            return text_result(f"Aucun document modifié dans les {days} derniers jours")
+            return text_result(f"No document modified in the last {days} days")
         return text_result(json.dumps(hits, ensure_ascii=False, indent=2))
 
     if name == "create_doc":
@@ -2330,70 +2448,72 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         content = args.get("content", "")
         target = _validate_doc_path(rel)
         if not target:
-            return text_result("Path invalide (doit être un .md ou .html relatif, sans '..')", is_error=True)
+            return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
         if _is_readonly_path(rel):
-            return text_result("Emplacement en lecture seule (miroir d'un nœud distant) — choisis un autre path.", is_error=True)
+            return text_result("Read-only location (remote node mirror) — choose another path.", is_error=True)
         if target.exists():
-            return text_result(f"Le document existe déjà : {rel} (impossible d'écraser avec ce token)", is_error=True)
+            return text_result(f"Document already exists: {rel} (cannot overwrite with this token)", is_error=True)
         if not isinstance(content, str):
-            return text_result("'content' doit être une string", is_error=True)
+            return text_result("'content' must be a string", is_error=True)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         trigger_sync()
-        return text_result(f"Document créé : {rel}")
+        return text_result(f"Document created: {rel}")
 
     if name == "edit_doc":
         rel = (args.get("path") or "").strip()
         target = _validate_doc_path(rel)
         if not target:
-            return text_result("Path invalide (doit être un .md ou .html relatif, sans '..')", is_error=True)
+            return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
         if _is_readonly_path(rel):
-            return text_result("Document en lecture seule (miroir d'un nœud distant). Utilise « S'approprier » pour en faire une copie éditable.", is_error=True)
+            return text_result("Read-only document (remote node mirror). Use \"Appropriate\" to make an editable copy.", is_error=True)
         if not target.exists():
-            return text_result(f"Document introuvable : {rel} (utilise create_doc pour en créer un nouveau)", is_error=True)
+            return text_result(f"Document not found: {rel} (use create_doc to create a new one)", is_error=True)
         old_string = args.get("old_string")
         new_string = args.get("new_string")
         content = args.get("content")
         # Patch mode: targeted replacement, takes priority over the rewrite.
         if old_string is not None:
             if not isinstance(old_string, str) or not isinstance(new_string, str):
-                return text_result("'old_string' et 'new_string' doivent être des strings", is_error=True)
+                return text_result("'old_string' and 'new_string' must be strings", is_error=True)
             if old_string == "":
-                return text_result("'old_string' ne peut pas être vide", is_error=True)
+                return text_result("'old_string' cannot be empty", is_error=True)
             current = target.read_text(encoding="utf-8")
             count = current.count(old_string)
             if count == 0:
-                return text_result("'old_string' introuvable dans le document (vérifie l'exactitude avec read_doc)", is_error=True)
+                return text_result("'old_string' not found in the document (check it with read_doc)", is_error=True)
             if count > 1:
-                return text_result(f"'old_string' apparaît {count} fois — elle doit être unique. Ajoute du contexte autour pour la rendre unique.", is_error=True)
+                return text_result(f"'old_string' appears {count} times — it must be unique. Add surrounding context to make it unique.", is_error=True)
             target.write_text(current.replace(old_string, new_string, 1), encoding="utf-8")
             trigger_sync()
-            return text_result(f"Document édité (remplacement ciblé) : {rel}")
+            return text_result(f"Document edited (targeted replacement): {rel}")
         # Full rewrite mode.
         if content is not None:
             if not isinstance(content, str):
-                return text_result("'content' doit être une string", is_error=True)
+                return text_result("'content' must be a string", is_error=True)
             target.write_text(content, encoding="utf-8")
             trigger_sync()
-            return text_result(f"Document réécrit : {rel}")
-        return text_result("Fournis soit 'old_string'+'new_string' (patch), soit 'content' (réécriture)", is_error=True)
+            return text_result(f"Document rewritten: {rel}")
+        return text_result("Provide either 'old_string'+'new_string' (patch) or 'content' (rewrite)", is_error=True)
 
     if name == "move_doc":
         src_rel = (args.get("from") or "").strip()
         dst_rel = (args.get("to") or "").strip()
         if not src_rel or not dst_rel:
-            return text_result("'from' et 'to' sont requis", is_error=True)
+            return text_result("'from' and 'to' are required", is_error=True)
+        if _is_readonly_path(src_rel) or _is_readonly_path(dst_rel):
+            return text_result("Read-only location (remote node mirror) — \"Appropriate\" it first to get an editable copy.", is_error=True)
         status, payload = _move_md_with_relink(src_rel, dst_rel)
         if status != "ok":
             return text_result(payload, is_error=True)
         trigger_sync()
         n, files = payload["links_updated"], len(payload["rewrites"])
-        msg = f"Déplacé : {payload['from']} → {payload['to']}."
-        msg += (f" {n} wikilink(s) entrant(s) réécrit(s) dans {files} doc(s)."
-                if n else " Aucun wikilink entrant à corriger.")
+        msg = f"Moved: {payload['from']} -> {payload['to']}."
+        msg += (f" {n} incoming wikilink(s) rewritten in {files} doc(s)."
+                if n else " No incoming wikilink to fix.")
         return text_result(msg)
 
-    return text_result(f"Tool inconnu : {name}", is_error=True)
+    return text_result(f"Unknown tool: {name}", is_error=True)
 
 
 def _mcp_jsonrpc(req: dict):
@@ -2436,9 +2556,11 @@ def _mcp_jsonrpc(req: dict):
             return ok(_mcp_call_tool(tool_name, arguments))
         return err(-32601, f"method not found: {method}")
     except Exception as e:
+        # Log the detail (which may carry server paths) to stderr only; the
+        # client gets a generic message.
         sys.stderr.write(f"[mcp] error in {method}: {e}\n")
         sys.stderr.flush()
-        return err(-32603, str(e))
+        return err(-32603, "internal error")
 
 
 # ─── Server extensions (<mind>/.atlas/extensions/*.py) ───────────────────────
@@ -2474,12 +2596,12 @@ class ExtensionContext:
     def add_route(self, method, pattern, handler, role=None):
         method = (method or "").upper()
         if method not in ("GET", "POST"):
-            raise ValueError(f"méthode non supportée : {method!r} (GET ou POST)")
+            raise ValueError(f"unsupported method: {method!r} (GET or POST)")
         if role is None:
             role = "admin" if method == "POST" else "auth"
         if role not in EXTENSION_ROLES:
             raise ValueError(
-                f"rôle inconnu : {role!r} (public, auth ou admin)")
+                f"unknown role: {role!r} (public, auth or admin)")
         self._routes.append((method, re.compile(pattern), handler, role))
 
 
@@ -2504,13 +2626,13 @@ def load_server_extensions(config, routes=None):
             spec.loader.exec_module(module)
             register = getattr(module, "register", None)
             if not callable(register):
-                print(f"[extensions] {path.name} ignorée : pas de fonction "
-                      "register(context)", file=sys.stderr)
+                print(f"[extensions] {path.name} skipped: no register(context) "
+                      "function", file=sys.stderr)
                 continue
             register(ExtensionContext(config, routes))
-            print(f"[extensions] {path.name} chargée", file=sys.stderr)
+            print(f"[extensions] {path.name} loaded", file=sys.stderr)
         except Exception as e:
-            print(f"[extensions] {path.name} ignorée : {e}", file=sys.stderr)
+            print(f"[extensions] {path.name} skipped: {e}", file=sys.stderr)
     return routes
 
 
@@ -2794,9 +2916,17 @@ class Handler(SimpleHTTPRequestHandler):
         if trusted_header:
             value = self.headers.get(trusted_header, "").split(",")[-1].strip()
             return value or self.client_address[0]
-        return (self.headers.get("Fly-Client-IP")
-                or self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-                or self.client_address[0])
+        # No trusted header configured. Fly injects Fly-Client-IP at its edge
+        # (trustworthy ONLY when we actually run on Fly); honor it solely then.
+        # We do NOT trust X-Forwarded-For here: its leftmost element is
+        # client-set and forgeable, which would let an attacker rotate it to
+        # bypass the login rate limit. A self-hoster behind a proxy must set
+        # server.trusted_ip_header (documented) to get real client IPs.
+        if os.environ.get("FLY_APP_NAME") or os.environ.get("FLY_ALLOC_ID"):
+            fly_ip = self.headers.get("Fly-Client-IP", "").strip()
+            if fly_ip:
+                return fly_ip
+        return self.client_address[0]
 
     def _session_cookie_pair(self, email: str, role: str, epoch: int):
         """The TWO Set-Cookie headers of an open session: the signed session
@@ -2990,7 +3120,7 @@ class Handler(SimpleHTTPRequestHandler):
                 })
                 _setup_token = None  # closes the window for good
         except Exception as e:
-            print(f"[setup] création admin impossible: {e}", file=sys.stderr)
+            print(f"[setup] could not create admin account: {e}", file=sys.stderr)
             self._send_json(503, {"error": "registry unavailable"})
             return
         self.send_response(200)
@@ -3364,8 +3494,7 @@ class Handler(SimpleHTTPRequestHandler):
         data = self._read_json()
         name = (data.get("name") or "").strip()
         rel = (data.get("path") or "").strip()
-        if (not name or "/" in name or ".." in name
-                or _has_control_chars(name) or len(name) > 60):
+        if not _is_safe_node_name(name):
             self._send_json(400, {"error": "invalid name"})
             return
         target = _validate_node_path(rel)
@@ -3434,7 +3563,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_json(400, {"error": "invalid node link"})
             return
         name = decoded["name"]
-        if "/" in name or ".." in name or _has_control_chars(name) or len(name) > 60:
+        if not _is_safe_node_name(name):
             self._send_json(400, {"error": "invalid node name"})
             return
         try:
@@ -3491,7 +3620,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         import shutil
         mirror = _remote_mirror_root(name)
-        if mirror.exists():
+        if _mirror_is_under_remotes(mirror) and mirror.exists():
             shutil.rmtree(mirror, ignore_errors=True)
         _prune_empty_dirs(CONFIG.content_root / REMOTES_DIR)
         trigger_sync()
@@ -3509,11 +3638,22 @@ class Handler(SimpleHTTPRequestHandler):
         if not name or not dest:
             self._send_json(400, {"error": "name and dest required"})
             return
+        if not _is_safe_node_name(name):
+            self._send_json(400, {"error": "invalid name"})  # no '..'/'/' traversal in name
+            return
         if ".." in dest.split("/") or dest == REMOTES_DIR or dest.startswith(REMOTES_DIR + "/"):
             self._send_json(400, {"error": "invalid destination"})  # no copying INTO a mirror
             return
+        try:
+            if not get_store().get_remote(name):
+                self._send_json(404, {"error": "remote not found"})
+                return
+        except Exception as e:
+            print(f"[admin] appropriate: {e}", file=sys.stderr)
+            self._send_json(503, {"error": "registry unavailable"})
+            return
         mirror = _remote_mirror_root(name)
-        if not mirror.exists():
+        if not _mirror_is_under_remotes(mirror) or not mirror.exists():
             self._send_json(404, {"error": "remote not mirrored"})
             return
         src = (mirror / source) if source else mirror
@@ -3541,7 +3681,14 @@ class Handler(SimpleHTTPRequestHandler):
             shutil.copy2(src, target)
             copied = 1
         else:
-            for f in [p for p in src.rglob("*") if p.is_file()]:
+            sources = [p for p in src.rglob("*") if p.is_file()]
+            # Mirror the single-file 409 guard: never silently overwrite the
+            # admin's own (non-mirror) documents — appropriate makes a NEW copy.
+            if any((dest_path / f.relative_to(src).as_posix()).exists()
+                   for f in sources):
+                self._send_json(409, {"error": "destination exists"})
+                return
+            for f in sources:
                 target = dest_path / f.relative_to(src).as_posix()
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(f, target)
@@ -4081,10 +4228,18 @@ class Handler(SimpleHTTPRequestHandler):
         # Security: the static handler (super().do_GET) serves any
         # file under ROOT, dotfiles included. We explicitly refuse
         # dotfiles (.git/config contains the GitHub PAT embedded in the
-        # clone URL) and source code (*.py). URL-decoded to prevent
-        # bypass via %2e/%2f.
+        # clone URL) and source code (*.py/*.pyc).
+        #
+        # The checks MUST run on the CANONICAL path — normalized exactly the
+        # way the static handler (translate_path -> posixpath.normpath) will
+        # resolve it. A non-normalized path ("/a//b/x.md", "/a%2fb/x.md", a
+        # leading "%2f") would otherwise slip past the literal-prefix dotfile/
+        # ACL match here while translate_path still serves the normalized file
+        # underneath — a real hidden-folder ACL bypass. URL-decoded to also
+        # prevent %2e/%2f tricks.
         from urllib.parse import unquote as _unquote
-        _decoded = _unquote(rel)
+        _norm = posixpath.normpath(_unquote(self.path.split("?", 1)[0]))
+        _decoded = "/".join(w for w in _norm.split("/") if w and w not in (".", ".."))
         if (any(p.startswith(".") for p in _decoded.split("/"))
                 or _decoded.endswith((".py", ".pyc"))):
             self.send_error(404)
@@ -4519,7 +4674,7 @@ class Handler(SimpleHTTPRequestHandler):
             "openapi": "3.1.0",
             "info": {
                 "title": CONFIG.site_name,
-                "description": f"{CONFIG.tagline} Recherche, lecture et création de documents markdown (lecture seule + create-only).",
+                "description": f"{CONFIG.tagline} Search, read and create markdown documents (read-only + create-only).",
                 "version": "1.0.0",
             },
             "servers": [{"url": f"{scheme}://{host}"}],
@@ -4555,15 +4710,15 @@ class Handler(SimpleHTTPRequestHandler):
                 "/api/v1/search": {
                     "get": {
                         "operationId": "searchDocs",
-                        "summary": "Recherche full-text sur tous les .md de la base",
-                        "description": "Retourne les documents qui matchent la query. Trié par score. Utilise des termes français ou anglais selon le contenu indexé.",
+                        "summary": "Full-text search across all .md in the base",
+                        "description": "Returns the documents matching the query, ranked by score. Use terms in the language of the indexed content.",
                         "parameters": [
-                            {"name": "q", "in": "query", "required": True, "schema": {"type": "string"}, "description": "Terme(s) recherchés"},
+                            {"name": "q", "in": "query", "required": True, "schema": {"type": "string"}, "description": "Search term(s)"},
                             {"name": "limit", "in": "query", "schema": {"type": "integer", "default": 10, "maximum": 50}},
                         ],
                         "responses": {
                             "200": {
-                                "description": "Résultats triés par pertinence",
+                                "description": "Results ranked by relevance",
                                 "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/SearchHit"}}}},
                             }
                         },
@@ -4572,50 +4727,50 @@ class Handler(SimpleHTTPRequestHandler):
                 "/api/v1/file": {
                     "get": {
                         "operationId": "readDoc",
-                        "summary": "Lit le contenu intégral d'un document markdown",
-                        "parameters": [{"name": "path", "in": "query", "required": True, "schema": {"type": "string"}, "description": "Chemin relatif (ex: notes/exemple.md)"}],
+                        "summary": "Read the full content of a markdown document",
+                        "parameters": [{"name": "path", "in": "query", "required": True, "schema": {"type": "string"}, "description": "Relative path (e.g. notes/example.md)"}],
                         "responses": {
-                            "200": {"description": "Contenu du document", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FileContent"}}}},
-                            "404": {"description": "Document introuvable"},
+                            "200": {"description": "Document content", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FileContent"}}}},
+                            "404": {"description": "Document not found"},
                         },
                     },
                     "post": {
                         "operationId": "createDoc",
-                        "summary": "Crée un nouveau document markdown (refuse l'écrasement)",
-                        "description": "Renvoie 409 si un document existe déjà à ce path. Le contenu doit être du markdown valide.",
+                        "summary": "Create a new markdown document (refuses overwrite)",
+                        "description": "Returns 409 if a document already exists at this path. The content must be valid markdown.",
                         "requestBody": {
                             "required": True,
                             "content": {"application/json": {"schema": {
                                 "type": "object",
                                 "required": ["path", "content"],
                                 "properties": {
-                                    "path": {"type": "string", "description": "Chemin relatif terminant par .md (ex: inbox/2026-05-23-note.md)"},
-                                    "content": {"type": "string", "description": "Corps markdown complet"},
+                                    "path": {"type": "string", "description": "Relative path ending in .md (e.g. inbox/note.md)"},
+                                    "content": {"type": "string", "description": "Full markdown body"},
                                 },
                             }}},
                         },
                         "responses": {
-                            "201": {"description": "Document créé"},
-                            "409": {"description": "Existe déjà — pas d'écrasement autorisé pour ce token"},
+                            "201": {"description": "Document created"},
+                            "409": {"description": "Already exists — no overwrite allowed for this token"},
                         },
                     },
                 },
                 "/api/v1/tree": {
                     "get": {
                         "operationId": "listTree",
-                        "summary": "Liste l'arborescence complète des documents (metadata sans contenu)",
-                        "responses": {"200": {"description": "Tree de la knowledge base", "content": {"application/json": {"schema": {"type": "object"}}}}},
+                        "summary": "List the full document tree (metadata without content)",
+                        "responses": {"200": {"description": "Knowledge base tree", "content": {"application/json": {"schema": {"type": "object"}}}}},
                     }
                 },
                 "/api/v1/recent": {
                     "get": {
                         "operationId": "recentDocs",
-                        "summary": "Documents modifiés récemment, triés du plus récent au plus ancien",
+                        "summary": "Recently modified documents, newest first",
                         "parameters": [
-                            {"name": "days", "in": "query", "schema": {"type": "integer", "default": 7}, "description": "Fenêtre en jours"},
+                            {"name": "days", "in": "query", "schema": {"type": "integer", "default": 7}, "description": "Window in days"},
                             {"name": "limit", "in": "query", "schema": {"type": "integer", "default": 20, "maximum": 100}},
                         ],
-                        "responses": {"200": {"description": "Liste de documents", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/SearchHit"}}}}}},
+                        "responses": {"200": {"description": "List of documents", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/SearchHit"}}}}}},
                     }
                 },
             },
@@ -4807,7 +4962,7 @@ if __name__ == "__main__":
         env_secret = os.environ.get("SESSION_SECRET")
         if env_secret is not None and env_secret in ("", "dev-secret-change-me"):
             sys.exit(
-                "FATAL: SESSION_SECRET non défini en mode cloud (KB_AUTH_ENABLED=1).\n"
+                "FATAL: SESSION_SECRET not set in cloud mode (KB_AUTH_ENABLED=1).\n"
                 "  fly secrets set SESSION_SECRET=$(python3 -c \"import secrets;print(secrets.token_hex(32))\")"
             )
         freshly_cloned = ensure_repo_cloned(mind_root)
@@ -4826,7 +4981,7 @@ if __name__ == "__main__":
         # Better to crash than to run wide open.
         if not CONFIG.session_secret or CONFIG.session_secret == b"dev-secret-change-me":
             sys.exit(
-                "FATAL: SESSION_SECRET non défini en mode cloud (KB_AUTH_ENABLED=1).\n"
+                "FATAL: SESSION_SECRET not set in cloud mode (KB_AUTH_ENABLED=1).\n"
                 "  fly secrets set SESSION_SECRET=$(python3 -c \"import secrets;print(secrets.token_hex(32))\")"
             )
         if freshly_cloned:
@@ -4870,9 +5025,9 @@ if __name__ == "__main__":
         # displayed as-is instead of killing the boot on the relative_to.
         todo_display = CONFIG.todo_file
     print(f"Todo -> {todo_display}")
-    print("Ctrl+C pour arrêter")
+    print("Ctrl+C to stop")
     try:
         ThreadingHTTPServer((bind, CONFIG.port), Handler).serve_forever()
     except KeyboardInterrupt:
-        print("\nArrêté.")
+        print("\nStopped.")
         sys.exit(0)

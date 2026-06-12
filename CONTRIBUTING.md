@@ -10,9 +10,9 @@ welcome.
 - **Standard library first.** The engine runs on Python 3's standard library.
   The only optional dependency is `bcrypt`, and only to verify legacy password
   hashes. Please do not add dependencies to the engine.
-- **Engine and content stay decoupled.** Code lives under `src/`, `web/` and
-  `templates/`; a *mind* (content) is a separate git repository. Changes should
-  not blur that boundary.
+- **Engine and content stay decoupled.** Code lives under `src/` (with the
+  viewer assets in `src/web/` and `src/templates/`); a *mind* (content) is a
+  separate git repository. Changes should not blur that boundary.
 - **No silent failure of safety paths, no crashing of optional ones.** Extensions
   and builds must degrade gracefully (warn and continue); security checks must
   fail closed.

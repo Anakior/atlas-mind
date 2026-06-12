@@ -7,7 +7,7 @@ An instance's language comes from the root `lang` key of atlas.toml:
   server.STRINGS, selected by CONFIG.lang. The API's JSON errors and the logs
   stay as-is (contract characterized elsewhere).
 
-The default stays "fr": without atlas.toml, the historical rendering is unchanged.
+The default is "en": without atlas.toml, the engine renders in English.
 An unsupported language fails with AtlasConfigError, never with broken English.
 """
 from __future__ import annotations
@@ -156,8 +156,8 @@ class TestI18nEnglishLoginPage(unittest.TestCase):
         self.assertNotIn("Identifiants invalides", resp.text)
 
 
-class TestI18nFrenchDefaultUnchanged(unittest.TestCase):
-    """Without atlas.toml: everything stays in French (historical default intact)."""
+class TestI18nEnglishDefault(unittest.TestCase):
+    """Without atlas.toml: everything renders in English (engine default)."""
 
     @classmethod
     def setUpClass(cls):
@@ -168,21 +168,21 @@ class TestI18nFrenchDefaultUnchanged(unittest.TestCase):
     def tearDownClass(cls):
         cls.srv.stop()
 
-    def test_login_page_default_french(self):
+    def test_login_page_default_english(self):
         resp = self.srv.get("/login")
         self.assertEqual(resp.status, 200)
-        self.assertIn('<html lang="fr">', resp.text)
-        self.assertIn("Connexion", resp.text)
-        self.assertIn("Se connecter", resp.text)
-        self.assertIn('placeholder="Mot de passe"', resp.text)
+        self.assertIn('<html lang="en">', resp.text)
+        self.assertIn("Sign in", resp.text)
+        self.assertIn('placeholder="Password"', resp.text)
+        self.assertNotIn("Se connecter", resp.text)
 
-    def test_dist_index_default_french(self):
+    def test_dist_index_default_english(self):
         # dist/index.html is generated at _populate even in cloud mode.
         text = (self.srv.root / "dist" / "index.html").read_text(
             encoding="utf-8")
-        self.assertIn('<html lang="fr">', text)
-        self.assertIn("Récemment modifiés", text)
-        self.assertIn("'Rechercher…'", text)
+        self.assertIn('<html lang="en">', text)
+        self.assertIn("Recently modified", text)
+        self.assertIn("'Search…'", text)
 
 
 class TestI18nViewerDictionaryConsistency(unittest.TestCase):

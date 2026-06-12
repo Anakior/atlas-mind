@@ -84,7 +84,12 @@ class TestBrowseMind(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.srv = AtlasServer(mind=BROWSE_MIND)
+        # Explicitly exclude skill/ from the viewer (the engine default no longer
+        # ships a personal "skill" name): this exercises the exclusion mechanism
+        # via an opt-in [build].excluded_names at the mind ROOT, not a default.
+        cls.srv = AtlasServer(
+            mind=BROWSE_MIND,
+            extra_files={"atlas.toml": '[build]\nexcluded_names = ["skill", "quick.md"]\n'})
         cls.srv.start()
 
     @classmethod

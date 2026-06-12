@@ -88,6 +88,23 @@ class TestViewerACL(unittest.TestCase):
         self.assertEqual(self.srv.get("/public/note.md",
                          headers={"Cookie": self.viewer}).status, 200)
 
+    def test_acl_bypass_via_path_normalization(self):
+        # Regression: a non-normalized request path must not slip a hidden doc
+        # past the ACL. The static handler normalizes via posixpath.normpath,
+        # so the dotfile/ACL checks now run on that same canonical form. Each of
+        # these vectors resolves to the hidden secret/private.md.
+        for vector in (
+            "/%2fsecret/private.md",   # leading %2f → //secret/... after decode
+            "/secret//private.md",     # embedded double slash
+            "/%2e/secret/private.md",  # encoded "." curdir segment
+        ):
+            resp = self.srv.get(vector, headers={"Cookie": self.viewer})
+            self.assertEqual(resp.status, 404,
+                             f"{vector} leaked to viewer ({resp.status})")
+        # Sanity: the admin (no hidden folders) still reads the canonical doc.
+        self.assertEqual(self.srv.get("/secret/private.md",
+                         headers={"Cookie": self.admin}).status, 200)
+
     def test_search_filtered_for_viewer(self):
         admin = self.srv.get("/api/search?q=terme-secret-prive",
                              headers={"Cookie": self.admin}).json()

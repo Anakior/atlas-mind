@@ -76,7 +76,7 @@ class TestBrandingConfig(unittest.TestCase):
         self.assertEqual(cfg.prefix, "")
         self.assertEqual(cfg.site_name, "Atlas Mind")
         self.assertEqual(cfg.site_short_name, "Atlas Mind")
-        self.assertEqual(cfg.lang, "fr")
+        self.assertEqual(cfg.lang, "en")
         self.assertEqual(cfg.site_slug, "atlas-mind")
         # Neutral baseline: short, non-empty, without the historical personal
         # branding.
@@ -123,7 +123,7 @@ class TestBrandingConfig(unittest.TestCase):
             cfg = self._config({"site_name": "Acme's Atlas"})
         warning = stderr.getvalue()
         self.assertIn("site_name", warning)
-        self.assertIn("inconnue ignorée", warning)
+        self.assertIn("ignored", warning)
         self.assertIn("'prefix'", warning)
         # The ignored key does not bleed into the identity: neutral default.
         self.assertEqual(cfg.site_name, "Atlas Mind")
@@ -200,8 +200,8 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
     def test_viewer_defaults_are_neutral(self):
         text = self.srv.get("/").text
         self.assertIn("<title>Atlas Mind</title>", text)
-        self.assertIn('<html lang="fr">', text)
-        self.assertIn("Base de connaissances personnelle.", text)
+        self.assertIn('<html lang="en">', text)
+        self.assertIn("Personal knowledge base.", text)
         self.assertNotIn("Acme", text)
         # Without a prefix, the styled wordmark stays alone in the H1 (the prefix
         # span is empty) and the viewer's JS constant is the empty string.
@@ -228,9 +228,9 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
         manifest = self.srv.get("/manifest.json").json()
         self.assertEqual(manifest["name"], "Atlas Mind")
         self.assertEqual(manifest["short_name"], "Atlas Mind")
-        self.assertEqual(manifest["lang"], "fr")
+        self.assertEqual(manifest["lang"], "en")
         self.assertEqual(manifest["description"],
-                         "Base de connaissances personnelle.")
+                         "Personal knowledge base.")
 
     def test_no_nul_bytes_in_template_nor_dist_index(self):
         # Fix agreed in the spec: the graph dedup key uses "\n" (impossible in a

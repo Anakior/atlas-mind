@@ -309,12 +309,12 @@ class TestServerBrokenExtensions(unittest.TestCase):
 
     def test_broken_extension_warns_and_server_continues(self):
         log = self.srv.read_log()
-        self.assertIn("10_broken.py ignorée", log)
+        self.assertIn("10_broken.py skipped", log)
         # The server still responds (healthz already validated the boot).
         self.assertEqual(self.srv.get("/healthz").status, 200)
 
     def test_module_without_register_warns(self):
-        self.assertIn("20_noregister.py ignorée : pas de fonction register",
+        self.assertIn("20_noregister.py skipped: no register(context) function",
                       self.srv.read_log())
 
     def test_healthy_extension_still_loaded_after_broken_one(self):

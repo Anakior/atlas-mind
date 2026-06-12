@@ -87,10 +87,11 @@ NOTES_INDEX = DIST_DIR / "_notes-index.json"
 # of AtlasConfig.extensions_dir: FIXED location relative to the mind.
 EXTENSIONS_DIR = REPO_ROOT / ".atlas" / "extensions"
 
-# We only walk content/: the only things to hide in there are skill/ (personal
-# notes outside the viewer) and quick.md (the to-do, edited via the widget).
-# EXCLUDED_PREFIXES also keeps dotfiles (.notes/, etc.) out of the tree.
-EXCLUDED_NAMES = {"skill", "quick.md"}
+# We only walk content/: by default the only thing to hide in there is quick.md
+# (the to-do, edited via the widget). Add your own names via
+# [build].excluded_names in atlas.toml. EXCLUDED_PREFIXES also keeps dotfiles
+# (.notes/, etc.) out of the tree.
+EXCLUDED_NAMES = {"quick.md"}
 EXCLUDED_PREFIXES = (".",)
 
 # Default identity (mirror of the defaults in src/config.py, so that the script
@@ -98,14 +99,14 @@ EXCLUDED_PREFIXES = (".",)
 # "Atlas" is THE BRAND, fixed: only the optional prefix comes from the config.
 SITE_WORDMARK = "Atlas Mind"
 DEFAULT_SITE_PREFIX = ""
-DEFAULT_TAGLINE = "Base de connaissances personnelle."
-DEFAULT_LANG = "fr"
+DEFAULT_TAGLINE = "Personal knowledge base."
+DEFAULT_LANG = "en"
 # Todo categories injected into the viewer (tabs + filter). Mirror of the
 # defaults in src/config.py; replaced by the categories configured in
 # atlas.toml ([todo].categories). Shape: [{"cat": <key>, "label": <header>}].
 DEFAULT_TODO_CATEGORIES = [
-    {"cat": "travail", "label": "Travail"},
-    {"cat": "personnel", "label": "Personnel"},
+    {"cat": "work", "label": "Work"},
+    {"cat": "personal", "label": "Personal"},
 ]
 
 # ─── Tree walk ────────────────────────────────────────────────────────────────
@@ -676,7 +677,7 @@ def _load_config():
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--offline", action="store_true",
-                        help="Génère index-offline.html monolithique (file://-ready).")
+                        help="Generate the monolithic index-offline.html (file://-ready).")
     args = parser.parse_args()
 
     cfg = _load_config()
@@ -785,7 +786,7 @@ def main() -> int:
         f"Generated:\n"
         f"  {out_online.name:24} {html_size:>10,} bytes  (shell + tree metadata)\n"
         f"  {backlinks_data.name:24} {backlinks_size:>10,} bytes  ({len(backlinks)} entries)\n"
-        f"  {notes_index_path.name:24} {notes_index_path.stat().st_size:>10,} bytes  ({len(notes_index)} docs annotés)"
+        f"  {notes_index_path.name:24} {notes_index_path.stat().st_size:>10,} bytes  ({len(notes_index)} annotated docs)"
     )
     return 0
 

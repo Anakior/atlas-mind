@@ -186,7 +186,7 @@ def slugify_token_label(label: str) -> str:
         slug = slug.replace("--", "-")
     slug = slug.strip("-.")
     if not slug:
-        raise ValueError(f"label de token invalide : {label!r}")
+        raise ValueError(f"invalid token label: {label!r}")
     return slug
 
 
@@ -344,11 +344,11 @@ class FileStore:
             self._cache.pop(name, None)
             return default_type()
         except (OSError, ValueError) as error:
-            raise ValueError(f"{name} illisible ou corrompu: {error}")
+            raise ValueError(f"{name} unreadable or corrupted: {error}")
         if not isinstance(data, default_type):
             raise ValueError(
-                f"{name}: type racine inattendu ({type(data).__name__} "
-                f"au lieu de {default_type.__name__})")
+                f"{name}: unexpected root type ({type(data).__name__} "
+                f"instead of {default_type.__name__})")
         self._cache[name] = (mtime, data)
         return data
 
@@ -382,17 +382,29 @@ class FileStore:
         return None
 
     def dummy_verify(self, password: str) -> None:
-        """Timing equalization for unknown email / role 'api': dummy scrypt
-        (FileStore's native scheme) + dummy bcrypt when bcrypt is importable —
-        verify_password accepts legacy "$2…" hashes, so a legacy
-        account may cost a bcrypt rounds=12 and the dummy must cover it. Without
-        bcrypt installed, no "$2…" hash is verifiable either: the scrypt dummy
-        alone is enough."""
+        """Timing equalization for unknown email / role 'api'.
+
+        Always run the dummy of the NATIVE scheme (scrypt). Run the bcrypt dummy
+        ONLY when the registry actually contains a legacy "$2…" account, so the
+        unknown-email cost matches the heaviest scheme IN USE. Adding bcrypt
+        unconditionally over a scrypt-only registry would itself create the
+        enumeration oracle we are defending against: unknown email =
+        scrypt+bcrypt vs a real account = scrypt-only → measurably faster."""
         dummy_verify(password)
+        if self._has_bcrypt_account():
+            try:
+                _dummy_bcrypt_verify(password)
+            except ImportError:
+                pass
+
+    def _has_bcrypt_account(self) -> bool:
+        """True if any account stores a legacy bcrypt ("$2…") password hash."""
         try:
-            _dummy_bcrypt_verify(password)
-        except ImportError:
-            pass
+            with self._locks[self.USERS_FILE]:
+                users = self._load(self.USERS_FILE)
+        except Exception:
+            return False
+        return any(str(u.get("password_hash", "")).startswith("$2") for u in users)
 
     def find_api_identity(self, token_sha256: str):
         if not token_sha256:
@@ -536,8 +548,8 @@ class FileStore:
             existing = next((u for u in users if u.get("email") == email), None)
             if existing is not None and existing.get("role") != API_ROLE:
                 raise ValueError(
-                    f"{email} est déjà pris par un compte "
-                    f"{existing.get('role')!r}")
+                    f"{email} is already taken by a "
+                    f"{existing.get('role')!r} account")
             token, fields = new_api_token_fields(
                 label, set_unusable_password=existing is None)
             if existing is not None:
