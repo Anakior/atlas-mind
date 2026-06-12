@@ -162,13 +162,16 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
 
 ## Install
 
-Clone the repository and install it (a virtualenv is recommended). This puts an
-`atlas` command on your PATH:
+`pip install` puts a self-contained `atlas` command on your PATH (the viewer
+assets ship inside the package — no separate download). A virtualenv is
+recommended.
 
 ```bash
-git clone https://github.com/Anakior/atlas-mind.git
-cd atlas-mind
-pip install -e .          # editable install → the `atlas` command
+pip install atlas-mind                                   # once published to PyPI
+# or, straight from the repository:
+pip install "git+https://github.com/Anakior/atlas-mind.git"
+# or, for development (editable, from a clone):
+git clone https://github.com/Anakior/atlas-mind.git && cd atlas-mind && pip install -e .
 ```
 
 Without installing, the engine also runs straight from the source tree as

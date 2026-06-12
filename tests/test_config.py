@@ -85,7 +85,9 @@ class TestDefaults(ConfigTestBase):
         # in this repo) that is kept.
         (self.mind / "web").mkdir()
         cfg = self.load()
-        self.assertEqual(cfg.web_dir, config.ENGINE_ROOT / "web")
+        # Viewer assets are bundled inside the package (src/web), not taken from
+        # the mind even if it ships its own web/.
+        self.assertEqual(cfg.web_dir, config.PACKAGE_DIR / "web")
         self.assertNotEqual(cfg.web_dir, self.mind / "web")
 
 

@@ -19,14 +19,13 @@ REQ_DEPS = [ln.strip() for ln in REQUIREMENTS.splitlines()
 
 class TestDeployImageSelfContained(unittest.TestCase):
     def test_dockerfile_copies_engine_code_and_viewer(self):
-        # The self-contained engine = src/ + web/ + templates/ in the image.
-        for src in ("COPY src/", "COPY web/", "COPY templates/"):
-            self.assertIn(src, DOCKERFILE,
-                          f"Dockerfile must embed {src!r} (self-contained image)")
+        # The self-contained engine = src/ (which now bundles web/ + templates/).
+        self.assertIn("COPY src/", DOCKERFILE,
+                      "Dockerfile must embed src/ (self-contained image)")
 
     def test_dockerignore_lets_web_into_build_context(self):
-        # web/ must NOT be excluded from the build context.
-        for keep in ("!src", "!web", "!templates", "!requirements.txt"):
+        # src/ (with its bundled assets) must NOT be excluded from the context.
+        for keep in ("!src", "!requirements.txt"):
             self.assertIn(keep, DOCKERIGNORE,
                           f".dockerignore must re-include {keep!r}")
 

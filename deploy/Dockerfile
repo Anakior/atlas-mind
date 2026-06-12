@@ -9,16 +9,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# The engine (src/) bundles its own assets: src/web (viewer + vendored libs/fonts
+# + sw.js + icon.svg) and src/templates (new-document skeletons). The image is
+# SELF-CONTAINED — web_dir = PACKAGE_DIR/web (see config.py) — and the cloned mind
+# carries no engine code, only content.
 COPY src/ ./src/
-# Viewer + vendored assets (web/vendor: marked, DOMPurify, highlight, MiniSearch,
-# pako, precompiled tailwind.css, fonts) + sw.js + icon.svg. The engine is
-# SELF-CONTAINED: web_dir = ENGINE_ROOT/web (see config.py) → the image serves its own
-# viewer, the cloned mind no longer carries any code (no web/). Essential to
-# break the clone↔image coupling and allow removing web/ on the mind side.
-COPY web/ ./web/
-# Engine's new-document skeletons (merged at build time with those from the
-# cloned mind — see build.py load_doc_templates).
-COPY templates/ ./templates/
 
 # Non-root user: in case of an RCE, no root access to the GitHub PAT (embedded
 # in the clone URL). `app` owns /app to clone/write the

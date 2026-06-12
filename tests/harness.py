@@ -46,8 +46,8 @@ from typing import NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent  # /…/atlas
 SRC_DIR = REPO_ROOT / "src"
-WEB_DIR = REPO_ROOT / "web"
-TEMPLATES_DIR = REPO_ROOT / "templates"
+WEB_DIR = SRC_DIR / "web"            # engine assets now bundled inside the package
+TEMPLATES_DIR = SRC_DIR / "templates"
 
 TODO_REL = "notes/quick.md"  # engine default (config.DEFAULT_TODO_FILE, [todo].file)
 
@@ -222,10 +222,9 @@ class AtlasServer:
 
     def _populate(self) -> None:
         ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
+        # web/ and templates/ now live INSIDE src/ (the package), so copying src/
+        # brings the engine assets along — no separate copy needed.
         shutil.copytree(SRC_DIR, self.root / "src", ignore=ignore)
-        shutil.copytree(WEB_DIR, self.root / "web", ignore=ignore)
-        if TEMPLATES_DIR.is_dir():
-            shutil.copytree(TEMPLATES_DIR, self.root / "templates", ignore=ignore)
         (self.root / ".gitignore").write_text(TEST_GITIGNORE, encoding="utf-8")
         for rel, content in self.mind.items():
             target = self.content_root / rel

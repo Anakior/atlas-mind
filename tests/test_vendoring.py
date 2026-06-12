@@ -19,9 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from harness import AtlasServer  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-VIEWER = REPO_ROOT / "web" / "viewer.html"
+VIEWER = REPO_ROOT / "src" / "web" / "viewer.html"
 SERVER_PY = REPO_ROOT / "src" / "server.py"
-SW_JS = REPO_ROOT / "web" / "sw.js"
+SW_JS = REPO_ROOT / "src" / "web" / "sw.js"
 
 # External load reference: a src/href attribute, CSS url() or import that points
 # to http(s)://… "Doc anchor" URLs (comments, links in help strings, SVG xmlns)
@@ -143,7 +143,7 @@ class TestVendoringOnline(unittest.TestCase):
         # Integrity: each inlined lib is BYTE-IDENTICAL to the vendored file
         # (a real regression: a late replace of </head> injected MiniSearch
         # in the middle of a DOMPurify string and broke its parsing).
-        vendor = self.srv.root / "web" / "vendor"
+        vendor = self.srv.root / "src" / "web" / "vendor"
         for name in ("marked.min.js", "purify.min.js", "highlight.min.js",
                      "minisearch.min.js"):
             match = re.search(
@@ -231,7 +231,7 @@ class TestVendoringSources(unittest.TestCase):
             self.assertIn("hljs.highlightAuto", text, path.name)
 
     def test_vendor_licenses_are_preserved(self):
-        vendor = REPO_ROOT / "web" / "vendor"
+        vendor = REPO_ROOT / "src" / "web" / "vendor"
         # OFL: the license must travel with the .woff2 files (per-family notices).
         ofl = (vendor / "fonts" / "OFL.txt").read_text(encoding="utf-8")
         self.assertIn("SIL OPEN FONT LICENSE Version 1.1", ofl)
@@ -252,7 +252,7 @@ class TestVendoringSources(unittest.TestCase):
         self.assertIn("MIT", first_line)
 
     def test_vendor_files_exist_and_are_non_trivial(self):
-        vendor = REPO_ROOT / "web" / "vendor"
+        vendor = REPO_ROOT / "src" / "web" / "vendor"
         for name, minimum_size in {
             "tailwind.css": 20_000, "fonts.css": 2_000,
             "marked.min.js": 10_000, "purify.min.js": 10_000,

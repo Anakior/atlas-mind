@@ -192,7 +192,7 @@ class TestI18nViewerDictionaryConsistency(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.template = (REPO_ROOT / "web" / "viewer.html").read_text(
+        cls.template = (REPO_ROOT / "src" / "web" / "viewer.html").read_text(
             encoding="utf-8")
 
     def _dict_keys(self, lang: str) -> set:

@@ -72,10 +72,12 @@ from pathlib import Path
 SRC_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SRC_DIR.parent
 CONTENT_ROOT = REPO_ROOT / "content"
-WEB_DIR = REPO_ROOT / "web"
+# Engine assets (viewer + doc skeletons) ship INSIDE the package (src/) so a
+# pip-installed wheel is self-contained; content/dist stay relative to the mind.
+WEB_DIR = SRC_DIR / "web"
 DIST_DIR = REPO_ROOT / "dist"
 TEMPLATE = WEB_DIR / "viewer.html"
-TEMPLATES_DIR = REPO_ROOT / "templates"
+TEMPLATES_DIR = SRC_DIR / "templates"
 OUT_ONLINE = DIST_DIR / "index.html"
 OUT_OFFLINE = DIST_DIR / "index-offline.html"
 BACKLINKS_DATA = DIST_DIR / "_backlinks.json"

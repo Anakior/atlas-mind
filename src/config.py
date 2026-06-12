@@ -57,8 +57,11 @@ import re
 import sys
 import tomllib
 
-# Root of the ENGINE (the atlas repo: src/ + web/), independent of the mind.
-ENGINE_ROOT = Path(__file__).resolve().parent.parent
+# The installed package directory (src/, a.k.a. the `atlas_mind` package): holds
+# the engine code AND the bundled assets (web/, templates/) so a pip wheel is
+# self-contained. ENGINE_ROOT is its parent (the repo root when run from source).
+PACKAGE_DIR = Path(__file__).resolve().parent
+ENGINE_ROOT = PACKAGE_DIR.parent
 
 CONFIG_FILENAME = "atlas.toml"
 
@@ -259,7 +262,9 @@ class AtlasConfig:
         # inline into the viewer there, server.py loads the *.py there at boot.
         # Missing directory = no extensions, behavior unchanged.
         self.extensions_dir = self.root / ".atlas" / "extensions"
-        engine_web = ENGINE_ROOT / "web"
+        # Viewer assets ship inside the package (src/web) so a pip-installed wheel
+        # is self-contained; fall back to <mind>/web for any legacy layout.
+        engine_web = PACKAGE_DIR / "web"
         self.web_dir = engine_web if engine_web.is_dir() else self.root / "web"
 
         # ── instance identity (configurable branding) ──────────────────────
