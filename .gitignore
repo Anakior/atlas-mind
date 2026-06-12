@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 dist/
 .venv/
+*.egg-info/
+build/
 content/
 .notes/
 .atlas/

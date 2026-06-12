@@ -63,8 +63,8 @@ def _require_mind(raw: str) -> Path:
     mind = Path(raw).expanduser().resolve()
     if not mind.is_dir():
         raise CliError(
-            f"mind introuvable : {mind} — le dossier n'existe pas "
-            f"(`atlas init {raw}` pour en créer un)")
+            f"mind not found: {mind} — the directory does not exist "
+            f"(run `atlas init {raw}` to create one)")
     return mind
 
 
@@ -340,9 +340,9 @@ def _git_init_main(mind: Path) -> str:
     """`git init -b main` (fallback to `git init` for old git versions), or a
     warning if git is absent — init never fails because of this."""
     if shutil.which("git") is None:
-        return "git introuvable : repo non initialisé (installe git puis `git init -b main`)."
+        return "git not found: repo not initialized (install git then run `git init -b main`)."
     if (mind / ".git").exists():
-        return "repo git déjà présent, conservé."
+        return "git repo already present, kept."
     result = subprocess.run(["git", "init", "-q", "-b", "main"],
                             cwd=str(mind), capture_output=True, text=True)
     if result.returncode != 0:
@@ -350,19 +350,19 @@ def _git_init_main(mind: Path) -> str:
         fallback = subprocess.run(["git", "init", "-q"], cwd=str(mind),
                                   capture_output=True, text=True)
         if fallback.returncode != 0:
-            return f"git init a échoué : {fallback.stderr.strip()}"
-        return "repo git initialisé (branche par défaut : ce git ne supporte pas -b main)."
-    return "repo git initialisé (branche main)."
+            return f"git init failed: {fallback.stderr.strip()}"
+        return "git repo initialized (default branch: this git does not support -b main)."
+    return "git repo initialized (branch main)."
 
 
 def cmd_init(args) -> int:
     mind = Path(args.dir).expanduser().resolve()
     if mind.exists() and not mind.is_dir():
-        raise CliError(f"{mind} existe déjà et n'est pas un dossier.")
+        raise CliError(f"{mind} already exists and is not a directory.")
     if mind.is_dir() and any(mind.iterdir()) and not args.force:
         raise CliError(
-            f"{mind} n'est pas vide — relance avec --force pour scaffolder "
-            "quand même (les fichiers existants seront conservés).")
+            f"{mind} is not empty — rerun with --force to scaffold "
+            "anyway (existing files are kept).")
     mind.mkdir(parents=True, exist_ok=True)
 
     created: list = []
@@ -390,16 +390,16 @@ def cmd_init(args) -> int:
 
     git_message = _git_init_main(mind)
 
-    print(f"Mind initialisé : {mind}")
+    print(f"Mind initialized: {mind}")
     for path in created:
-        print(f"  créé     : {path.relative_to(mind)}")
+        print(f"  created : {path.relative_to(mind)}")
     for path in kept:
-        print(f"  conservé : {path.relative_to(mind)} (existant, non touché)")
-    print(f"  git      : {git_message}")
+        print(f"  kept    : {path.relative_to(mind)} (existing, untouched)")
+    print(f"  git     : {git_message}")
     print()
-    print("Étapes suivantes :")
+    print("Next steps:")
     print(f"  python3 {sys.argv[0]} serve {args.dir}")
-    print(f"  python3 {sys.argv[0]} user add {args.dir} --email toi@exemple.fr")
+    print(f"  python3 {sys.argv[0]} user add {args.dir} --email you@example.com")
     return 0
 
 
@@ -410,14 +410,14 @@ def cmd_serve(args) -> int:
     mind = _require_mind(args.dir)
     if not (mind / "content").is_dir():
         raise CliError(
-            f"{mind} ne contient pas de dossier content/ — est-ce bien un "
-            f"mind ? (`atlas init {args.dir}` pour en scaffolder un)")
+            f"{mind} has no content/ directory — is this really a "
+            f"mind? (run `atlas init {args.dir}` to scaffold one)")
     config = _load_config(mind)  # human error if atlas.toml is broken
     if not config.index_file.exists():
-        print("dist/index.html absent : build initial du viewer…")
+        print("dist/index.html missing: initial build of the viewer…")
         if _run_build(mind) != 0:
-            print("avertissement : le build a échoué, le viewer sera "
-                  "indisponible (l'API reste servie).", file=sys.stderr)
+            print("warning: the build failed, the viewer will be "
+                  "unavailable (the API is still served).", file=sys.stderr)
     env = os.environ.copy()
     env["ATLAS_MIND"] = str(mind)
     if args.port is not None:
@@ -431,7 +431,7 @@ def cmd_serve(args) -> int:
 def cmd_build(args) -> int:
     mind = _require_mind(args.dir)
     if not (mind / "content").is_dir():
-        raise CliError(f"{mind} ne contient pas de dossier content/ — rien à construire.")
+        raise CliError(f"{mind} has no content/ directory — nothing to build.")
     _load_config(mind)  # human error if atlas.toml is broken
     return _run_build(mind, offline=args.offline)
 
@@ -445,15 +445,15 @@ def _normalize_email(raw: str) -> str:
     # re-printed raw by `atlas user list`); both sides of the @ are
     # mandatory ("@" alone used to pass before).
     if not re.fullmatch(r"[^@\s]+@[^@\s]+", email):
-        raise CliError(f"email invalide : {raw!r}")
+        raise CliError(f"invalid email: {raw!r}")
     return email
 
 
 def _ask_password() -> str:
-    password = getpass.getpass("Mot de passe (saisie cachée) : ")
-    confirmation = getpass.getpass("Confirmation : ")
+    password = getpass.getpass("Password (hidden input): ")
+    confirmation = getpass.getpass("Confirmation: ")
     if password != confirmation:
-        raise CliError("les mots de passe diffèrent, abandon.")
+        raise CliError("passwords differ, aborting.")
     return password
 
 
@@ -463,18 +463,18 @@ def cmd_user_add(args) -> int:
     email = _normalize_email(args.email)
     if file_store.get_user_by_email(email) is not None:
         raise CliError(
-            f"l'email {email} est déjà pris — `atlas user remove` d'abord "
-            "pour le remplacer.")
+            f"the email {email} is already taken — run `atlas user remove` first "
+            "to replace it.")
     password = args.password if args.password is not None else _ask_password()
     if len(password) < MIN_PASSWORD_LENGTH:
         raise CliError(
-            f"mot de passe trop court (minimum {MIN_PASSWORD_LENGTH} caractères).")
+            f"password too short (minimum {MIN_PASSWORD_LENGTH} characters).")
     file_store.upsert_user(email, {
         "password_hash": store.hash_password(password),
         "role": args.role,
         "created_at": int(time.time()),
     })
-    print(f"Compte créé : {email} (rôle {args.role})")
+    print(f"Account created: {email} (role {args.role})")
     return 0
 
 
@@ -483,7 +483,7 @@ def cmd_user_list(args) -> int:
     file_store = _file_store(_load_config(mind))
     users = file_store.list_users()
     if not users:
-        print("Aucun compte. (`atlas user add <dir> --email …` pour en créer un.)")
+        print("No accounts. (run `atlas user add <dir> --email …` to create one.)")
         return 0
     for user in users:
         email = user.get("email", "?")
@@ -491,7 +491,7 @@ def cmd_user_list(args) -> int:
         note = ""
         if role == store.API_ROLE:
             label = user.get("label", "?")
-            state = "token actif" if user.get("api_token_hash") else "token révoqué"
+            state = "token active" if user.get("api_token_hash") else "token revoked"
             note = f"  (label {label}, {state})"
         print(f"{email}  {role}{note}")
     return 0
@@ -502,8 +502,8 @@ def cmd_user_remove(args) -> int:
     file_store = _file_store(_load_config(mind))
     email = _normalize_email(args.email)
     if not file_store.delete_user(email):
-        raise CliError(f"aucun compte {email} dans ce mind.")
-    print(f"Compte supprimé : {email}")
+        raise CliError(f"no account {email} in this mind.")
+    print(f"Account removed: {email}")
     return 0
 
 
@@ -518,7 +518,7 @@ def _token_email(label: str) -> str:
     try:
         return store.token_email(label)
     except ValueError:
-        raise CliError(f"label de token invalide : {label!r}")
+        raise CliError(f"invalid token label: {label!r}")
 
 
 def cmd_token_create(args) -> int:
@@ -528,8 +528,8 @@ def cmd_token_create(args) -> int:
     existing = file_store.get_user_by_email(email)
     if existing is not None and existing.get("role") != store.API_ROLE:
         raise CliError(
-            f"{email} est déjà pris par un compte {existing.get('role')!r} — "
-            "choisis un autre label.")
+            f"{email} is already taken by a {existing.get('role')!r} account — "
+            "choose another label.")
 
     # Token format (256 bits, SHA256 stored, role 'api') factored into
     # store.new_api_token_fields — shared with the server's admin endpoints.
@@ -537,21 +537,21 @@ def cmd_token_create(args) -> int:
         args.label, set_unusable_password=existing is None)
     file_store.upsert_user(email, fields)
 
-    action = "régénéré (l'ancien est révoqué)" if existing else "créé"
+    action = "regenerated (the old one is revoked)" if existing else "created"
     print()
     print("=" * 72)
-    print(f"Token API {action} pour {email} (label : {args.label})")
+    print(f"API token {action} for {email} (label: {args.label})")
     print("=" * 72)
     print()
     print(f"  {token}")
     print()
-    print("Ce token ne sera plus jamais affiché. Copie-le maintenant.")
+    print("This token will never be shown again. Copy it now.")
     print()
-    print("Utilisation :")
-    print("  REST : en-tête  Authorization: Bearer <token>  sur /api/v1/*")
-    print("  MCP  : URL /mcp/<token> (connecteur personnalisé Claude.ai)")
+    print("Usage:")
+    print("  REST : header  Authorization: Bearer <token>  on /api/v1/*")
+    print("  MCP  : URL /mcp/<token> (custom Claude.ai connector)")
     print()
-    print(f"Pour le couper : atlas token revoke <dir> --label {args.label}")
+    print(f"To revoke it: atlas token revoke <dir> --label {args.label}")
     return 0
 
 
@@ -561,14 +561,14 @@ def cmd_token_list(args) -> int:
     tokens = [u for u in file_store.list_users()
               if u.get("role") == store.API_ROLE]
     if not tokens:
-        print("Aucun token API. (`atlas token create <dir>` pour en émettre un.)")
+        print("No API tokens. (run `atlas token create <dir>` to issue one.)")
         return 0
     for record in tokens:
         label = record.get("label", "?")
         email = record.get("email", "?")
-        state = "actif" if record.get("api_token_hash") else "révoqué"
+        state = "active" if record.get("api_token_hash") else "revoked"
         created = _format_timestamp(record.get("api_token_created_at"))
-        print(f"{label}  {email}  {state}  créé le {created}")
+        print(f"{label}  {email}  {state}  created on {created}")
     return 0
 
 
@@ -578,19 +578,19 @@ def cmd_token_revoke(args) -> int:
     email = _token_email(args.label)
     record = file_store.get_user_by_email(email)
     if record is None:
-        print(f"Aucun token « {args.label} » ({email}) : rien à révoquer.")
+        print(f"No token \"{args.label}\" ({email}): nothing to revoke.")
         return 0
     if record.get("role") != store.API_ROLE:
-        raise CliError(f"{email} n'est pas un compte API (rôle {record.get('role')!r}).")
+        raise CliError(f"{email} is not an API account (role {record.get('role')!r}).")
     if not record.get("api_token_hash"):
-        print(f"Token « {args.label} » déjà révoqué : rien à faire.")
+        print(f"Token \"{args.label}\" already revoked: nothing to do.")
         return 0
     file_store.upsert_user(email, {
         "api_token_hash": None,
         "api_token_revoked_at": int(time.time()),
     })
-    print(f"Token « {args.label} » révoqué : tout appel renverra désormais 401.")
-    print("Pour réémettre : atlas token create <dir> --label " + args.label)
+    print(f"Token \"{args.label}\" revoked: every call will now return 401.")
+    print("To reissue: atlas token create <dir> --label " + args.label)
     return 0
 
 
@@ -602,18 +602,18 @@ def cmd_share_list(args) -> int:
     file_store = _file_store(_load_config(mind))
     shares = file_store.list_shares(include_revoked=True)
     if not shares:
-        print("Aucun lien de partage.")
+        print("No share links.")
         return 0
     now = int(time.time())
     for share in shares:
         if share.get("revoked"):
-            state = "révoqué"
+            state = "revoked"
         elif share.get("expires_at") and share["expires_at"] < now:
-            state = "expiré"
+            state = "expired"
         else:
-            state = "actif"
+            state = "active"
         expires = _format_timestamp(share.get("expires_at"))
-        print(f"{share.get('id')}  {share.get('path')}  {state}  expire le {expires}")
+        print(f"{share.get('id')}  {share.get('path')}  {state}  expires on {expires}")
     return 0
 
 
@@ -621,8 +621,8 @@ def cmd_share_revoke(args) -> int:
     mind = _require_mind(args.dir)
     file_store = _file_store(_load_config(mind))
     if not file_store.revoke_share(args.id):
-        raise CliError(f"lien introuvable ou déjà révoqué : {args.id}")
-    print(f"Lien révoqué : {args.id}")
+        raise CliError(f"link not found or already revoked: {args.id}")
+    print(f"Link revoked: {args.id}")
     return 0
 
 
@@ -632,83 +632,83 @@ def cmd_share_revoke(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="atlas",
-        description="Moteur Atlas : scaffolding, serveur, build et "
-                    "administration du registre fichiers d'un mind.")
-    subparsers = parser.add_subparsers(dest="command", metavar="<commande>",
+        description="Atlas engine: scaffolding, server, build and "
+                    "administration of a mind's file registry.")
+    subparsers = parser.add_subparsers(dest="command", metavar="<command>",
                                        required=True)
 
     p_init = subparsers.add_parser(
-        "init", help="Scaffolde un nouveau mind (atlas.toml, content/, git).")
-    p_init.add_argument("dir", help="Dossier du mind à créer.")
+        "init", help="Scaffold a new mind (atlas.toml, content/, git).")
+    p_init.add_argument("dir", help="Directory of the mind to create.")
     p_init.add_argument("--force", action="store_true",
-                        help="Scaffolde même si le dossier n'est pas vide "
-                             "(les fichiers existants sont conservés).")
+                        help="Scaffold even if the directory is not empty "
+                             "(existing files are kept).")
     p_init.set_defaults(func=cmd_init)
 
     p_serve = subparsers.add_parser(
-        "serve", help="Lance le serveur sur ce mind (mode local par défaut).")
-    p_serve.add_argument("dir", help="Dossier du mind.")
+        "serve", help="Start the server on this mind (local mode by default).")
+    p_serve.add_argument("dir", help="Directory of the mind.")
     p_serve.add_argument("--port", type=int, default=None,
-                         help="Port d'écoute (défaut : atlas.toml ou 8765).")
+                         help="Listening port (default: atlas.toml or 8765).")
     p_serve.set_defaults(func=cmd_serve)
 
     p_build = subparsers.add_parser(
-        "build", help="Génère le viewer (dist/) de ce mind.")
-    p_build.add_argument("dir", help="Dossier du mind.")
+        "build", help="Generate this mind's viewer (dist/).")
+    p_build.add_argument("dir", help="Directory of the mind.")
     p_build.add_argument("--offline", action="store_true",
-                         help="Monolithe autonome index-offline.html (file://).")
+                         help="Self-contained monolith index-offline.html (file://).")
     p_build.set_defaults(func=cmd_build)
 
     p_user = subparsers.add_parser(
-        "user", help="Comptes du registre fichiers du mind (.atlas/users.json).")
+        "user", help="Accounts in the mind's file registry (.atlas/users.json).")
     user_sub = p_user.add_subparsers(dest="action", metavar="<action>",
                                      required=True)
-    p_user_add = user_sub.add_parser("add", help="Crée un compte.")
-    p_user_add.add_argument("dir", help="Dossier du mind.")
+    p_user_add = user_sub.add_parser("add", help="Create an account.")
+    p_user_add.add_argument("dir", help="Directory of the mind.")
     p_user_add.add_argument("--email", required=True)
     p_user_add.add_argument("--role", choices=("admin", "viewer"),
                             default="admin")
     p_user_add.add_argument("--password", default=None,
-                            help="Mot de passe (sinon demandé en saisie cachée).")
+                            help="Password (otherwise prompted with hidden input).")
     p_user_add.set_defaults(func=cmd_user_add)
-    p_user_list = user_sub.add_parser("list", help="Liste les comptes.")
-    p_user_list.add_argument("dir", help="Dossier du mind.")
+    p_user_list = user_sub.add_parser("list", help="List the accounts.")
+    p_user_list.add_argument("dir", help="Directory of the mind.")
     p_user_list.set_defaults(func=cmd_user_list)
-    p_user_remove = user_sub.add_parser("remove", help="Supprime un compte.")
-    p_user_remove.add_argument("dir", help="Dossier du mind.")
+    p_user_remove = user_sub.add_parser("remove", help="Remove an account.")
+    p_user_remove.add_argument("dir", help="Directory of the mind.")
     p_user_remove.add_argument("--email", required=True)
     p_user_remove.set_defaults(func=cmd_user_remove)
 
     p_token = subparsers.add_parser(
-        "token", help="Tokens API Bearer (rôle 'api', /api/v1 et /mcp).")
+        "token", help="Bearer API tokens (role 'api', /api/v1 and /mcp).")
     token_sub = p_token.add_subparsers(dest="action", metavar="<action>",
                                        required=True)
     p_token_create = token_sub.add_parser(
-        "create", help="Émet un token 256 bits (affiché UNE seule fois).")
-    p_token_create.add_argument("dir", help="Dossier du mind.")
+        "create", help="Issue a 256-bit token (shown ONLY once).")
+    p_token_create.add_argument("dir", help="Directory of the mind.")
     p_token_create.add_argument("--label", default=DEFAULT_TOKEN_LABEL,
-                                help=f"Identifie le token (défaut : {DEFAULT_TOKEN_LABEL}).")
+                                help=f"Identifies the token (default: {DEFAULT_TOKEN_LABEL}).")
     p_token_create.set_defaults(func=cmd_token_create)
-    p_token_list = token_sub.add_parser("list", help="Liste les tokens.")
-    p_token_list.add_argument("dir", help="Dossier du mind.")
+    p_token_list = token_sub.add_parser("list", help="List the tokens.")
+    p_token_list.add_argument("dir", help="Directory of the mind.")
     p_token_list.set_defaults(func=cmd_token_list)
     p_token_revoke = token_sub.add_parser(
-        "revoke", help="Révoque un token (coupe l'accès immédiatement).")
-    p_token_revoke.add_argument("dir", help="Dossier du mind.")
+        "revoke", help="Revoke a token (cuts off access immediately).")
+    p_token_revoke.add_argument("dir", help="Directory of the mind.")
     p_token_revoke.add_argument("--label", default=DEFAULT_TOKEN_LABEL)
     p_token_revoke.set_defaults(func=cmd_token_revoke)
 
     p_share = subparsers.add_parser(
-        "share", help="Liens de partage du registre fichiers.")
+        "share", help="Share links of the file registry.")
     share_sub = p_share.add_subparsers(dest="action", metavar="<action>",
                                        required=True)
-    p_share_list = share_sub.add_parser("list", help="Liste les liens (y compris révoqués).")
-    p_share_list.add_argument("dir", help="Dossier du mind.")
+    p_share_list = share_sub.add_parser("list", help="List the links (including revoked ones).")
+    p_share_list.add_argument("dir", help="Directory of the mind.")
     p_share_list.set_defaults(func=cmd_share_list)
-    p_share_revoke = share_sub.add_parser("revoke", help="Révoque un lien par id.")
-    p_share_revoke.add_argument("dir", help="Dossier du mind.")
+    p_share_revoke = share_sub.add_parser("revoke", help="Revoke a link by id.")
+    p_share_revoke.add_argument("dir", help="Directory of the mind.")
     p_share_revoke.add_argument("--id", required=True, dest="id",
-                                help="Id du lien (voir `atlas share list`).")
+                                help="Link id (see `atlas share list`).")
     p_share_revoke.set_defaults(func=cmd_share_revoke)
 
     return parser
@@ -719,17 +719,17 @@ def main(argv=None) -> int:
     try:
         return args.func(args)
     except CliError as e:
-        print(f"Erreur : {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         return 1
     except (OSError, ValueError) as e:
         # Environment errors (PermissionError on init/mkstemp, full disk…) and
         # corrupted registry (ValueError "users.json illisible ou corrompu"
         # from store._load, deliberately raised for the server's fail-closed):
         # human message, never a traceback for these cases.
-        print(f"Erreur : {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
-        print("\nInterrompu.", file=sys.stderr)
+        print("\nInterrupted.", file=sys.stderr)
         return 130
 
 

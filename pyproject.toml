@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlas-mind"
+version = "0.1.0"
+description = "Self-hostable, AI-native knowledge base engine — an external brain you share with your AI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "The Atlas Mind authors" }]
+keywords = ["knowledge-base", "wiki", "markdown", "self-hosted", "mcp", "ai", "notes"]
+classifiers = [
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Documentation",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+# The engine is pure standard library. bcrypt is an OPTIONAL extra, used only to
+# verify legacy "$2…" password hashes (the native scheme is scrypt, stdlib).
+dependencies = []
+
+[project.optional-dependencies]
+bcrypt = ["bcrypt>=4.1"]
+
+[project.scripts]
+atlas = "atlas_mind.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Anakior/atlas-mind"
+Repository = "https://github.com/Anakior/atlas-mind"
+Issues = "https://github.com/Anakior/atlas-mind/issues"
+
+# The engine code lives under src/ and is published as the `atlas_mind` package.
+# The viewer assets (web/) and document templates (templates/) are sibling
+# directories resolved at runtime relative to the engine; an editable install
+# (pip install -e .) points at the source tree in place, so they are found
+# without bundling. (A self-contained PyPI wheel that vendors the assets is a
+# follow-up.)
+[tool.setuptools]
+packages = ["atlas_mind"]
+package-dir = { "atlas_mind" = "src" }

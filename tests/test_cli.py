@@ -156,7 +156,7 @@ class TestCliInit(CliMindTest):
         (self.mind / "notes-perso.txt").write_text("précieux", encoding="utf-8")
         result = run_cli("init", self.mind)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("pas vide", result.stderr)
+        self.assertIn("not empty", result.stderr)
         self.assertFalse((self.mind / "atlas.toml").exists())
 
     def test_init_force_scaffolds_but_keeps_existing_files(self):
@@ -168,7 +168,7 @@ class TestCliInit(CliMindTest):
         # The existing file is never overwritten, the rest is scaffolded.
         self.assertEqual((self.mind / "atlas.toml").read_text(encoding="utf-8"),
                          custom_toml)
-        self.assertIn("conservé", result.stdout)
+        self.assertIn("kept", result.stdout)
         self.assertTrue((self.mind / "content" / "bienvenue.md").is_file())
 
     def test_init_without_git_on_path(self):
@@ -176,7 +176,7 @@ class TestCliInit(CliMindTest):
         empty_bin.mkdir()
         result = run_cli("init", self.mind, env=clean_env(PATH=str(empty_bin)))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("git introuvable", result.stdout)
+        self.assertIn("git not found", result.stdout)
         self.assertFalse((self.mind / ".git").exists())
         self.assertTrue((self.mind / "content" / "bienvenue.md").is_file())
 
@@ -204,7 +204,7 @@ class TestCliBuild(CliMindTest):
     def test_build_unknown_mind_is_a_human_error(self):
         result = run_cli("build", self.tmp / "nexiste-pas")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("introuvable", result.stderr)
+        self.assertIn("not found", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
 
@@ -245,7 +245,7 @@ class TestCliUser(CliMindTest):
         result = run_cli("user", "add", self.mind, "--email", "admin@test.local",
                          "--password", "autre-password-456")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("déjà pris", result.stderr)
+        self.assertIn("already taken", result.stderr)
         self.assertEqual(len(self.users_json()), 1)
 
     def test_user_add_rejects_short_password_and_bad_role(self):
@@ -253,7 +253,7 @@ class TestCliUser(CliMindTest):
         result = run_cli("user", "add", self.mind, "--email", "a@test.local",
                          "--password", "court")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("trop court", result.stderr)
+        self.assertIn("too short", result.stderr)
         # Role outside the choices → argparse error (exit 2).
         result = run_cli("user", "add", self.mind, "--email", "a@test.local",
                          "--password", PASSWORD, "--role", "superadmin")
@@ -263,7 +263,7 @@ class TestCliUser(CliMindTest):
         self.init_mind()
         empty = run_cli("user", "list", self.mind)
         self.assertEqual(empty.returncode, 0)
-        self.assertIn("Aucun compte", empty.stdout)
+        self.assertIn("No accounts", empty.stdout)
         run_cli("user", "add", self.mind, "--email", "admin@test.local",
                 "--password", PASSWORD)
         run_cli("user", "add", self.mind, "--email", "viewer@test.local",
@@ -283,7 +283,7 @@ class TestCliUser(CliMindTest):
         self.assertEqual(self.users_json(), [])
         again = run_cli("user", "remove", self.mind, "--email", "admin@test.local")
         self.assertEqual(again.returncode, 1)
-        self.assertIn("aucun compte", again.stderr.lower())
+        self.assertIn("no account", again.stderr.lower())
 
 
 # ─── token ─────────────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ class TestCliToken(CliMindTest):
         result = run_cli("token", "create", self.mind)
         self.assertEqual(result.returncode, 0, result.stderr)
         token = extract_token(result.stdout)
-        self.assertIn("ne sera plus jamais affiché", result.stdout)
+        self.assertIn("will never be shown again", result.stdout)
         records = self.users_json()
         self.assertEqual(len(records), 1)
         record = records[0]
@@ -313,7 +313,7 @@ class TestCliToken(CliMindTest):
         first = extract_token(run_cli("token", "create", self.mind).stdout)
         second_result = run_cli("token", "create", self.mind)
         self.assertEqual(second_result.returncode, 0)
-        self.assertIn("régénéré", second_result.stdout)
+        self.assertIn("regenerated", second_result.stdout)
         second = extract_token(second_result.stdout)
         self.assertNotEqual(first, second)
         records = self.users_json()
@@ -325,17 +325,17 @@ class TestCliToken(CliMindTest):
         self.init_mind()
         run_cli("token", "create", self.mind, "--label", "claude")
         listed = run_cli("token", "list", self.mind)
-        self.assertIn("actif", listed.stdout)
+        self.assertIn("active", listed.stdout)
         revoked = run_cli("token", "revoke", self.mind, "--label", "claude")
         self.assertEqual(revoked.returncode, 0, revoked.stderr)
         self.assertIsNone(self.users_json()[0]["api_token_hash"])
-        self.assertIn("révoqué", run_cli("token", "list", self.mind).stdout)
+        self.assertIn("revoked", run_cli("token", "list", self.mind).stdout)
         again = run_cli("token", "revoke", self.mind, "--label", "claude")
         self.assertEqual(again.returncode, 0)
-        self.assertIn("déjà révoqué", again.stdout)
+        self.assertIn("already revoked", again.stdout)
         unknown = run_cli("token", "revoke", self.mind, "--label", "inconnu")
         self.assertEqual(unknown.returncode, 0)
-        self.assertIn("rien à révoquer", unknown.stdout)
+        self.assertIn("nothing to revoke", unknown.stdout)
 
     def test_token_label_colliding_with_human_account_is_rejected(self):
         self.init_mind()
@@ -343,7 +343,7 @@ class TestCliToken(CliMindTest):
                 "--password", PASSWORD)
         result = run_cli("token", "create", self.mind, "--label", "bob")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("déjà pris", result.stderr)
+        self.assertIn("already taken", result.stderr)
 
 
 # ─── share ─────────────────────────────────────────────────────────────────────
@@ -355,7 +355,7 @@ class TestCliShare(CliMindTest):
         self.init_mind()
         result = run_cli("share", "list", self.mind)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Aucun lien", result.stdout)
+        self.assertIn("No share links", result.stdout)
 
     def test_share_revoke_lifecycle(self):
         self.init_mind()
@@ -370,14 +370,14 @@ class TestCliShare(CliMindTest):
         })
         listed = run_cli("share", "list", self.mind)
         self.assertIn(share_id, listed.stdout)
-        self.assertIn("actif", listed.stdout)
+        self.assertIn("active", listed.stdout)
         revoked = run_cli("share", "revoke", self.mind, "--id", share_id)
         self.assertEqual(revoked.returncode, 0, revoked.stderr)
         self.assertTrue(self.shares_json()[0]["revoked"])
-        self.assertIn("révoqué", run_cli("share", "list", self.mind).stdout)
+        self.assertIn("revoked", run_cli("share", "list", self.mind).stdout)
         again = run_cli("share", "revoke", self.mind, "--id", share_id)
         self.assertEqual(again.returncode, 1)
-        self.assertIn("introuvable ou déjà révoqué", again.stderr)
+        self.assertIn("not found or already revoked", again.stderr)
 
 
 # ─── serve (end-to-end) ─────────────────────────────────────────────────────────
@@ -463,7 +463,7 @@ class TestCliServe(CliMindTest):
     def test_serve_unknown_mind_is_a_human_error(self):
         result = run_cli("serve", self.tmp / "nexiste-pas", "--port", "1")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("introuvable", result.stderr)
+        self.assertIn("not found", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
 

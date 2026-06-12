@@ -160,18 +160,29 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
   `.atlas/`. (`bcrypt` is an optional dependency, used only to verify legacy
   `$2…` password hashes; the native scheme is scrypt, from the standard library.)
 
-There is no installed `atlas` console command yet; the engine is invoked as
-`python3 src/cli.py <command>` (a packaged `atlas` entry point is planned). The
-systemd unit uses the equivalent `python3 -m src.cli serve <mind>` form.
+## Install
+
+Clone the repository and install it (a virtualenv is recommended). This puts an
+`atlas` command on your PATH:
+
+```bash
+git clone https://github.com/Anakior/atlas-mind.git
+cd atlas-mind
+pip install -e .          # editable install → the `atlas` command
+```
+
+Without installing, the engine also runs straight from the source tree as
+`python3 src/cli.py <command>` (the form used by the systemd unit:
+`python3 -m src.cli serve <mind>`). All examples below use the `atlas` command;
+substitute `python3 src/cli.py` if you did not install.
 
 ## Quick start
 
 Scaffold a new mind and serve it locally:
 
 ```bash
-# From the engine repository (the folder containing src/ and web/):
-python3 src/cli.py init ~/my-mind
-python3 src/cli.py serve ~/my-mind
+atlas init ~/my-mind
+atlas serve ~/my-mind
 ```
 
 `init` creates `atlas.toml`, a `.gitignore`, example documents under `content/`,
@@ -187,8 +198,8 @@ By default it listens on `127.0.0.1:8765` with authentication disabled — open
 To produce the static viewer without serving:
 
 ```bash
-python3 src/cli.py build ~/my-mind            # dist/index.html (online shell)
-python3 src/cli.py build ~/my-mind --offline  # dist/index-offline.html (monolith)
+atlas build ~/my-mind            # dist/index.html (online shell)
+atlas build ~/my-mind --offline  # dist/index-offline.html (monolith)
 ```
 
 ### CLI commands
@@ -228,7 +239,7 @@ The engine exposes an **MCP endpoint** with six tools — `search_docs`,
 and point your assistant at it:
 
 ```bash
-python3 src/cli.py token create ~/my-mind --label claude
+atlas token create ~/my-mind --label claude
 # → prints the MCP URL: https://<your-atlas>/mcp/<token>
 ```
 
@@ -371,8 +382,9 @@ The Docker image enables auth by default (`KB_AUTH_ENABLED=1`); the local CLI
 leaves it off. When auth is on, a real `SESSION_SECRET` is mandatory — the server
 refuses to boot on the default secret.
 
-- **Local (CLI)** — `python3 src/cli.py serve <mind>`: binds `127.0.0.1`, auth
-  off, no secret required. The everyday local mode.
+- **Local (CLI)** — `atlas serve <mind>` (or `python3 src/cli.py serve <mind>`
+  without installing): binds `127.0.0.1`, auth off, no secret required. The
+  everyday local mode.
 - **Docker Compose** — `deploy/docker-compose.yml` builds the image and serves a
   mounted mind (`ATLAS_STORE: file`, accounts under `<mind>/.atlas`):
   `docker compose -f deploy/docker-compose.yml up -d`.
