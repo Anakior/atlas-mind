@@ -11,6 +11,10 @@ an open protocol — it never pulls your brain into its own.
 
 Own the data. Own the engine. Own the mind.
 
+[![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
+
+<!-- TODO: drop a screenshot of the viewer here (ideally the "The Mind" graph) — it is the single biggest thing missing from this README. A short GIF of search + open + the mind palace would carry the whole pitch. -->
+
 **Atlas Mind** is a self-hostable wiki / knowledge base engine — and an external
 brain you share with your AI. It serves a single-page viewer from a folder of
 documents (a *mind*), and keeps the **engine** (the code) cleanly decoupled from
@@ -30,7 +34,8 @@ It is built on three ideas:
 - **Lightweight & self-contained.** A single Python HTTP server plus a build step,
   written entirely on the standard library — **no database required**, accounts
   and share links live in plain JSON files on disk. Frontend libraries and fonts
-  are vendored, so a running instance makes no third-party network calls.
+  are vendored, so a running instance makes no third-party network calls — your
+  mind never leaves your disk, and nothing you write trains anyone's model.
 
 ## Who it is for
 
@@ -42,6 +47,15 @@ It is built on three ideas:
 
 It is not a multi-tenant SaaS, a real-time collaborative editor, or a plugin
 marketplace. It is a focused engine for one mind per instance.
+
+## Contents
+
+[How it works](#how-it-works) · [Features](#features) · [Requirements](#requirements) ·
+[Install](#install) · [Quick start](#quick-start) ·
+[Use it with your AI](#use-it-with-your-ai-mcp) ·
+[Atlas nodes](#atlas-nodes-federation) · [Configuration](#configuration) ·
+[Updating](#updating) · [Deployment](#deployment) · [Extensions](#extensions) ·
+[Security model](#security-model) · [Licence](#licence)
 
 ## How it works
 
@@ -59,6 +73,10 @@ turns `content/` into a search/backlink index and a viewer shell, the server
 serves it, and edits made in the viewer are written back to the files (and, in
 cloud mode, committed and pushed). Upgrading the engine never touches your
 content; syncing content never touches the engine.
+
+That separation is the whole point: if Atlas Mind disappeared tomorrow, your mind
+would still open in any text editor — it is just a folder of files in your own git
+repository. You are never holding someone else's format hostage.
 
 ## Features
 
