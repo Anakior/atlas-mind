@@ -28,7 +28,7 @@ It is built on three ideas:
   HTML in your browser, nothing uploaded anywhere. Your knowledge lives in one
   place whatever its shape.
 - **AI-native.** Atlas Mind is meant to be the memory your AI assistant reads and
-  enriches: it exposes an **MCP** endpoint (six tools) and `atlas init` scaffolds
+  enriches: it exposes an **MCP** endpoint (seven tools) and `atlas init` scaffolds
   the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how
   to use your mind. See [Use it with your AI](#use-it-with-your-ai-mcp).
 - **Lightweight & self-contained.** A single Python HTTP server plus a build step,
@@ -54,7 +54,8 @@ marketplace. It is a focused engine for one mind per instance.
 [Install](#install) · [Quick start](#quick-start) ·
 [Use it with your AI](#use-it-with-your-ai-mcp) ·
 [Atlas nodes](#atlas-nodes-federation) · [Configuration](#configuration) ·
-[Updating](#updating) · [Deployment](#deployment) · [Extensions](#extensions) ·
+[Updating](#updating) · [Deployment](#deployment) ·
+[Building from source](#building-from-source) · [Extensions](#extensions) ·
 [Security model](#security-model) · [Licence](#licence)
 
 ## How it works
@@ -158,9 +159,9 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
 
 ### AI integration
 
-- An **MCP endpoint** exposing six tools (`search_docs`, `read_doc`, `list_tree`,
-  `recent_docs`, `create_doc`, `edit_doc`) so an assistant reads and writes your
-  mind directly.
+- An **MCP endpoint** exposing seven tools (`search_docs`, `read_doc`, `list_tree`,
+  `recent_docs`, `create_doc`, `edit_doc`, `move_doc`) so an assistant reads and
+  writes your mind directly.
 - A **REST API v1** (Bearer tokens, create-only writes) with a published
   **OpenAPI 3.1** spec.
 - `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`). See
@@ -285,9 +286,9 @@ adapt it to your conventions. Two folders come scaffolded: `content/agents/`
 (reusable AI agent definitions) and `content/ai-sessions/` (session saves, with a
 `TEMPLATE.md` template).
 
-The engine exposes an **MCP endpoint** with six tools — `search_docs`,
-`read_doc`, `list_tree`, `recent_docs`, `create_doc`, `edit_doc`. Mint a token
-and point your assistant at it:
+The engine exposes an **MCP endpoint** with seven tools — `search_docs`,
+`read_doc`, `list_tree`, `recent_docs`, `create_doc`, `edit_doc`, `move_doc`.
+Mint a token and point your assistant at it:
 
 ```bash
 atlas token create ~/my-mind --label claude
@@ -455,8 +456,9 @@ docker compose build --no-cache && docker compose up -d   # Docker Compose
 
 Cleaner and reproducible: **pin** the version in the Dockerfile
 (`pip install "atlas-mind[bcrypt]==X.Y.Z"`) and bump it — a normal `fly deploy`
-then rebuilds that layer because the Dockerfile changed. On a venv/systemd
-install, update in place with `pip install -U atlas-mind` and restart the service.
+then rebuilds that layer because the Dockerfile changed. For a local install,
+update in place — `uv tool upgrade atlas-mind`, `pipx upgrade atlas-mind`, or
+`pip install -U atlas-mind` — and restart the service.
 
 ## Deployment
 
