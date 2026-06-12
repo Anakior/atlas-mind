@@ -1,5 +1,12 @@
-/* Entrée de la précompilation Tailwind (équivalent de ce qu'injectait le
- * Play CDN : preflight + composants + utilités). Voir tailwind.config.cjs. */
+/*! Atlas - precompiled Tailwind (replaces the cdn.tailwindcss.com Play CDN).
+ * Generated from web/tailwind/ : config mirrors the viewer's former inline
+ * tailwind.config, plus a safelist of classes built dynamically in the JS.
+ *
+ * REGENERATE after changing Tailwind classes in web/viewer.html :
+ *   cd src/web/tailwind && npm install   # once, populates node_modules
+ *   npm run build                        # every time after that
+ * This banner uses the /[*][!] form, preserved by --minify - nothing to re-paste.
+ */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
