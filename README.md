@@ -192,9 +192,22 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
 
 ## Install
 
-`pip install` puts a self-contained `atlas` command on your PATH (the viewer
-assets ship inside the package — no separate download). A virtualenv is
-recommended.
+Installing puts a self-contained `atlas` command on your PATH (the viewer assets
+ship inside the package — no separate download).
+
+**The easy way — [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/).**
+Both install the command into its own isolated environment (no virtualenv to
+manage), and `uv` will even fetch a suitable Python for you:
+
+```bash
+uv tool install atlas-mind     # or: pipx install atlas-mind
+atlas serve ~/my-mind
+
+# Or run it once without installing, straight from PyPI:
+uvx atlas-mind serve ~/my-mind   # or: pipx run atlas-mind serve ~/my-mind
+```
+
+**With pip** (a virtualenv is recommended):
 
 ```bash
 pip install atlas-mind
@@ -206,7 +219,9 @@ git clone https://github.com/Anakior/atlas-mind.git && cd atlas-mind && pip inst
 
 Without installing, the engine also runs straight from the source tree as
 `python3 src/cli.py <command>`. All examples below use the `atlas` command;
-substitute `python3 src/cli.py` if you did not install.
+substitute `python3 src/cli.py` if you did not install. (`atlas-mind` is a
+built-in alias of `atlas`, so the `uvx`/`pipx run` one-liners above resolve a
+command without `--from`.)
 
 ## Quick start
 
