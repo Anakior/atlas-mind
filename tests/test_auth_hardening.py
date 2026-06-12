@@ -325,6 +325,18 @@ class TestTotp(unittest.TestCase):
         self.assertEqual(resp.status, 401)
         self.assertIsNone(resp.headers.get("Set-Cookie"))
 
+    def test_totp_code_not_replayable(self):
+        # Anti-replay: a valid code, used a second time within its window, is
+        # refused (the accepted step is remembered per account).
+        secret, _ = self._enroll()
+        at = int(time.time())
+        code = totp_code(secret, at)
+        first = login(self.srv, ADMIN_EMAIL, ADMIN_PASSWORD, totp_code=code)
+        self.assertEqual(first.status, 303)
+        replay = login(self.srv, ADMIN_EMAIL, ADMIN_PASSWORD, totp_code=code)
+        self.assertEqual(replay.status, 401)
+        self.assertIsNone(replay.headers.get("Set-Cookie"))
+
     def test_recovery_code_single_use(self):
         _, codes = self._enroll()
         code = codes[0]

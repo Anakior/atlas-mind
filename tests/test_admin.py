@@ -842,5 +842,22 @@ class TestUpdateCheck(unittest.TestCase):
         self.assertFalse(server._is_newer(None, "0.1.4"))
 
 
+class TestRateLimitEviction(unittest.TestCase):
+    """The rate-limit dicts must shed fully-expired keys (no unbounded growth)."""
+
+    def test_evict_stale_buckets_keeps_only_active(self):
+        import time
+        import server
+        now = time.time()
+        buckets = {
+            "active": [now],                       # in window → keep
+            "stale": [now - 120],                  # all older than cutoff → drop
+            "empty": [],                           # nothing left → drop
+            "expired-multi": [now - 90, now - 70],  # newest still < cutoff → drop
+        }
+        server._evict_stale_buckets(buckets, now - 60)
+        self.assertEqual(set(buckets), {"active"})
+
+
 if __name__ == "__main__":
     unittest.main()

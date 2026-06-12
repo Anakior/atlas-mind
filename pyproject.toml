@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlas-mind"
-version = "0.1.5"
+version = "0.1.6"
 description = "Self-hostable, AI-native knowledge base engine — an external brain you share with your AI."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -463,29 +463,36 @@ def _decode_base32_secret(secret_b32: str) -> bytes:
     return base64.b32decode(padded)
 
 
-def verify_totp(secret_b32: str, code: str, *, at: int = None) -> bool:
-    """Verifies a TOTP code in constant time over the ±TOTP_WINDOW window.
+def verify_totp_step(secret_b32: str, code: str, *, at: int = None):
+    """Verifies a TOTP code in constant time over the ±TOTP_WINDOW window and
+    returns the matched ABSOLUTE step (counter), or None if invalid.
 
     Compares ALL steps of the window before returning (no short-circuit on the
     first match): the response time does not depend on the step that validates.
     A malformed code (length/non-digits) is rejected without revealing by timing
-    whether it reached the HMAC comparison."""
+    whether it reached the HMAC comparison. The returned step lets the login path
+    refuse replays (a code stays valid ~90 s across the window)."""
     code = (code or "").strip()
     if len(code) != TOTP_DIGITS or not code.isdigit():
-        return False
+        return None
     try:
         secret_bytes = _decode_base32_secret(secret_b32)
     except (ValueError, TypeError):
-        return False
+        return None
     if at is None:
         at = int(time.time())
     counter = at // TOTP_STEP_SECONDS
-    matched = False
+    matched = None
     for step in range(-TOTP_WINDOW, TOTP_WINDOW + 1):
         candidate = _hotp(secret_bytes, counter + step)
         if hmac.compare_digest(candidate, code):
-            matched = True
+            matched = counter + step
     return matched
+
+
+def verify_totp(secret_b32: str, code: str, *, at: int = None) -> bool:
+    """True if `code` is a valid TOTP in the ±TOTP_WINDOW window (constant time)."""
+    return verify_totp_step(secret_b32, code, at=at) is not None
 
 
 def totp_provisioning_uri(secret_b32: str, account: str, issuer: str) -> str:
@@ -675,6 +682,21 @@ def reset_login_failures(email: str) -> None:
 # Note: the MCP (/mcp/<token>) additionally exposes editing (edit_doc) because
 # Claude first reads the doc then amends it; REST overwriting stays forbidden.
 
+# Soft cap on the in-memory rate-limit dicts: once a limiter grows past this,
+# fully-expired keys are swept. Without it, rotating source IPs (or IPv6 churn
+# behind a proxy) / churned API tokens grow these module-level dicts without
+# bound — a slow memory-exhaustion vector on a long-running instance.
+_RATE_BUCKET_CAP = 4096
+
+
+def _evict_stale_buckets(buckets: dict, cutoff: float) -> None:
+    """Drop limiter keys whose timestamps are all older than `cutoff` (empty or
+    fully expired). The most-recent timestamp is the last appended, so a single
+    `ts[-1] <= cutoff` check identifies a key with nothing left in its window."""
+    for key in [k for k, ts in buckets.items() if not ts or ts[-1] <= cutoff]:
+        del buckets[key]
+
+
 API_RATE_LIMIT_PER_MIN = 120  # requests/min per token
 _api_rate_buckets: dict[str, list[float]] = {}
 _api_rate_lock = threading.Lock()
@@ -769,10 +791,12 @@ def decode_node_link(link: str):
 def api_rate_limit_ok(token_hash: str) -> bool:
     """Sliding window rate limit per token: API_RATE_LIMIT_PER_MIN max/min."""
     now = time.time()
+    cutoff = now - 60
     with _api_rate_lock:
+        if len(_api_rate_buckets) > _RATE_BUCKET_CAP:
+            _evict_stale_buckets(_api_rate_buckets, cutoff)
         bucket = _api_rate_buckets.setdefault(token_hash, [])
         # Drop entries older than 60s
-        cutoff = now - 60
         bucket[:] = [t for t in bucket if t > cutoff]
         if len(bucket) >= API_RATE_LIMIT_PER_MIN:
             return False
@@ -789,9 +813,11 @@ _login_lock = threading.Lock()
 
 def login_rate_limit_ok(ip: str) -> bool:
     now = time.time()
+    cutoff = now - 60
     with _login_lock:
+        if len(_login_buckets) > _RATE_BUCKET_CAP:
+            _evict_stale_buckets(_login_buckets, cutoff)
         bucket = _login_buckets.setdefault(ip, [])
-        cutoff = now - 60
         bucket[:] = [t for t in bucket if t > cutoff]
         if len(bucket) >= LOGIN_RATE_LIMIT_PER_MIN:
             return False
@@ -3103,7 +3129,18 @@ class Handler(SimpleHTTPRequestHandler):
         recovery code (consumed). The recovery code is only attempted if no TOTP
         code is provided, to avoid consuming a code by mistake."""
         if totp_code:
-            return verify_totp(user.get("totp_secret") or "", totp_code)
+            step = verify_totp_step(user.get("totp_secret") or "", totp_code)
+            if step is None:
+                return False
+            # Anti-replay: a TOTP code is valid ~90 s across the window; refuse
+            # reusing a step already accepted at login (proxy-phishing / shoulder
+            # -surf). Fail-open if the state store hiccups — never lock out a
+            # legitimate login over a hardening control.
+            email = user.get("email") or ""
+            if step <= get_store().get_last_totp_step(email):
+                return False
+            get_store().set_last_totp_step(email, step)
+            return True
         if recovery_code:
             return consume_recovery_code(user.get("email"), recovery_code)
         return False

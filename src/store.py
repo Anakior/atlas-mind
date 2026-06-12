@@ -430,6 +430,32 @@ class FileStore:
             state[key] = int(time.time())
             self._write(self.STATE_FILE, state)
 
+    # ── TOTP anti-replay (last accepted step per account) ─────────────────────
+    # Stored in state.json (volatile) under a "totp_step:<email>" key, namespaced
+    # so it never collides with last_used_at. Best-effort: a read/write hiccup
+    # must NOT block a legitimate login (the replay check is defense-in-depth).
+
+    def get_last_totp_step(self, email: str) -> int:
+        if not email:
+            return 0
+        try:
+            with self._locks[self.STATE_FILE]:
+                state = self._load(self.STATE_FILE, dict)
+            return int(state.get("totp_step:" + email, 0))
+        except Exception:
+            return 0
+
+    def set_last_totp_step(self, email: str, step: int) -> None:
+        if not email:
+            return
+        try:
+            with self._locks[self.STATE_FILE]:
+                state = dict(self._load(self.STATE_FILE, dict))
+                state["totp_step:" + email] = int(step)
+                self._write(self.STATE_FILE, state)
+        except Exception:
+            pass
+
     def upsert_user(self, email: str, fields: dict) -> None:
         with self._locks[self.USERS_FILE]:
             users = [dict(u) for u in self._load(self.USERS_FILE)]
