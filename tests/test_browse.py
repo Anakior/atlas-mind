@@ -173,6 +173,12 @@ class TestBrowseMind(unittest.TestCase):
                          "application/javascript; charset=utf-8")
         self.assertEqual(resp.headers.get("Cache-Control"), "no-cache")
         self.assertEqual(resp.headers.get("Service-Worker-Allowed"), "/")
+        # CACHE_VERSION is stamped with the engine version at serve time so each
+        # release busts the worker's cache (otherwise unversioned vendored assets
+        # like tailwind.css are served stale forever after a deploy).
+        sw_body = resp.text
+        self.assertNotIn("__ENGINE_VERSION__", sw_body)
+        self.assertIn("atlas-cache-", sw_body)
         # Characterization: /favicon.ico is routed to web/favicon.ico... which
         # does not exist (web/ contains only icon.svg) → 404.
         self.assertEqual(self.srv.get("/favicon.ico").status, 404)
