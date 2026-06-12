@@ -787,6 +787,8 @@ __EXTENSIONS_CSS__
     </div>
     <div class="flex-1 overflow-y-auto scrollbar-thin p-5">
       <div id="settings-error" class="hidden mb-3 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded px-3 py-2"></div>
+      <!-- Update-available banner (admin only): shown when a newer atlas-mind is on PyPI. -->
+      <a id="settings-update-banner" class="hidden mb-3 block text-xs text-accent bg-accent/10 border border-accent/25 rounded px-3 py-2 hover:bg-accent/15 transition" target="_blank" rel="noopener"></a>
 
       <!-- ── Users tab ─────────────────────────────────────────── -->
       <section id="settings-pane-users" class="settings-pane">
@@ -1332,6 +1334,7 @@ const STRINGS = {
     settingsDeleteUserTitle: 'Supprimer cet utilisateur ?',
     settingsDeleteUserMsg: e => `Le compte ${e} sera supprimé définitivement.`,
     settingsLastAdmin: 'Impossible de supprimer le dernier admin.',
+    settingsUpdateAvailable: 'Mise à jour disponible : version {latest} (vous avez {current}). Voir sur PyPI →',
     settingsNoUsers: 'Aucun utilisateur.',
     settingsTokenLabel: 'Libellé',
     settingsTokenLabelPlaceholder: 'claude, mcp-perso...',
@@ -1705,6 +1708,7 @@ const STRINGS = {
     settingsDeleteUserTitle: 'Delete this user?',
     settingsDeleteUserMsg: e => `The account ${e} will be permanently deleted.`,
     settingsLastAdmin: 'Cannot delete the last admin.',
+    settingsUpdateAvailable: 'Update available: version {latest} (you have {current}). View on PyPI →',
     settingsNoUsers: 'No users.',
     settingsTokenLabel: 'Label',
     settingsTokenLabelPlaceholder: 'claude, my-mcp...',
@@ -5938,6 +5942,23 @@ settingsRemotesList.addEventListener('click', async (e) => {
   } catch (err) { showSettingsError(err.message); }
 });
 
+async function refreshUpdateBanner() {
+  // Admin-only, best-effort: never block Settings if the check fails/offline.
+  const banner = document.getElementById('settings-update-banner');
+  if (!banner) return;
+  banner.classList.add('hidden');
+  try {
+    const data = await settingsFetch('/api/admin/update-check');
+    if (data && data.update_available && data.latest) {
+      banner.textContent = t('settingsUpdateAvailable')
+        .replace('{latest}', data.latest)
+        .replace('{current}', data.current || '?');
+      banner.href = data.url || 'https://pypi.org/project/atlas-mind/';
+      banner.classList.remove('hidden');
+    }
+  } catch (_) { /* best-effort */ }
+}
+
 function openSettings() {
   hideTokenResult();
   settingsBackdrop.classList.remove('hidden');
@@ -5945,6 +5966,7 @@ function openSettings() {
   // for them.
   const isAdmin = document.body.classList.contains('admin-cloud');
   settingsSelectTab(isAdmin ? 'users' : 'security');
+  if (isAdmin) refreshUpdateBanner();
 }
 function closeSettings() { settingsBackdrop.classList.add('hidden'); }
 

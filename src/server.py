@@ -829,6 +829,77 @@ def _mask_url(s: str) -> str:
     return re.sub(r"://[^@\s]+@", "://***@", s or "")
 
 
+# ─── Update check (admin Settings banner) ──────────────────────────────────────
+# Compares the running version to the latest on PyPI. This is the ONLY outbound
+# call the engine makes on its own: admin-only, cached ~1 day, best-effort, and
+# disabled when CONFIG.update_check is False.
+
+PYPI_JSON_URL = "https://pypi.org/pypi/atlas-mind/json"
+PROJECT_URL = "https://pypi.org/project/atlas-mind/"
+_UPDATE_CACHE = {"checked_at": 0, "latest": None}
+_UPDATE_CACHE_TTL = 86400  # 1 day
+_update_lock = threading.Lock()
+
+
+def current_version():
+    """Running atlas-mind version, in both install modes. Installed → package
+    metadata; source run → parse __version__ from the sibling __init__.py."""
+    try:
+        from importlib.metadata import version
+        return version("atlas-mind")
+    except Exception:
+        pass
+    try:
+        init = (Path(__file__).resolve().parent / "__init__.py").read_text(encoding="utf-8")
+        match = re.search(r'__version__\s*=\s*"([^"]+)"', init)
+        if match:
+            return match.group(1)
+    except OSError:
+        pass
+    return None
+
+
+def _version_tuple(value):
+    """Best-effort numeric tuple for comparison ("0.1.10" → (0, 1, 10)). Returns
+    None if the string has no leading numeric component."""
+    parts = re.findall(r"\d+", value or "")
+    return tuple(int(p) for p in parts) if parts else None
+
+
+def _is_newer(latest, current) -> bool:
+    lt, ct = _version_tuple(latest), _version_tuple(current)
+    if lt is None or ct is None:
+        return False
+    return lt > ct
+
+
+def latest_pypi_version():
+    """Latest atlas-mind version on PyPI, cached ~1 day. Best-effort: any failure
+    (offline, timeout, parse error) returns None and is cached briefly so a
+    flaky network does not hammer PyPI on every Settings open."""
+    import urllib.request
+    now = int(time.time())
+    with _update_lock:
+        if _UPDATE_CACHE["latest"] is not None and \
+                now - _UPDATE_CACHE["checked_at"] < _UPDATE_CACHE_TTL:
+            return _UPDATE_CACHE["latest"]
+        fresh = now - _UPDATE_CACHE["checked_at"] < 3600  # back off after a failure
+        if _UPDATE_CACHE["latest"] is None and fresh and _UPDATE_CACHE["checked_at"]:
+            return None
+    latest = None
+    try:
+        with urllib.request.urlopen(PYPI_JSON_URL, timeout=4) as resp:
+            data = json.loads(resp.read(1_000_000))
+        latest = (data.get("info") or {}).get("version") or None
+    except Exception as e:
+        print(f"[update-check] PyPI lookup failed: {e}", file=sys.stderr)
+    with _update_lock:
+        _UPDATE_CACHE["checked_at"] = now
+        if latest is not None:
+            _UPDATE_CACHE["latest"] = latest
+    return latest
+
+
 def ensure_repo_cloned(root: Path) -> bool:
     """Clone the repo into `root` if not already present. Cloud mode only.
 
@@ -3475,6 +3546,22 @@ class Handler(SimpleHTTPRequestHandler):
         self._send_json(200, {"ok": True})
 
     # ── Atlas nodes — administration (federation, #10) ────────────────────────
+    def _handle_admin_update_check(self):
+        if not self._require_admin_or_403():
+            return
+        current = current_version()
+        if not CONFIG.update_check:
+            self._send_json(200, {"current": current, "latest": None,
+                                  "update_available": False, "disabled": True})
+            return
+        latest = latest_pypi_version()
+        self._send_json(200, {
+            "current": current,
+            "latest": latest,
+            "update_available": _is_newer(latest, current),
+            "url": PROJECT_URL,
+        })
+
     def _handle_admin_nodes_get(self):
         if not self._require_admin_or_403():
             return
@@ -4125,6 +4212,9 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if self.path == "/api/admin/remotes":
             self._handle_admin_remotes_get()
+            return
+        if self.path == "/api/admin/update-check":
+            self._handle_admin_update_check()
             return
         if self.path == "/api/todos":
             if not self._require_auth_or_401():

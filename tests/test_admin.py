@@ -810,5 +810,37 @@ class TestLastAdminConcurrency(unittest.TestCase):
                     f"lockout: zero admin after race (refused={refused})")
 
 
+class TestUpdateCheck(unittest.TestCase):
+    """Admin update-available endpoint: admin-gated, opt-out, and no network
+    when disabled (the tests never hit PyPI)."""
+
+    def test_requires_admin(self):
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            seed_admin_and_viewer(file_store_of(srv))
+            r = srv.get("/api/admin/update-check")  # no cookie
+            self.assertIn(r.status, (401, 403))
+
+    def test_disabled_returns_no_update_without_network(self):
+        env = cloud_env()
+        env["ATLAS_UPDATE_CHECK"] = "0"
+        with AtlasServer(extra_env=env) as srv:
+            seed_admin_and_viewer(file_store_of(srv))
+            cookie = session_cookie(srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+            r = srv.get("/api/admin/update-check", headers={"Cookie": cookie})
+            self.assertEqual(r.status, 200, r.body)
+            body = r.json()
+            self.assertFalse(body["update_available"])
+            self.assertTrue(body.get("disabled"))
+            self.assertTrue(body["current"])  # running version is reported
+
+    def test_version_compare_is_numeric(self):
+        import server
+        self.assertTrue(server._is_newer("0.1.10", "0.1.9"))   # numeric, not lexicographic
+        self.assertTrue(server._is_newer("0.2.0", "0.1.9"))
+        self.assertFalse(server._is_newer("0.1.4", "0.1.4"))
+        self.assertFalse(server._is_newer("0.1.3", "0.1.4"))
+        self.assertFalse(server._is_newer(None, "0.1.4"))
+
+
 if __name__ == "__main__":
     unittest.main()

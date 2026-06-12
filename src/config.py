@@ -109,7 +109,7 @@ _KNOWN_TOML_KEYS = {
     "server": frozenset({"port", "auth_enabled", "session_secret",
                          "session_max_age", "git_pull_interval",
                          "github_webhook_secret", "trusted_ip_header",
-                         "allow_private_remotes"}),
+                         "allow_private_remotes", "update_check"}),
     "store": frozenset({"kind", "dir"}),
     "git": frozenset({"author_name", "author_email", "repo_url"}),
     "todo": frozenset({"file", "categories"}),
@@ -376,6 +376,18 @@ class AtlasConfig:
         else:
             self.allow_private_remotes = _toml_bool(
                 server, "server", "allow_private_remotes", False)
+
+        # Update check: the admin Settings panel shows a discreet banner when a
+        # newer atlas-mind is on PyPI. It is the ONLY outbound call the engine
+        # makes on its own (cached ~1/day, admin-only, best-effort). Opt out to
+        # disable that single network call entirely.
+        update_check_env = env.get("ATLAS_UPDATE_CHECK", "").strip()
+        if update_check_env:
+            self.update_check = update_check_env.lower() in (
+                "1", "true", "yes", "on")
+        else:
+            self.update_check = _toml_bool(
+                server, "server", "update_check", True)
 
         # ── identity/share registry ────────────────────────────────────────
         # `or` (and not presence): an EMPTY env value falls back to the next
