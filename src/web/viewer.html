@@ -1153,7 +1153,7 @@ const STRINGS = {
     docxError: e => `Impossible d'afficher ce document Word (${e}). Télécharger :`,
     openFullscreen: 'Ouvrir en plein écran ↗',
     cantLoadDoc: m => 'Impossible de charger le document: ' + m,
-    fileModeNoEdit: 'Édition impossible en mode file:// — lance python3 server.py',
+    fileModeNoEdit: 'Édition indisponible en mode hors-ligne',
     // Tags
     folderTagTitle: 'Tag de dossier (toujours présent)',
     removeTag: 'Retirer',
@@ -1255,7 +1255,7 @@ const STRINGS = {
     updated: 'Modifié',
     synced: 'Synchronisé',
     offlinePrefix: m => 'Hors-ligne: ' + m,
-    fileModeTodoStatus: 'Mode file:// — lance python3 server.py',
+    fileModeTodoStatus: 'Indisponible en mode hors-ligne',
     adding: 'Ajout…',
     added: 'Ajouté',
     doneStatus: 'Terminé',
@@ -1267,7 +1267,7 @@ const STRINGS = {
     clearing: 'Vidage…',
     nCleared: n => `${n} supprimé${n > 1 ? 'es' : 'e'}`,
     serverRequired: 'Serveur requis',
-    fileModeTodosHtml: 'Mode file:// — les todos nécessitent',
+    fileModeTodosHtml: 'Les tâches sont indisponibles en mode hors-ligne',
     // Modales document (renommer / déplacer / supprimer / nouveau)
     renameDocTitle: 'Renommer le document',
     moveDocTitle: 'Déplacer le document',
@@ -1527,7 +1527,7 @@ const STRINGS = {
     docxError: e => `Can't display this Word document (${e}). Download:`,
     openFullscreen: 'Open full screen ↗',
     cantLoadDoc: m => 'Could not load the document: ' + m,
-    fileModeNoEdit: 'Editing unavailable in file:// mode — run python3 server.py',
+    fileModeNoEdit: 'Editing unavailable in offline mode',
     // Tags
     folderTagTitle: 'Folder tag (always present)',
     removeTag: 'Remove',
@@ -1629,7 +1629,7 @@ const STRINGS = {
     updated: 'Updated',
     synced: 'Synced',
     offlinePrefix: m => 'Offline: ' + m,
-    fileModeTodoStatus: 'file:// mode — run python3 server.py',
+    fileModeTodoStatus: 'Unavailable in offline mode',
     adding: 'Adding…',
     added: 'Added',
     doneStatus: 'Done',
@@ -1641,7 +1641,7 @@ const STRINGS = {
     clearing: 'Clearing…',
     nCleared: n => `${n} deleted`,
     serverRequired: 'Server required',
-    fileModeTodosHtml: 'file:// mode — todos require',
+    fileModeTodosHtml: 'To-dos are unavailable in offline mode',
     // Document modals (rename / move / delete / new)
     renameDocTitle: 'Rename the document',
     moveDocTitle: 'Move the document',
@@ -6889,7 +6889,7 @@ if (isServerMode) {
 } else {
   // file:// mode: no server. If we have an EMBED_CONTENT, we can still read.
   // Otherwise (never in practice), we degrade.
-  todoList.innerHTML = '<li class="px-3 py-4 text-center text-xs text-amber-300">' + t('fileModeTodosHtml') + ' <code class="bg-navy-900 px-1 rounded">python3 server.py</code></li>';
+  todoList.innerHTML = '<li class="px-3 py-4 text-center text-xs text-slate-500">' + t('fileModeTodosHtml') + '</li>';
   todoInput.disabled = true;
   todoForm.querySelector('button').disabled = true;
   setStatus(t('serverRequired'), 'err');
