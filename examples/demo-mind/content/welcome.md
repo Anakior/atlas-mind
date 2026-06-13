@@ -34,6 +34,12 @@ endpoint for your AI, but the *reading* experience is exactly this.
   screen (charts, KPIs, table) rendered inline, animations and all.
 - Scroll any document to the bottom: **backlinks** show every other note that
   points here.
+- Open the graph (`Ctrl/Cmd+G`) to see the whole mind at once — including the
+  teal **[[remotes/mira-garden/start-here|mental node]]** this demo follows from
+  another atlas.
+- Some documents carry **highlighted passages** with margin notes — open
+  [[features/own-your-data]] or [[notes/why-not-notion]] and look for the amber
+  highlights.
 
 ## The pitch in one line
 

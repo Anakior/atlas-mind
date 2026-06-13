@@ -25,6 +25,16 @@ This very demo is a small graph. Trace a few edges from here:
   [[guides/wikilinks-and-backlinks]]
 - the AI cluster: [[features/ai-native]]
 
+## Minds that link to other minds
+
+A mind doesn't have to be an island. You can **follow a node** published by
+*another* Atlas instance — it shows up read-only, in its own teal cluster, wired
+into your own notes. This demo follows one: see
+[[remotes/mira-garden/start-here|Mira's public garden]] and its
+[[remotes/mira-garden/zettelkasten|note on the Zettelkasten]]. Open the graph and
+you'll spot it as a separate island bridged to the main mind — that bridge is the
+whole idea of federation.
+
 ## Why a graph beats search alone
 
 Search finds what you remember to ask for. A graph surfaces what you *forgot* —

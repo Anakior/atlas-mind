@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "notes": [
+    {
+      "id": "note-own-1",
+      "note": "This single line is the whole pitch: your knowledge stays in files you control, in a git repo you own — not in someone else's database.",
+      "exact": "plain Markdown files in your own git",
+      "prefix": "your knowledge is ",
+      "suffix": " repository. No proprietary",
+      "pos": 320,
+      "created": 1781322236
+    },
+    {
+      "id": "note-own-2",
+      "note": "No database at all — accounts, tokens and share links are just JSON on disk. That's what makes a fully offline, single-file build like this one possible.",
+      "exact": "No database",
+      "prefix": "standard library. ",
+      "suffix": " Accounts, tokens",
+      "pos": 700,
+      "created": 1781253836
+    }
+  ]
+}

@@ -13,3 +13,7 @@ content/
 # Pages demo built into docs/). Re-include its content/ despite the rule above.
 !examples/demo-mind/content/
 !examples/demo-mind/content/**
+# …and its example annotations (.notes sidecars), so the offline demo ships with
+# a couple of highlighted passages baked in.
+!examples/demo-mind/.notes/
+!examples/demo-mind/.notes/**

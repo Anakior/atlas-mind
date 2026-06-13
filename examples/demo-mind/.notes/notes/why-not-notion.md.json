@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "notes": [
+    {
+      "id": "note-notion-1",
+      "note": "The entire trade-off in three words. Atlas Mind isn't trying to beat Notion at convenience — it's a different bet, on ownership.",
+      "exact": "ownership over convenience",
+      "prefix": "people who value ",
+      "suffix": ".",
+      "pos": 180,
+      "created": 1781081036
+    },
+    {
+      "id": "note-notion-2",
+      "note": "This is the line that decides it for me: notes I plan to keep for a decade shouldn't be hostage to someone else's pricing or shutdown.",
+      "exact": "compound over a decade",
+      "prefix": "you intend to ",
+      "suffix": " — and increasingly",
+      "pos": 600,
+      "created": 1781322236
+    }
+  ]
+}

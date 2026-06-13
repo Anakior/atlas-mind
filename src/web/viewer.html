@@ -2093,14 +2093,17 @@ marked.use({ renderer: {
 // ─── Wikilinks [[doc]] ─────────────────────────────────────────────────────────
 // Resolution of a target to a path (same logic as the build): direct path,
 // otherwise file name (stem). Maps built once over fileMap.
+// Docs you can open are all valid [[wikilink]] targets — not just Markdown but
+// standalone HTML decks, PDFs and Word docs too.
+const WL_TARGET_EXTS = ['.md', '.html', '.pdf', '.docx'];
 let _wlMaps = null;
 function wlMaps() {
   if (_wlMaps) return _wlMaps;
   const byPath = {}, byStem = {};
   for (const f of Object.values(fileMap)) {
-    if (f.ext !== '.md') continue;
+    if (!WL_TARGET_EXTS.includes(f.ext)) continue;
     byPath[f.path.toLowerCase()] = f.path;
-    const stem = f.name.replace(/\.md$/i, '').toLowerCase();
+    const stem = f.name.replace(/\.[^.]+$/, '').toLowerCase();
     if (!(stem in byStem)) byStem[stem] = f.path;
   }
   _wlMaps = { byPath, byStem };
@@ -2110,10 +2113,12 @@ function resolveWikilink(target) {
   const { byPath, byStem } = wlMaps();
   const t = target.split('|')[0].trim().toLowerCase();
   if (!t) return null;
-  if (byPath[t]) return byPath[t];
-  if (byPath[t + '.md']) return byPath[t + '.md'];
-  let stem = t.split('/').pop();
-  if (stem.endsWith('.md')) stem = stem.slice(0, -3);
+  // Exact path, with or without one of the known extensions.
+  for (const ext of ['', ...WL_TARGET_EXTS]) {
+    if (byPath[t + ext]) return byPath[t + ext];
+  }
+  // Fallback: match on the file stem (last segment, extension stripped).
+  const stem = t.split('/').pop().replace(/\.[^.]+$/, '');
   return byStem[stem] || null;
 }
 // marked extension: [[target]] or [[target|text]] → navigable link (or .broken if
@@ -2816,9 +2821,11 @@ async function showMarkdown(file, highlightQuery) {
   btnCancel.classList.add('hidden');
   document.getElementById('btn-share')?.classList.toggle('hidden', isRemoteDoc);
   document.getElementById('btn-more-wrap')?.classList.toggle('hidden', isRemoteDoc);
-  // Remote node actions: visible ONLY on a mirror doc.
-  document.getElementById('btn-node-appropriate')?.classList.toggle('hidden', !isRemoteDoc);
-  document.getElementById('btn-node-remove')?.classList.toggle('hidden', !isRemoteDoc);
+  // Remote node actions: visible ONLY on a mirror doc, and never in an offline
+  // build (no server to appropriate/remove against — the buttons would 404).
+  const showNodeActions = isRemoteDoc && !IS_OFFLINE_BUILD;
+  document.getElementById('btn-node-appropriate')?.classList.toggle('hidden', !showNodeActions);
+  document.getElementById('btn-node-remove')?.classList.toggle('hidden', !showNodeActions);
   // Download button label = the doc's actual extension (.md/.html/.pdf/.docx).
   const dlExt = document.getElementById('btn-download-ext');
   if (dlExt) dlExt.textContent = file.ext || '';
@@ -3295,8 +3302,8 @@ function wlClose() {
 function wlBuildCands() {
   const out = [];
   for (const f of Object.values(fileMap)) {
-    if (f.ext !== '.md') continue;
-    const stem = f.name.replace(/\.md$/i, '');
+    if (!WL_TARGET_EXTS.includes(f.ext)) continue;
+    const stem = f.name.replace(/\.[^.]+$/, '');
     out.push({
       path: f.path, label: stem, sub: f.path, mtime: f.mtime || 0,
       _name: stem.toLowerCase(),
@@ -3371,13 +3378,13 @@ function wlPosition() {
   m.style.left = Math.max(8, left) + 'px';
 }
 function wlTargetFor(path) {
-  const stem = fileMap[path].name.replace(/\.md$/i, '');
+  const stem = fileMap[path].name.replace(/\.[^.]+$/, '');
   const stemLc = stem.toLowerCase();
   let count = 0;
   for (const f of Object.values(fileMap)) {
-    if (f.ext === '.md' && f.name.replace(/\.md$/i, '').toLowerCase() === stemLc) count++;
+    if (WL_TARGET_EXTS.includes(f.ext) && f.name.replace(/\.[^.]+$/, '').toLowerCase() === stemLc) count++;
   }
-  return count <= 1 ? stem : path.replace(/\.md$/i, '');
+  return count <= 1 ? stem : path.replace(/\.[^.]+$/, '');
 }
 function wlUpdate() {
   if (!editTextarea) return;
