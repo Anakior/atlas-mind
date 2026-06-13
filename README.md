@@ -11,9 +11,13 @@ an open protocol — it never pulls your brain into its own.
 
 Own the data. Own the engine. Own the mind.
 
-[![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
+[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://anakior.github.io/atlas-mind/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
 
-<!-- TODO: drop a screenshot of the viewer here (ideally the "The Mind" graph) — it is the single biggest thing missing from this README. A short GIF of search + open + the mind palace would carry the whole pitch. -->
+> 🔗 **[Try the live demo →](https://anakior.github.io/atlas-mind/)** — a fully
+> offline, single-file build of the viewer, served from GitHub Pages (no server,
+> no account, nothing leaves your browser). Source: [`examples/demo-mind/`](examples/demo-mind/).
+
+<!-- TODO: drop a screenshot/GIF of the viewer here (ideally the "The Mind" graph) to complement the live demo link above. -->
 
 **Atlas Mind** is a self-hostable wiki / knowledge base engine — and an external
 brain you share with your AI. It serves a single-page viewer from a folder of
