@@ -23,10 +23,14 @@ decade — and increasingly, the memory you share with an AI — it isn't.
 
 | You give up                  | You get back                                  |
 |------------------------------|-----------------------------------------------|
-| One-click hosted setup       | [[features/own-your-data|plain files in your git]] |
+| One-click hosted setup       | Plain files in your own git repo              |
 | A polished mobile app        | An engine you can read and fork               |
 | Real-time co-editing         | No database, no lock-in, no third-party calls |
-| Someone else's roadmap       | [[features/ai-native|an open MCP your AI uses]]    |
+| Someone else's roadmap       | An open MCP your AI talks to                  |
+
+Put plainly: [[features/own-your-data|plain files in your git]] instead of a
+hosted silo, and [[features/ai-native|an open MCP your AI uses]] instead of
+someone else's roadmap.
 
 ## Who should care
 
