@@ -1,5 +1,7 @@
 # Atlas Mind
 
+[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://anakior.github.io/atlas-mind/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
+
 > **It's your mind, not someone else's.**
 
 Notion, and every hosted notes app, ask you to pour your thinking into
@@ -12,14 +14,9 @@ an open protocol — it never pulls your brain into its own.
 Own the data. Own the engine. Own the mind.
 
 <img width="1613" height="1228" alt="image" src="https://github.com/user-attachments/assets/79359338-d16d-4102-95c7-b45c9a31ba72" />
-
-[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://anakior.github.io/atlas-mind/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
-
 > 🔗 **[Try the live demo →](https://anakior.github.io/atlas-mind/)** — a fully
 > offline, single-file build of the viewer, served from GitHub Pages (no server,
 > no account, nothing leaves your browser). Source: [`examples/demo-mind/`](examples/demo-mind/).
-
-<!-- TODO: drop a screenshot/GIF of the viewer here (ideally the "The Mind" graph) to complement the live demo link above. -->
 
 **Atlas Mind** is a self-hostable wiki / knowledge base engine — and an external
 brain you share with your AI. It serves a single-page viewer from a folder of
