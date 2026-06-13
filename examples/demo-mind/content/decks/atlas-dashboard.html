@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen — store admin (demo)</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#0d1220; --muted:#737a8a; --soft:#9aa1b1;
+    --line:#ebeef3; --accent:#635bff; --accent-soft:#efeefe;
+    --green:#0fa968; --green-bg:#e7f7ef; --amber:#b8780a; --amber-bg:#fdf3e2; --red:#e0395c; --red-bg:#fdeaef;
+    --shadow:0 1px 2px rgba(13,18,32,.04), 0 10px 30px -12px rgba(13,18,32,.12);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);
+    font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;-webkit-font-smoothing:antialiased}
+  .app{display:grid;grid-template-columns:240px 1fr;height:100%}
+
+  /* sidebar */
+  .side{background:#0c0f1a;color:#c3c9d6;display:flex;flex-direction:column;padding:20px 14px}
+  .brand{display:flex;align-items:center;gap:11px;padding:4px 8px 20px;font-weight:800;font-size:1.08rem;color:#fff;letter-spacing:-.02em}
+  .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,#635bff,#a78bfa);display:grid;place-items:center;font-size:16px;box-shadow:0 6px 18px rgba(99,91,255,.5)}
+  .seclabel{font-size:.64rem;letter-spacing:.18em;text-transform:uppercase;color:#5a6175;margin:18px 10px 8px}
+  .nav{display:flex;align-items:center;gap:12px;padding:9px 11px;border-radius:9px;color:#9aa1b3;font-weight:500;cursor:default;margin-bottom:2px}
+  .nav .i{width:18px;text-align:center;opacity:.9}
+  .nav:hover{background:rgba(255,255,255,.05);color:#fff}
+  .nav.active{background:rgba(99,91,255,.16);color:#fff;box-shadow:inset 2px 0 0 #635bff}
+  .nav .badge{margin-left:auto;background:#635bff;color:#fff;font-size:.66rem;font-weight:700;border-radius:999px;padding:1px 7px}
+  .me{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px 8px 2px;border-top:1px solid rgba(255,255,255,.07)}
+  .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(140deg,#f59e0b,#ef4444);display:grid;place-items:center;color:#fff;font-weight:700;font-size:.78rem}
+  .me small{color:#7e859a;display:block;font-size:.72rem;margin-top:1px}
+
+  /* main */
+  .main{overflow:auto}
+  .top{display:flex;align-items:center;gap:16px;padding:18px 28px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.8);backdrop-filter:blur(6px);position:sticky;top:0;z-index:5}
+  .top h1{font-size:1.18rem;margin:0;font-weight:800;letter-spacing:-.02em}
+  .top .sub{color:var(--muted);font-size:.78rem;margin-top:2px}
+  .search{margin-left:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 13px;color:var(--soft);min-width:220px;font-size:.82rem}
+  .btn{background:var(--ink);color:#fff;border:0;border-radius:10px;padding:10px 15px;font-weight:600;font-size:.82rem;white-space:nowrap}
+
+  .content{padding:24px 28px;display:flex;flex-direction:column;gap:20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);
+    opacity:0;transform:translateY(12px);animation:rise .55s cubic-bezier(.2,.7,.2,1) forwards}
+
+  .kpis{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .kpi{padding:18px 20px}
+  .kpi .cap{color:var(--muted);font-size:.76rem;font-weight:600}
+  .kpi .val{font-size:1.95rem;font-weight:800;letter-spacing:-.035em;margin:8px 0 8px}
+  .pill{font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:4px}
+  .p-up{color:var(--green);background:var(--green-bg)} .p-down{color:var(--red);background:var(--red-bg)}
+  .kpi .since{color:var(--soft);font-size:.72rem;margin-left:8px}
+  .kpis .card:nth-child(1){animation-delay:.04s}.kpis .card:nth-child(2){animation-delay:.10s}
+  .kpis .card:nth-child(3){animation-delay:.16s}.kpis .card:nth-child(4){animation-delay:.22s}
+
+  .grid{display:grid;gap:20px;grid-template-columns:1.7fr 1fr}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}.app{grid-template-columns:66px 1fr}.brand span,.nav span,.seclabel,.me div{display:none}}
+  .panel{padding:20px 22px;animation-delay:.28s}
+  .phead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .phead h3{margin:0;font-size:.98rem;font-weight:800;letter-spacing:-.01em}
+  .phead a{color:var(--accent);font-size:.78rem;font-weight:600;text-decoration:none}
+
+  table{width:100%;border-collapse:collapse;font-size:.84rem}
+  th{text-align:left;color:var(--soft);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;padding:0 8px 12px}
+  td{padding:13px 8px;border-top:1px solid var(--line)}
+  tbody tr:hover{background:#fafbfd}
+  .who{display:flex;align-items:center;gap:10px;font-weight:600}
+  .ic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:.74rem;flex:0 0 auto}
+  .status{font-size:.72rem;font-weight:700;padding:4px 10px;border-radius:999px}
+  .s-paid{background:var(--green-bg);color:var(--green)} .s-pend{background:var(--amber-bg);color:var(--amber)} .s-ref{background:var(--red-bg);color:var(--red)}
+  .amt{font-variant-numeric:tabular-nums;font-weight:700}
+
+  .feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .feed li{display:flex;gap:12px;padding:11px 4px;border-top:1px solid var(--line)}
+  .feed li:first-child{border-top:0}
+  .feed .ic{width:34px;height:34px}
+  .feed .txt{font-size:.83rem}
+  .feed .txt b{font-weight:700}
+  .feed .when{color:var(--soft);font-size:.74rem;margin-top:2px}
+
+  .prods{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .prod{display:flex;align-items:center;gap:13px;padding:13px 14px;border:1px solid var(--line);border-radius:14px}
+  .thumb{width:42px;height:42px;border-radius:11px;flex:0 0 auto;display:grid;place-items:center;color:#fff;font-size:18px;font-weight:700}
+  .prod .nm{font-weight:700} .prod .meta{color:var(--soft);font-size:.76rem;margin-top:1px}
+  .prod .rev{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums}
+
+  @keyframes rise{to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important}.card{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="logo">◆</span><span>Lumen</span></div>
+    <div class="seclabel">Store</div>
+    <div class="nav active"><span class="i">▦</span><span>Dashboard</span></div>
+    <div class="nav"><span class="i">🛍</span><span>Orders</span><span class="badge">12</span></div>
+    <div class="nav"><span class="i">📦</span><span>Products</span></div>
+    <div class="nav"><span class="i">👤</span><span>Customers</span></div>
+    <div class="seclabel">Grow</div>
+    <div class="nav"><span class="i">📈</span><span>Analytics</span></div>
+    <div class="nav"><span class="i">🎯</span><span>Campaigns</span></div>
+    <div class="nav"><span class="i">⚙</span><span>Settings</span></div>
+    <div class="me"><span class="avatar">LB</span><div><strong>Ludo B.</strong><small>Administrator</small></div></div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1>Dashboard</h1><div class="sub">Welcome back — here's your store, last 30 days.</div></div>
+      <div class="search">🔎 Search orders, products…</div>
+      <button class="btn">+ New product</button>
+    </header>
+
+    <div class="content">
+      <div class="kpis">
+        <div class="card kpi"><div class="cap">Revenue</div><div class="val" data-money data-to="48230">€0</div><span class="pill p-up">▲ 12.4%</span><span class="since">vs last month</span></div>
+        <div class="card kpi"><div class="cap">Orders</div><div class="val" data-to="1284">0</div><span class="pill p-up">▲ 8.1%</span><span class="since">vs last month</span></div>
+        <div class="card kpi"><div class="cap">New customers</div><div class="val" data-to="312">0</div><span class="pill p-up">▲ 5.6%</span><span class="since">vs last month</span></div>
+        <div class="card kpi"><div class="cap">Refund rate</div><div class="val" data-pct data-to="21">0%</div><span class="pill p-down">▼ 0.3%</span><span class="since">vs last month</span></div>
+      </div>
+
+      <div class="grid">
+        <div class="card panel">
+          <div class="phead"><h3>Recent orders</h3><a href="#">View all →</a></div>
+          <table>
+            <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th style="text-align:right">Amount</th></tr></thead>
+            <tbody>
+              <tr><td>#LM-9043</td><td><span class="who"><span class="ic" style="background:#635bff">AM</span>Amélie Morel</span></td><td><span class="status s-paid">Paid</span></td><td style="text-align:right"><span class="amt">€129.90</span></td></tr>
+              <tr><td>#LM-9042</td><td><span class="who"><span class="ic" style="background:#0fa968">TK</span>Tomás Klein</span></td><td><span class="status s-pend">Pending</span></td><td style="text-align:right"><span class="amt">€54.00</span></td></tr>
+              <tr><td>#LM-9041</td><td><span class="who"><span class="ic" style="background:#f59e0b">JD</span>Jordan Diaz</span></td><td><span class="status s-paid">Paid</span></td><td style="text-align:right"><span class="amt">€312.40</span></td></tr>
+              <tr><td>#LM-9040</td><td><span class="who"><span class="ic" style="background:#ef4444">SR</span>Sara Reni</span></td><td><span class="status s-ref">Refunded</span></td><td style="text-align:right"><span class="amt">€89.00</span></td></tr>
+              <tr><td>#LM-9039</td><td><span class="who"><span class="ic" style="background:#a78bfa">YC</span>Yann Coste</span></td><td><span class="status s-paid">Paid</span></td><td style="text-align:right"><span class="amt">€47.50</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card panel">
+          <div class="phead"><h3>Activity</h3><a href="#">All</a></div>
+          <ul class="feed">
+            <li><span class="ic" style="background:#0fa968">✓</span><div><div class="txt"><b>Order #LM-9043</b> was paid — €129.90</div><div class="when">2 minutes ago</div></div></li>
+            <li><span class="ic" style="background:#635bff">＋</span><div><div class="txt"><b>Aurora Lamp</b> added to catalog</div><div class="when">26 minutes ago</div></div></li>
+            <li><span class="ic" style="background:#f59e0b">★</span><div><div class="txt">New 5-star review on <b>Linen Tote</b></div><div class="when">1 hour ago</div></div></li>
+            <li><span class="ic" style="background:#ef4444">↩</span><div><div class="txt"><b>Order #LM-9040</b> refunded</div><div class="when">3 hours ago</div></div></li>
+            <li><span class="ic" style="background:#a78bfa">👤</span><div><div class="txt"><b>312</b> new customers this month</div><div class="when">Today</div></div></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card panel">
+        <div class="phead"><h3>Top products</h3><a href="#">Catalog →</a></div>
+        <div class="prods">
+          <div class="prod"><span class="thumb" style="background:linear-gradient(140deg,#635bff,#a78bfa)">💡</span><div><div class="nm">Aurora Lamp</div><div class="meta">218 sold</div></div><span class="rev">€8.7k</span></div>
+          <div class="prod"><span class="thumb" style="background:linear-gradient(140deg,#0fa968,#34d399)">🧺</span><div><div class="nm">Linen Tote</div><div class="meta">194 sold</div></div><span class="rev">€5.4k</span></div>
+          <div class="prod"><span class="thumb" style="background:linear-gradient(140deg,#f59e0b,#fbbf24)">☕</span><div><div class="nm">Ceramic Mug</div><div class="meta">176 sold</div></div><span class="rev">€3.1k</span></div>
+          <div class="prod"><span class="thumb" style="background:linear-gradient(140deg,#ef4444,#fb7185)">🕯</span><div><div class="nm">Soy Candle</div><div class="meta">151 sold</div></div><span class="rev">€2.3k</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  document.querySelectorAll('[data-to]').forEach(function(el){
+    var to=+el.dataset.to,money='money'in el.dataset,pct='pct'in el.dataset;
+    function fmt(v){if(money)return '€'+v.toLocaleString('fr-FR');if(pct)return (v/10).toFixed(1)+'%';return v.toLocaleString('en-US');}
+    if(reduce){el.textContent=fmt(to);return;}
+    var t0=null,dur=1100;
+    function step(ts){if(!t0)t0=ts;var p=Math.min(1,(ts-t0)/dur),e=1-Math.pow(1-p,3);
+      el.textContent=fmt(Math.round(to*e));if(p<1)requestAnimationFrame(step);}
+    requestAnimationFrame(step);
+  });
+})();
+</script>
+</body>
+</html>
