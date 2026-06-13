@@ -14,9 +14,7 @@ an open protocol — it never pulls your brain into its own.
 Own the data. Own the engine. Own the mind.
 
 <img width="1613" height="1228" alt="image" src="https://github.com/user-attachments/assets/79359338-d16d-4102-95c7-b45c9a31ba72" />
-> 🔗 **[Try the live demo →](https://anakior.github.io/atlas-mind/)** — a fully
-> offline, single-file build of the viewer, served from GitHub Pages (no server,
-> no account, nothing leaves your browser). Source: [`examples/demo-mind/`](examples/demo-mind/).
+> 🔗 **[Try the live demo →](https://anakior.github.io/atlas-mind/)** - This is the offline build, some feature are missing
 
 **Atlas Mind** is a self-hostable wiki / knowledge base engine — and an external
 brain you share with your AI. It serves a single-page viewer from a folder of
