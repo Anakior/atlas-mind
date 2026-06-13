@@ -8,3 +8,8 @@ build/
 content/
 .notes/
 .atlas/
+
+# Exception: the bundled demo mind IS versioned (source of the public GitHub
+# Pages demo built into docs/). Re-include its content/ despite the rule above.
+!examples/demo-mind/content/
+!examples/demo-mind/content/**

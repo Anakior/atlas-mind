@@ -1,0 +1,12 @@
+# Atlas mind configuration — demo mind shipped with the engine.
+# This is the source for the public, static, offline demo published on GitHub
+# Pages. It contains NO private data: every document is a self-referential
+# showcase of what Atlas Mind can do.
+
+prefix = ""
+tagline = "A live, in-browser demo — your knowledge, your engine, your mind."
+lang = "en"
+
+[build]
+# Nothing to hide in the demo; the whole tree is meant to be browsed.
+excluded_names = []
