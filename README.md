@@ -11,6 +11,8 @@ an open protocol — it never pulls your brain into its own.
 
 Own the data. Own the engine. Own the mind.
 
+<img width="1613" height="1228" alt="image" src="https://github.com/user-attachments/assets/79359338-d16d-4102-95c7-b45c9a31ba72" />
+
 [![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://anakior.github.io/atlas-mind/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
 
 > 🔗 **[Try the live demo →](https://anakior.github.io/atlas-mind/)** — a fully
