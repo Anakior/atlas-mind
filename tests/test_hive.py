@@ -1,4 +1,4 @@
-"""Federation — atlas nodes, PUBLISHING side (#10, Phase A).
+"""Hive — atlas nodes, PUBLISHING side (#10, Phase A).
 
 An admin publishes a folder OR a file as a "node": they get a self-contained,
 copyable link (origin + token + name + path). The remote recipient has NO
@@ -280,7 +280,7 @@ class TestNodeSubscription(unittest.TestCase):
         self.assertEqual(r2.status, 409, r2.body)
 
 
-class TestFederationSSRFGuard(unittest.TestCase):
+class TestHiveSSRFGuard(unittest.TestCase):
     """Without ATLAS_ALLOW_PRIVATE_REMOTES, subscribing to a loopback/private
     URL must be refused by the SSRF guard (the link is attacker-supplied)."""
 

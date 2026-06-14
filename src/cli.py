@@ -149,9 +149,9 @@ lang = "{lang}"
 # unset: on Fly, Atlas trusts Fly-Client-IP; otherwise it uses the socket peer
 # and ignores client headers (so a forged header cannot bypass the rate limit).
 # trusted_ip_header = "X-Forwarded-For"
-# Federation: by default a pasted node link may only point at a PUBLIC host
+# Hive: by default a pasted node link may only point at a PUBLIC host
 # (loopback/private/LAN addresses are refused — SSRF guard). Set true to also
-# allow localhost/LAN remotes (home-lab federation between instances).
+# allow localhost/LAN remotes (home-lab hive between instances).
 # allow_private_remotes = false
 
 [store]

@@ -364,11 +364,11 @@ class AtlasConfig:
                                           "trusted_ip_header", ""))
         self.trusted_ip_header = trusted_ip_header.strip() or None
 
-        # Federation SSRF guard: by default a pasted node link may only point at
+        # Hive SSRF guard: by default a pasted node link may only point at
         # a PUBLIC host (the subscribe client refuses URLs resolving to
         # loopback/private/link-local/reserved addresses — cloud metadata,
         # internal services). Set this True to also allow localhost/LAN remotes
-        # (home-lab federation between instances on a private network).
+        # (home-lab hive between instances on a private network).
         allow_private_env = env.get("ATLAS_ALLOW_PRIVATE_REMOTES", "").strip()
         if allow_private_env:
             self.allow_private_remotes = allow_private_env.lower() in (

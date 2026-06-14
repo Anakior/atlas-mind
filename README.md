@@ -57,7 +57,7 @@ marketplace. It is a focused engine for one mind per instance.
 [How it works](#how-it-works) · [Features](#features) · [Requirements](#requirements) ·
 [Install](#install) · [Quick start](#quick-start) ·
 [Use it with your AI](#use-it-with-your-ai-mcp) ·
-[Atlas nodes](#atlas-nodes-federation) · [Configuration](#configuration) ·
+[Atlas nodes](#hive-atlas-nodes) · [Configuration](#configuration) ·
 [Updating](#updating) · [Deployment](#deployment) ·
 [Building from source](#building-from-source) · [Extensions](#extensions) ·
 [Security model](#security-model) · [Licence](#licence)
@@ -114,7 +114,7 @@ Everything below ships in the box.
   on a navigable map (drag, pan, zoom), colour-grouped into regions by folder,
   with recently-edited nodes glowing and orphans dimmed. Subscribed remote nodes
   appear as their own distinct, teal regions (see
-  [Atlas nodes](#atlas-nodes-federation)).
+  [Atlas nodes](#hive-atlas-nodes)).
 - **Command palette** (Ctrl-K), **pinned** and **recently-modified** documents,
   and a quick-capture button.
 
@@ -142,10 +142,10 @@ Everything below ships in the box.
   with no login, with optional expiry and one-click revocation. Useful to hand a
   page to someone outside your instance.
 
-### Atlas nodes (federation)
+### Hive Mind (Atlas nodes)
 
 Share a folder or document with **another Atlas Mind instance**, read-only, kept
-in sync. See the dedicated section: [Atlas nodes](#atlas-nodes-federation).
+in sync. See the dedicated section: [Atlas nodes](#hive-atlas-nodes).
 
 ### Multi-user & permissions (cloud mode)
 
@@ -302,9 +302,9 @@ atlas token create ~/my-mind --label claude
 Your AI can then search, read and create documents directly in your mind — the
 **Mind** view is, quite literally, the map it walks.
 
-## Atlas nodes (federation)
+## Hive Mind (Atlas nodes)
 
-Two Atlas Mind instances can share a slice of their content. The model is a
+Two Atlas Mind instances can share a slice of their content becoming an Hive Mind. The model is a
 **personal memory with sharing**, not a real-time collaborative editor: a node is
 published by one side and **mirrored read-only** by the other, kept in sync.
 

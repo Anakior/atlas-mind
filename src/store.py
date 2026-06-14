@@ -660,7 +660,7 @@ class FileStore:
                 return True
         return False
 
-    # ── Atlas nodes (federation, #10) ─────────────────────────────────────────
+    # ── Atlas nodes (hive, #10) ─────────────────────────────────────────
     def create_node(self, name: str, path: str, token: str) -> dict:
         """Publish a node: the folder/file `path` (relative to content/) becomes
         readable read-only via `token` (stored as SHA256). Upsert by name:
@@ -704,7 +704,7 @@ class FileStore:
                     return True
         return False
 
-    # ── Subscriptions to remote nodes (federation, #10 Phase B) ───────────────
+    # ── Subscriptions to remote nodes (hive, #10 Phase B) ───────────────
     def add_remote(self, record: dict) -> dict:
         """Register a subscription to a remote node (upsert by local name).
 

@@ -13,7 +13,7 @@ You can read it, search it, and link to it — but you can't edit it: notice the
 teal accent, the **Mental nodes** label in the sidebar, and the missing edit
 button up top.
 
-That is federation: minds that point at **other minds**, in the open, without a
+That is the hive: minds that point at **other minds**, in the open, without a
 central server in the middle. Your knowledge can cite a teammate's node the same
 way one note cites another.
 
