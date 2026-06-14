@@ -866,7 +866,7 @@ __EXTENSIONS_CSS__
         <ul id="settings-shares-list" class="space-y-1.5"></ul>
       </section>
 
-      <!-- ── Nodes tab (federation: publish a folder/file) ───────── -->
+      <!-- ── Nodes tab (hive: publish a folder/file) ───────── -->
       <section id="settings-pane-nodes" class="settings-pane hidden">
         <p class="text-[11px] text-ink-500 mb-3" data-i18n="settingsNodesHint">Publie un dossier ou un document en n&oelig;ud : un autre atlas pourra s&rsquo;y abonner en lecture seule via le lien.</p>
         <form id="settings-node-form" class="mb-5 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
@@ -5738,7 +5738,7 @@ settingsSharesList.addEventListener('click', async (e) => {
   } catch (err) { showSettingsError(err.message); }
 });
 
-// ── Nodes (federation) ──
+// ── Nodes (hive) ──
 async function loadSettingsNodes() {
   settingsNodesList.innerHTML = '';
   try {

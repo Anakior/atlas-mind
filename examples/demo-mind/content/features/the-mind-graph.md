@@ -33,7 +33,7 @@ into your own notes. This demo follows one: see
 [[remotes/mira-garden/start-here|Mira's public garden]] and its
 [[remotes/mira-garden/zettelkasten|note on the Zettelkasten]]. Open the graph and
 you'll spot it as a separate island bridged to the main mind — that bridge is the
-whole idea of federation.
+whole idea of the hive.
 
 ## Why a graph beats search alone
 

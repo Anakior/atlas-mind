@@ -739,7 +739,7 @@ def verify_api_bearer(authorization_header: str):
 def verify_node_bearer(authorization_header: str):
     """Returns the node dict {'name', 'path'} for a valid node token, or None.
 
-    Counterpart of verify_api_bearer for NODE tokens (federation, #10). A node
+    Counterpart of verify_api_bearer for NODE tokens (hive, #10). A node
     token opens neither the v1 API nor the admin: only the manifest and the files
     of the published subtree, read-only (path carried by the node)."""
     if not authorization_header:
@@ -1910,7 +1910,7 @@ def _iter_node_files(node_path: str):
             yield rel[len(prefix):], path
 
 
-# ─── Subscriptions: read-only mirror of remote nodes (federation, #10 B) ───────
+# ─── Subscriptions: read-only mirror of remote nodes (hive, #10 B) ───────
 
 REMOTES_DIR = "remotes"  # root of the mirrors, under content_root
 
@@ -1995,7 +1995,7 @@ def _validate_remote_url(url: str) -> None:
     if not host:
         raise ValueError("missing host")
     if getattr(CONFIG, "allow_private_remotes", False):
-        return  # opt-in: localhost/LAN federation (home lab) — scheme still checked
+        return  # opt-in: localhost/LAN hive (home lab) — scheme still checked
     try:
         infos = socket.getaddrinfo(
             host, parts.port or (443 if parts.scheme == "https" else 80))
@@ -2008,7 +2008,7 @@ def _validate_remote_url(url: str) -> None:
 
 def _http_get_bearer(url: str, token: str, timeout: float = 15.0) -> bytes:
     """Fetch a remote node URL with the Bearer token. Hardened against the
-    federation SSRF surface: scheme/host are validated, redirects are NOT
+    hive SSRF surface: scheme/host are validated, redirects are NOT
     followed (a redirect could escape the validation into an internal target),
     and the response is capped at MAX_NODE_FILE_BYTES."""
     import urllib.request
@@ -3582,7 +3582,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self._send_json(200, {"ok": True})
 
-    # ── Atlas nodes — administration (federation, #10) ────────────────────────
+    # ── Atlas nodes — administration (hive, #10) ────────────────────────
     def _handle_admin_update_check(self):
         if not self._require_admin_or_403():
             return
@@ -4188,7 +4188,7 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/share/"):
             self._serve_share(self.path[len("/share/"):])
             return
-        # Atlas nodes (federation, #10): Bearer channel independent of the cookie,
+        # Atlas nodes (hive, #10): Bearer channel independent of the cookie,
         # like /api/v1 — the remote subscriber has no session here.
         if self.path == "/api/node/manifest":
             self._handle_node_manifest()
