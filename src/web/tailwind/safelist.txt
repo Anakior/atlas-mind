@@ -58,6 +58,7 @@ application
 application/json
 appropriateDestPlaceholder
 archives
+are
 aria-pressed
 arpente
 article
@@ -345,7 +346,6 @@ fichiers
 file
 file(s)).
 file-name
-file://
 fileExists
 fileExistsAt
 fileModeNoEdit
@@ -411,6 +411,7 @@ graph
 graph-btn
 graph-canvas
 graph-close
+graph-controls
 graph-overlay
 graph-stats
 graph-tooltip
@@ -477,6 +478,7 @@ in,
 inbox/
 including
 indisponible
+indisponibles
 info
 injoignable
 inline
@@ -518,7 +520,6 @@ keyboard
 keydown
 la
 label
-lance
 language-
 last
 le
@@ -537,6 +538,7 @@ lien.
 liens
 liens,
 lieu
+lighter
 lineHeight
 link
 link.
@@ -807,7 +809,6 @@ publics
 published
 puces
 px
-px-1
 px-1.5
 px-10
 px-2
@@ -823,7 +824,6 @@ py-2
 py-2.5
 py-4
 py-6
-python3
 que
 quick-capture-backdrop
 quick-capture-body
@@ -872,7 +872,6 @@ rendering
 rendu
 renomme
 reopened
-require
 required
 required.
 requis
@@ -901,12 +900,14 @@ revokeConfirmTitle
 revokeTitle
 revoked
 rgba(110,110,130,0.3)
+rgba(150,130,246,0.28)
 rgba(150,150,160,0.3)
 rgba(150,150,160,0.5)
-rgba(196,181,253,0.4)
 rgba(196,181,253,0.95)
-rgba(255,255,255,0.06)
-rgba(255,255,255,0.4)
+rgba(200,188,250,0.9)
+rgba(255,255,255,0.05)
+rgba(255,255,255,0.35)
+rgba(255,255,255,0.72)
 rgba(29,155,209,0.18)
 rgba(29,155,209,0.36)
 rgba(29,155,209,0.6)
@@ -922,7 +923,6 @@ rounded-b-md
 rounded-lg
 rounded-md
 rounded-t-md
-run
 sa
 safe.
 sameTopic
@@ -959,7 +959,6 @@ semaine
 sera
 seras
 seront
-server.py
 serverRequired
 serviceWorker
 sessions
@@ -1173,7 +1172,6 @@ that
 the
 these
 this
-thought
 thoughts
 titleRequired
 to
