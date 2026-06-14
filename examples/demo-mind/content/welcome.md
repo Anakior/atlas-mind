@@ -18,6 +18,8 @@ endpoint for your AI, but the *reading* experience is exactly this.
 
 ## Start here
 
+- **[[guides/install-and-setup]]** — the full tutorial: requirements and every
+  install step to run your own mind in five minutes.
 - **[[features/own-your-data]]** — why plain files in your own git repo beat a
   hosted notes app.
 - **[[features/multi-format]]** — Markdown, standalone HTML, PDF and Word, all in
