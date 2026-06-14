@@ -26,6 +26,8 @@ endpoint for your AI, but the *reading* experience is exactly this.
   one place.
 - **[[features/ai-native]]** — the memory your AI reads and enriches over MCP.
 - **[[features/the-mind-graph]]** — the link graph that turns notes into a *mind*.
+- **[[guides/hive-mind]]** — share a slice of your mind with another instance: the
+  Hive Mind, step by step.
 
 ## Try the viewer
 
