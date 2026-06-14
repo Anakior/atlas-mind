@@ -1,6 +1,8 @@
 # GitHub Pages site (`/docs`)
 
-Served at **https://anakior.github.io/atlas-mind/** from `main` → `/docs`.
+Served at **https://atlas-mind.anakior.app/** (custom domain via `docs/CNAME`;
+GitHub Pages from `main` → `/docs`). The old `anakior.github.io/atlas-mind/`
+redirects here.
 
 | Path | What it is | How it's produced |
 |------|------------|-------------------|
