@@ -1,6 +1,6 @@
 # Atlas Mind
 
-[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://anakior.github.io/atlas-mind/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
+[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://atlas-mind.anakior.app/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
 
 > **It's your mind, not someone else's.**
 
@@ -17,7 +17,7 @@ Own the data. Own the engine. Own the mind.
   <img src="https://github.com/user-attachments/assets/79359338-d16d-4102-95c7-b45c9a31ba72" alt="Atlas Mind viewer" width="900" />
 </p>
 
-> 🔗 **[Try the live demo →](https://anakior.github.io/atlas-mind/demo/)** — this is the offline build, some features are missing. ([What is Atlas Mind?](https://anakior.github.io/atlas-mind/) — the landing page.)
+> 🔗 **[Try the live demo →](https://atlas-mind.anakior.app/demo/)** — this is the offline build, some features are missing. ([What is Atlas Mind?](https://atlas-mind.anakior.app/) — the landing page.)
 
 **Atlas Mind** is a self-hostable wiki / knowledge base engine — and an external
 brain you share with your AI. It serves a single-page viewer from a folder of
