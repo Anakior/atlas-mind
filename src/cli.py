@@ -1106,6 +1106,67 @@ def cmd_deploy(args) -> int:
         print( "  Follow the commented header of deploy/atlas.service (create the atlas user,")
         print( "  the venv, install atlas-mind, place your mind, set SESSION_SECRET via")
         print( "  `systemctl edit atlas`, then enable the service). Front it with Caddy/nginx for TLS.")
+    # Symmetry with `update`: the upgrade command is printed right next to the
+    # deploy, so "going online" and "staying up to date" are never two hunts.
+    print()
+    update_hint = f"{_invocation()} update --target {args.target}"
+    if args.target == "fly" and app_name:
+        update_hint += f" --app {app_name}"
+    print(f"To update the engine later (new atlas-mind version):\n  {update_hint}")
+    return 0
+
+
+def cmd_update(args) -> int:
+    """Update a DEPLOYED instance to the newest engine — the mirror of `deploy`,
+    so "staying up to date" is never a separate hunt. Prints the exact command
+    for the target (and runs it with --run for fly/compose). The pip-based images
+    cache the install layer, hence the --no-cache that forces the new version."""
+    target = args.target
+
+    if target == "fly":
+        mind = _require_mind(args.dir)
+        chosen = args.app
+        if chosen is None and sys.stdin.isatty():
+            chosen = _prompt("Fly app name", _fly_app_slug(mind.name))
+        app_name = _fly_app_slug(chosen if chosen is not None else mind.name)
+        fly_args = ["deploy", "-a", app_name, "-c", "deploy/fly.toml", "--no-cache"]
+        print("Update the engine on Fly.io (rebuilds the image so pip pulls the")
+        print("latest atlas-mind; content is re-cloned and the volume is preserved):")
+        print(f"  (from {mind})  fly {' '.join(fly_args)}")
+        if not args.run:
+            print("  -> re-run with --run to execute it now.")
+            return 0
+        fly = shutil.which("fly") or shutil.which("flyctl")
+        if not fly:
+            raise CliError("the `fly` CLI is required for --run "
+                           "(https://fly.io/docs/flyctl/install/).")
+        return subprocess.run([fly, *fly_args], cwd=str(mind)).returncode
+
+    if target == "compose":
+        mind = _require_mind(args.dir)
+        cf = "deploy/docker-compose.yml"
+        print("Update the engine with Docker Compose (rebuilds atlas so pip pulls")
+        print("the latest atlas-mind; the mounted mind is untouched):")
+        print(f"  (from {mind})")
+        print(f"  docker compose -f {cf} build --no-cache atlas")
+        print(f"  docker compose -f {cf} up -d")
+        if not args.run:
+            print("  -> re-run with --run to execute it now.")
+            return 0
+        docker = shutil.which("docker")
+        if not docker:
+            raise CliError("the `docker` CLI is required for --run.")
+        if subprocess.run([docker, "compose", "-f", cf, "build", "--no-cache",
+                           "atlas"], cwd=str(mind)).returncode != 0:
+            raise CliError("compose build failed — fix the issue above and re-run.")
+        return subprocess.run([docker, "compose", "-f", cf, "up", "-d"],
+                              cwd=str(mind)).returncode
+
+    # systemd: runs on the server as root — print-only (nothing to execute here).
+    print("Update the engine on a systemd host (run these ON the server):")
+    print('  sudo -u atlas /opt/atlas/venv/bin/pip install -U "atlas-mind[bcrypt]"')
+    print("  sudo systemctl restart atlas")
+    print("The content and the .atlas registry (accounts/tokens/2FA) are preserved.")
     return 0
 
 
@@ -1363,6 +1424,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_deploy.add_argument("--region", default="cdg",
                           help="Fly region for --provision/--wizard (default: cdg).")
     p_deploy.set_defaults(func=cmd_deploy)
+
+    p_update = subparsers.add_parser(
+        "update",
+        help="Update a deployed instance to the newest engine (mirror of deploy).")
+    p_update.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
+    p_update.add_argument("--target", choices=tuple(_DEPLOY_TARGETS),
+                          default="compose",
+                          help="Deployment target to update (default: compose).")
+    p_update.add_argument("--app", default=None,
+                          help="Fly app name (fly target; default: slug of the mind "
+                               "folder, prompted on a TTY).")
+    p_update.add_argument("--run", action="store_true",
+                          help="Execute the update now (fly/compose; needs the relevant CLI).")
+    p_update.set_defaults(func=cmd_update)
 
     p_user = subparsers.add_parser(
         "user", help="Accounts in the mind's file registry (.atlas/users.json).")
