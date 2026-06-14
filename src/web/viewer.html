@@ -488,7 +488,7 @@ __EXTENSIONS_CSS__
     <div class="text-[11px] text-ink-400 font-sans" data-i18n="mindSubtitle">ton palais mental — celui que ton IA arpente avec toi</div>
     <div class="text-[11px] text-ink-500 font-sans" id="graph-stats"></div>
   </div>
-  <div class="absolute top-4 right-4 flex items-center gap-3">
+  <div id="graph-controls" class="absolute top-4 right-4 flex items-center gap-3">
     <span class="text-[10px] text-ink-500 font-sans hidden sm:inline" data-i18n="graphHint">molette : zoom · glisser : déplacer · clic : ouvrir</span>
     <button id="graph-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -4312,7 +4312,13 @@ function renderPinned() {
 btnPin.addEventListener('click', () => { if (currentFile) togglePin(currentFile.path); });
 renderPinned();
 
-if (location.hash) {
+// Embed mode (#mind): the landing page iframes this viewer to show a live,
+// chrome-less The Mind as its hero. We only build the base view here; the graph
+// is opened (and its controls hidden) once the graph is fully wired, below.
+const EMBED_MIND = location.hash.replace(/^#/, '') === 'mind';
+if (EMBED_MIND) {
+  showWelcome();
+} else if (location.hash) {
   const path = decodeURIComponent(location.hash.slice(1));
   if (fileMap[path] && fileMap[path].ext === '.md') showMarkdown(fileMap[path]);
   else showWelcome();
@@ -4338,15 +4344,19 @@ async function openGraph() {
   graphOverlay.classList.remove('hidden');
   // Nodes = all .md files; edges = wikilinks (undirected, deduplicated).
   const nodes = [], byPath = {}, tagNodes = {};
+  // Every previewable document is a node (not just Markdown): media docs cluster
+  // by folder tag / region like any other thought.
+  const GRAPH_EXTS = new Set(['.md', '.html', '.pdf', '.docx']);
   for (const f of Object.values(fileMap)) {
-    if (f.ext !== '.md') continue;
+    if (!GRAPH_EXTS.has(f.ext)) continue;
     const parts = f.path.split('/');
     // Mirror doc (remotes/<source>/…) → its own region per source, prefixed with a
     // diamond to avoid any collision with a directory of the same name + to signal
     // that we are leaving the personal content.
     const isRemote = f.path.startsWith('remotes/');
     const region = isRemote ? ('⧫ ' + (parts[1] || 'node')) : (parts.length > 1 ? parts[0] : '');
-    const n = { kind: 'doc', path: f.path, name: f.name.replace(/\.md$/i, ''), tags: f.tags || [],
+    const n = { kind: 'doc', path: f.path, name: f.name.replace(/\.(md|html|pdf|docx)$/i, ''),
+      doctype: f.ext, tags: f.tags || [],
       region, remote: isRemote, mtime: f.mtime || 0, recent: false,
       x: (Math.random() - 0.5) * 520, y: (Math.random() - 0.5) * 520, vx: 0, vy: 0, deg: 0 };
     // AI teal color for remote mental nodes; otherwise color = region.
@@ -4387,6 +4397,9 @@ async function openGraph() {
   resizeGraph();
   graphState.cam.ox = graphCanvas.clientWidth / 2;
   graphState.cam.oy = graphCanvas.clientHeight / 2;
+  // Embed hero: pre-settle the layout off-screen so it appears already organized
+  // (no nodes flying into place on the landing page); only pulses/breathing move.
+  if (EMBED_MIND) { for (let i = 0; i < 480; i++) graphSimStep(graphState); graphState.ticks = 480; }
   cancelAnimationFrame(graphRaf);
   graphLoop();
 }
@@ -4407,7 +4420,7 @@ function resizeGraph() {
 
 function graphSimStep(st) {
   const { nodes, edges } = st;
-  const REP = 8000, SPRING = 0.02, REST = 90, CENTER = 0.004;
+  const REP = 13000, SPRING = 0.02, REST = 120, CENTER = 0.0034;
   for (let i = 0; i < nodes.length; i++) {
     const a = nodes[i];
     for (let j = i + 1; j < nodes.length; j++) {
@@ -4475,27 +4488,73 @@ function graphDraw(st) {
     ctx.fillText(name, scx, scy - sr + 16);
     ctx.textAlign = 'left';
   }
+  // ── Neural pass: glowing curved synapses + firing pulses + node bloom ──
+  const now = performance.now();
+  // 1) Synapses: wikilinks bow into organic arcs (additive glow); tag links stay
+  //    faint and straight — structural scaffolding behind the firing network.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
   for (const e of edges) {
     const hot = hover && (e.s === hover || e.t === hover);
-    if (e.kind === 'link') { ctx.strokeStyle = hot ? 'rgba(196,181,253,0.95)' : 'rgba(196,181,253,0.4)'; ctx.lineWidth = hot ? 2 : 1.3; }
-    else { ctx.strokeStyle = hot ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.06)'; ctx.lineWidth = hot ? 1.4 : 0.8; }
-    ctx.beginPath(); ctx.moveTo(SX(e.s), SY(e.s)); ctx.lineTo(SX(e.t), SY(e.t)); ctx.stroke();
+    const ax = SX(e.s), ay = SY(e.s), bx = SX(e.t), by = SY(e.t);
+    if (e.kind === 'link') {
+      const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+      const bow = Math.min(26, len * 0.16);
+      e._cx = (ax + bx) / 2 - dy / len * bow;
+      e._cy = (ay + by) / 2 + dx / len * bow;
+      ctx.strokeStyle = hot ? 'rgba(196,181,253,0.95)' : 'rgba(150,130,246,0.28)';
+      ctx.lineWidth = hot ? 2 : 1.1;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(e._cx, e._cy, bx, by); ctx.stroke();
+    } else {
+      ctx.strokeStyle = hot ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = hot ? 1.2 : 0.7;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
   }
+  // 2) Firing synapses: a pulse of light travels along each wikilink arc.
+  let pi = 0;
+  for (const e of edges) {
+    if (e.kind !== 'link') continue;
+    const ax = SX(e.s), ay = SY(e.s), bx = SX(e.t), by = SY(e.t);
+    const tt = ((now * 0.00016) + (pi++ * 0.1379)) % 1, u = 1 - tt;
+    const px = u * u * ax + 2 * u * tt * e._cx + tt * tt * bx;
+    const py = u * u * ay + 2 * u * tt * e._cy + tt * tt * by;
+    const env = Math.sin(tt * Math.PI);          // fade in/out along the arc
+    const gr = 0.9 + env * 1.0;
+    ctx.globalAlpha = 0.3 + env * 0.3;
+    ctx.beginPath(); ctx.arc(px, py, gr, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(200,188,250,0.9)'; ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  // 3) Soft neural bloom under every doc node; recently-edited ones breathe.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const n of nodes) {
+    if (n.kind !== 'doc') continue;
+    const dim = hover && n !== hover && !n._adj;
+    if (dim) continue;
+    const r = Math.max(2, n.r * cam.scale), x = SX(n), y = SY(n);
+    const breath = n.recent ? 1 + 0.12 * Math.sin(now * 0.004 + (n._ph || (n._ph = (Math.abs(n.x) + Math.abs(n.y)) % 6.28))) : 1;
+    const gr = (r + (n.recent ? 7 : 4)) * 2.1 * breath;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, gr);
+    g.addColorStop(0, n.color + (n.recent ? '3a' : '30'));
+    g.addColorStop(1, n.color + '00');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, gr, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+  // 4) Neuron cores: solid doc discs, hollow-tinted tags, a ring on media docs.
   for (const n of nodes) {
     const dim = hover && n !== hover && !n._adj;
     const orphan = n.kind === 'doc' && n.deg === 0;
-    const r = Math.max(2, n.r * cam.scale);
+    const r = Math.max(2, n.r * cam.scale), x = SX(n), y = SY(n);
     // Orphans (neither link nor tag) muted when not hovered: disconnected thoughts.
-    ctx.globalAlpha = (!dim && !hover && orphan) ? 0.4 : 1;
-    // "Active thought" halo: recently edited doc.
-    if (n.recent && n.kind === 'doc' && !dim) {
-      ctx.beginPath(); ctx.arc(SX(n), SY(n), r + 5, 0, Math.PI * 2);
-      ctx.fillStyle = n.color + '22'; ctx.fill();
-    }
-    ctx.beginPath(); ctx.arc(SX(n), SY(n), r, 0, Math.PI * 2);
+    ctx.globalAlpha = (!dim && !hover && orphan) ? 0.45 : 1;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = dim ? 'rgba(110,110,130,0.3)' : (n.kind === 'tag' ? n.color + '33' : n.color);
     ctx.fill();
     if (n.kind === 'tag') { ctx.lineWidth = dim ? 1 : 1.6; ctx.strokeStyle = dim ? 'rgba(150,150,160,0.3)' : n.color; ctx.stroke(); }
+    else if (n.doctype && n.doctype !== '.md' && !dim) { ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.72)'; ctx.stroke(); }
     if (n === hover) { ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }
     ctx.globalAlpha = 1;
   }
@@ -4588,6 +4647,13 @@ graphCanvas.addEventListener('wheel', (e) => {
 document.getElementById('graph-close').addEventListener('click', closeGraph);
 document.getElementById('graph-btn').addEventListener('click', openGraph);
 window.addEventListener('resize', () => { if (graphState) resizeGraph(); });
+
+// Embed hero: now that the graph is wired, open it chrome-less. The host iframe
+// is pointer-events:none, so there is nothing to interact with — it just lives.
+if (EMBED_MIND) {
+  const gc = document.getElementById('graph-controls'); if (gc) gc.style.display = 'none';
+  openGraph();
+}
 
 // To-do widget
 const isServerMode = location.protocol === 'http:' || location.protocol === 'https:';

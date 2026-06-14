@@ -10,7 +10,7 @@
 <meta property="og:description" content="Own the data. Own the engine. Own the mind. A self-hostable knowledge base that keeps your notes as plain files in your own private git repo, with a built-in AI (MCP) integration.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://atlas-mind.anakior.app/">
-<meta property="og:image" content="https://github.com/user-attachments/assets/79359338-d16d-4102-95c7-b45c9a31ba72">
+<meta property="og:image" content="https://atlas-mind.anakior.app/assets/mind-poster.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://atlas-mind.anakior.app/">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PGRlZnM+PHJhZGlhbEdyYWRpZW50IGlkPSJzayIgY3g9IjUwJSIgY3k9IjQwJSIgcj0iNjUlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMWYxZDJhIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGEwYTEyIi8+PC9yYWRpYWxHcmFkaWVudD48cmFkaWFsR3JhZGllbnQgaWQ9ImdsIiBjeD0iNTAlIiBjeT0iNTAlIiByPSI1MCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmYmM2NzgiIHN0b3Atb3BhY2l0eT0iLjc1Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjZmJjNjc4IiBzdG9wLW9wYWNpdHk9IjAiLz48L3JhZGlhbEdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHJ4PSI3IiBmaWxsPSJ1cmwoI3NrKSIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iMTYiIHI9IjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIuNyIgb3BhY2l0eT0iLjQiLz48Y2lyY2xlIGN4PSIxNiIgY3k9IjE2IiByPSIxLjIiIGZpbGw9IiNmZmYiIG9wYWNpdHk9Ii44NSIvPjxjaXJjbGUgY3g9IjIyLjM2IiBjeT0iOS42NCIgcj0iNCIgZmlsbD0idXJsKCNnbCkiLz48Y2lyY2xlIGN4PSIyMi4zNiIgY3k9IjkuNjQiIHI9IjEuOSIgZmlsbD0iI2ZiYzY3OCIvPjwvc3ZnPg==">
@@ -100,7 +100,24 @@
   .shot-bar{display:flex;align-items:center;gap:7px;padding:11px 15px;border-bottom:1px solid var(--line);
     background:rgba(255,255,255,.02)}
   .shot-bar i{width:11px;height:11px;border-radius:50%;background:#3a3744;display:block}
-  .shot-frame img{display:block;width:100%;height:auto}
+  .shot-frame img,.shot-frame video{display:block;width:100%;height:auto}
+  /* Live hero: the actual demo viewer, iframed and opened straight on The Mind.
+     pointer-events:none → it breathes/fires but never traps scroll or clicks;
+     a transparent overlay sends a click through to the full interactive demo. */
+  .shot-stage{position:relative;aspect-ratio:16/10;background:#0e0d12;overflow:hidden}
+  .shot-stage #mind-embed{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none}
+  .shot-stage #mind-fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .shot-stage .mind-cta{position:absolute;inset:0;z-index:4;cursor:pointer;
+    background:radial-gradient(60% 50% at 50% 100%,rgba(251,198,120,.0),transparent);transition:.2s}
+  .shot-stage .mind-cta:hover{background:radial-gradient(70% 60% at 50% 100%,rgba(251,198,120,.10),transparent)}
+  /* Loader covering the reorg/parse until the live Mind is ready, then fades. */
+  .mind-loading{position:absolute;inset:0;z-index:3;background:#0e0d12 center/cover no-repeat;
+    display:grid;place-items:center;transition:opacity .6s ease}
+  .mind-loading::after{content:"";position:absolute;inset:0;background:rgba(14,13,18,.5)}
+  .mind-loading.is-hidden{opacity:0;pointer-events:none}
+  .mind-spinner{position:relative;z-index:1;width:26px;height:26px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.16);border-top-color:var(--gold);animation:mindspin .8s linear infinite}
+  @keyframes mindspin{to{transform:rotate(360deg)}}
   .shot-glow{position:absolute;inset:auto 10% -30px;height:80px;
     background:radial-gradient(50% 100% at 50% 0,rgba(251,198,120,.35),transparent 70%);filter:blur(20px);z-index:-1}
 
@@ -235,7 +252,16 @@
   <div class="shot">
     <div class="shot-frame">
       <div class="shot-bar"><i></i><i></i><i></i></div>
-      <img src="https://github.com/user-attachments/assets/79359338-d16d-4102-95c7-b45c9a31ba72" alt="The Atlas Mind viewer — tree sidebar, rendered Markdown, and the force-directed mind graph" loading="lazy">
+      <div class="shot-stage">
+        <iframe id="mind-embed" title="The Mind — Atlas Mind's live knowledge graph" tabindex="-1" aria-hidden="true" loading="lazy"></iframe>
+        <video id="mind-fallback" autoplay loop muted playsinline poster="assets/mind-poster.jpg"
+               aria-label="The Mind — Atlas Mind's force-directed knowledge graph, alive with firing synapses">
+          <source src="assets/mind.webm" type="video/webm">
+          <source src="assets/mind.mp4" type="video/mp4">
+        </video>
+        <div id="mind-loading" class="mind-loading" style="background-image:url(assets/mind-poster.jpg)"><span class="mind-spinner"></span></div>
+        <a class="mind-cta" href="./demo/" aria-label="Open the interactive demo"></a>
+      </div>
     </div>
     <div class="shot-glow"></div>
   </div>
@@ -372,5 +398,30 @@
     <a href="https://github.com/Anakior/atlas-mind/blob/main/LICENSE">AGPL-3.0</a>
   </span>
 </div></footer>
+
+<script>
+  // Live hero vs. lightweight fallback. On a roomy screen with motion allowed we
+  // load the real demo viewer (iframed, opened on The Mind); otherwise we keep the
+  // small looping video and never fetch the ~1.7 MB app. Either way the overlay
+  // link sends a click through to the full interactive demo.
+  (function () {
+    var small = matchMedia('(max-width: 820px)').matches;
+    var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var frame = document.getElementById('mind-embed');
+    var video = document.getElementById('mind-fallback');
+    var loader = document.getElementById('mind-loading');
+    function hideLoader() { if (loader) loader.classList.add('is-hidden'); }
+    if (small || reduce) {
+      if (frame) frame.remove();
+      if (loader) loader.remove();           // the video shows its own poster
+    } else {
+      if (video) video.remove();
+      // The Mind is pre-settled in embed mode, so a short beat after load is enough.
+      frame.addEventListener('load', function () { setTimeout(hideLoader, 500); });
+      setTimeout(hideLoader, 6000);          // safety net if 'load' never fires
+      frame.src = './demo/#mind';
+    }
+  })();
+</script>
 </body>
 </html>
