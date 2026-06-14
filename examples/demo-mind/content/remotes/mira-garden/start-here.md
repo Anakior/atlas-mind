@@ -15,7 +15,7 @@ button up top.
 
 That is the hive: minds that point at **other minds**, in the open, without a
 central server in the middle. Your knowledge can cite a teammate's node the same
-way one note cites another.
+way one note cites another. Want to build one? See [[guides/hive-mind]].
 
 ## What's inside
 

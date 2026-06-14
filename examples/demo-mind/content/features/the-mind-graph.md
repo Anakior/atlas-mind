@@ -33,7 +33,7 @@ into your own notes. This demo follows one: see
 [[remotes/mira-garden/start-here|Mira's public garden]] and its
 [[remotes/mira-garden/zettelkasten|note on the Zettelkasten]]. Open the graph and
 you'll spot it as a separate island bridged to the main mind — that bridge is the
-whole idea of the hive.
+whole idea of the hive. Want to build one yourself? See [[guides/hive-mind]].
 
 ## Why a graph beats search alone
 
