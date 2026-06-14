@@ -222,6 +222,10 @@ def walk(path: Path, *, content_root: Path | None = None,
             # unversioned files or files outside the git repo. See _git_commit_dates.
             "mtime": _accum["git_dates"].get(rel, int(child.stat().st_mtime)),
         }
+        # Folder-derived tags apply to EVERY file (md, html, pdf, docx, …) so
+        # that non-Markdown documents also surface as nodes — clustered by zone
+        # and tag — in The Mind graph, not just Markdown.
+        tags = _folder_tags(rel)
         if ext == ".md":
             try:
                 # utf-8-sig absorbs the BOM (Windows editors: Notepad,
@@ -240,13 +244,10 @@ def walk(path: Path, *, content_root: Path | None = None,
                 tags_fm, body = _parse_frontmatter(text)
                 # Tags = parent folders (always) ∪ frontmatter (custom). Folder
                 # tags remain even if the doc has explicit tags.
-                tags = _folder_tags(rel)
                 for t in tags_fm:
                     if t not in tags:
                         tags.append(t)
                 file_node["words"] = _count_words(body)
-                if tags:
-                    file_node["tags"] = tags
                 _accum["md_files"].append(
                     {"path": rel, "name": child.name, "content": text, "body": body, "tags": tags})
                 if embed_content:
@@ -263,14 +264,15 @@ def walk(path: Path, *, content_root: Path | None = None,
                 print(f"[build] skip metadata for {rel}: {e}", file=sys.stderr)
                 text = None
             if text is not None:
-                tags = _folder_tags(rel)
                 file_node["words"] = _count_words(re.sub(r"<[^>]+>", " ", text))
-                if tags:
-                    file_node["tags"] = tags
                 _accum["md_files"].append(
                     {"path": rel, "name": child.name, "content": text, "body": "", "tags": tags})
                 if embed_content:
                     file_node["content"] = text
+        # PDFs, Word docs and other previewable files carry no indexable text,
+        # but still get their folder tags (attached below) so they are nodes too.
+        if tags:
+            file_node["tags"] = tags
         node["children"].append(file_node)
     return node
 
