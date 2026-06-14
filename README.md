@@ -14,7 +14,7 @@ an open protocol — it never pulls your brain into its own.
 Own the data. Own the engine. Own the mind.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/79359338-d16d-4102-95c7-b45c9a31ba72" alt="Atlas Mind viewer" width="900" />
+  <img alt="Atlas Mind viewer" width="900" src="https://github.com/user-attachments/assets/726ab344-b024-425f-a5ee-f56d97a886c7" />
 </p>
 
 > 🔗 **[Try the live demo →](https://atlas-mind.anakior.app/demo/)** — this is the offline build, some features are missing. ([What is Atlas Mind?](https://atlas-mind.anakior.app/) — the landing page.)
