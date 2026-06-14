@@ -446,12 +446,21 @@ token is never pushed with your content.
 
 Engine updates are **not automatic** — only your *content* syncs on its own (the
 git pull + webhook above). When a new engine version ships (the admin Settings
-**update banner** flags it), you redeploy by hand. Content and the `.atlas`
+**update banner** flags it), update by hand. Content and the `.atlas`
 store/volume are preserved; only the code changes.
 
-The generated images install `atlas-mind` from PyPI. **Docker caches the
-`pip install` layer**, so a *plain* redeploy can silently reuse the old version —
-force a fresh fetch:
+The simplest way is the **`atlas update`** command — the mirror of `atlas deploy`.
+It prints the right command for your target (and runs it with `--run`):
+
+```bash
+atlas update --target fly --app <your-app>   # or --target compose / --target systemd
+atlas update --target compose --run          # build (no-cache) + up -d, in one go
+```
+
+Under the hood: the generated images install `atlas-mind` from PyPI, and **Docker
+caches the `pip install` layer**, so a *plain* redeploy can silently reuse the old
+version — `atlas update` forces a fresh fetch (`--no-cache`) for you. The manual
+equivalents:
 
 ```bash
 fly deploy -c deploy/fly.toml --no-cache              # Fly.io

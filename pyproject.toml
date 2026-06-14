@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlas-mind"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Self-hostable, AI-native knowledge base engine — an external brain you share with your AI."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -44,6 +44,12 @@ Issues = "https://github.com/Anakior/atlas-mind/issues"
 [tool.setuptools]
 packages = ["atlas_mind"]
 package-dir = { "atlas_mind" = "src" }
+
+# Single source of truth for the version: src/__init__.py (__version__). Both the
+# built package metadata AND the runtime fallback (_engine_version) read it, so
+# they can never drift. Bump the version in ONE place.
+[tool.setuptools.dynamic]
+version = { attr = "atlas_mind.__version__" }
 
 [tool.setuptools.package-data]
 atlas_mind = ["web/**/*", "templates/**/*"]
