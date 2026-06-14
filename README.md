@@ -17,7 +17,7 @@ Own the data. Own the engine. Own the mind.
   <img src="https://github.com/user-attachments/assets/79359338-d16d-4102-95c7-b45c9a31ba72" alt="Atlas Mind viewer" width="900" />
 </p>
 
-> 🔗 **[Try the live demo →](https://anakior.github.io/atlas-mind/)** — this is the offline build, some features are missing.
+> 🔗 **[Try the live demo →](https://anakior.github.io/atlas-mind/demo/)** — this is the offline build, some features are missing. ([What is Atlas Mind?](https://anakior.github.io/atlas-mind/) — the landing page.)
 
 **Atlas Mind** is a self-hostable wiki / knowledge base engine — and an external
 brain you share with your AI. It serves a single-page viewer from a folder of
