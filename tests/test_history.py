@@ -125,6 +125,35 @@ class TestHistoryEndpoints(unittest.TestCase):
             self.assertEqual(resp.status, 400)
             self.assertEqual(resp.json(), {"error": "invalid rev"})
 
+    def test_history_follows_move_and_pre_move_revisions_still_load(self):
+        # A doc edited then moved: --follow lists its pre-move commits, AND
+        # /api/revision resolves the path it had then (git show <sha>:<old-path>),
+        # so they load instead of failing ("Impossible de charger").
+        with AtlasServer() as srv:
+            srv.path("projets/before.md").write_text(
+                "# Before\n\nORIGINAL CONTENT\n", encoding="utf-8")
+            srv.git("add", "-A"); srv.git("commit", "-q", "-m", "add before")
+            srv.path("projets/before.md").write_text(
+                "# Before\n\nEDITED CONTENT\n", encoding="utf-8")
+            srv.git("add", "-A"); srv.git("commit", "-q", "-m", "edit before")
+            srv.git("mv", "content/projets/before.md", "content/projets/after.md")
+            srv.git("commit", "-q", "-m", "move before to after")
+
+            revs = srv.get("/api/history?path=projets/after.md").json()["revisions"]
+            subjects = [r["subject"] for r in revs]
+            self.assertIn("add before", subjects)   # pre-move commit still listed
+            self.assertIn("edit before", subjects)
+            # a pre-move revision loads its OLD-path content (rename resolved)
+            add_sha = next(r["sha"] for r in revs if r["subject"] == "add before")
+            rev = srv.get("/api/revision?path=projets/after.md&rev=" + add_sha)
+            self.assertEqual(rev.status, 200)
+            self.assertIn("ORIGINAL CONTENT", rev.json()["content"])
+            # a diff between two pre-move revisions loads too
+            edit_sha = next(r["sha"] for r in revs if r["subject"] == "edit before")
+            diff = srv.get("/api/diff?path=projets/after.md&from=" + add_sha + "&to=" + edit_sha)
+            self.assertEqual(diff.status, 200)
+            self.assertIn("EDITED CONTENT", diff.json()["diff"])
+
 
 class TestHistoryPathEscape(unittest.TestCase):
     """Path-traversal and ref-injection rejection on the three endpoints."""
