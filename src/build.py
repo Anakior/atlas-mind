@@ -382,6 +382,38 @@ def build_links_index(md_files: list[dict]) -> dict:
     return index
 
 
+_TASK_RE = re.compile(r"^\s*[-*+]\s+\[([ xX])\]\s+(.+?)\s*$")
+
+
+def build_tasks_index(md_files: list) -> list:
+    """Flat rollup of every GFM checkbox across the mind: [{path, line, text, done}].
+
+    Lines inside fenced code blocks (``` / ~~~) are ignored. Source = the same
+    md_files as build_links_index, so excluded_names / dotfolders are already
+    filtered out (and the dedicated [todo] file is in EXCLUDED_NAMES) — leaving a
+    transversal view of the tasks scattered through the content. `line` is 1-based
+    within the doc body and informational: the viewer navigates by matching text."""
+    tasks = []
+    for f in md_files:
+        in_fence = False
+        for i, line in enumerate((f.get("body") or "").split("\n"), start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            m = _TASK_RE.match(line)
+            if m:
+                tasks.append({
+                    "path": f["path"],
+                    "line": i,
+                    "text": m.group(2).strip(),
+                    "done": m.group(1).lower() == "x",
+                })
+    return tasks
+
+
 # ─── Inline annotations (sidecars .notes/<rel>.json) ────────────────────────────
 
 
@@ -586,6 +618,7 @@ def _engine_version() -> str:
 
 def render_template(*, tree: dict, embed_content: dict | None,
                     embed_backlinks: dict | None, embed_notes: dict | None,
+                    embed_tasks=None,
                     build_ts: str, template_path: Path | None = None,
                     site_prefix: str = DEFAULT_SITE_PREFIX,
                     tagline: str = DEFAULT_TAGLINE,
@@ -621,6 +654,7 @@ def render_template(*, tree: dict, embed_content: dict | None,
         "__EMBED_CONTENT__": _enc(embed_content) if embed_content is not None else "null",
         "__EMBED_BACKLINKS__": _enc(embed_backlinks) if embed_backlinks is not None else "null",
         "__EMBED_NOTES__": _enc(embed_notes) if embed_notes is not None else "null",
+        "__EMBED_TASKS__": _enc(embed_tasks) if embed_tasks is not None else "null",
         "__TEMPLATES__": _enc(doc_templates if doc_templates is not None else {}),
         # Extension code injected AS-IS (not JSON) into a <style> / <script> of
         # the viewer; the container's closing tag is neutralized so the content
@@ -721,6 +755,7 @@ def main() -> int:
     out_offline = dist_dir / "index-offline.html"
     backlinks_data = dist_dir / "_backlinks.json"
     notes_index_path = dist_dir / "_notes-index.json"
+    tasks_index_path = dist_dir / "_tasks-index.json"
     manifest_path = dist_dir / "manifest.json"
     # Skeletons: those of the engine (TEMPLATES_DIR, next to src/) then those of
     # the mind (<mind>/templates, sibling of content/) which add/override.
@@ -753,6 +788,7 @@ def main() -> int:
             embed_content=embed_content,
             embed_backlinks=backlinks,
             embed_notes=load_all_notes(notes_dir),
+            embed_tasks=build_tasks_index(accum["md_files"]),
             build_ts=build_ts,
             template_path=template_path,
             site_prefix=site_prefix,
@@ -780,6 +816,7 @@ def main() -> int:
         embed_content=None,
         embed_backlinks=None,
         embed_notes=None,
+        embed_tasks=None,
         build_ts=build_ts,
         template_path=template_path,
         site_prefix=site_prefix,
@@ -801,6 +838,12 @@ def main() -> int:
     # Used only for the tree's "📝 n" badges; the data lives in .notes/.
     notes_index = {rel: len(ns) for rel, ns in load_all_notes(notes_dir).items()}
     notes_index_path.write_text(json.dumps(notes_index, ensure_ascii=False), encoding="utf-8")
+
+    # Transversal task rollup (disposable, gitignored): served at /_tasks-index.json,
+    # filtered per-viewer like _backlinks.json. Offline build embeds it instead.
+    tasks_index_path.write_text(
+        json.dumps(build_tasks_index(accum["md_files"]), ensure_ascii=False),
+        encoding="utf-8")
 
     html_size = out_online.stat().st_size
     backlinks_size = backlinks_data.stat().st_size
