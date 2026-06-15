@@ -25,11 +25,11 @@ This demo already follows one: the teal
   graph. They are read-only on your side.
 
 ```text
-   Publisher (reachable)                    Subscriber (just pulls)
-   ┌────────────────────┐   atlas-node:…    ┌────────────────────────┐
+   Publisher (reachable)                     Subscriber (just pulls)
+   ┌────────────────────┐   atlas-node:…     ┌──────────────────────────┐
    │ folder / document  │ ───── link ─────▶ │ remotes/<node>/  (mirror)│
    │  + read-only token │ ◀──── pull ────── │  re-syncs on a cadence   │
-   └────────────────────┘   (SHA-256 diff)  └────────────────────────┘
+   └────────────────────┘   (SHA-256 diff)   └──────────────────────────┘
 ```
 
 ## Before you start

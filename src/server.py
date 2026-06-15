@@ -1860,6 +1860,18 @@ def _validate_doc_path(rel: str):
         return None
 
 
+# Git revision accepted by the read-only history endpoints: a full or
+# abbreviated commit SHA, or HEAD / HEAD~N. Anything else is refused before it
+# reaches `git`. The ref is passed as argv to subprocess (no shell, so no shell
+# injection), but a flag-looking ("--output=…") or path-looking value must never
+# slip through to git's argument parser.
+_GIT_REV_RE = re.compile(r"^(?:[0-9a-fA-F]{4,40}|HEAD(?:~\d+)?)$")
+
+
+def _valid_git_rev(rev: str) -> bool:
+    return bool(rev) and _GIT_REV_RE.match(rev) is not None
+
+
 def _iter_doc_files():
     """Yields (relative_path, Path) for each doc tracked by the viewer (.md + .html)."""
     excluded = _import_build().EXCLUDED_NAMES
@@ -4306,6 +4318,80 @@ class Handler(SimpleHTTPRequestHandler):
                 results = [r for r in results if not _path_hidden(r.get("path", ""), hidden)]
             self._send_json(200, results)
             return
+        # ─── Git history (read-only, authenticated admin/viewer) ───────────────
+        # Every document is versioned git: expose its revisions, an old version,
+        # and a diff between two revisions. `git` runs at CONFIG.root (repo root)
+        # while ?path= is relative to content/, so the pathspec is prefixed with
+        # "content/". Always `--` before the pathspec; revisions are regex-checked.
+        if self.path.split("?", 1)[0] == "/api/history":
+            if not self._require_auth_or_401():
+                return
+            from urllib.parse import urlparse, parse_qs as _pqs
+            rel = (_pqs(urlparse(self.path).query).get("path", [""])[0] or "").strip()
+            if _validate_doc_path(rel) is None:
+                self._send_json(400, {"error": "invalid path"})
+                return
+            repo_rel = "content/" + rel
+            # --follow tracks renames (move_doc); -z + \x1f keep records/fields
+            # unambiguous; -n 100 bounds the payload and memory.
+            fmt = "%H%x1f%an%x1f%aI%x1f%s"
+            result = git("log", "--follow", "-n", "100", "--format=" + fmt, "-z",
+                         "--", repo_rel)
+            if result.returncode != 0:
+                self._send_json(500, {"error": result.stderr.strip() or "git log failed"})
+                return
+            revisions = []
+            for record in result.stdout.split("\x00"):
+                if not record:
+                    continue
+                fields = (record.split("\x1f") + ["", "", "", ""])[:4]
+                revisions.append({
+                    "sha": fields[0], "author": fields[1],
+                    "date": fields[2], "subject": fields[3],
+                })
+            self._send_json(200, {"path": rel, "revisions": revisions})
+            return
+        if self.path.split("?", 1)[0] == "/api/revision":
+            if not self._require_auth_or_401():
+                return
+            from urllib.parse import urlparse, parse_qs as _pqs
+            query = _pqs(urlparse(self.path).query)
+            rel = (query.get("path", [""])[0] or "").strip()
+            rev = (query.get("rev", [""])[0] or "").strip()
+            if _validate_doc_path(rel) is None:
+                self._send_json(400, {"error": "invalid path"})
+                return
+            if not _valid_git_rev(rev):
+                self._send_json(400, {"error": "invalid rev"})
+                return
+            result = git("show", rev + ":content/" + rel)
+            if result.returncode != 0:
+                self._send_json(404, {"error": "revision not found"})
+                return
+            self._send_json(200, {"path": rel, "rev": rev, "content": result.stdout})
+            return
+        if self.path.split("?", 1)[0] == "/api/diff":
+            if not self._require_auth_or_401():
+                return
+            from urllib.parse import urlparse, parse_qs as _pqs
+            query = _pqs(urlparse(self.path).query)
+            rel = (query.get("path", [""])[0] or "").strip()
+            rev_from = (query.get("from", [""])[0] or "").strip()
+            rev_to = (query.get("to", [""])[0] or "").strip()
+            if _validate_doc_path(rel) is None:
+                self._send_json(400, {"error": "invalid path"})
+                return
+            if not _valid_git_rev(rev_from) or not _valid_git_rev(rev_to):
+                self._send_json(400, {"error": "invalid rev"})
+                return
+            result = git("diff", rev_from, rev_to, "--", "content/" + rel)
+            if result.returncode != 0:
+                self._send_json(500, {"error": result.stderr.strip() or "git diff failed"})
+                return
+            self._send_json(200, {
+                "path": rel, "from": rev_from, "to": rev_to, "diff": result.stdout,
+            })
+            return
         if self.path == "/api/events":
             if not self._require_auth_or_401():
                 return
@@ -4544,6 +4630,35 @@ class Handler(SimpleHTTPRequestHandler):
             save_notes(rel, notes)
             trigger_sync()
             self._send_json(200, note)
+            return
+        if self.path == "/api/revert":
+            # Restore a doc to a past revision: write that revision's content back
+            # as the current file. Mutating → admin + CSRF, like the other writes.
+            if not self._require_admin_or_403():
+                return
+            if not self._check_csrf_or_403():
+                return
+            data = self._read_json()
+            rel = (data.get("path") or "").strip()
+            rev = (data.get("rev") or "").strip()
+            target = _validate_doc_path(rel)
+            if target is None:
+                self._send_json(400, {"error": "invalid path"})
+                return
+            if not _valid_git_rev(rev):
+                self._send_json(400, {"error": "invalid rev"})
+                return
+            if _is_readonly_path(rel):
+                self._send_json(403, {"error": "remote mirror is read-only"})
+                return
+            show = git("show", rev + ":content/" + rel)
+            if show.returncode != 0:
+                self._send_json(404, {"error": "revision not found"})
+                return
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(show.stdout, encoding="utf-8")
+            trigger_sync()
+            self._send_json(200, {"ok": True})
             return
         if self.path == "/api/file/move":
             if not self._require_admin_or_403():
