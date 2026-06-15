@@ -41,6 +41,9 @@ endpoint for your AI, but the *reading* experience is exactly this.
 - Open the graph (`Ctrl/Cmd+G`) to see the whole mind at once — including the
   teal **[[remotes/mira-garden/start-here|mental node]]** this demo follows from
   another atlas.
+- Open the **Tasks** view (the checklist icon, top of the sidebar): every
+  `- [ ]` from across the mind in one place — start with
+  [[guides/getting-started-checklist]].
 - Some documents carry **highlighted passages** with margin notes — open
   [[features/own-your-data]] or [[notes/why-not-notion]] and look for the amber
   highlights.
