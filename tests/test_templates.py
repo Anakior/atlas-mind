@@ -32,6 +32,13 @@ import build  # noqa: E402
 
 ENGINE_NOTE_CONTENT = "# {{title}}\n\n_{{date}}_\n\n"
 
+# Every neutral skeleton shipped by the engine (templates/*.md). Update when a
+# base template is added or removed.
+ENGINE_TEMPLATES = {
+    "note", "reunion", "zettel", "projet", "decision",
+    "lecture", "guide", "contact", "retro", "spec",
+}
+
 DOC_TEMPLATES_RE = re.compile(r"^const DOC_TEMPLATES = (.*);$", re.M)
 
 
@@ -92,7 +99,7 @@ class TestEngineTemplatesDiscovered(unittest.TestCase):
 
     def test_engine_templates_injected(self):
         templates = extract_doc_templates(self.index)
-        self.assertEqual(set(templates), {"note", "reunion"})
+        self.assertEqual(set(templates), ENGINE_TEMPLATES)
         self.assertEqual(templates["note"], ENGINE_NOTE_CONTENT)
         self.assertIn("## Décisions", templates["reunion"])
 
@@ -125,7 +132,7 @@ class TestEngineTemplatesDiscovered(unittest.TestCase):
         offline = (self.mind / "dist" / "index-offline.html").read_text(
             encoding="utf-8")
         templates = extract_doc_templates(offline)
-        self.assertEqual(set(templates), {"note", "reunion"})
+        self.assertEqual(set(templates), ENGINE_TEMPLATES)
 
 
 class TestMindTemplates(unittest.TestCase):
@@ -149,7 +156,7 @@ class TestMindTemplates(unittest.TestCase):
         cls._tmp.cleanup()
 
     def test_mind_template_added_with_filename_label(self):
-        self.assertEqual(set(self.templates), {"note", "reunion", "compte-rendu"})
+        self.assertEqual(set(self.templates), ENGINE_TEMPLATES | {"compte-rendu"})
         self.assertEqual(self.templates["compte-rendu"],
                          "# {{title}}\n\n_{{isoDate}}_\n\n## Suivi\n")
 
