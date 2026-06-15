@@ -1872,6 +1872,33 @@ def _valid_git_rev(rev: str) -> bool:
     return bool(rev) and _GIT_REV_RE.match(rev) is not None
 
 
+def _doc_path_history(repo_rel: str) -> dict:
+    """Map {full_sha: repo-relative path the doc had at that commit}, following
+    renames/moves. Lets the history endpoints resolve a doc that lived under
+    another path before a move_doc."""
+    out = git("log", "--follow", "--format=%H", "--name-only", "--", repo_rel)
+    mapping = {}
+    sha = None
+    for raw in out.stdout.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if re.fullmatch(r"[0-9a-f]{40}", line):
+            sha = line
+        elif sha and sha not in mapping:
+            mapping[sha] = line  # the followed file's path in that commit's tree
+    return mapping
+
+
+def _doc_path_at(repo_rel: str, rev: str) -> str:
+    """Repo-relative path the doc had at `rev`: the current path if the blob exists
+    there, else resolved across renames (falls back to the current path)."""
+    if git("cat-file", "-e", rev + ":" + repo_rel).returncode == 0:
+        return repo_rel
+    full = git("rev-parse", rev).stdout.strip()
+    return _doc_path_history(repo_rel).get(full, repo_rel)
+
+
 def _iter_doc_files():
     """Yields (relative_path, Path) for each doc tracked by the viewer (.md + .html)."""
     excluded = _import_build().EXCLUDED_NAMES
@@ -4539,8 +4566,10 @@ class Handler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"error": "invalid path"})
                 return
             repo_rel = "content/" + rel
-            # --follow tracks renames (move_doc); -z + \x1f keep records/fields
-            # unambiguous; -n 100 bounds the payload and memory.
+            # --follow tracks renames/moves (move_doc); /api/revision, /api/diff and
+            # revert resolve the path the file had at each revision (see _doc_path_at),
+            # so pre-move commits still load. -z + \x1f keep records/fields
+            # unambiguous; -n 100 bounds payload.
             fmt = "%H%x1f%an%x1f%aI%x1f%s"
             result = git("log", "--follow", "-n", "100", "--format=" + fmt, "-z",
                          "--", repo_rel)
@@ -4571,7 +4600,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not _valid_git_rev(rev):
                 self._send_json(400, {"error": "invalid rev"})
                 return
-            result = git("show", rev + ":content/" + rel)
+            result = git("show", rev + ":" + _doc_path_at("content/" + rel, rev))
             if result.returncode != 0:
                 self._send_json(404, {"error": "revision not found"})
                 return
@@ -4591,7 +4620,13 @@ class Handler(SimpleHTTPRequestHandler):
             if not _valid_git_rev(rev_from) or not _valid_git_rev(rev_to):
                 self._send_json(400, {"error": "invalid rev"})
                 return
-            result = git("diff", rev_from, rev_to, "--", "content/" + rel)
+            repo_rel = "content/" + rel
+            from_path = _doc_path_at(repo_rel, rev_from)
+            to_path = _doc_path_at(repo_rel, rev_to)
+            if from_path == to_path:
+                result = git("diff", rev_from, rev_to, "--", from_path)
+            else:  # the doc was moved/renamed between the two revisions → diff the blobs
+                result = git("diff", rev_from + ":" + from_path, rev_to + ":" + to_path)
             if result.returncode != 0:
                 self._send_json(500, {"error": result.stderr.strip() or "git diff failed"})
                 return
@@ -4863,7 +4898,7 @@ class Handler(SimpleHTTPRequestHandler):
             if _is_readonly_path(rel):
                 self._send_json(403, {"error": "remote mirror is read-only"})
                 return
-            show = git("show", rev + ":content/" + rel)
+            show = git("show", rev + ":" + _doc_path_at("content/" + rel, rev))
             if show.returncode != 0:
                 self._send_json(404, {"error": "revision not found"})
                 return
