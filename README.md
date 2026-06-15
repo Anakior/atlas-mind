@@ -110,6 +110,9 @@ Everything below ships in the box.
   tags, surfaced in a side panel; a wikilink/backlink index is built at build time.
 - **Tags** derived from parent folders and YAML frontmatter, each with its own
   per-tag view.
+- **Task rollup** — every `- [ ]` / `- [x]` across the whole mind gathered in one
+  view, grouped by document, "show done" toggle, and a click that jumps straight
+  to the task in its document (the per-document todo widget stays separate).
 - **The Mind** — a force-directed "mind palace": every document and tag is a node
   on a navigable map (drag, pan, zoom), colour-grouped into regions by folder,
   with recently-edited nodes glowing and orphans dimmed. Subscribed remote nodes
@@ -122,11 +125,24 @@ Everything below ships in the box.
 
 - Create, edit, **rename**, move and **delete** documents straight from the
   viewer; moving a document **rewrites the wikilinks** that point at it.
+- **Document templates** — new documents can start from a base skeleton (note,
+  meeting, project, decision/ADR, literature note, how-to, contact, retro, spec);
+  drop a `.md` in `templates/` to add or override your own.
 - **Interactive task checkboxes** — tick a `- [ ]` item in a rendered document and
-  the change is written back to the file, with no full re-render flicker.
+  the change is written straight back to the file, no full re-render flicker.
+  (Live engine only — the offline build / demo can't write, so its checkboxes are
+  read-only.)
 - **Todos** — a small categorised CRUD widget backed by a Markdown file, with a
   count badge on the favicon.
 - All edits in cloud mode are committed and pushed by the instance itself.
+
+### History (git time-travel)
+
+- Every document is **git-versioned**, so the viewer surfaces its **history**: a
+  side panel lists each revision (date, author, message), shows a **clean diff**
+  between versions, lets you **view a past version**, and **restore** one — the
+  restore is a new commit on top, nothing is rewritten. Renames and moves are
+  followed, so a document keeps its full, loadable history even after a `move_doc`.
 
 ### Notes (annotations)
 
@@ -163,9 +179,12 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
 
 ### AI integration
 
-- An **MCP endpoint** exposing seven tools (`search_docs`, `read_doc`, `list_tree`,
-  `recent_docs`, `create_doc`, `edit_doc`, `move_doc`) so an assistant reads and
-  writes your mind directly.
+- An **MCP endpoint** exposing twelve tools so an assistant reads, writes and
+  *navigates* your mind directly: `search_docs` (with an optional `tag` filter),
+  `read_doc`, `list_tree`, `recent_docs`, `create_doc`, `edit_doc`, `move_doc`,
+  `delete_doc` (soft-delete to `.trash/`, reversible), plus graph traversal —
+  `get_links`, `get_backlinks`, `list_by_tag`, and `get_mind_topology` (a
+  bird's-eye summary: hubs, orphans, density, top tags).
 - A **REST API v1** (Bearer tokens, create-only writes) with a published
   **OpenAPI 3.1** spec.
 - `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`). See
