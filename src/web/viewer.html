@@ -4739,21 +4739,21 @@ const tasksOverlay = document.getElementById('tasks-overlay');
 const tasksList = document.getElementById('tasks-list');
 const tasksStats = document.getElementById('tasks-stats');
 const tasksShowDone = document.getElementById('tasks-show-done');
-let _tasksIndex = null;
+let _tasksIndex = [];
 
 async function loadTasksIndex() {
-  if (_tasksIndex) return _tasksIndex;
-  if (IS_OFFLINE_BUILD) { _tasksIndex = EMBED_TASKS || []; return _tasksIndex; }
+  if (IS_OFFLINE_BUILD) return EMBED_TASKS || [];
+  // Online: always fetch fresh — the rollup is live, it changes as you tick boxes.
   try {
     const res = await fetch('/_tasks-index.json', { cache: 'no-cache' });
-    _tasksIndex = res.ok ? await res.json() : [];
-  } catch (e) { _tasksIndex = []; }
-  return _tasksIndex;
+    return res.ok ? await res.json() : [];
+  } catch (e) { return []; }
 }
 
 async function openTasks() {
   tasksOverlay.classList.remove('hidden');
-  renderTasks(await loadTasksIndex());
+  _tasksIndex = await loadTasksIndex();  // kept for the "show done" toggle re-render
+  renderTasks(_tasksIndex);
 }
 
 function closeTasks() { tasksOverlay.classList.add('hidden'); }
@@ -4867,7 +4867,7 @@ function renderTasks(tasks) {
 
 document.getElementById('tasks-btn').addEventListener('click', openTasks);
 document.getElementById('tasks-close').addEventListener('click', closeTasks);
-tasksShowDone.addEventListener('change', () => { if (_tasksIndex) renderTasks(_tasksIndex); });
+tasksShowDone.addEventListener('change', () => renderTasks(_tasksIndex));
 
 function resizeGraph() {
   const dpr = window.devicePixelRatio || 1;

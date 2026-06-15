@@ -95,6 +95,17 @@ class TestTasksEndpoint(unittest.TestCase):
         tasks = self.srv.get("/_tasks-index.json").json()
         self.assertNotIn("tâche du widget todo", {t["text"] for t in tasks})
 
+    def test_rollup_is_live_reflects_a_ticked_box_without_rebuild(self):
+        # The rollup is computed from the CURRENT files, so ticking a box (as the
+        # write-back does) shows up immediately — no rebuild of dist needed.
+        with AtlasServer(mind={"projets/p.md": "# P\n\n- [ ] do the thing\n"}) as srv:
+            before = {t["text"]: t["done"] for t in srv.get("/_tasks-index.json").json()}
+            self.assertEqual(before.get("do the thing"), False)
+            srv.path("projets/p.md").write_text(
+                "# P\n\n- [x] do the thing\n", encoding="utf-8")
+            after = {t["text"]: t["done"] for t in srv.get("/_tasks-index.json").json()}
+            self.assertEqual(after.get("do the thing"), True)
+
 
 if __name__ == "__main__":
     unittest.main()
