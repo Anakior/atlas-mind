@@ -433,6 +433,10 @@ __EXTENSIONS_CSS__
         <button id="btn-pin" class="px-2 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded flex items-center" title="Épingler" data-i18n-title="pin">
           <svg id="btn-pin-icon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
         </button>
+        <button id="btn-history" class="hidden px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded inline-flex items-center gap-1" title="Historique du document" data-i18n-title="historyTitle">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l2.5 2.5M21 12a9 9 0 1 1-9-9c2.6 0 4.96 1.1 6.6 2.86M21 4v4h-4"/></svg>
+          <span data-i18n="historyLabel">Historique</span>
+        </button>
         <button id="btn-download" class="px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded flex items-center gap-1" title="Télécharger le fichier" data-i18n-title="downloadTitle">
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
           <span id="btn-download-ext">.md</span>
@@ -534,6 +538,23 @@ __EXTENSIONS_CSS__
   <div id="toc-links" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
   <div id="toc-notes" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
 </aside>
+<div id="history-overlay" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+  <div class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[44rem] max-w-[94vw] max-h-[88vh] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 overflow-hidden flex flex-col">
+    <div class="px-4 py-3 border-b subtle-border flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-[10px] uppercase tracking-[0.12em] text-accent font-bold" data-i18n="historyHeader">Historique</div>
+        <div id="history-path" class="text-[11px] font-mono text-ink-400 truncate"></div>
+      </div>
+      <button id="history-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-white/5" title="Fermer (Esc)" data-i18n-title="historyClose">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="flex" style="min-height:0">
+      <nav id="history-list" class="w-64 shrink-0 overflow-y-auto scrollbar-thin p-2 text-[11px]" style="max-height:72vh;border-right:1px solid rgba(255,255,255,0.08)"></nav>
+      <div id="history-detail" class="flex-1 overflow-y-auto scrollbar-thin px-4 py-3 text-[11px]" style="max-height:72vh"></div>
+    </div>
+  </div>
+</div>
 <button id="kb-note-add" type="button" title="Noter" data-i18n-title="noteBtn"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg><span data-i18n="noteBtn">Noter</span></button>
 <div id="kb-note-pop"></div>
 
@@ -1192,6 +1213,21 @@ const STRINGS = {
     hideToc: 'Masquer (Ctrl+J)',
     showToc: 'Afficher le sommaire (Ctrl+J)',
     linksTitle: 'Liens',
+    historyTitle: 'Historique du document',
+    historyLabel: 'Historique',
+    historyHeader: 'Historique',
+    historyClose: 'Fermer (Esc)',
+    historyPick: 'Sélectionne une révision à gauche.',
+    historyEmpty: 'Aucun historique pour ce document.',
+    historyError: 'Impossible de charger l’historique.',
+    historyNoChange: 'Aucun changement dans cette révision.',
+    historyViewVersion: 'Voir cette version',
+    historyViewChanges: 'Voir les changements',
+    historyRestore: 'Restaurer cette version',
+    historyRestoreBtn: 'Restaurer',
+    historyRestoreConfirm: 'Elle remplacera le contenu actuel du document. Rien n’est perdu : la version actuelle restera dans l’historique, tu pourras y revenir.',
+    historyRestored: 'Version restaurée.',
+    historyRestoreError: 'Échec de la restauration.',
     referencedBy: n => `← Référencé par (${n})`,
     outgoingLinks: n => `→ Sortantes (${n})`,
     sameTopic: n => `~ Même sujet (${n})`,
@@ -1571,6 +1607,21 @@ const STRINGS = {
     hideToc: 'Hide (Ctrl+J)',
     showToc: 'Show the outline (Ctrl+J)',
     linksTitle: 'Links',
+    historyTitle: 'Document history',
+    historyLabel: 'History',
+    historyHeader: 'History',
+    historyClose: 'Close (Esc)',
+    historyPick: 'Pick a revision on the left.',
+    historyEmpty: 'No history for this document.',
+    historyError: 'Couldn’t load the history.',
+    historyNoChange: 'No change in this revision.',
+    historyViewVersion: 'View this version',
+    historyViewChanges: 'View changes',
+    historyRestore: 'Restore this version',
+    historyRestoreBtn: 'Restore',
+    historyRestoreConfirm: 'It will replace the document’s current content. Nothing is lost: the current version stays in the history, you can come back to it.',
+    historyRestored: 'Version restored.',
+    historyRestoreError: 'Restore failed.',
     referencedBy: n => `← Referenced by (${n})`,
     outgoingLinks: n => `→ Outgoing (${n})`,
     sameTopic: n => `~ Same topic (${n})`,
@@ -2862,6 +2913,11 @@ async function showMarkdown(file, highlightQuery) {
   // Download button label = the doc's actual extension (.md/.html/.pdf/.docx).
   const dlExt = document.getElementById('btn-download-ext');
   if (dlExt) dlExt.textContent = file.ext || '';
+  // History: button only for markdown docs in server mode (the history API is
+  // absent in offline builds / read-only views). Close any panel left open from
+  // the previous doc so it never shows stale revisions.
+  closeHistory();
+  document.getElementById('btn-history')?.classList.toggle('hidden', !historyAvailable(file));
   updatePinButton(file);
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
   const active = document.querySelector(`[data-path="${file.path}"]`);
@@ -2905,6 +2961,235 @@ async function showMarkdown(file, highlightQuery) {
   document.dispatchEvent(new CustomEvent('atlas:doc-rendered', { detail: { path: file.path, markdown: body } }));
   if (highlightQuery) highlightFirstMatch(contentEl, highlightQuery);
 }
+
+// ─── Git history (revisions + diff) ──────────────────────────────────────────
+// Each doc is versioned git. This panel lists a doc's revisions and shows, per
+// revision, what that commit changed (diff against the previous revision) or the
+// full version at that point. Backed by /api/history|diff|revision, which require
+// an authenticated admin/viewer — so the button is hidden in offline builds and
+// read-only share views, where those endpoints don't exist / return 401.
+const historyOverlay = document.getElementById('history-overlay');
+const historyList = document.getElementById('history-list');
+const historyDetail = document.getElementById('history-detail');
+const historyPathEl = document.getElementById('history-path');
+let historyFile = null;
+
+function historyAvailable(file) {
+  // Inline the protocol check rather than referencing the `isServerMode` const:
+  // showMarkdown calls this synchronously (before its first await), so on an
+  // initial deep-link it runs before that const is initialized (TDZ).
+  const serverMode = location.protocol === 'http:' || location.protocol === 'https:';
+  return !!file && file.ext === '.md' && serverMode && !IS_OFFLINE_BUILD
+    && !window.__viewerMode && !(file.path || '').startsWith('remotes/');
+}
+
+function closeHistory() {
+  historyFile = null;
+  historyOverlay.classList.add('hidden');
+}
+
+function formatRevDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleDateString(LANG, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function openHistory() {
+  const file = currentFile;
+  if (!historyAvailable(file)) return;
+  historyFile = file;
+  historyPathEl.textContent = file.path;
+  historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">…</div>';
+  historyDetail.innerHTML = '<div class="text-ink-500">' + escapeHtml(t('historyPick')) + '</div>';
+  historyOverlay.classList.remove('hidden');
+  let data;
+  try {
+    data = await api('GET', '/api/history?path=' + encodeURIComponent(file.path));
+  } catch (e) {
+    if (historyFile !== file) return;
+    historyList.innerHTML = '<div class="text-rose-400 px-2 py-1">' + escapeHtml(t('historyError')) + '</div>';
+    return;
+  }
+  if (historyFile !== file) return; // user closed / navigated mid-load
+  const revisions = data.revisions || [];
+  if (!revisions.length) {
+    historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">' + escapeHtml(t('historyEmpty')) + '</div>';
+    return;
+  }
+  historyList.innerHTML = '';
+  revisions.forEach((rev, i) => {
+    const when = formatRevDate(rev.date);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'block w-full text-left px-2 py-1.5 rounded hover:bg-white/5 border-b subtle-border';
+    row.innerHTML =
+      '<div class="text-ink-200 truncate">' + escapeHtml(rev.subject || ('(' + rev.sha.slice(0, 7) + ')')) + '</div>' +
+      '<div class="text-[10px] text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
+        (when ? ' · ' + escapeHtml(when) : '') + (rev.author ? ' · ' + escapeHtml(rev.author) : '') + '</div>';
+    row.addEventListener('click', () => {
+      historyList.querySelectorAll('button').forEach(b => b.classList.remove('bg-white/10'));
+      row.classList.add('bg-white/10');
+      showRevision(file, revisions, i);
+    });
+    historyList.appendChild(row);
+  });
+  historyList.querySelector('button')?.click(); // open the latest revision by default
+}
+
+function revisionHeader(file, revisions, i) {
+  const rev = revisions[i];
+  const wrap = document.createElement('div');
+  wrap.className = 'mb-3 pb-2 border-b subtle-border';
+  const when = rev.date ? new Date(rev.date).toLocaleString(LANG) : '';
+  wrap.innerHTML =
+    '<div class="text-ink-100">' + escapeHtml(rev.subject || '') + '</div>' +
+    '<div class="text-[10px] text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
+      (when ? ' · ' + escapeHtml(when) : '') + (rev.author ? ' · ' + escapeHtml(rev.author) : '') + '</div>';
+  const view = document.createElement('button');
+  view.type = 'button';
+  view.className = 'mt-2 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
+  view.textContent = t('historyViewVersion');
+  view.addEventListener('click', () => showVersion(file, revisions, i));
+  wrap.appendChild(view);
+  const restore = document.createElement('button');
+  restore.type = 'button';
+  restore.className = 'mt-2 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
+  restore.style.marginLeft = '8px';
+  restore.textContent = t('historyRestore');
+  restore.addEventListener('click', () => revertToRevision(file, rev));
+  wrap.appendChild(restore);
+  return wrap;
+}
+
+async function showRevision(file, revisions, i) {
+  const rev = revisions[i];
+  const parent = revisions[i + 1]; // newest-first → the next entry is the older revision
+  historyDetail.innerHTML = '';
+  historyDetail.appendChild(revisionHeader(file, revisions, i));
+  const body = document.createElement('div');
+  body.className = 'text-ink-500';
+  body.textContent = '…';
+  historyDetail.appendChild(body);
+  try {
+    if (parent) {
+      const data = await api('GET', '/api/diff?path=' + encodeURIComponent(file.path) +
+        '&from=' + parent.sha + '&to=' + rev.sha);
+      if (historyFile !== file) return;
+      body.replaceWith((data.diff && data.diff.trim()) ? diffToDom(data.diff) : simpleNode(t('historyNoChange')));
+    } else {
+      // Oldest revision: no parent to diff against → show the full version as introduced.
+      const data = await api('GET', '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha);
+      if (historyFile !== file) return;
+      body.replaceWith(plainTextNode(data.content));
+    }
+  } catch (e) {
+    if (historyFile !== file) return;
+    body.textContent = t('historyError');
+    body.className = 'text-rose-400';
+  }
+}
+
+async function showVersion(file, revisions, i) {
+  const rev = revisions[i];
+  let data;
+  try {
+    data = await api('GET', '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha);
+  } catch (e) { return; }
+  if (historyFile !== file) return;
+  historyDetail.innerHTML = '';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'mb-3 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
+  back.textContent = t('historyViewChanges');
+  back.addEventListener('click', () => showRevision(file, revisions, i));
+  historyDetail.appendChild(back);
+  const wrap = document.createElement('div');
+  wrap.className = 'prose prose-invert text-sm mt-1';
+  wrap.innerHTML = renderMd(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
+  historyDetail.appendChild(wrap);
+}
+
+// Restore a doc to a past revision: writes that revision's content back as the
+// current file (a forward-moving change, kept in git history). Admin-only on the
+// server; CSRF is auto-injected by the global fetch wrapper.
+async function revertToRevision(file, rev) {
+  const ok = await confirmDialog({
+    title: t('historyRestore'),
+    message: t('historyRestoreConfirm'),
+    confirmLabel: t('historyRestoreBtn'),
+  });
+  if (!ok) return;
+  try {
+    await api('POST', '/api/revert', { path: file.path, rev: rev.sha });
+  } catch (e) {
+    setStatus(t('historyRestoreError'), 'err');
+    return;
+  }
+  contentCache.delete(file.path); // force a fresh load of the restored content
+  closeHistory();
+  setStatus(t('historyRestored'), 'info');
+  showMarkdown(file);
+}
+
+function simpleNode(text) {
+  const d = document.createElement('div');
+  d.className = 'text-ink-500';
+  d.textContent = text;
+  return d;
+}
+
+function plainTextNode(text) {
+  const pre = document.createElement('pre');
+  pre.className = 'font-mono text-[11px] text-ink-300';
+  pre.style.whiteSpace = 'pre-wrap';
+  pre.style.wordBreak = 'break-word';
+  pre.textContent = text || '';
+  return pre;
+}
+
+// Unified diff → escaped, color-coded DOM. Diff colors use inline styles (no
+// emerald/green utility is compiled into the precompiled tailwind.css), so the
+// panel renders correctly without a Tailwind rebuild.
+function diffToDom(diffText) {
+  const wrap = document.createElement('div');
+  wrap.className = 'font-mono text-[11px]';
+  wrap.style.whiteSpace = 'pre-wrap';
+  wrap.style.wordBreak = 'break-word';
+  // Everything before the first @@ is git plumbing (diff --git / index / --- / +++):
+  // pure noise for a reader, skipped. Each @@ starts a hunk → a thin separator
+  // instead of the raw marker. After the first @@, every line is real content
+  // (so a content line starting with --- is rendered, not mistaken for a header).
+  let hunks = 0;
+  for (const line of (diffText || '').split('\n')) {
+    if (line.startsWith('@@')) {
+      if (hunks > 0) {
+        const sep = document.createElement('div');
+        sep.className = 'border-t subtle-border';
+        sep.style.margin = '8px 0';
+        wrap.appendChild(sep);
+      }
+      hunks++;
+      continue;
+    }
+    if (hunks === 0) continue; // pre-hunk header lines
+    const row = document.createElement('div');
+    row.className = 'px-2';
+    if (line[0] === '+') {
+      row.style.color = '#86efac'; row.style.background = 'rgba(16,185,129,0.10)';
+    } else if (line[0] === '-') {
+      row.style.color = '#fca5a5'; row.style.background = 'rgba(244,63,94,0.10)';
+    } else {
+      row.className += ' text-ink-400';
+    }
+    row.textContent = line === '' ? ' ' : line;
+    wrap.appendChild(row);
+  }
+  return wrap;
+}
+
+document.getElementById('btn-history').addEventListener('click', openHistory);
+document.getElementById('history-close').addEventListener('click', closeHistory);
+historyOverlay.addEventListener('click', (e) => { if (e.target === historyOverlay) closeHistory(); });
 
 // Rendering of a .html document: standalone page (slide deck, dashboard…) served
 // as-is in a sandboxed iframe. sandbox="allow-scripts" lets its JS run
@@ -4286,6 +4571,7 @@ paletteBackdrop.addEventListener('click', (e) => { if (e.target === paletteBackd
 
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
+  if (e.key === 'Escape' && !historyOverlay.classList.contains('hidden')) { closeHistory(); return; }
   if (e.key === 'Escape' && !tasksOverlay.classList.contains('hidden')) { closeTasks(); return; }
   if (e.key === 'Escape' && !graphOverlay.classList.contains('hidden')) { closeGraph(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') { e.preventDefault(); openGraph(); return; }
