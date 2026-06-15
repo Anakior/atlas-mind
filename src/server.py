@@ -1860,6 +1860,18 @@ def _validate_doc_path(rel: str):
         return None
 
 
+# Git revision accepted by the read-only history endpoints: a full or
+# abbreviated commit SHA, or HEAD / HEAD~N. Anything else is refused before it
+# reaches `git`. The ref is passed as argv to subprocess (no shell, so no shell
+# injection), but a flag-looking ("--output=…") or path-looking value must never
+# slip through to git's argument parser.
+_GIT_REV_RE = re.compile(r"^(?:[0-9a-fA-F]{4,40}|HEAD(?:~\d+)?)$")
+
+
+def _valid_git_rev(rev: str) -> bool:
+    return bool(rev) and _GIT_REV_RE.match(rev) is not None
+
+
 def _iter_doc_files():
     """Yields (relative_path, Path) for each doc tracked by the viewer (.md + .html)."""
     excluded = _import_build().EXCLUDED_NAMES
@@ -2293,6 +2305,7 @@ MCP_TOOLS = [
             "properties": {
                 "q": {"type": "string", "description": "Search terms"},
                 "limit": {"type": "integer", "default": 10, "minimum": 1, "maximum": 50},
+                "tag": {"type": "string", "description": "Optional: only keep results that also carry this tag (folder-derived or frontmatter, case-insensitive)."},
             },
             "required": ["q"],
         },
@@ -2382,6 +2395,63 @@ MCP_TOOLS = [
                 "to": {"type": "string", "description": "NEW relative .md path (e.g. projects/draft-final.md). Same folder + new name = a plain rename."},
             },
             "required": ["from", "to"],
+        },
+    },
+    {
+        "name": "get_links",
+        "description": "Outgoing [[wikilinks]] of a document: the docs it points to. Lets you traverse the mind's graph forward from a doc.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Relative path of the .md/.html (e.g. notes/example.md)"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "get_backlinks",
+        "description": "Backlinks of a document: the docs that point TO it via [[wikilinks]]. Find what references a doc.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Relative path of the .md/.html"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "get_mind_topology",
+        "description": (
+            "Bird's-eye view of the whole mind's graph (a summary, not the full graph): "
+            "doc/edge counts, density, hubs (most-referenced docs), orphans (no link), and the "
+            "most frequent tags. Call it on first contact with a mind to get oriented before diving in."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_by_tag",
+        "description": "List the documents carrying a given tag (folder-derived or frontmatter). Navigate the mind by topic, like a human browsing folders.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tag": {"type": "string", "description": "A single tag, e.g. 'projets' or 'recap' (case-insensitive)"},
+            },
+            "required": ["tag"],
+        },
+    },
+    {
+        "name": "delete_doc",
+        "description": (
+            "Delete a document — SOFT delete: it is moved to a .trash/ folder (reversible), never "
+            "erased. To rename, use move_doc instead. Refuses on remote mirrors (remotes/). "
+            "Called by an AI, so the move-to-trash keeps a wrong call recoverable."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Relative path of the .md/.html to delete"},
+            },
+            "required": ["path"],
         },
     },
 ]
@@ -2492,6 +2562,62 @@ def _move_md_with_relink(src_rel: str, dst_rel: str):
                    "links_updated": sum(r["count"] for r in rewrites)})
 
 
+# ─── MCP graph / tag / trash helpers (back the AI-native tools below) ─────────
+
+def _doc_corpus():
+    """[(rel, name, text)] for every viewer-tracked doc, each file read once.
+
+    utf-8-sig tolerates a BOM. Same source set as _iter_doc_files (dotfolders,
+    EXCLUDED_NAMES and skill/tools/__pycache__ already filtered out)."""
+    out = []
+    for rel, path in _iter_doc_files():
+        try:
+            out.append((rel, path.name, path.read_text(encoding="utf-8-sig")))
+        except (OSError, UnicodeDecodeError):
+            continue
+    return out
+
+
+def _links_graph():
+    """Wikilink graph {path: {"out": [...], "in": [...]}} over the whole mind.
+
+    Single source of truth shared with the build/viewer: build_links_index only
+    keeps docs that have at least one edge, so an isolated doc is simply absent."""
+    return _import_build().build_links_index(
+        [{"path": rel, "name": name, "body": text} for rel, name, text in _doc_corpus()])
+
+
+def _tags_for(build, rel: str, text: str) -> list:
+    """Folder-derived tags + frontmatter tags, merged and deduped — mirrors the
+    tag computation of build.walk so the MCP tools never diverge from the viewer."""
+    tags = list(build._folder_tags(rel))
+    fm_tags, _ = build._parse_frontmatter(text)
+    for t in fm_tags:
+        if t not in tags:
+            tags.append(t)
+    return tags
+
+
+def _soft_delete(target: Path) -> str:
+    """Move a doc into content_root/.trash/ (reversible) instead of erasing it.
+
+    delete_doc is called by an AI, not a human seeing a confirmation box, so a
+    wrong call must stay recoverable. '.trash' is dot-prefixed → automatically
+    hidden from tree/search/links (build EXCLUDED_PREFIXES and _iter_doc_files
+    both skip dot-prefixed parts). Returns the trash-relative path."""
+    content_root = CONFIG.content_root
+    rel = target.relative_to(content_root)
+    dest = content_root / ".trash" / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    # Don't clobber an earlier trashed copy of the same doc: suffix -2, -3, …
+    n = 2
+    while dest.exists():
+        dest = dest.with_name(f"{rel.stem}-{n}{rel.suffix}")
+        n += 1
+    target.replace(dest)
+    return ".trash/" + rel.as_posix()
+
+
 def _mcp_call_tool(name: str, args: dict) -> dict:
     """Dispatch an MCP tool to the _api_* helpers. Returns MCP CallToolResult."""
     def text_result(s: str, is_error: bool = False) -> dict:
@@ -2508,9 +2634,25 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             limit = min(50, max(1, int(args.get("limit", 10))))
         except (ValueError, TypeError):
             limit = 10
-        hits = _api_search(q, limit)
+        tag = (args.get("tag") or "").strip().lower()
+        # Tag filter is additive: without it, identical to before. With it, over-fetch
+        # then keep only the hits that also carry the tag (post-scoring, order kept).
+        hits = _api_search(q, 50 if tag else limit)
+        if tag:
+            build = _import_build()
+            kept = []
+            for h in hits:
+                fp = CONFIG.content_root / h.get("path", "")
+                try:
+                    if tag in _tags_for(build, h.get("path", ""), fp.read_text(encoding="utf-8-sig")):
+                        kept.append(h)
+                except (OSError, UnicodeDecodeError):
+                    continue
+                if len(kept) >= limit:
+                    break
+            hits = kept
         if not hits:
-            return text_result(f"No results for: {q}")
+            return text_result(f"No results for: {q}" + (f" (tag: {tag})" if tag else ""))
         return text_result(json.dumps(hits, ensure_ascii=False, indent=2))
 
     if name == "read_doc":
@@ -2609,6 +2751,78 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         msg += (f" {n} incoming wikilink(s) rewritten in {files} doc(s)."
                 if n else " No incoming wikilink to fix.")
         return text_result(msg)
+
+    if name == "get_links":
+        rel = (args.get("path") or "").strip()
+        target = _validate_doc_path(rel)
+        if not target or not target.exists():
+            return text_result(f"Document not found: {rel}", is_error=True)
+        entry = _links_graph().get(rel) or {"out": [], "in": []}
+        return text_result(json.dumps({"path": rel, "links": entry["out"]},
+                                      ensure_ascii=False, indent=2))
+
+    if name == "get_backlinks":
+        rel = (args.get("path") or "").strip()
+        target = _validate_doc_path(rel)
+        if not target or not target.exists():
+            return text_result(f"Document not found: {rel}", is_error=True)
+        entry = _links_graph().get(rel) or {"out": [], "in": []}
+        return text_result(json.dumps({"path": rel, "backlinks": entry["in"]},
+                                      ensure_ascii=False, indent=2))
+
+    if name == "get_mind_topology":
+        build = _import_build()
+        corpus = _doc_corpus()
+        graph = build.build_links_index(
+            [{"path": rel, "name": name_, "body": text} for rel, name_, text in corpus])
+        all_paths = [rel for rel, _, _ in corpus]
+        edges = sum(len(v["out"]) for v in graph.values())
+        hubs = sorted(
+            ({"path": p, "in_degree": len(v["in"])} for p, v in graph.items() if v["in"]),
+            key=lambda h: (-h["in_degree"], h["path"]))[:10]
+        linked = set(graph)
+        orphans = [p for p in all_paths if p not in linked]
+        tag_counts: dict = {}
+        for rel, _, text in corpus:
+            for t in _tags_for(build, rel, text):
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        top_tags = sorted(({"tag": t, "count": c} for t, c in tag_counts.items()),
+                          key=lambda x: (-x["count"], x["tag"]))[:15]
+        n = len(all_paths)
+        payload = {
+            "counts": {"docs": n, "edges": edges},
+            "density": round(edges / n, 4) if n else 0,
+            "hubs": hubs,
+            "orphans": orphans[:50],
+            "orphans_total": len(orphans),
+            "top_tags": top_tags,
+        }
+        return text_result(json.dumps(payload, ensure_ascii=False, indent=2))
+
+    if name == "list_by_tag":
+        tag = (args.get("tag") or "").strip().lower()
+        if not tag:
+            return text_result("Error: missing 'tag' parameter", is_error=True)
+        build = _import_build()
+        matches = sorted(rel for rel, _, text in _doc_corpus()
+                         if tag in _tags_for(build, rel, text))
+        if not matches:
+            return text_result(f"No document tagged: {tag}")
+        return text_result(json.dumps({"tag": tag, "documents": matches},
+                                      ensure_ascii=False, indent=2))
+
+    if name == "delete_doc":
+        rel = (args.get("path") or "").strip()
+        target = _validate_doc_path(rel)
+        if not target:
+            return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
+        if _is_readonly_path(rel):
+            return text_result("Read-only location (remote node mirror) — cannot delete.", is_error=True)
+        if not target.exists():
+            return text_result(f"Document not found: {rel}", is_error=True)
+        trashed = _soft_delete(target)
+        trigger_sync()
+        return text_result(f"Document moved to trash (reversible): {rel} -> {trashed}")
 
     return text_result(f"Unknown tool: {name}", is_error=True)
 
@@ -4311,6 +4525,80 @@ class Handler(SimpleHTTPRequestHandler):
                 results = [r for r in results if not _path_hidden(r.get("path", ""), hidden)]
             self._send_json(200, results)
             return
+        # ─── Git history (read-only, authenticated admin/viewer) ───────────────
+        # Every document is versioned git: expose its revisions, an old version,
+        # and a diff between two revisions. `git` runs at CONFIG.root (repo root)
+        # while ?path= is relative to content/, so the pathspec is prefixed with
+        # "content/". Always `--` before the pathspec; revisions are regex-checked.
+        if self.path.split("?", 1)[0] == "/api/history":
+            if not self._require_auth_or_401():
+                return
+            from urllib.parse import urlparse, parse_qs as _pqs
+            rel = (_pqs(urlparse(self.path).query).get("path", [""])[0] or "").strip()
+            if _validate_doc_path(rel) is None:
+                self._send_json(400, {"error": "invalid path"})
+                return
+            repo_rel = "content/" + rel
+            # --follow tracks renames (move_doc); -z + \x1f keep records/fields
+            # unambiguous; -n 100 bounds the payload and memory.
+            fmt = "%H%x1f%an%x1f%aI%x1f%s"
+            result = git("log", "--follow", "-n", "100", "--format=" + fmt, "-z",
+                         "--", repo_rel)
+            if result.returncode != 0:
+                self._send_json(500, {"error": result.stderr.strip() or "git log failed"})
+                return
+            revisions = []
+            for record in result.stdout.split("\x00"):
+                if not record:
+                    continue
+                fields = (record.split("\x1f") + ["", "", "", ""])[:4]
+                revisions.append({
+                    "sha": fields[0], "author": fields[1],
+                    "date": fields[2], "subject": fields[3],
+                })
+            self._send_json(200, {"path": rel, "revisions": revisions})
+            return
+        if self.path.split("?", 1)[0] == "/api/revision":
+            if not self._require_auth_or_401():
+                return
+            from urllib.parse import urlparse, parse_qs as _pqs
+            query = _pqs(urlparse(self.path).query)
+            rel = (query.get("path", [""])[0] or "").strip()
+            rev = (query.get("rev", [""])[0] or "").strip()
+            if _validate_doc_path(rel) is None:
+                self._send_json(400, {"error": "invalid path"})
+                return
+            if not _valid_git_rev(rev):
+                self._send_json(400, {"error": "invalid rev"})
+                return
+            result = git("show", rev + ":content/" + rel)
+            if result.returncode != 0:
+                self._send_json(404, {"error": "revision not found"})
+                return
+            self._send_json(200, {"path": rel, "rev": rev, "content": result.stdout})
+            return
+        if self.path.split("?", 1)[0] == "/api/diff":
+            if not self._require_auth_or_401():
+                return
+            from urllib.parse import urlparse, parse_qs as _pqs
+            query = _pqs(urlparse(self.path).query)
+            rel = (query.get("path", [""])[0] or "").strip()
+            rev_from = (query.get("from", [""])[0] or "").strip()
+            rev_to = (query.get("to", [""])[0] or "").strip()
+            if _validate_doc_path(rel) is None:
+                self._send_json(400, {"error": "invalid path"})
+                return
+            if not _valid_git_rev(rev_from) or not _valid_git_rev(rev_to):
+                self._send_json(400, {"error": "invalid rev"})
+                return
+            result = git("diff", rev_from, rev_to, "--", "content/" + rel)
+            if result.returncode != 0:
+                self._send_json(500, {"error": result.stderr.strip() or "git diff failed"})
+                return
+            self._send_json(200, {
+                "path": rel, "from": rev_from, "to": rev_to, "diff": result.stdout,
+            })
+            return
         if self.path == "/api/events":
             if not self._require_auth_or_401():
                 return
@@ -4554,6 +4842,35 @@ class Handler(SimpleHTTPRequestHandler):
             save_notes(rel, notes)
             trigger_sync()
             self._send_json(200, note)
+            return
+        if self.path == "/api/revert":
+            # Restore a doc to a past revision: write that revision's content back
+            # as the current file. Mutating → admin + CSRF, like the other writes.
+            if not self._require_admin_or_403():
+                return
+            if not self._check_csrf_or_403():
+                return
+            data = self._read_json()
+            rel = (data.get("path") or "").strip()
+            rev = (data.get("rev") or "").strip()
+            target = _validate_doc_path(rel)
+            if target is None:
+                self._send_json(400, {"error": "invalid path"})
+                return
+            if not _valid_git_rev(rev):
+                self._send_json(400, {"error": "invalid rev"})
+                return
+            if _is_readonly_path(rel):
+                self._send_json(403, {"error": "remote mirror is read-only"})
+                return
+            show = git("show", rev + ":content/" + rel)
+            if show.returncode != 0:
+                self._send_json(404, {"error": "revision not found"})
+                return
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(show.stdout, encoding="utf-8")
+            trigger_sync()
+            self._send_json(200, {"ok": True})
             return
         if self.path == "/api/file/move":
             if not self._require_admin_or_403():
