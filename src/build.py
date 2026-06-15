@@ -755,7 +755,6 @@ def main() -> int:
     out_offline = dist_dir / "index-offline.html"
     backlinks_data = dist_dir / "_backlinks.json"
     notes_index_path = dist_dir / "_notes-index.json"
-    tasks_index_path = dist_dir / "_tasks-index.json"
     manifest_path = dist_dir / "manifest.json"
     # Skeletons: those of the engine (TEMPLATES_DIR, next to src/) then those of
     # the mind (<mind>/templates, sibling of content/) which add/override.
@@ -839,11 +838,9 @@ def main() -> int:
     notes_index = {rel: len(ns) for rel, ns in load_all_notes(notes_dir).items()}
     notes_index_path.write_text(json.dumps(notes_index, ensure_ascii=False), encoding="utf-8")
 
-    # Transversal task rollup (disposable, gitignored): served at /_tasks-index.json,
-    # filtered per-viewer like _backlinks.json. Offline build embeds it instead.
-    tasks_index_path.write_text(
-        json.dumps(build_tasks_index(accum["md_files"]), ensure_ascii=False),
-        encoding="utf-8")
+    # The task rollup is served LIVE by the server (/_tasks-index.json, computed
+    # from the current files) — no static snapshot to write here. The offline
+    # build still embeds it via __EMBED_TASKS__ (read-only there anyway).
 
     html_size = out_online.stat().st_size
     backlinks_size = backlinks_data.stat().st_size
