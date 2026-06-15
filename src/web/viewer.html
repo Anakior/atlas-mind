@@ -386,6 +386,9 @@ __EXTENSIONS_CSS__
         <button id="graph-btn" class="p-2 bg-white/5 hover:bg-white/10 text-ink-300 hover:text-white rounded-md flex-shrink-0 transition" title="Vue graphe (Ctrl+G)" data-i18n-title="graphBtnTitle">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>
         </button>
+        <button id="tasks-btn" class="p-2 bg-white/5 hover:bg-white/10 text-ink-300 hover:text-white rounded-md flex-shrink-0 transition" title="Tâches" data-i18n-title="tasksBtnTitle">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"/></svg>
+        </button>
         <button id="new-file-btn" class="p-2 bg-accent/20 hover:bg-accent/40 text-accent rounded-md flex-shrink-0 transition" title="Nouveau document (N)" data-i18n-title="newDocTitle">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
         </button>
@@ -429,6 +432,10 @@ __EXTENSIONS_CSS__
       <div id="breadcrumb-actions" class="flex items-center gap-2 hidden">
         <button id="btn-pin" class="px-2 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded flex items-center" title="Épingler" data-i18n-title="pin">
           <svg id="btn-pin-icon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+        </button>
+        <button id="btn-history" class="hidden px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded inline-flex items-center gap-1" title="Historique du document" data-i18n-title="historyTitle">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l2.5 2.5M21 12a9 9 0 1 1-9-9c2.6 0 4.96 1.1 6.6 2.86M21 4v4h-4"/></svg>
+          <span data-i18n="historyLabel">Historique</span>
         </button>
         <button id="btn-download" class="px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded flex items-center gap-1" title="Télécharger le fichier" data-i18n-title="downloadTitle">
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -496,6 +503,25 @@ __EXTENSIONS_CSS__
   </div>
   <div id="graph-tooltip" class="absolute pointer-events-none hidden bg-navy-800/95 border subtle-border text-ink-100 text-xs px-2.5 py-1.5 rounded-md shadow-xl font-sans z-10"></div>
 </div>
+<div id="tasks-overlay" class="hidden fixed inset-0 z-50 overflow-y-auto backdrop-blur-md" style="background:rgba(14,13,18,0.6)">
+  <div style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
+    <div class="flex items-center justify-between" style="margin-bottom:1.5rem">
+      <div>
+        <div class="text-lg font-semibold text-ink-100 font-sans" data-i18n="tasksTitle">Tâches</div>
+        <div id="tasks-stats" class="text-xs text-ink-400 font-sans"></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-[11px] text-ink-400 font-sans flex items-center gap-2" style="cursor:pointer;user-select:none">
+          <input id="tasks-show-done" type="checkbox"> <span data-i18n="tasksShowDone">Afficher les faites</span>
+        </label>
+        <button id="tasks-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="tasks-list"></div>
+  </div>
+</div>
 
 <button id="toc-show" class="hidden fixed top-14 right-3 z-20 p-2 bg-navy-800/90 backdrop-blur border subtle-border rounded-lg text-ink-300 hover:text-white hover:bg-navy-700 shadow-lg" title="Afficher le sommaire (Ctrl+J)" data-i18n-title="showToc">
   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
@@ -512,6 +538,23 @@ __EXTENSIONS_CSS__
   <div id="toc-links" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
   <div id="toc-notes" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
 </aside>
+<div id="history-overlay" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+  <div class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[44rem] max-w-[94vw] max-h-[88vh] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 overflow-hidden flex flex-col">
+    <div class="px-4 py-3 border-b subtle-border flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-[10px] uppercase tracking-[0.12em] text-accent font-bold" data-i18n="historyHeader">Historique</div>
+        <div id="history-path" class="text-[11px] font-mono text-ink-400 truncate"></div>
+      </div>
+      <button id="history-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-white/5" title="Fermer (Esc)" data-i18n-title="historyClose">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="flex" style="min-height:0">
+      <nav id="history-list" class="w-64 shrink-0 overflow-y-auto scrollbar-thin p-2 text-[11px]" style="max-height:72vh;border-right:1px solid rgba(255,255,255,0.08)"></nav>
+      <div id="history-detail" class="flex-1 overflow-y-auto scrollbar-thin px-4 py-3 text-[11px]" style="max-height:72vh"></div>
+    </div>
+  </div>
+</div>
 <button id="kb-note-add" type="button" title="Noter" data-i18n-title="noteBtn"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg><span data-i18n="noteBtn">Noter</span></button>
 <div id="kb-note-pop"></div>
 
@@ -1023,6 +1066,7 @@ const TREE = __DATA__;
 const EMBED_CONTENT = __EMBED_CONTENT__;
 const EMBED_BACKLINKS = __EMBED_BACKLINKS__;
 const EMBED_NOTES = __EMBED_NOTES__;
+const EMBED_TASKS = __EMBED_TASKS__;
 // New-document skeletons: {label: markdown content}, label = file name
 // without extension. Discovered by build.py in templates/ (engine)
 // merged with <mind>/templates/ (the mind adds or overrides its own).
@@ -1169,6 +1213,21 @@ const STRINGS = {
     hideToc: 'Masquer (Ctrl+J)',
     showToc: 'Afficher le sommaire (Ctrl+J)',
     linksTitle: 'Liens',
+    historyTitle: 'Historique du document',
+    historyLabel: 'Historique',
+    historyHeader: 'Historique',
+    historyClose: 'Fermer (Esc)',
+    historyPick: 'Sélectionne une révision à gauche.',
+    historyEmpty: 'Aucun historique pour ce document.',
+    historyError: 'Impossible de charger l’historique.',
+    historyNoChange: 'Aucun changement dans cette révision.',
+    historyViewVersion: 'Voir cette version',
+    historyViewChanges: 'Voir les changements',
+    historyRestore: 'Restaurer cette version',
+    historyRestoreBtn: 'Restaurer',
+    historyRestoreConfirm: 'Elle remplacera le contenu actuel du document. Rien n’est perdu : la version actuelle restera dans l’historique, tu pourras y revenir.',
+    historyRestored: 'Version restaurée.',
+    historyRestoreError: 'Échec de la restauration.',
     referencedBy: n => `← Référencé par (${n})`,
     outgoingLinks: n => `→ Sortantes (${n})`,
     sameTopic: n => `~ Même sujet (${n})`,
@@ -1240,6 +1299,11 @@ const STRINGS = {
     graphHint: 'molette : zoom · glisser : déplacer · clic : ouvrir',
     closeEsc: 'Fermer (Esc)',
     graphStats: (docs, links, tags) => docs + ' docs · ' + links + ' liens, ' + tags + ' tags',
+    tasksBtnTitle: 'Tâches',
+    tasksTitle: 'Tâches',
+    tasksShowDone: 'Afficher les faites',
+    tasksEmpty: 'Aucune tâche à faire 🎉',
+    tasksStats: (open, total) => open + ' à faire · ' + total + ' au total',
     nDocs: n => n + ' doc' + (n > 1 ? 's' : ''),
     // Widget to-do
     nPending: n => `${n} à faire`,
@@ -1543,6 +1607,21 @@ const STRINGS = {
     hideToc: 'Hide (Ctrl+J)',
     showToc: 'Show the outline (Ctrl+J)',
     linksTitle: 'Links',
+    historyTitle: 'Document history',
+    historyLabel: 'History',
+    historyHeader: 'History',
+    historyClose: 'Close (Esc)',
+    historyPick: 'Pick a revision on the left.',
+    historyEmpty: 'No history for this document.',
+    historyError: 'Couldn’t load the history.',
+    historyNoChange: 'No change in this revision.',
+    historyViewVersion: 'View this version',
+    historyViewChanges: 'View changes',
+    historyRestore: 'Restore this version',
+    historyRestoreBtn: 'Restore',
+    historyRestoreConfirm: 'It will replace the document’s current content. Nothing is lost: the current version stays in the history, you can come back to it.',
+    historyRestored: 'Version restored.',
+    historyRestoreError: 'Restore failed.',
     referencedBy: n => `← Referenced by (${n})`,
     outgoingLinks: n => `→ Outgoing (${n})`,
     sameTopic: n => `~ Same topic (${n})`,
@@ -1614,6 +1693,11 @@ const STRINGS = {
     graphHint: 'wheel: zoom · drag: pan · click: open',
     closeEsc: 'Close (Esc)',
     graphStats: (docs, links, tags) => docs + ' docs · ' + links + ' links, ' + tags + ' tags',
+    tasksBtnTitle: 'Tasks',
+    tasksTitle: 'Tasks',
+    tasksShowDone: 'Show completed',
+    tasksEmpty: 'Nothing to do 🎉',
+    tasksStats: (open, total) => open + ' to do · ' + total + ' total',
     nDocs: n => n + ' doc' + (n > 1 ? 's' : ''),
     // To-do widget
     nPending: n => `${n} to do`,
@@ -2829,6 +2913,11 @@ async function showMarkdown(file, highlightQuery) {
   // Download button label = the doc's actual extension (.md/.html/.pdf/.docx).
   const dlExt = document.getElementById('btn-download-ext');
   if (dlExt) dlExt.textContent = file.ext || '';
+  // History: button only for markdown docs in server mode (the history API is
+  // absent in offline builds / read-only views). Close any panel left open from
+  // the previous doc so it never shows stale revisions.
+  closeHistory();
+  document.getElementById('btn-history')?.classList.toggle('hidden', !historyAvailable(file));
   updatePinButton(file);
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
   const active = document.querySelector(`[data-path="${file.path}"]`);
@@ -2872,6 +2961,235 @@ async function showMarkdown(file, highlightQuery) {
   document.dispatchEvent(new CustomEvent('atlas:doc-rendered', { detail: { path: file.path, markdown: body } }));
   if (highlightQuery) highlightFirstMatch(contentEl, highlightQuery);
 }
+
+// ─── Git history (revisions + diff) ──────────────────────────────────────────
+// Each doc is versioned git. This panel lists a doc's revisions and shows, per
+// revision, what that commit changed (diff against the previous revision) or the
+// full version at that point. Backed by /api/history|diff|revision, which require
+// an authenticated admin/viewer — so the button is hidden in offline builds and
+// read-only share views, where those endpoints don't exist / return 401.
+const historyOverlay = document.getElementById('history-overlay');
+const historyList = document.getElementById('history-list');
+const historyDetail = document.getElementById('history-detail');
+const historyPathEl = document.getElementById('history-path');
+let historyFile = null;
+
+function historyAvailable(file) {
+  // Inline the protocol check rather than referencing the `isServerMode` const:
+  // showMarkdown calls this synchronously (before its first await), so on an
+  // initial deep-link it runs before that const is initialized (TDZ).
+  const serverMode = location.protocol === 'http:' || location.protocol === 'https:';
+  return !!file && file.ext === '.md' && serverMode && !IS_OFFLINE_BUILD
+    && !window.__viewerMode && !(file.path || '').startsWith('remotes/');
+}
+
+function closeHistory() {
+  historyFile = null;
+  historyOverlay.classList.add('hidden');
+}
+
+function formatRevDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleDateString(LANG, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function openHistory() {
+  const file = currentFile;
+  if (!historyAvailable(file)) return;
+  historyFile = file;
+  historyPathEl.textContent = file.path;
+  historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">…</div>';
+  historyDetail.innerHTML = '<div class="text-ink-500">' + escapeHtml(t('historyPick')) + '</div>';
+  historyOverlay.classList.remove('hidden');
+  let data;
+  try {
+    data = await api('GET', '/api/history?path=' + encodeURIComponent(file.path));
+  } catch (e) {
+    if (historyFile !== file) return;
+    historyList.innerHTML = '<div class="text-rose-400 px-2 py-1">' + escapeHtml(t('historyError')) + '</div>';
+    return;
+  }
+  if (historyFile !== file) return; // user closed / navigated mid-load
+  const revisions = data.revisions || [];
+  if (!revisions.length) {
+    historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">' + escapeHtml(t('historyEmpty')) + '</div>';
+    return;
+  }
+  historyList.innerHTML = '';
+  revisions.forEach((rev, i) => {
+    const when = formatRevDate(rev.date);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'block w-full text-left px-2 py-1.5 rounded hover:bg-white/5 border-b subtle-border';
+    row.innerHTML =
+      '<div class="text-ink-200 truncate">' + escapeHtml(rev.subject || ('(' + rev.sha.slice(0, 7) + ')')) + '</div>' +
+      '<div class="text-[10px] text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
+        (when ? ' · ' + escapeHtml(when) : '') + (rev.author ? ' · ' + escapeHtml(rev.author) : '') + '</div>';
+    row.addEventListener('click', () => {
+      historyList.querySelectorAll('button').forEach(b => b.classList.remove('bg-white/10'));
+      row.classList.add('bg-white/10');
+      showRevision(file, revisions, i);
+    });
+    historyList.appendChild(row);
+  });
+  historyList.querySelector('button')?.click(); // open the latest revision by default
+}
+
+function revisionHeader(file, revisions, i) {
+  const rev = revisions[i];
+  const wrap = document.createElement('div');
+  wrap.className = 'mb-3 pb-2 border-b subtle-border';
+  const when = rev.date ? new Date(rev.date).toLocaleString(LANG) : '';
+  wrap.innerHTML =
+    '<div class="text-ink-100">' + escapeHtml(rev.subject || '') + '</div>' +
+    '<div class="text-[10px] text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
+      (when ? ' · ' + escapeHtml(when) : '') + (rev.author ? ' · ' + escapeHtml(rev.author) : '') + '</div>';
+  const view = document.createElement('button');
+  view.type = 'button';
+  view.className = 'mt-2 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
+  view.textContent = t('historyViewVersion');
+  view.addEventListener('click', () => showVersion(file, revisions, i));
+  wrap.appendChild(view);
+  const restore = document.createElement('button');
+  restore.type = 'button';
+  restore.className = 'mt-2 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
+  restore.style.marginLeft = '8px';
+  restore.textContent = t('historyRestore');
+  restore.addEventListener('click', () => revertToRevision(file, rev));
+  wrap.appendChild(restore);
+  return wrap;
+}
+
+async function showRevision(file, revisions, i) {
+  const rev = revisions[i];
+  const parent = revisions[i + 1]; // newest-first → the next entry is the older revision
+  historyDetail.innerHTML = '';
+  historyDetail.appendChild(revisionHeader(file, revisions, i));
+  const body = document.createElement('div');
+  body.className = 'text-ink-500';
+  body.textContent = '…';
+  historyDetail.appendChild(body);
+  try {
+    if (parent) {
+      const data = await api('GET', '/api/diff?path=' + encodeURIComponent(file.path) +
+        '&from=' + parent.sha + '&to=' + rev.sha);
+      if (historyFile !== file) return;
+      body.replaceWith((data.diff && data.diff.trim()) ? diffToDom(data.diff) : simpleNode(t('historyNoChange')));
+    } else {
+      // Oldest revision: no parent to diff against → show the full version as introduced.
+      const data = await api('GET', '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha);
+      if (historyFile !== file) return;
+      body.replaceWith(plainTextNode(data.content));
+    }
+  } catch (e) {
+    if (historyFile !== file) return;
+    body.textContent = t('historyError');
+    body.className = 'text-rose-400';
+  }
+}
+
+async function showVersion(file, revisions, i) {
+  const rev = revisions[i];
+  let data;
+  try {
+    data = await api('GET', '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha);
+  } catch (e) { return; }
+  if (historyFile !== file) return;
+  historyDetail.innerHTML = '';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'mb-3 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
+  back.textContent = t('historyViewChanges');
+  back.addEventListener('click', () => showRevision(file, revisions, i));
+  historyDetail.appendChild(back);
+  const wrap = document.createElement('div');
+  wrap.className = 'prose prose-invert text-sm mt-1';
+  wrap.innerHTML = renderMd(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
+  historyDetail.appendChild(wrap);
+}
+
+// Restore a doc to a past revision: writes that revision's content back as the
+// current file (a forward-moving change, kept in git history). Admin-only on the
+// server; CSRF is auto-injected by the global fetch wrapper.
+async function revertToRevision(file, rev) {
+  const ok = await confirmDialog({
+    title: t('historyRestore'),
+    message: t('historyRestoreConfirm'),
+    confirmLabel: t('historyRestoreBtn'),
+  });
+  if (!ok) return;
+  try {
+    await api('POST', '/api/revert', { path: file.path, rev: rev.sha });
+  } catch (e) {
+    setStatus(t('historyRestoreError'), 'err');
+    return;
+  }
+  contentCache.delete(file.path); // force a fresh load of the restored content
+  closeHistory();
+  setStatus(t('historyRestored'), 'info');
+  showMarkdown(file);
+}
+
+function simpleNode(text) {
+  const d = document.createElement('div');
+  d.className = 'text-ink-500';
+  d.textContent = text;
+  return d;
+}
+
+function plainTextNode(text) {
+  const pre = document.createElement('pre');
+  pre.className = 'font-mono text-[11px] text-ink-300';
+  pre.style.whiteSpace = 'pre-wrap';
+  pre.style.wordBreak = 'break-word';
+  pre.textContent = text || '';
+  return pre;
+}
+
+// Unified diff → escaped, color-coded DOM. Diff colors use inline styles (no
+// emerald/green utility is compiled into the precompiled tailwind.css), so the
+// panel renders correctly without a Tailwind rebuild.
+function diffToDom(diffText) {
+  const wrap = document.createElement('div');
+  wrap.className = 'font-mono text-[11px]';
+  wrap.style.whiteSpace = 'pre-wrap';
+  wrap.style.wordBreak = 'break-word';
+  // Everything before the first @@ is git plumbing (diff --git / index / --- / +++):
+  // pure noise for a reader, skipped. Each @@ starts a hunk → a thin separator
+  // instead of the raw marker. After the first @@, every line is real content
+  // (so a content line starting with --- is rendered, not mistaken for a header).
+  let hunks = 0;
+  for (const line of (diffText || '').split('\n')) {
+    if (line.startsWith('@@')) {
+      if (hunks > 0) {
+        const sep = document.createElement('div');
+        sep.className = 'border-t subtle-border';
+        sep.style.margin = '8px 0';
+        wrap.appendChild(sep);
+      }
+      hunks++;
+      continue;
+    }
+    if (hunks === 0) continue; // pre-hunk header lines
+    const row = document.createElement('div');
+    row.className = 'px-2';
+    if (line[0] === '+') {
+      row.style.color = '#86efac'; row.style.background = 'rgba(16,185,129,0.10)';
+    } else if (line[0] === '-') {
+      row.style.color = '#fca5a5'; row.style.background = 'rgba(244,63,94,0.10)';
+    } else {
+      row.className += ' text-ink-400';
+    }
+    row.textContent = line === '' ? ' ' : line;
+    wrap.appendChild(row);
+  }
+  return wrap;
+}
+
+document.getElementById('btn-history').addEventListener('click', openHistory);
+document.getElementById('history-close').addEventListener('click', closeHistory);
+historyOverlay.addEventListener('click', (e) => { if (e.target === historyOverlay) closeHistory(); });
 
 // Rendering of a .html document: standalone page (slide deck, dashboard…) served
 // as-is in a sandboxed iframe. sandbox="allow-scripts" lets its JS run
@@ -4253,6 +4571,8 @@ paletteBackdrop.addEventListener('click', (e) => { if (e.target === paletteBackd
 
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
+  if (e.key === 'Escape' && !historyOverlay.classList.contains('hidden')) { closeHistory(); return; }
+  if (e.key === 'Escape' && !tasksOverlay.classList.contains('hidden')) { closeTasks(); return; }
   if (e.key === 'Escape' && !graphOverlay.classList.contains('hidden')) { closeGraph(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') { e.preventDefault(); openGraph(); return; }
   if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
@@ -4410,6 +4730,144 @@ function closeGraph() {
   graphState = null;
   graphTooltip.classList.add('hidden');
 }
+
+// ─── Tasks rollup — every - [ ] / - [x] across the mind in one view ───────────
+// Reads the embedded EMBED_TASKS (offline) or /_tasks-index.json (server). A row
+// click opens its doc and scrolls to the task text (highlightFirstMatch), exactly
+// like a search result. Works in both build modes (the index is embedded offline).
+const tasksOverlay = document.getElementById('tasks-overlay');
+const tasksList = document.getElementById('tasks-list');
+const tasksStats = document.getElementById('tasks-stats');
+const tasksShowDone = document.getElementById('tasks-show-done');
+let _tasksIndex = null;
+
+async function loadTasksIndex() {
+  if (_tasksIndex) return _tasksIndex;
+  if (IS_OFFLINE_BUILD) { _tasksIndex = EMBED_TASKS || []; return _tasksIndex; }
+  try {
+    const res = await fetch('/_tasks-index.json', { cache: 'no-cache' });
+    _tasksIndex = res.ok ? await res.json() : [];
+  } catch (e) { _tasksIndex = []; }
+  return _tasksIndex;
+}
+
+async function openTasks() {
+  tasksOverlay.classList.remove('hidden');
+  renderTasks(await loadTasksIndex());
+}
+
+function closeTasks() { tasksOverlay.classList.add('hidden'); }
+
+// Normalize a task line for matching against rendered text: drop wikilink/link
+// syntax and inline markdown marks, lowercase, collapse spaces. The index stores
+// raw markdown; the rendered doc shows plain text — this bridges the two.
+function _normTask(s) {
+  return (s || '').toLowerCase()
+    .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`~]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// Scroll the open doc to the checkbox of `task` and flash it. Primary = the Nth
+// rendered checkbox (task._docIndex); if its text doesn't match (rare drift:
+// blockquote/empty checkboxes marked renders but the index skips), scan for the
+// checkbox whose text matches; last resort = a loose text highlight.
+function scrollToTaskCheckbox(task) {
+  const want = _normTask(task.text);
+  const boxes = [...contentEl.querySelectorAll('input[type=checkbox]')];
+  const liOf = (b) => b && (b.closest('li') || b.parentElement);
+  let li = liOf(boxes[task._docIndex]);
+  if (!(li && want && _normTask(li.textContent).includes(want))) {
+    li = null;
+    if (want) {
+      for (const b of boxes) {
+        const candidate = liOf(b);
+        if (candidate && _normTask(candidate.textContent).includes(want)) { li = candidate; break; }
+      }
+    }
+  }
+  if (!li) { highlightFirstMatch(contentEl, task.text); return; }
+  li.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  li.style.transition = 'background-color 0.4s';
+  li.style.backgroundColor = 'rgba(89,208,207,0.18)';
+  li.style.borderRadius = '4px';
+  setTimeout(() => { li.style.backgroundColor = ''; }, 1600);
+}
+
+// Render a task's inline markdown (bold/italic/code) like the rest of the app,
+// instead of showing raw ** / backticks. Links/images are stripped to text (the
+// row is itself a button — no nested navigation).
+function renderTaskText(s) {
+  // marked + DOMPurify are always vendored; on any unexpected error fall back to
+  // ESCAPED text (never raw, unsanitized HTML).
+  try {
+    return DOMPurify.sanitize(marked.parseInline(s), { FORBID_TAGS: ['a', 'img'] });
+  } catch (e) { return escapeHtml(s); }
+}
+
+function renderTasks(tasks) {
+  // Position of each task among its OWN doc's tasks (document order) → matches the
+  // Nth rendered checkbox, so a click scrolls straight to it regardless of the
+  // "show done" filter or any markdown formatting inside the text.
+  const perDoc = {};
+  for (const tk of tasks) tk._docIndex = (perDoc[tk.path] = (perDoc[tk.path] ?? -1) + 1);
+  const open = tasks.filter(x => !x.done).length;
+  tasksStats.textContent = t('tasksStats', open, tasks.length);
+  const visible = tasksShowDone.checked ? tasks : tasks.filter(x => !x.done);
+  tasksList.innerHTML = '';
+  if (!visible.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-ink-500 text-sm font-sans';
+    empty.textContent = t('tasksEmpty');
+    tasksList.appendChild(empty);
+    return;
+  }
+  const byDoc = {};
+  for (const task of visible) (byDoc[task.path] = byDoc[task.path] || []).push(task);
+  for (const p of Object.keys(byDoc).sort()) {
+    const file = fileMap[p];
+    const section = document.createElement('div');
+    section.style.marginBottom = '1.75rem';
+    const head = document.createElement('div');
+    head.className = 'text-[11px] uppercase tracking-[0.12em] text-ink-500 font-bold font-mono';
+    head.style.marginBottom = '0.6rem';
+    head.textContent = p;
+    section.appendChild(head);
+    for (const task of byDoc[p]) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'flex items-start gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-base font-sans';
+      const box = document.createElement('span');
+      box.className = 'flex-shrink-0';
+      box.style.marginTop = '3px';
+      // Neutral outlined square when to-do; accent-filled with a check when done
+      // (the accent shows up as a reward, not on every empty box).
+      box.innerHTML = task.done
+        ? '<svg viewBox="0 0 24 24" fill="none" class="text-accent" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor"/><path d="M7.4 12.4l3 3 6.2-6.7" fill="none" stroke="#0e0d12" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" class="text-ink-500" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="2"/></svg>';
+      const txt = document.createElement('span');
+      txt.className = task.done ? 'text-ink-500' : 'text-ink-100';
+      if (task.done) txt.style.textDecoration = 'line-through';
+      txt.innerHTML = renderTaskText(task.text);
+      row.appendChild(box);
+      row.appendChild(txt);
+      row.addEventListener('click', async () => {
+        closeTasks();
+        if (!file) return;
+        await showMarkdown(file);
+        history.replaceState(null, '', '#' + encodeURIComponent(file.path));
+        scrollToTaskCheckbox(task);
+      });
+      section.appendChild(row);
+    }
+    tasksList.appendChild(section);
+  }
+}
+
+document.getElementById('tasks-btn').addEventListener('click', openTasks);
+document.getElementById('tasks-close').addEventListener('click', closeTasks);
+tasksShowDone.addEventListener('change', () => { if (_tasksIndex) renderTasks(_tasksIndex); });
 
 function resizeGraph() {
   const dpr = window.devicePixelRatio || 1;
