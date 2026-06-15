@@ -386,6 +386,9 @@ __EXTENSIONS_CSS__
         <button id="graph-btn" class="p-2 bg-white/5 hover:bg-white/10 text-ink-300 hover:text-white rounded-md flex-shrink-0 transition" title="Vue graphe (Ctrl+G)" data-i18n-title="graphBtnTitle">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>
         </button>
+        <button id="tasks-btn" class="p-2 bg-white/5 hover:bg-white/10 text-ink-300 hover:text-white rounded-md flex-shrink-0 transition" title="Tâches" data-i18n-title="tasksBtnTitle">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"/></svg>
+        </button>
         <button id="new-file-btn" class="p-2 bg-accent/20 hover:bg-accent/40 text-accent rounded-md flex-shrink-0 transition" title="Nouveau document (N)" data-i18n-title="newDocTitle">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
         </button>
@@ -495,6 +498,25 @@ __EXTENSIONS_CSS__
     </button>
   </div>
   <div id="graph-tooltip" class="absolute pointer-events-none hidden bg-navy-800/95 border subtle-border text-ink-100 text-xs px-2.5 py-1.5 rounded-md shadow-xl font-sans z-10"></div>
+</div>
+<div id="tasks-overlay" class="hidden fixed inset-0 z-50 overflow-y-auto backdrop-blur-md" style="background:rgba(14,13,18,0.6)">
+  <div style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
+    <div class="flex items-center justify-between" style="margin-bottom:1.5rem">
+      <div>
+        <div class="text-lg font-semibold text-ink-100 font-sans" data-i18n="tasksTitle">Tâches</div>
+        <div id="tasks-stats" class="text-xs text-ink-400 font-sans"></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-[11px] text-ink-400 font-sans flex items-center gap-2" style="cursor:pointer;user-select:none">
+          <input id="tasks-show-done" type="checkbox"> <span data-i18n="tasksShowDone">Afficher les faites</span>
+        </label>
+        <button id="tasks-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="tasks-list"></div>
+  </div>
 </div>
 
 <button id="toc-show" class="hidden fixed top-14 right-3 z-20 p-2 bg-navy-800/90 backdrop-blur border subtle-border rounded-lg text-ink-300 hover:text-white hover:bg-navy-700 shadow-lg" title="Afficher le sommaire (Ctrl+J)" data-i18n-title="showToc">
@@ -1023,6 +1045,7 @@ const TREE = __DATA__;
 const EMBED_CONTENT = __EMBED_CONTENT__;
 const EMBED_BACKLINKS = __EMBED_BACKLINKS__;
 const EMBED_NOTES = __EMBED_NOTES__;
+const EMBED_TASKS = __EMBED_TASKS__;
 // New-document skeletons: {label: markdown content}, label = file name
 // without extension. Discovered by build.py in templates/ (engine)
 // merged with <mind>/templates/ (the mind adds or overrides its own).
@@ -1240,6 +1263,11 @@ const STRINGS = {
     graphHint: 'molette : zoom · glisser : déplacer · clic : ouvrir',
     closeEsc: 'Fermer (Esc)',
     graphStats: (docs, links, tags) => docs + ' docs · ' + links + ' liens, ' + tags + ' tags',
+    tasksBtnTitle: 'Tâches',
+    tasksTitle: 'Tâches',
+    tasksShowDone: 'Afficher les faites',
+    tasksEmpty: 'Aucune tâche à faire 🎉',
+    tasksStats: (open, total) => open + ' à faire · ' + total + ' au total',
     nDocs: n => n + ' doc' + (n > 1 ? 's' : ''),
     // Widget to-do
     nPending: n => `${n} à faire`,
@@ -1614,6 +1642,11 @@ const STRINGS = {
     graphHint: 'wheel: zoom · drag: pan · click: open',
     closeEsc: 'Close (Esc)',
     graphStats: (docs, links, tags) => docs + ' docs · ' + links + ' links, ' + tags + ' tags',
+    tasksBtnTitle: 'Tasks',
+    tasksTitle: 'Tasks',
+    tasksShowDone: 'Show completed',
+    tasksEmpty: 'Nothing to do 🎉',
+    tasksStats: (open, total) => open + ' to do · ' + total + ' total',
     nDocs: n => n + ' doc' + (n > 1 ? 's' : ''),
     // To-do widget
     nPending: n => `${n} to do`,
@@ -4253,6 +4286,7 @@ paletteBackdrop.addEventListener('click', (e) => { if (e.target === paletteBackd
 
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
+  if (e.key === 'Escape' && !tasksOverlay.classList.contains('hidden')) { closeTasks(); return; }
   if (e.key === 'Escape' && !graphOverlay.classList.contains('hidden')) { closeGraph(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') { e.preventDefault(); openGraph(); return; }
   if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
@@ -4410,6 +4444,144 @@ function closeGraph() {
   graphState = null;
   graphTooltip.classList.add('hidden');
 }
+
+// ─── Tasks rollup — every - [ ] / - [x] across the mind in one view ───────────
+// Reads the embedded EMBED_TASKS (offline) or /_tasks-index.json (server). A row
+// click opens its doc and scrolls to the task text (highlightFirstMatch), exactly
+// like a search result. Works in both build modes (the index is embedded offline).
+const tasksOverlay = document.getElementById('tasks-overlay');
+const tasksList = document.getElementById('tasks-list');
+const tasksStats = document.getElementById('tasks-stats');
+const tasksShowDone = document.getElementById('tasks-show-done');
+let _tasksIndex = null;
+
+async function loadTasksIndex() {
+  if (_tasksIndex) return _tasksIndex;
+  if (IS_OFFLINE_BUILD) { _tasksIndex = EMBED_TASKS || []; return _tasksIndex; }
+  try {
+    const res = await fetch('/_tasks-index.json', { cache: 'no-cache' });
+    _tasksIndex = res.ok ? await res.json() : [];
+  } catch (e) { _tasksIndex = []; }
+  return _tasksIndex;
+}
+
+async function openTasks() {
+  tasksOverlay.classList.remove('hidden');
+  renderTasks(await loadTasksIndex());
+}
+
+function closeTasks() { tasksOverlay.classList.add('hidden'); }
+
+// Normalize a task line for matching against rendered text: drop wikilink/link
+// syntax and inline markdown marks, lowercase, collapse spaces. The index stores
+// raw markdown; the rendered doc shows plain text — this bridges the two.
+function _normTask(s) {
+  return (s || '').toLowerCase()
+    .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`~]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// Scroll the open doc to the checkbox of `task` and flash it. Primary = the Nth
+// rendered checkbox (task._docIndex); if its text doesn't match (rare drift:
+// blockquote/empty checkboxes marked renders but the index skips), scan for the
+// checkbox whose text matches; last resort = a loose text highlight.
+function scrollToTaskCheckbox(task) {
+  const want = _normTask(task.text);
+  const boxes = [...contentEl.querySelectorAll('input[type=checkbox]')];
+  const liOf = (b) => b && (b.closest('li') || b.parentElement);
+  let li = liOf(boxes[task._docIndex]);
+  if (!(li && want && _normTask(li.textContent).includes(want))) {
+    li = null;
+    if (want) {
+      for (const b of boxes) {
+        const candidate = liOf(b);
+        if (candidate && _normTask(candidate.textContent).includes(want)) { li = candidate; break; }
+      }
+    }
+  }
+  if (!li) { highlightFirstMatch(contentEl, task.text); return; }
+  li.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  li.style.transition = 'background-color 0.4s';
+  li.style.backgroundColor = 'rgba(89,208,207,0.18)';
+  li.style.borderRadius = '4px';
+  setTimeout(() => { li.style.backgroundColor = ''; }, 1600);
+}
+
+// Render a task's inline markdown (bold/italic/code) like the rest of the app,
+// instead of showing raw ** / backticks. Links/images are stripped to text (the
+// row is itself a button — no nested navigation).
+function renderTaskText(s) {
+  // marked + DOMPurify are always vendored; on any unexpected error fall back to
+  // ESCAPED text (never raw, unsanitized HTML).
+  try {
+    return DOMPurify.sanitize(marked.parseInline(s), { FORBID_TAGS: ['a', 'img'] });
+  } catch (e) { return escapeHtml(s); }
+}
+
+function renderTasks(tasks) {
+  // Position of each task among its OWN doc's tasks (document order) → matches the
+  // Nth rendered checkbox, so a click scrolls straight to it regardless of the
+  // "show done" filter or any markdown formatting inside the text.
+  const perDoc = {};
+  for (const tk of tasks) tk._docIndex = (perDoc[tk.path] = (perDoc[tk.path] ?? -1) + 1);
+  const open = tasks.filter(x => !x.done).length;
+  tasksStats.textContent = t('tasksStats', open, tasks.length);
+  const visible = tasksShowDone.checked ? tasks : tasks.filter(x => !x.done);
+  tasksList.innerHTML = '';
+  if (!visible.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-ink-500 text-sm font-sans';
+    empty.textContent = t('tasksEmpty');
+    tasksList.appendChild(empty);
+    return;
+  }
+  const byDoc = {};
+  for (const task of visible) (byDoc[task.path] = byDoc[task.path] || []).push(task);
+  for (const p of Object.keys(byDoc).sort()) {
+    const file = fileMap[p];
+    const section = document.createElement('div');
+    section.style.marginBottom = '1.75rem';
+    const head = document.createElement('div');
+    head.className = 'text-[11px] uppercase tracking-[0.12em] text-ink-500 font-bold font-mono';
+    head.style.marginBottom = '0.6rem';
+    head.textContent = p;
+    section.appendChild(head);
+    for (const task of byDoc[p]) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'flex items-start gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-base font-sans';
+      const box = document.createElement('span');
+      box.className = 'flex-shrink-0';
+      box.style.marginTop = '3px';
+      // Neutral outlined square when to-do; accent-filled with a check when done
+      // (the accent shows up as a reward, not on every empty box).
+      box.innerHTML = task.done
+        ? '<svg viewBox="0 0 24 24" fill="none" class="text-accent" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor"/><path d="M7.4 12.4l3 3 6.2-6.7" fill="none" stroke="#0e0d12" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" class="text-ink-500" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="2"/></svg>';
+      const txt = document.createElement('span');
+      txt.className = task.done ? 'text-ink-500' : 'text-ink-100';
+      if (task.done) txt.style.textDecoration = 'line-through';
+      txt.innerHTML = renderTaskText(task.text);
+      row.appendChild(box);
+      row.appendChild(txt);
+      row.addEventListener('click', async () => {
+        closeTasks();
+        if (!file) return;
+        await showMarkdown(file);
+        history.replaceState(null, '', '#' + encodeURIComponent(file.path));
+        scrollToTaskCheckbox(task);
+      });
+      section.appendChild(row);
+    }
+    tasksList.appendChild(section);
+  }
+}
+
+document.getElementById('tasks-btn').addEventListener('click', openTasks);
+document.getElementById('tasks-close').addEventListener('click', closeTasks);
+tasksShowDone.addEventListener('change', () => { if (_tasksIndex) renderTasks(_tasksIndex); });
 
 function resizeGraph() {
   const dpr = window.devicePixelRatio || 1;
