@@ -4,7 +4,9 @@ node_modules/
 dist/
 .venv/
 *.egg-info/
-build/
+# setuptools build artifact (repo root only) — anchored so it does NOT match the
+# src/build/ engine package, which IS versioned.
+/build/
 content/
 .notes/
 .atlas/

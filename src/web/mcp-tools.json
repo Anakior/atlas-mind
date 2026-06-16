@@ -1,0 +1,215 @@
+[
+  {
+    "name": "search_docs",
+    "description": "Full-text search across the knowledge base. Returns the documents matching the query, ranked by relevance. Use terms in the language of the indexed content.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "type": "string",
+          "description": "Search terms"
+        },
+        "limit": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 50
+        },
+        "tag": {
+          "type": "string",
+          "description": "Optional: only keep results that also carry this tag (folder-derived or frontmatter, case-insensitive)."
+        }
+      },
+      "required": [
+        "q"
+      ]
+    }
+  },
+  {
+    "name": "read_doc",
+    "description": "Read the full raw content of a document (.md OR .html). For a .html you get the complete HTML source (not extracted text).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md or .html (e.g. notes/example.md, projects/deck-may.html). Use list_tree or search_docs to discover paths."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "list_tree",
+    "description": "List the full tree of the knowledge base (metadata only, no content). Handy to understand the folder organization before navigating.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "recent_docs",
+    "description": "Recently modified documents, newest first. Handy to know what the user has worked on lately.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "days": {
+          "type": "integer",
+          "default": 7,
+          "description": "Window in days",
+          "minimum": 1
+        },
+        "limit": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    }
+  },
+  {
+    "name": "create_doc",
+    "description": "Create a new document. Two formats, pick by content:\n• .md — prose, notes, recaps, specs, markdown reports (rendered with marked in the viewer). Default.\n• .html — a SELF-CONTAINED styled document: slide deck, dashboard, richly laid-out page with its own CSS/JS. Rendered AS-IS in a viewer iframe sandbox.\nRULE: NEVER wrap a full HTML document (<!DOCTYPE html>…) inside a ```html code block of a .md — it would show as raw source. Create a .html instead.\nRefuses if the path already exists (create-only, no overwrite). The path must end in .md or .html and be in a valid folder (notes/, projects/, inbox/, etc.).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path ending in .md or .html (e.g. inbox/note.md, projects/deck-report.html)"
+        },
+        "content": {
+          "type": "string",
+          "description": "For a .md: full markdown body with an H1 title. For a .html: a complete self-contained HTML page (<!DOCTYPE html>…</html>), inline CSS/JS included."
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ]
+    }
+  },
+  {
+    "name": "edit_doc",
+    "description": "Edit an EXISTING document (.md OR .html). Two mutually exclusive modes:\n1. Targeted replacement: pass 'old_string' + 'new_string'. 'old_string' must appear exactly once in the document (otherwise an error) — add surrounding context to make it unique. Token-efficient, preferred on large docs (and .html, often big).\n2. Full rewrite: pass 'content' (replaces the whole file).\nAt least one of the two modes is required. The document must already exist (use create_doc to create a new one). Read the doc with read_doc before editing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the existing .md or .html (e.g. notes/recap.md, projects/deck-may.html)"
+        },
+        "old_string": {
+          "type": "string",
+          "description": "Patch mode: the exact text to replace, must be unique in the document."
+        },
+        "new_string": {
+          "type": "string",
+          "description": "Patch mode: the replacement text (required if old_string is provided)."
+        },
+        "content": {
+          "type": "string",
+          "description": "Rewrite mode: the full new markdown content. Ignored if old_string is provided."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "move_doc",
+    "description": "Move OR rename an existing document (.md or .html), AUTOMATICALLY rewriting the incoming [[wikilinks]] that point at it (no broken backlinks). Renaming = a move within the same folder (just change the filename in 'to'). Refuses if the target already exists (no overwrite). Read list_tree/search_docs first for the exact path.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "CURRENT relative path of the .md (e.g. notes/draft.md)"
+        },
+        "to": {
+          "type": "string",
+          "description": "NEW relative .md path (e.g. projects/draft-final.md). Same folder + new name = a plain rename."
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    }
+  },
+  {
+    "name": "get_links",
+    "description": "Outgoing [[wikilinks]] of a document: the docs it points to. Lets you traverse the mind's graph forward from a doc.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md/.html (e.g. notes/example.md)"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "get_backlinks",
+    "description": "Backlinks of a document: the docs that point TO it via [[wikilinks]]. Find what references a doc.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md/.html"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "get_mind_topology",
+    "description": "Bird's-eye view of the whole mind's graph (a summary, not the full graph): doc/edge counts, density, hubs (most-referenced docs), orphans (no link), and the most frequent tags. Call it on first contact with a mind to get oriented before diving in.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "list_by_tag",
+    "description": "List the documents carrying a given tag (folder-derived or frontmatter). Navigate the mind by topic, like a human browsing folders.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "A single tag, e.g. 'projets' or 'recap' (case-insensitive)"
+        }
+      },
+      "required": [
+        "tag"
+      ]
+    }
+  },
+  {
+    "name": "delete_doc",
+    "description": "Delete a document — SOFT delete: it is moved to a .trash/ folder (reversible), never erased. To rename, use move_doc instead. Refuses on remote mirrors (remotes/). Called by an AI, so the move-to-trash keeps a wrong call recoverable.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md/.html to delete"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  }
+]

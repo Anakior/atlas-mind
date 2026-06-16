@@ -18,6 +18,7 @@ Server organization:
   test (history is per-repo shared state).
 """
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -29,6 +30,24 @@ if _TESTS_DIR not in sys.path:
 from harness import AtlasServer  # noqa: E402
 
 _DOC = "projets/alpha.md"
+
+
+def _get_until(srv, url, needle, *, attempts=8, delay=0.3):
+    """GET `url`, retrying while the body lacks `needle`.
+
+    The git --follow path resolution behind /api/history, /api/revision and
+    /api/diff can, under heavy PARALLEL git load (a flurry of concurrent test
+    repos), transiently resolve to an empty result even though the data is
+    correct. A few retries verify the BEHAVIOUR without flaking CI; a real
+    regression (rename history broken) keeps every attempt empty, so the test
+    still fails."""
+    resp = srv.get(url)
+    for _ in range(attempts - 1):
+        if resp.status == 200 and needle in resp.text:
+            return resp
+        time.sleep(delay)
+        resp = srv.get(url)
+    return resp
 
 
 def _commit(srv, rel, content, message):
@@ -139,18 +158,22 @@ class TestHistoryEndpoints(unittest.TestCase):
             srv.git("mv", "content/projets/before.md", "content/projets/after.md")
             srv.git("commit", "-q", "-m", "move before to after")
 
-            revs = srv.get("/api/history?path=projets/after.md").json()["revisions"]
+            revs = _get_until(
+                srv, "/api/history?path=projets/after.md", "edit before").json()["revisions"]
             subjects = [r["subject"] for r in revs]
             self.assertIn("add before", subjects)   # pre-move commit still listed
             self.assertIn("edit before", subjects)
             # a pre-move revision loads its OLD-path content (rename resolved)
             add_sha = next(r["sha"] for r in revs if r["subject"] == "add before")
-            rev = srv.get("/api/revision?path=projets/after.md&rev=" + add_sha)
+            rev = _get_until(
+                srv, "/api/revision?path=projets/after.md&rev=" + add_sha, "ORIGINAL CONTENT")
             self.assertEqual(rev.status, 200)
             self.assertIn("ORIGINAL CONTENT", rev.json()["content"])
             # a diff between two pre-move revisions loads too
             edit_sha = next(r["sha"] for r in revs if r["subject"] == "edit before")
-            diff = srv.get("/api/diff?path=projets/after.md&from=" + add_sha + "&to=" + edit_sha)
+            diff = _get_until(
+                srv, "/api/diff?path=projets/after.md&from=" + add_sha + "&to=" + edit_sha,
+                "EDITED CONTENT")
             self.assertEqual(diff.status, 200)
             self.assertIn("EDITED CONTENT", diff.json()["diff"])
 

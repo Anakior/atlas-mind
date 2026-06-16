@@ -1,0 +1,27 @@
+  .tree-item.active {
+    background: linear-gradient(90deg, rgba(29, 155, 209, 0.28) 0%, rgba(29, 155, 209, 0.08) 70%, transparent 100%);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: inset 2px 0 0 #1d9bd1;
+  }
+  .tree-item:hover:not(.active) { background: rgba(255, 255, 255, 0.06); color: #ffffff; }
+  .tree-item { transition: background 0.08s ease, color 0.08s ease, box-shadow 0.08s ease; }
+  /* remotes/ : mirrors of remote nodes (read-only) — slightly indented
+     to distinguish them from own content, folder renaming hidden. */
+  .tree-item.tree-remote { font-style: italic; opacity: 0.82; }
+  .tree-item.tree-remote .dir-rename-btn { display: none !important; }
+  .tree-remote-badge {
+    font-style: normal; font-size: 9px; line-height: 1; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 2px 5px; margin-left: 4px; border-radius: 3px;
+    color: #8fd3e8; background: rgba(82, 174, 205, 0.16); flex-shrink: 0;
+  }
+  /* Origin (atlas source) under a mirror: small discreet teal label. */
+  .tree-remote-origin {
+    font-style: normal; font-size: 9px; line-height: 1;
+    padding: 2px 5px; margin-left: 4px; border-radius: 3px; flex-shrink: 0;
+    color: #59d0cf; background: rgba(89, 208, 207, 0.12); max-width: 9rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .caret { transition: transform 0.15s ease; }
+  .caret.open { transform: rotate(90deg); }

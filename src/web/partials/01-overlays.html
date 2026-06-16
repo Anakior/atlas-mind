@@ -1,0 +1,85 @@
+<div id="palette-backdrop" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+  <div class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[640px] max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 overflow-hidden">
+    <div class="border-b subtle-border flex items-center gap-2 px-4">
+      <svg class="w-4 h-4 text-ink-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input id="palette-input" type="text" placeholder="Rechercher un fichier ou une action&hellip;" data-i18n-placeholder="palettePlaceholder" class="flex-1 px-1 py-3 bg-transparent text-ink-100 placeholder-ink-500 text-sm focus:outline-none">
+      <kbd class="text-[10px] text-ink-500 bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Esc</kbd>
+    </div>
+    <ul id="palette-list" class="max-h-[420px] overflow-y-auto scrollbar-thin py-1"></ul>
+    <div class="px-4 py-2 border-t subtle-border text-[10px] text-ink-500 flex justify-between font-sans">
+      <span><kbd class="bg-black/30 px-1 rounded">&uarr;&darr;</kbd> <span data-i18n="paletteNavigate">naviguer</span> · <kbd class="bg-black/30 px-1 rounded">&crarr;</kbd> <span data-i18n="paletteOpen">ouvrir</span></span>
+      <span id="palette-count"></span>
+    </div>
+  </div>
+</div>
+
+<div id="graph-overlay" class="hidden fixed inset-0 z-50" style="background:#0e0d12">
+  <canvas id="graph-canvas" class="absolute inset-0" style="width:100%;height:100%"></canvas>
+  <div class="absolute top-4 left-5 pointer-events-none select-none">
+    <div class="text-sm font-semibold text-ink-100 font-sans" data-i18n="graphTitle">The Mind</div>
+    <div class="text-[11px] text-ink-400 font-sans" data-i18n="mindSubtitle">ton palais mental — celui que ton IA arpente avec toi</div>
+    <div class="text-[11px] text-ink-500 font-sans" id="graph-stats"></div>
+  </div>
+  <div id="graph-controls" class="absolute top-4 right-4 flex items-center gap-3">
+    <span class="text-[10px] text-ink-500 font-sans hidden sm:inline" data-i18n="graphHint">molette : zoom · glisser : déplacer · clic : ouvrir</span>
+    <button id="graph-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div id="graph-tooltip" class="absolute pointer-events-none hidden bg-navy-800/95 border subtle-border text-ink-100 text-xs px-2.5 py-1.5 rounded-md shadow-xl font-sans z-10"></div>
+</div>
+<div id="tasks-overlay" class="hidden fixed inset-0 z-50 overflow-y-auto backdrop-blur-md" style="background:rgba(14,13,18,0.6)">
+  <div style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
+    <div class="flex items-center justify-between" style="margin-bottom:1.5rem">
+      <div>
+        <div class="text-lg font-semibold text-ink-100 font-sans" data-i18n="tasksTitle">Tâches</div>
+        <div id="tasks-stats" class="text-xs text-ink-400 font-sans"></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-[11px] text-ink-400 font-sans flex items-center gap-2" style="cursor:pointer;user-select:none">
+          <input id="tasks-show-done" type="checkbox"> <span data-i18n="tasksShowDone">Afficher les faites</span>
+        </label>
+        <button id="tasks-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="tasks-list"></div>
+  </div>
+</div>
+
+<button id="toc-show" class="hidden fixed top-14 right-3 z-20 p-2 bg-navy-800/90 backdrop-blur border subtle-border rounded-lg text-ink-300 hover:text-white hover:bg-navy-700 shadow-lg" title="Afficher le sommaire (Ctrl+J)" data-i18n-title="showToc">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
+</button>
+
+<aside id="toc-panel" class="panel-card fixed top-16 right-6 z-20 w-64 max-h-[65vh] rounded-xl hidden overflow-hidden flex-col">
+  <div class="px-4 py-2 border-b panel-divider flex items-center justify-between">
+    <span class="text-[10px] uppercase tracking-[0.12em] text-accent font-bold" data-i18n="tocHeader">Sur ce doc</span>
+    <button id="toc-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-white/5" title="Masquer (Ctrl+J)" data-i18n-title="hideToc">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <nav id="toc-list" class="overflow-y-auto scrollbar-thin p-2 text-xs max-h-[32vh]"></nav>
+  <div id="toc-links" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
+  <div id="toc-notes" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
+</aside>
+<div id="history-overlay" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+  <div class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[44rem] max-w-[94vw] max-h-[88vh] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 overflow-hidden flex flex-col">
+    <div class="px-4 py-3 border-b subtle-border flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-[10px] uppercase tracking-[0.12em] text-accent font-bold" data-i18n="historyHeader">Historique</div>
+        <div id="history-path" class="text-[11px] font-mono text-ink-400 truncate"></div>
+      </div>
+      <button id="history-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-white/5" title="Fermer (Esc)" data-i18n-title="historyClose">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="flex" style="min-height:0">
+      <nav id="history-list" class="w-64 shrink-0 overflow-y-auto scrollbar-thin p-2 text-[11px]" style="max-height:72vh;border-right:1px solid rgba(255,255,255,0.08)"></nav>
+      <div id="history-detail" class="flex-1 overflow-y-auto scrollbar-thin px-4 py-3 text-[11px]" style="max-height:72vh"></div>
+    </div>
+  </div>
+</div>
+<button id="kb-note-add" type="button" title="Noter" data-i18n-title="noteBtn"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg><span data-i18n="noteBtn">Noter</span></button>
+<div id="kb-note-pop"></div>
+

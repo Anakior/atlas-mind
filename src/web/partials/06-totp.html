@@ -1,0 +1,67 @@
+<!-- ── 2FA modal: enrollment (secret + QR + verification + recovery codes)
+     and disabling. Above the Settings panel (z-65). Reuses the
+     style of the existing modals (dark backdrop, navy card, buttons). ── -->
+<div id="totp-backdrop" class="hidden fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
+  <div id="totp-modal" class="w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70">
+    <div class="px-5 py-4 border-b subtle-border flex items-center justify-between gap-3">
+      <h3 id="totp-title" class="text-base font-semibold text-ink-100" data-i18n="totpModalTitle">Activer le 2FA</h3>
+      <button type="button" id="totp-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-5">
+      <div id="totp-error" class="hidden mb-3 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded px-3 py-2"></div>
+
+      <!-- Step 1: show the secret + QR + verification field -->
+      <div id="totp-step-enroll">
+        <p class="text-[13px] text-ink-300 mb-3 leading-snug" data-i18n="totpScanHint">Scanne ce QR code avec ton application d&rsquo;authentification, ou ajoute la cl&eacute; manuellement.</p>
+        <div class="flex justify-center mb-3">
+          <div id="totp-qr" class="bg-white p-2 rounded-lg" aria-hidden="true"></div>
+        </div>
+        <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="totpSecretLabel">Cl&eacute; secr&egrave;te</label>
+        <div class="flex gap-2 mb-4">
+          <input id="totp-secret-value" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded text-ink-100 text-xs font-mono focus:outline-none">
+          <button type="button" id="totp-secret-copy" class="px-3 py-2 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded flex-shrink-0" data-i18n="copy">Copier</button>
+        </div>
+        <form id="totp-verify-form">
+          <label for="totp-verify-code" class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="totpVerifyLabel">Code de v&eacute;rification</label>
+          <input id="totp-verify-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
+            class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 text-center tracking-[0.3em] text-lg focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+            placeholder="123456">
+          <div class="flex justify-end gap-2 mt-4">
+            <button type="button" id="totp-enroll-cancel" class="px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-i18n="cancel">Annuler</button>
+            <button type="submit" id="totp-verify-submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium" data-i18n="totpConfirmEnable">Confirmer et activer</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Step 2: recovery codes (shown ONCE) -->
+      <div id="totp-step-recovery" class="hidden">
+        <div class="flex items-start gap-2.5 px-3 py-2.5 mb-3 rounded-lg" style="background:rgba(245,158,11,0.10);border:1px solid rgba(251,191,36,0.35);">
+          <svg class="w-4 h-4 mt-px flex-shrink-0" style="color:#fcd34d" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          <p class="flex-1 text-[11px] leading-snug font-semibold" style="color:#fde68a" data-i18n="totpRecoveryWarn">Conserve ces codes de secours en lieu s&ucirc;r. Ils ne seront plus jamais affich&eacute;s et chacun ne fonctionne qu&rsquo;une fois.</p>
+        </div>
+        <ul id="totp-recovery-list" class="grid grid-cols-2 gap-1.5 text-sm text-ink-100 mb-4"></ul>
+        <div class="flex justify-between gap-2">
+          <button type="button" id="totp-recovery-copy" class="px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-i18n="totpRecoveryCopy">Copier les codes</button>
+          <button type="button" id="totp-recovery-done" class="px-4 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium" data-i18n="done">Termin&eacute;</button>
+        </div>
+      </div>
+
+      <!-- Disabling: asks for a code (TOTP or recovery) -->
+      <div id="totp-step-disable" class="hidden">
+        <p class="text-[13px] text-ink-300 mb-3 leading-snug" data-i18n="totpDisableHint">Saisis un code de ton application (ou un code de secours) pour d&eacute;sactiver le 2FA.</p>
+        <form id="totp-disable-form">
+          <input id="totp-disable-code" type="text" autocomplete="off"
+            class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 text-center tracking-[0.2em] focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+            placeholder="123456">
+          <div class="flex justify-end gap-2 mt-4">
+            <button type="button" id="totp-disable-cancel" class="px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-i18n="cancel">Annuler</button>
+            <button type="submit" id="totp-disable-submit" class="px-3 py-1.5 text-sm bg-rose-500/80 hover:bg-rose-500 text-white rounded font-medium" data-i18n="totpConfirmDisable">D&eacute;sactiver</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+

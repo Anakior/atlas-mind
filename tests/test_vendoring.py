@@ -8,6 +8,7 @@ web/vendor/, served by the server under /vendor/ with the right content-types,
 without auth (the login page depends on it) and without traversal. The
 dangerous "DOMPurify absent → raw HTML" fallback in renderMd is removed.
 """
+import os
 import re
 import subprocess
 import sys
@@ -20,8 +21,28 @@ from harness import AtlasServer  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VIEWER = REPO_ROOT / "src" / "web" / "viewer.html"
-SERVER_PY = REPO_ROOT / "src" / "server.py"
+SERVER_PY = REPO_ROOT / "src" / "server" / "__init__.py"
+PAGES_DIR = REPO_ROOT / "src" / "web" / "pages"  # served login/setup/share HTML
 SW_JS = REPO_ROOT / "src" / "web" / "sw.js"
+WEB_DIR = REPO_ROOT / "src" / "web"
+
+
+def _viewer_source() -> str:
+    """The full viewer source = the shell viewer.html + the split fragments it
+    recollates at build (web/styles/*.css, web/partials/*.html, web/js/*.js), so
+    substring assertions about the viewer's CSS / markup / JS hold wherever the
+    content now physically lives."""
+    parts = [VIEWER.read_text(encoding="utf-8")]
+    for sub in ("styles", "partials", "js"):
+        directory = WEB_DIR / sub
+        if directory.is_dir():
+            for frag in sorted(directory.iterdir()):
+                if frag.is_file():
+                    parts.append(frag.read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
+VIEWER_SOURCE = _viewer_source()
 
 # External load reference: a src/href attribute, CSS url() or import that points
 # to http(s)://… "Doc anchor" URLs (comments, links in help strings, SVG xmlns)
@@ -113,10 +134,11 @@ class TestVendoringOnline(unittest.TestCase):
             self.assertNotIn(b"Directory listing", resp.body, path)
 
     def test_offline_build_is_self_contained(self):
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(self.srv.root / "src") + os.pathsep + env.get("PYTHONPATH", "")
         result = subprocess.run(
-            [sys.executable, str(self.srv.root / "src" / "build.py"),
-             "--offline"],
-            cwd=str(self.srv.root), capture_output=True, text=True, timeout=60)
+            [sys.executable, "-m", "build", "--offline"],
+            cwd=str(self.srv.root), env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr)
         text = (self.srv.dist_dir / "index-offline.html").read_text(
             encoding="utf-8")
@@ -193,13 +215,15 @@ class TestVendoringSources(unittest.TestCase):
             self.assertNotIn(host, text)
 
     def test_server_pages_have_no_cdn_hosts(self):
-        # LOGIN_HTML / SHARE_HTML / SHARE_ERROR_HTML: libs and fonts in /vendor/.
-        text = SERVER_PY.read_text(encoding="utf-8")
-        for host in _CDN_HOSTS:
-            self.assertNotIn(host, text)
+        # The served HTML pages (login/setup/share/share-error): every lib and
+        # font comes from /vendor/, never a CDN.
+        for page in sorted(PAGES_DIR.glob("*.html")):
+            text = page.read_text(encoding="utf-8")
+            for host in _CDN_HOSTS:
+                self.assertNotIn(host, text, page.name)
 
     def test_dompurify_fallback_removed(self):
-        text = VIEWER.read_text(encoding="utf-8")
+        text = VIEWER_SOURCE
         # The "DOMPurify absent → raw HTML" fallback pattern no longer exists:
         # no ternary returns the un-sanitized output of marked anymore.
         self.assertNotIn("DOMPurify.sanitize(raw) : raw", text)
@@ -226,11 +250,11 @@ class TestVendoringSources(unittest.TestCase):
         # ignored by the vendored marked v15 → monochrome code blocks).
         # Colorization goes through a custom `code` renderer that calls
         # hljs — in the viewer AND the share page (SHARE_HTML).
-        for path in (VIEWER, SERVER_PY):
-            text = path.read_text(encoding="utf-8")
-            self.assertNotIn("highlight: (code, lang)", text, path.name)
-            self.assertIn('code class="hljs', text, path.name)
-            self.assertIn("hljs.highlightAuto", text, path.name)
+        for text, label in ((VIEWER_SOURCE, "viewer"),
+                            ((PAGES_DIR / "share.html").read_text(encoding="utf-8"), "share.html")):
+            self.assertNotIn("highlight: (code, lang)", text, label)
+            self.assertIn('code class="hljs', text, label)
+            self.assertIn("hljs.highlightAuto", text, label)
 
     def test_vendor_licenses_are_preserved(self):
         vendor = REPO_ROOT / "src" / "web" / "vendor"

@@ -237,8 +237,7 @@ class AtlasConfig:
 
     MIND-side paths: root, content_root, dist_dir, index_file, notes_dir,
     extensions_dir, todo_file, store_dir. ENGINE-side path: web_dir (viewer
-    template + PWA assets) — with a fallback to <mind>/web for the historical
-    cloud image that does not bundle web/ (the content repo clone provides it)."""
+    template + PWA assets), always the package's web/ (the engine ships it)."""
 
     def __init__(self, root, *, toml_data: dict = None, env=None):
         if env is None:
@@ -253,7 +252,6 @@ class AtlasConfig:
 
         # ── paths ──────────────────────────────────────────────────────────
         self.root = Path(root).resolve()
-        self.engine_root = ENGINE_ROOT
         self.content_root = self.root / "content"
         self.dist_dir = self.root / "dist"
         self.index_file = self.dist_dir / "index.html"
@@ -264,9 +262,8 @@ class AtlasConfig:
         # Missing directory = no extensions, behavior unchanged.
         self.extensions_dir = self.root / ".atlas" / "extensions"
         # Viewer assets ship inside the package (src/web) so a pip-installed wheel
-        # is self-contained; fall back to <mind>/web for any legacy layout.
-        engine_web = PACKAGE_DIR / "web"
-        self.web_dir = engine_web if engine_web.is_dir() else self.root / "web"
+        # is self-contained — always the package's web/, never the mind's.
+        self.web_dir = PACKAGE_DIR / "web"
 
         # ── instance identity (configurable branding) ──────────────────────
         # The "Atlas" brand is FIXED (SITE_WORDMARK); only the prefix is
@@ -313,6 +310,18 @@ class AtlasConfig:
             secret = _toml_str(server, "server", "session_secret",
                                DEFAULT_SESSION_SECRET)
         self.session_secret = secret.encode()
+
+        # Dev sandbox (ATLAS_DEV=1): turn the CLOUD features on locally (login,
+        # setup, share, 2FA, admin…) while staying ISOLATED from prod — no git
+        # push/pull (run() + GitSync gate on dev_mode), bound to 127.0.0.1, a fixed
+        # non-default secret, and a seeded dev admin. NEVER set ATLAS_DEV in prod.
+        self.dev_mode = bool(env.get("ATLAS_DEV"))
+        if self.dev_mode:
+            self.auth_enabled = True
+            if secret in ("", DEFAULT_SESSION_SECRET):
+                # A stable non-sentinel secret so sessions survive a restart and the
+                # run() default-secret guard passes.
+                self.session_secret = b"atlas-dev-sandbox-secret-not-for-production"
 
         if "SESSION_MAX_AGE" in env:
             self.session_max_age = _parse_int(env["SESSION_MAX_AGE"],
