@@ -328,8 +328,9 @@ class TestSeparateMindServer(unittest.TestCase):
         # at the mind via ATLAS_MIND (same mechanism as trigger_sync server-side).
         env = os.environ.copy()
         env["ATLAS_MIND"] = str(cls.mind)
+        env["PYTHONPATH"] = str(cls.srv.root / "src") + os.pathsep + env.get("PYTHONPATH", "")
         result = subprocess.run(
-            [sys.executable, str(cls.srv.root / "src" / "build.py")],
+            [sys.executable, "-m", "build"],
             cwd=str(cls.srv.root), env=env,
             capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stderr

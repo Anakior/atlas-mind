@@ -1,0 +1,201 @@
+"""build — the viewer build pipeline (public facade).
+
+`python -m build` is the entrypoint (see __main__); the logic lives in the
+submodules: paths (engine paths + identity defaults), parse (pure indexing),
+assets (extensions + vendor inlining), render (template substitution). This
+module re-exports the public surface that server.py reaches via _import_build
+and that the tests import, and it owns the tree walk + the EXCLUDED_NAMES
+exclusion set (server.py monkey-patches build.EXCLUDED_NAMES at runtime; walk
+reads it at call time, so the override takes effect)."""
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+from build.paths import (  # noqa: F401  (re-exported as build.*)
+    SRC_DIR, WEB_DIR, TEMPLATE, TEMPLATES_DIR, STYLES_DIR, PARTIALS_DIR, JS_DIR,
+    SITE_WORDMARK, DEFAULT_SITE_PREFIX, DEFAULT_TAGLINE, DEFAULT_LANG,
+    DEFAULT_TODO_CATEGORIES,
+)
+from build.parse import (  # noqa: F401
+    _parse_frontmatter, _folder_tags, _resolve_wikilink, _WIKILINK_RE,
+    build_links_index, build_tasks_index,
+)
+from build.assets import (  # noqa: F401
+    load_all_notes, load_doc_templates, load_extension_assets,
+    _escape_closing_tag, _CLOSING_SCRIPT_RE, _CLOSING_STYLE_RE, _CLOSING_HEAD_RE,
+    inline_vendor_assets, concat_sources,
+)
+from build.render import render_template, render_manifest  # noqa: F401
+
+# Tree exclusions. server.py overrides EXCLUDED_NAMES from CONFIG.excluded_names
+# at runtime (_import_build); walk() reads it AT CALL TIME, so the override takes
+# effect. EXCLUDED_PREFIXES keeps dotfiles (.notes/, etc.) out of the tree.
+EXCLUDED_NAMES = {"quick.md"}
+EXCLUDED_PREFIXES = (".",)
+
+# ─── Tree walk ────────────────────────────────────────────────────────────────
+
+
+def _count_words(text: str) -> int:
+    return len(text.split())
+
+
+def _git_commit_dates(repo_root: Path) -> dict[str, int]:
+    """Map posix relative path → unix ts of the last commit that touches the file.
+
+    `repo_root` is the git repo root of the MIND (the parent of content/).
+
+    The activity heatmap must reflect when docs were actually written, not their
+    disk mtime: git does not preserve mtime (clone/pull/checkout/reset reset it
+    to the time of the operation), so on the Fly server all files inherit the
+    date of the last deployment. We read the commit date instead.
+
+    `git log` outputs in reverse-chronological order → the 1st occurrence of a
+    path is its most recent commit. Returns {} if git is unavailable (fallback
+    on st_mtime).
+
+    NB: recomputed on every walk() call (via _accum), and most definitely NOT
+    cached at the module level — the server is a long-lived process that calls
+    walk() again on /api/tree after each pull; a cache would freeze the dates
+    until restart.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "log",
+             "--format=__C__%ct", "--name-only", "--no-renames", "--", "content"],
+            cwd=str(repo_root), capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if out.returncode != 0:
+        return {}
+    dates: dict[str, int] = {}
+    ts = 0
+    for line in out.stdout.splitlines():
+        if line.startswith("__C__"):
+            ts = int(line[5:])
+        elif line and ts:
+            # Repo-relative paths (content/projets/x.md); we strip the content/
+            # prefix to match the doc identity (rel = relative_to content/).
+            key = line[8:] if line.startswith("content/") else line
+            if key not in dates:
+                dates[key] = ts
+    return dates
+
+
+def walk(path: Path, *, content_root: Path | None = None,
+         embed_content: bool = False, _accum: dict | None = None,
+         excluded_names=None, excluded_prefixes=None) -> dict:
+    """Recursively walk the knowledge-base content folder.
+
+    `content_root` is the content root: doc paths (`rel`) are computed relative
+    to it (default = `path`, the starting folder). Keeps doc identity stable
+    (`projets/x.md`) regardless of the physical location.
+
+    `excluded_names` / `excluded_prefixes`: tree exclusions, default = the module
+    constants (read AT CALL TIME: server.py injects CONFIG.excluded_names there
+    via _import_build).
+
+    `_accum` collects flat list of .md files for downstream indexing (search,
+    backlinks). When embed_content=True, each .md node also carries `content`
+    inline — used by the offline build.
+    """
+    if content_root is None:
+        content_root = path
+    if excluded_names is None:
+        excluded_names = EXCLUDED_NAMES
+    if excluded_prefixes is None:
+        excluded_prefixes = EXCLUDED_PREFIXES
+    if _accum is None:
+        _accum = {"md_files": []}
+    # Computed once per top-level walk() (recursive calls find it already
+    # present), never cached at the module level — see _git_commit_dates. The
+    # git repo root of the mind = parent of content/.
+    if "git_dates" not in _accum:
+        _accum["git_dates"] = _git_commit_dates(content_root.parent)
+    node = {"name": path.name, "type": "dir", "children": []}
+    entries = []
+    for child in path.iterdir():
+        if child.name in excluded_names:
+            continue
+        if any(child.name.startswith(p) for p in excluded_prefixes):
+            continue
+        entries.append(child)
+    entries.sort(key=lambda p: (not p.is_dir(), p.name.lower()))
+    for child in entries:
+        if child.is_dir():
+            sub = walk(child, content_root=content_root,
+                       embed_content=embed_content, _accum=_accum,
+                       excluded_names=excluded_names,
+                       excluded_prefixes=excluded_prefixes)
+            if sub["children"]:
+                node["children"].append(sub)
+            continue
+        ext = child.suffix.lower()
+        rel = child.relative_to(content_root).as_posix()
+        file_node = {
+            "name": child.name,
+            "type": "file",
+            "path": rel,
+            "ext": ext,
+            # Git commit date (true writing activity); st_mtime fallback for
+            # unversioned files or files outside the git repo. See _git_commit_dates.
+            "mtime": _accum["git_dates"].get(rel, int(child.stat().st_mtime)),
+        }
+        # Folder-derived tags apply to EVERY file (md, html, pdf, docx, …) so
+        # that non-Markdown documents also surface as nodes — clustered by zone
+        # and tag — in The Mind graph, not just Markdown.
+        tags = _folder_tags(rel)
+        if ext == ".md":
+            try:
+                # utf-8-sig absorbs the BOM (Windows editors: Notepad,
+                # PowerShell Out-File) which would otherwise break the
+                # frontmatter match (_FM_RE anchored on ^---) and display the
+                # tags block in plain text.
+                text = child.read_text(encoding="utf-8-sig")
+            except (OSError, UnicodeDecodeError) as e:
+                # A single unreadable .md must not fail the WHOLE rebuild (the
+                # webhook would stay stuck on the old version). We keep the node
+                # in the tree but without metadata, just as load_all_notes
+                # tolerates a faulty sidecar.
+                print(f"[build] skip metadata for {rel}: {e}", file=sys.stderr)
+                text = None
+            if text is not None:
+                tags_fm, body = _parse_frontmatter(text)
+                # Tags = parent folders (always) ∪ frontmatter (custom). Folder
+                # tags remain even if the doc has explicit tags.
+                for t in tags_fm:
+                    if t not in tags:
+                        tags.append(t)
+                file_node["words"] = _count_words(body)
+                _accum["md_files"].append(
+                    {"path": rel, "name": child.name, "content": text, "body": body, "tags": tags})
+                if embed_content:
+                    file_node["content"] = text
+        elif ext == ".html":
+            # Self-contained HTML document (deck, dashboard): no frontmatter nor
+            # wikilinks to parse. We count the words of the visible text (tags
+            # stripped) for the reading time, and embed it as-is in the offline
+            # build. body="" → ignored by the wikilink scan; still a possible
+            # [[link]] target via by_path/by_stem.
+            try:
+                text = child.read_text(encoding="utf-8-sig")
+            except (OSError, UnicodeDecodeError) as e:
+                print(f"[build] skip metadata for {rel}: {e}", file=sys.stderr)
+                text = None
+            if text is not None:
+                file_node["words"] = _count_words(re.sub(r"<[^>]+>", " ", text))
+                _accum["md_files"].append(
+                    {"path": rel, "name": child.name, "content": text, "body": "", "tags": tags})
+                if embed_content:
+                    file_node["content"] = text
+        # PDFs, Word docs and other previewable files carry no indexable text,
+        # but still get their folder tags (attached below) so they are nodes too.
+        if tags:
+            file_node["tags"] = tags
+        node["children"].append(file_node)
+    return node
+

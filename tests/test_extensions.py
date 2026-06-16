@@ -68,8 +68,9 @@ def run_build(mind: Path, *args: str) -> subprocess.CompletedProcess:
     env.pop("KB_AUTH_ENABLED", None)
     env["GIT_CONFIG_GLOBAL"] = os.devnull
     env["GIT_CONFIG_SYSTEM"] = os.devnull
+    env["PYTHONPATH"] = str(REPO_SRC) + os.pathsep + env.get("PYTHONPATH", "")
     result = subprocess.run(
-        [sys.executable, str(REPO_SRC / "build.py"), *args],
+        [sys.executable, "-m", "build", *args],
         cwd=str(mind), env=env, capture_output=True, text=True, timeout=60,
     )
     if result.returncode != 0:

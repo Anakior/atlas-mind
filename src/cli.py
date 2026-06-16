@@ -82,20 +82,14 @@ def _file_store(config: AtlasConfig) -> store.FileStore:
     return store.FileStore(config.store_dir)
 
 
-def _build_script_for(mind: Path) -> Path:
-    """build.py to run: the mind's own if it ships one (legacy repo with
-    src/), otherwise the engine's — same preference as server.py."""
-    mind_build = mind / "src" / "build.py"
-    if mind_build.is_file():
-        return mind_build
-    return ENGINE_SRC / "build.py"
-
-
 def _run_build(mind: Path, *, offline: bool = False) -> int:
-    """Run build.py on the mind (inherited output, visible to the user)."""
+    """Build the mind's viewer via `python -m build` (inherited output, visible to
+    the user). Always the ENGINE's build: PYTHONPATH puts the engine src first, so
+    a mind never builds with its own (now-forbidden) shipped build."""
     env = os.environ.copy()
     env["ATLAS_MIND"] = str(mind)
-    command = [sys.executable, str(_build_script_for(mind))]
+    env["PYTHONPATH"] = str(ENGINE_SRC) + os.pathsep + env.get("PYTHONPATH", "")
+    command = [sys.executable, "-m", "build"]
     if offline:
         command.append("--offline")
     completed = subprocess.run(command, cwd=str(mind), env=env)
@@ -651,11 +645,13 @@ def cmd_serve(args) -> int:
                   "unavailable (the API is still served).", file=sys.stderr)
     env = os.environ.copy()
     env["ATLAS_MIND"] = str(mind)
+    env["PYTHONPATH"] = str(ENGINE_SRC) + os.pathsep + env.get("PYTHONPATH", "")
     if args.port is not None:
         env["PORT"] = str(args.port)
-    # exec: the process BECOMES the server (direct Ctrl+C and signals).
+    # exec: the process BECOMES the server (direct Ctrl+C and signals). PYTHONPATH
+    # puts the engine src first so `-m server` resolves the engine's server.
     os.execve(sys.executable,
-              [sys.executable, str(ENGINE_SRC / "server.py")], env)
+              [sys.executable, "-m", "server"], env)
     return 0  # never reached
 
 

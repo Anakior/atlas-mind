@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="__LANG__"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>__TITLE__</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<script src="/vendor/marked.min.js"></script>
+<script src="/vendor/purify.min.js"></script>
+<link rel="stylesheet" href="/vendor/highlight-github-dark.min.css">
+<script src="/vendor/highlight.min.js"></script>
+<link rel="stylesheet" href="/vendor/fonts.css">
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:clip}
+body{margin:0;background:#23222a;color:#d1d2d3;font-family:Lora,Georgia,serif;font-size:17px;line-height:1.7}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.18)}
+::-webkit-scrollbar-track{background:transparent}
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent}
+.layout{display:flex;gap:2.5rem;max-width:1100px;margin:0 auto;padding:48px 24px 64px}
+aside#toc{width:240px;flex-shrink:0;position:sticky;top:32px;align-self:flex-start;max-height:calc(100vh - 64px);overflow-y:auto;font-family:Manrope,system-ui,sans-serif}
+aside#toc .toc-title{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.12em;color:#1d9bd1;margin:0 0 0.75rem 0.5rem;font-weight:700}
+aside#toc nav{display:flex;flex-direction:column;gap:0.15rem}
+aside#toc a{color:#b0b1b5;text-decoration:none;padding:0.25rem 0.5rem;font-size:0.85rem;line-height:1.4;border-left:2px solid transparent}
+aside#toc a:hover{color:#5db5e8;background:rgba(255,255,255,0.03);border-left-color:rgba(29,155,209,0.4)}
+aside#toc a.toc-h3{padding-left:1.25rem;font-size:0.8rem;color:#868a90}
+article#content{flex:1;min-width:0;max-width:780px;overflow-wrap:break-word}
+article#content *{max-width:100%;overflow-wrap:break-word;word-wrap:break-word}
+article#content a{word-break:break-all}
+h1,h2,h3,h4{font-family:Manrope,system-ui,sans-serif;letter-spacing:-0.015em;font-weight:700}
+h1{color:#fff;font-size:2rem;margin-top:0}
+h2{color:#4fb3e0;border-bottom:1px solid #2a2a32;padding-bottom:0.3rem;margin-top:2rem;scroll-margin-top:24px}
+h3{color:#87cdee;scroll-margin-top:24px}
+h4{color:#b6dcef}
+a{color:#36c5f0;text-decoration:none}
+a:hover{text-decoration:underline}
+.wikilink{color:#9aa0a6;border-bottom:1px dashed #3a3c44;cursor:default}
+code,pre{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:0.9em}
+code{background:rgba(29,155,209,0.1);color:#5db5e8;padding:2px 6px;border-radius:4px;border:1px solid rgba(29,155,209,0.15)}
+pre{background:#13141a;border:1px solid #2a2c36;padding:1rem;border-radius:8px;overflow-x:auto;max-width:100%}
+/* !important : la classe .hljs (posée par le renderer code) amène la couleur de
+   fond du thème highlight — le <pre> garde le fond/la bordure, comme le viewer. */
+pre code{background:transparent !important;color:inherit !important;border:0;padding:0}
+blockquote{border-left:3px solid #1d9bd1;background:rgba(29,155,209,0.06);padding:0.5rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;color:#b0b1b5}
+table{display:block;border-collapse:collapse;width:100%;margin:1rem 0;overflow-x:auto;max-width:100%}
+th,td{border:1px solid #2a2a32;padding:8px 12px;text-align:left}
+th{color:#fff}
+img{max-width:100%;height:auto;border-radius:6px}
+hr{border:0;border-top:1px solid #2a2a32;margin:2rem 0}
+ul,ol{padding-left:1.5rem}
+.footer{margin-top:3rem;padding-top:1rem;border-top:1px solid #2a2a32;font-size:12px;color:#5e6066;text-align:center}
+/* CSS des extensions du mind (mêmes fichiers que le viewer : .atlas/extensions/*.css).
+   L'article porte la classe .prose pour que leurs sélecteurs s'appliquent ici aussi. */
+__EXTENSIONS_CSS__
+@media(max-width:899px){
+  .layout{flex-direction:column;padding:24px 16px;gap:1rem}
+  aside#toc{width:auto;position:static;max-height:none;padding:0.75rem 1rem;background:rgba(0,0,0,0.25);border:1px solid #2a2a32;border-radius:8px}
+  aside#toc.empty{display:none}
+  aside#toc nav{max-height:14rem;overflow-y:auto}
+}
+</style></head><body>
+<div class="layout">
+  <aside id="toc" class="empty"></aside>
+  <article id="content" class="prose"></article>
+</div>
+<div class="footer">__FOOTER_LABEL__</div>
+<script>
+const CONTENT = __CONTENT_JSON__;
+marked.setOptions({ gfm: true, breaks: false });
+// Colorisation des blocs de code : marked ≥ v5 a SUPPRIMÉ l'option `highlight`
+// (silencieusement ignorée) → renderer `code` custom qui appelle highlight.js
+// au rendu (équivalent inline de marked-highlight). Même correctif que le
+// viewer. La sortie hljs (spans + classes) survit à DOMPurify.
+marked.use({ renderer: {
+  code({ text, lang }) {
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const language = (lang || '').trim().split(/\\s+/)[0];
+    let html;
+    try {
+      html = language && hljs.getLanguage(language)
+        ? hljs.highlight(text, { language }).value
+        : hljs.highlightAuto(text).value;
+    } catch (e) { html = esc(text); }
+    const cls = language ? ' language-' + esc(language) : '';
+    return '<pre><code class="hljs' + cls + '">' + html + '</code></pre>\\n';
+  },
+} });
+// Wikilinks [[target]] / [[target|alias]]: in a share the targets are not
+// navigable (we only serve one doc) → render readable non-clickable text instead
+// of the raw [[...]]. Without an alias: last segment de-slugged (my-note →
+// "my note"). Handled as an inline token → ignored inside code blocks.
+marked.use({ extensions: [{
+  name: 'wikilink',
+  level: 'inline',
+  start(src) { return src.indexOf('[['); },
+  tokenizer(src) {
+    const m = /^\\[\\[([^\\[\\]\\n]+?)\\]\\]/.exec(src);
+    if (m) return { type: 'wikilink', raw: m[0], target: m[1].trim() };
+  },
+  renderer(token) {
+    const parts = token.target.split('|');
+    let label = (parts[1] || '').trim();
+    if (!label) label = parts[0].split('/').pop().replace(/\\.md$/i, '').replace(/[-_]+/g, ' ').trim();
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return '<span class="wikilink">' + esc(label) + '</span>';
+  },
+}] });
+const article = document.getElementById('content');
+article.innerHTML = DOMPurify.sanitize(marked.parse(CONTENT));
+// Build TOC depuis h2/h3 du contenu
+const headings = article.querySelectorAll('h2, h3');
+if (headings.length >= 2) {
+  const slug = s => s.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const used = new Set();
+  const tocEl = document.getElementById('toc');
+  tocEl.classList.remove('empty');
+  let html = '<div class="toc-title">__TOC_TITLE__</div><nav>';
+  headings.forEach(h => {
+    let id = slug(h.textContent) || 'section';
+    let base = id, n = 2;
+    while (used.has(id)) { id = base + '-' + n; n++; }
+    used.add(id);
+    h.id = id;
+    const cls = 'toc-' + h.tagName.toLowerCase();
+    html += '<a href="#' + id + '" class="' + cls + '">' + h.textContent.replace(/</g, '&lt;') + '</a>';
+  });
+  html += '</nav>';
+  tocEl.innerHTML = html;
+}
+</script>
+<script>
+// JS des extensions du mind (mêmes fichiers que le viewer) : permet aux
+// contenus générés par une extension de rester interactifs une fois partagés.
+// Chaque extension doit tolérer ce contexte (DOM du viewer absent).
+__EXTENSIONS_JS__
+</script>
+</body></html>

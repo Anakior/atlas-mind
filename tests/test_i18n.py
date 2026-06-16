@@ -192,8 +192,18 @@ class TestI18nViewerDictionaryConsistency(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.template = (REPO_ROOT / "src" / "web" / "viewer.html").read_text(
-            encoding="utf-8")
+        # The viewer is split: the STRINGS dict lives in web/js/*.js and the
+        # data-i18n markup in web/partials/*.html — read the full source (shell +
+        # fragments), as the build recollates them.
+        web = REPO_ROOT / "src" / "web"
+        parts = [(web / "viewer.html").read_text(encoding="utf-8")]
+        for sub in ("js", "partials", "styles"):
+            directory = web / sub
+            if directory.is_dir():
+                for frag in sorted(directory.iterdir()):
+                    if frag.is_file():
+                        parts.append(frag.read_text(encoding="utf-8"))
+        cls.template = "\n".join(parts)
 
     def _dict_keys(self, lang: str) -> set:
         block = self.template.split("const STRINGS = {", 1)[1].split("\n};", 1)[0]

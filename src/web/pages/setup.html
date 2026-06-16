@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="__LANG__"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0e0d12">
+<meta name="robots" content="noindex, nofollow">
+<title>__SITE_NAME__ — Setup</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/vendor/fonts.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:radial-gradient(ellipse 80% 60% at 70% 30%, rgba(29,155,209,0.12), transparent),radial-gradient(ellipse 60% 40% at 20% 80%, rgba(251,198,120,0.08), transparent),#0e0d12;
+  color:#d1d2d3;font-family:Manrope,system-ui,sans-serif;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.card{
+  width:100%;max-width:420px;padding:36px 32px 32px;
+  background:rgba(35,34,42,0.55);
+  backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.1);border-radius:16px;
+  box-shadow:0 18px 48px -12px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.logo-wrap{display:flex;justify-content:center;margin-bottom:18px}
+.logo-wrap svg{width:64px;height:64px;border-radius:12px;box-shadow:0 6px 24px -2px rgba(251,198,120,0.35)}
+h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-0.015em;color:#fff;text-align:center;line-height:1.2}
+h1 .atlas{color:#fbc678;font-style:italic;font-weight:400;font-family:'Rubik 80s Fade',Impact,sans-serif;letter-spacing:0.02em}
+h1 .wordmark{position:relative;display:inline-block;line-height:1}
+h1 .mind{position:absolute;top:-1.05em;right:-1em;font-size:0.3em;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#e5e6e8;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:1em 0;padding:0.22em 0.6em;line-height:1.25;font-family:system-ui,-apple-system,sans-serif;opacity:0.3}
+h1 .brand{font-family:'Corinthia',cursive;font-weight:700;font-size:1.6em;line-height:1}
+.subtitle{font-size:11px;color:#868a90;text-align:center;margin:6px 0 12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+.intro{font-size:13px;color:#b0b1b5;text-align:center;margin:0 0 22px;line-height:1.5}
+form{display:flex;flex-direction:column;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field > label{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#868a90}
+input{
+  padding:12px 14px;border:1px solid #2a2a32;background:rgba(0,0,0,0.3);
+  color:#fff;border-radius:8px;font:inherit;font-size:14px;outline:none;
+  transition:border-color 0.15s,box-shadow 0.15s,background 0.15s;
+}
+input:focus{border-color:#1d9bd1;box-shadow:0 0 0 3px rgba(29,155,209,0.18);background:rgba(0,0,0,0.45)}
+input::placeholder{color:#5e6066}
+.token-input{font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0.02em}
+.field-help{font-size:11.5px;color:#868a90;line-height:1.45;margin:0;display:flex;gap:7px;align-items:flex-start}
+.field-help svg{width:14px;height:14px;flex-shrink:0;margin-top:1px;color:#fbc678;opacity:0.85}
+.field-help code{color:#cbd0d6;background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:11px}
+button{
+  padding:12px 14px;margin-top:4px;background:#1d9bd1;color:white;border:0;border-radius:8px;
+  font:inherit;font-size:14px;font-weight:600;cursor:pointer;
+  transition:filter 0.12s,transform 0.06s;
+}
+button:hover{filter:brightness(1.1)}
+button:active{transform:scale(0.98)}
+.err{color:#fca5a5;font-size:13px;margin:0 0 14px;text-align:center;background:rgba(248,113,113,0.08);padding:9px 12px;border-radius:7px;border:1px solid rgba(248,113,113,0.22)}
+</style></head><body>
+<div class="card">
+  <div class="logo-wrap">
+    <svg viewBox="0 0 32 32"><defs><radialGradient id="sky-setup" cx="50%" cy="40%" r="65%"><stop offset="0%" stop-color="#1f1d2a"/><stop offset="100%" stop-color="#0a0a12"/></radialGradient><radialGradient id="glow-setup" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbc678" stop-opacity="0.75"/><stop offset="100%" stop-color="#fbc678" stop-opacity="0"/></radialGradient></defs><rect width="32" height="32" rx="7" fill="url(#sky-setup)"/><circle cx="16" cy="16" r="9" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.4"/><circle cx="16" cy="16" r="1.2" fill="#fff" opacity="0.85"/><g><animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 16 16" to="360 16 16" dur="5s" repeatCount="indefinite"/><circle cx="22.36" cy="9.64" r="4" fill="url(#glow-setup)"/><circle cx="22.36" cy="9.64" r="1.9" fill="#fbc678"/></g></svg>
+  </div>
+  <h1><span class="brand">__SITE_PREFIX__</span> <span class="wordmark"><span class="atlas">Atlas</span><span class="mind">Mind</span></span></h1>
+  <p class="subtitle">__SETUP_SUBTITLE__</p>
+  <p class="intro">__SETUP_INTRO__</p>
+  <form id="setup-form">
+    __ERROR_HTML__
+    <div class="field">
+      <label for="setup-token">__TOKEN_LABEL__</label>
+      <input id="setup-token" name="setup_token" class="token-input" type="text" placeholder="__TOKEN_PLACEHOLDER__" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required autofocus>
+      <p class="field-help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span>__TOKEN_HELP__</span></p>
+    </div>
+    <div class="field">
+      <label for="setup-email">__EMAIL_LABEL__</label>
+      <input id="setup-email" name="email" type="email" placeholder="__EMAIL_PLACEHOLDER__" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="setup-password">__PASSWORD_LABEL__</label>
+      <input id="setup-password" name="password" type="password" placeholder="__PASSWORD_PLACEHOLDER__" autocomplete="new-password" minlength="8" required>
+    </div>
+    <button type="submit">__SUBMIT_LABEL__</button>
+  </form>
+</div>
+<script>
+// Soumission en JSON (les endpoints admin exigent application/json + même
+// origine). Pas de form action HTML : on POST en fetch same-origin.
+document.getElementById('setup-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const form = e.target;
+  const payload = {
+    setup_token: form.setup_token.value,
+    email: form.email.value,
+    password: form.password.value,
+  };
+  const resp = await fetch('/api/setup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (resp.ok) { window.location = '/'; return; }
+  let message = 'Error';
+  try { message = (await resp.json()).error || message; } catch (_) {}
+  let box = form.querySelector('.err');
+  if (!box) { box = document.createElement('p'); box.className = 'err'; form.insertBefore(box, form.firstChild); }
+  box.textContent = message;
+});
+</script>
+</body></html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="__LANG__"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0e0d12">
+<title>__SITE_NAME__ — Login</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/vendor/fonts.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:radial-gradient(ellipse 80% 60% at 70% 30%, rgba(29,155,209,0.12), transparent),radial-gradient(ellipse 60% 40% at 20% 80%, rgba(251,198,120,0.08), transparent),#0e0d12;
+  color:#d1d2d3;font-family:Manrope,system-ui,sans-serif;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.card{
+  width:100%;max-width:380px;padding:36px 32px 32px;
+  background:rgba(35,34,42,0.55);
+  backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.1);border-radius:16px;
+  box-shadow:0 18px 48px -12px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.logo-wrap{display:flex;justify-content:center;margin-bottom:18px}
+.logo-wrap svg{width:64px;height:64px;border-radius:12px;box-shadow:0 6px 24px -2px rgba(251,198,120,0.35)}
+h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-0.015em;color:#fff;text-align:center;line-height:1.2}
+h1 .atlas{color:#fbc678;font-style:italic;font-weight:400;font-family:'Rubik 80s Fade',Impact,sans-serif;letter-spacing:0.02em}
+h1 .wordmark{position:relative;display:inline-block;line-height:1}
+h1 .mind{position:absolute;top:-1.05em;right:-1em;font-size:0.3em;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#e5e6e8;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:1em 0;padding:0.22em 0.6em;line-height:1.25;font-family:system-ui,-apple-system,sans-serif;opacity:0.3}
+h1 .brand{font-family:'Corinthia',cursive;font-weight:700;font-size:1.6em;line-height:1}
+.subtitle{font-size:11px;color:#868a90;text-align:center;margin:6px 0 24px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+form{display:flex;flex-direction:column;gap:10px}
+input{
+  padding:12px 14px;border:1px solid #2a2a32;background:rgba(0,0,0,0.3);
+  color:#fff;border-radius:8px;font:inherit;font-size:14px;outline:none;
+  transition:border-color 0.15s,box-shadow 0.15s,background 0.15s;
+}
+input:focus{border-color:#1d9bd1;box-shadow:0 0 0 3px rgba(29,155,209,0.18);background:rgba(0,0,0,0.45)}
+input::placeholder{color:#5e6066}
+button{
+  padding:12px 14px;margin-top:10px;background:#1d9bd1;color:white;border:0;border-radius:8px;
+  font:inherit;font-size:14px;font-weight:600;cursor:pointer;
+  transition:filter 0.12s,transform 0.06s;
+}
+button:hover{filter:brightness(1.1)}
+button:active{transform:scale(0.98)}
+.err{color:#fca5a5;font-size:13px;margin:0 0 14px;text-align:center;background:rgba(248,113,113,0.08);padding:9px 12px;border-radius:7px;border:1px solid rgba(248,113,113,0.22)}
+.footer{text-align:center;margin-top:18px;font-size:11px;color:#5e6066;letter-spacing:0.05em}
+.hidden{display:none!important}
+.intro{font-size:13px;color:#b0b1b5;text-align:center;margin:2px 0 14px;line-height:1.55}
+.link-btn{background:none;border:0;color:#1d9bd1;font:inherit;font-size:12px;cursor:pointer;padding:6px;margin:0;text-align:center;text-decoration:underline}
+.link-btn:hover{filter:brightness(1.15)}
+input.code{text-align:center;letter-spacing:0.35em;font-size:18px;font-variant-numeric:tabular-nums}
+input.code.recovery{letter-spacing:0.12em;font-size:15px}
+</style></head><body>
+<div class="card">
+  <div class="logo-wrap">
+    <svg viewBox="0 0 32 32"><defs><radialGradient id="sky-login" cx="50%" cy="40%" r="65%"><stop offset="0%" stop-color="#1f1d2a"/><stop offset="100%" stop-color="#0a0a12"/></radialGradient><radialGradient id="glow-login" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbc678" stop-opacity="0.75"/><stop offset="100%" stop-color="#fbc678" stop-opacity="0"/></radialGradient></defs><rect width="32" height="32" rx="7" fill="url(#sky-login)"/><circle cx="16" cy="16" r="9" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.4"/><circle cx="16" cy="16" r="1.2" fill="#fff" opacity="0.85"/><g><animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 16 16" to="360 16 16" dur="5s" repeatCount="indefinite"/><circle cx="22.36" cy="9.64" r="4" fill="url(#glow-login)"/><circle cx="22.36" cy="9.64" r="1.9" fill="#fbc678"/></g></svg>
+  </div>
+  <h1><span class="brand">__SITE_PREFIX__</span> <span class="wordmark"><span class="atlas">Atlas</span><span class="mind">Mind</span></span></h1>
+  <p class="subtitle" id="login-subtitle">__LOGIN_SUBTITLE__</p>
+  <div id="login-error" class="err hidden" role="alert"></div>
+  __ERROR_HTML__
+  <!-- Étape 1 : email + mot de passe. POST classique en repli si JS off. -->
+  <form id="login-step-credentials" method="post" action="/login">
+    <input id="login-email" name="email" type="email" placeholder="__EMAIL_PLACEHOLDER__" autocomplete="username" required autofocus>
+    <input id="login-password" name="password" type="password" placeholder="__PASSWORD_PLACEHOLDER__" autocomplete="current-password" required>
+    <button type="submit">__SUBMIT_LABEL__</button>
+  </form>
+  <!-- Étape 2 : second facteur (TOTP). Révélée par JS si le backend l'exige. -->
+  <form id="login-step-totp" class="hidden">
+    <p class="intro">__TOTP_INTRO__</p>
+    <input id="login-totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class="code" placeholder="__TOTP_PLACEHOLDER__">
+    <button type="submit">__TOTP_SUBMIT__</button>
+    <button type="button" class="link-btn" id="login-to-recovery">__TOTP_USE_RECOVERY__</button>
+    <button type="button" class="link-btn" id="login-totp-back">__BACK_LABEL__</button>
+  </form>
+  <!-- Étape 2 bis : code de secours. -->
+  <form id="login-step-recovery" class="hidden">
+    <p class="intro">__RECOVERY_INTRO__</p>
+    <input id="login-recovery-code" type="text" autocomplete="off" class="code recovery" placeholder="__RECOVERY_PLACEHOLDER__">
+    <button type="submit">__TOTP_SUBMIT__</button>
+    <button type="button" class="link-btn" id="login-to-totp">__TOTP_USE_APP__</button>
+    <button type="button" class="link-btn" id="login-recovery-back">__BACK_LABEL__</button>
+  </form>
+</div>
+<script>
+(function() {
+  var STEP1 = "__LOGIN_SUBTITLE__", STEP2 = "__TOTP_SUBTITLE__";
+  var GENERIC = "__GENERIC_ERROR__";
+  var subtitle = document.getElementById('login-subtitle');
+  var errBox = document.getElementById('login-error');
+  var fCred = document.getElementById('login-step-credentials');
+  var fTotp = document.getElementById('login-step-totp');
+  var fRec = document.getElementById('login-step-recovery');
+  var email = document.getElementById('login-email');
+  var pw = document.getElementById('login-password');
+  var totpCode = document.getElementById('login-totp-code');
+  var recCode = document.getElementById('login-recovery-code');
+  function showError(msg) { errBox.textContent = msg; errBox.classList.remove('hidden'); }
+  function clearError() { errBox.classList.add('hidden'); errBox.textContent = ''; }
+  function showStep(which) {
+    fCred.classList.toggle('hidden', which !== 'cred');
+    fTotp.classList.toggle('hidden', which !== 'totp');
+    fRec.classList.toggle('hidden', which !== 'recovery');
+    subtitle.textContent = (which === 'cred') ? STEP1 : STEP2;
+    var focusEl = which === 'cred' ? email : which === 'totp' ? totpCode : recCode;
+    setTimeout(function() { focusEl.focus(); }, 30);
+  }
+  // POST JSON vers /login. Le serveur répond 303 (succès) ou JSON {error, totp_required}.
+  // fetch suit la redirection : res.redirected===true ⇒ session ouverte.
+  function submitLogin(extra) {
+    clearError();
+    var body = { email: email.value.trim().toLowerCase(), password: pw.value };
+    if (extra) { for (var k in extra) body[k] = extra[k]; }
+    var sentSecondFactor = !!(extra && (extra.totp_code || extra.recovery_code));
+    return fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      redirect: 'follow',
+    }).then(function(res) {
+      if (res.redirected || res.url.indexOf('/login') === -1) { window.location = '/'; return; }
+      if (res.status === 303 || (res.status >= 200 && res.status < 300 && res.headers.get('Set-Cookie'))) { window.location = '/'; return; }
+      return res.json().catch(function() { return {}; }).then(function(data) {
+        if (data.totp_required) {
+          // Challenge initial (aucun code soumis) : on révèle juste l'étape 2,
+          // son intro suffit — surtout PAS la boîte rouge d'erreur. On n'affiche
+          // une vraie erreur que si un code a été soumis et refusé.
+          if (sentSecondFactor) { if (data.error) showError(data.error); }
+          else { showStep('totp'); }
+          return;
+        }
+        showError(data.error || GENERIC);
+      });
+    }).catch(function() { showError(GENERIC); });
+  }
+  fCred.addEventListener('submit', function(e) { e.preventDefault(); submitLogin(null); });
+  fTotp.addEventListener('submit', function(e) { e.preventDefault(); submitLogin({ totp_code: totpCode.value.trim() }); });
+  fRec.addEventListener('submit', function(e) { e.preventDefault(); submitLogin({ recovery_code: recCode.value.trim() }); });
+  document.getElementById('login-to-recovery').addEventListener('click', function() { clearError(); recCode.value=''; showStep('recovery'); });
+  document.getElementById('login-to-totp').addEventListener('click', function() { clearError(); totpCode.value=''; showStep('totp'); });
+  document.getElementById('login-totp-back').addEventListener('click', function() { clearError(); totpCode.value=''; pw.value=''; showStep('cred'); });
+  document.getElementById('login-recovery-back').addEventListener('click', function() { clearError(); recCode.value=''; pw.value=''; showStep('cred'); });
+})();
+</script>
+</body></html>

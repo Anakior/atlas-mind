@@ -1,0 +1,40 @@
+  body { color-scheme: dark; background: #23222a; font-feature-settings: "ss01","cv11"; }
+  ::selection { background: #1d9bd1; color: #ffffff; text-shadow: none; }
+  .sidebar-gradient { background: linear-gradient(180deg, #1d2a3a 0%, #1a1d29 25%, #15151c 70%, #0f0e14 100%); }
+  .prose p, .prose li, .prose blockquote { font-family: 'Lora', Georgia, serif; font-size: 1.0625rem; line-height: 1.7; }
+  .prose, .prose p, .prose li, .prose td, .prose th, .prose h1, .prose h2, .prose h3, .prose h4, .prose blockquote { overflow-wrap: break-word; word-wrap: break-word; }
+  .prose a { word-break: break-all; }
+  .prose pre { overflow-x: auto; max-width: 100%; }
+  .prose img { max-width: 100%; height: auto; }
+  .prose table { display: block; overflow-x: auto; max-width: 100%; }
+  .prose code, .prose pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .prose h1, .prose h2, .prose h3, .prose h4 { font-family: 'Manrope', system-ui, sans-serif; letter-spacing: -0.015em; font-weight: 700; }
+  .prose h1 { color: #ffffff; }
+  .prose h2 { color: #4fb3e0; }
+  .prose h3 { color: #87cdee; }
+  .prose h4 { color: #b6dcef; }
+  .prose strong { color: #ffffff; font-weight: 600; }
+  .prose a { color: #36c5f0; }
+  .prose a:hover { color: #6dd5f6; }
+  .prose blockquote { border-left-color: #1d9bd1; background: rgba(29, 155, 209, 0.06); padding: 0.5rem 1.25rem; border-radius: 0 6px 6px 0; }
+  .prose hr { border-color: #2a2a32; }
+  .prose .search-hit { background: rgba(251,191,36,0.32); color: #fde68a; border-radius: 3px; padding: 0 0.1em; box-shadow: 0 0 0 2px rgba(251,191,36,0.22); animation: searchHitPulse 1.5s ease-out 1; }
+  @keyframes searchHitPulse { 0% { background: rgba(251,191,36,0.7); } 100% { background: rgba(251,191,36,0.32); } }
+  .doc-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 1.5rem; align-items: center; }
+  .doc-tag { display: inline-flex; align-items: center; font-family: 'Manrope', system-ui, sans-serif; font-size: 0.72rem; font-weight: 600; color: #87cdee; background: rgba(29,155,209,0.12); border: 1px solid rgba(29,155,209,0.28); border-radius: 999px; padding: 0.15rem 0.65rem; cursor: pointer; transition: background 0.12s, color 0.12s; }
+  .doc-tag:hover { background: rgba(29,155,209,0.26); color: #cdeafb; }
+  .doc-tag-count { margin-left: 0.4em; padding-left: 0.4em; border-left: 1px solid currentColor; font-size: 0.82em; font-weight: 700; opacity: 0.5; }
+  .doc-tag-folder { color: #9aa6b2; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.14); }
+  .doc-tag-folder:hover { background: rgba(255,255,255,0.1); color: #cdd3da; }
+  .doc-tag-x { margin-left: 0.3rem; padding: 0 0.1rem; color: inherit; opacity: 0.5; font-weight: 700; line-height: 1; background: none; border: 0; cursor: pointer; }
+  .doc-tag-x:hover { opacity: 1; color: #fca5a5; }
+  .doc-tag-add { font-family: 'Manrope', system-ui, sans-serif; font-size: 0.95rem; font-weight: 700; line-height: 1; color: #87cdee; background: rgba(29,155,209,0.1); border: 1px dashed rgba(29,155,209,0.45); border-radius: 999px; width: 1.5rem; height: 1.5rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+  .doc-tag-add:hover { background: rgba(29,155,209,0.24); color: #cdeafb; }
+  .prose a.wikilink { color: #36c5f0; font-style: normal; font-weight: 500; text-decoration: none; cursor: pointer; background: rgba(54,197,240,0.12); border: 1px solid rgba(54,197,240,0.3); border-radius: 0.3rem; padding: 0.03em 0.4em; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+  .prose a.wikilink::before { content: '🔗'; font-size: 0.72em; margin-right: 0.3em; opacity: 0.7; }
+  .prose a.wikilink:hover { color: #6dd5f6; background: rgba(54,197,240,0.22); border-color: rgba(54,197,240,0.62); }
+  .prose a.wikilink.broken { color: #f0a0a0; background: rgba(240,160,160,0.10); border-color: rgba(240,160,160,0.38); border-style: dashed; cursor: help; }
+  .prose a.wikilink.broken::before { content: '⚠️'; }
+  .prose table th { color: #ffffff; }
+  .prose table tr { border-color: #2a2a32; }
+

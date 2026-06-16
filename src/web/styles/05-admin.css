@@ -1,0 +1,65 @@
+  .logo-mark {
+    background: transparent;
+    box-shadow: 0 4px 18px -2px rgba(251, 198, 120, 0.35);
+  }
+  .logo-mark:hover { box-shadow: 0 4px 22px -2px rgba(251, 198, 120, 0.55); }
+  .logo-mark svg { width: 100%; height: 100%; display: block; border-radius: 7px; overflow: hidden; }
+  body.viewer-mode #btn-edit,
+  body.viewer-mode #btn-share,
+  body.viewer-mode #btn-more-wrap,
+  body.viewer-mode #todo-widget,
+  body.viewer-mode #new-file-btn,
+  body.viewer-mode #quick-capture-btn,
+  body.viewer-mode .dir-rename-btn { display: none !important; }
+  /* Settings gear: visible for ANY authenticated account in cloud mode.
+     An admin finds account/token/share management AND their Security there;
+     a reader finds only the Security tab (2FA + sessions of THEIR
+     account). In local mode, the entry point does not exist. */
+  body.cloud-authed #settings-btn { display: inline-flex !important; }
+  /* Tabs/sections reserved for the admin: hidden for a reader. */
+  body:not(.admin-cloud) .settings-tab[data-tab="users"],
+  body:not(.admin-cloud) .settings-tab[data-tab="tokens"],
+  body:not(.admin-cloud) .settings-tab[data-tab="nodes"],
+  body:not(.admin-cloud) .settings-tab[data-tab="shares"] { display: none; }
+  /* Security tab: visible only for a cloud-authenticated account. */
+  body:not(.cloud-authed) .settings-tab[data-tab="security"] { display: none; }
+  /* Active Settings tab */
+  .settings-tab.is-active { color: #fff; border-bottom-color: #1d9bd1; }
+  /* 2FA recovery codes: readable and copyable monospace grid. */
+  #totp-recovery-list { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  /* TOTP secret in plain text: clean line wrapping on mobile. */
+  #totp-secret-value { word-break: break-all; }
+  /* Password reset modal + 2FA modals: ABOVE the Settings panel
+     (z-50) and the confirmDialog (z-60). The Tailwind class z-[65] is not
+     compiled in the vendored CSS (safelist) — we set the z-index here. */
+  #reset-pw-backdrop, #totp-backdrop { z-index: 65; }
+  /* Confirmation flash after copy (token / MCP URL) */
+  #settings-token-copy.is-copied,
+  #settings-token-mcp-copy.is-copied { background-color: #10b981 !important; color: #fff !important; }
+  /* ─── Admin components (colors/layouts not guaranteed by the vendored
+     Tailwind CSS: we make them explicit here so they render without recompilation) ─── */
+  /* Admin error banners (reset validation, panel errors): colors
+     made explicit (the rose-500/10 variants are not all compiled). */
+  #reset-pw-error, #settings-error { color: #fda4af; background: rgba(244,63,94,0.10); border: 1px solid rgba(244,63,94,0.25); }
+  /* Success banner (password reset) */
+  #reset-pw-success { color: #6ee7b7; background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.28); }
+  /* Strong warning banner for the one-time token */
+  #settings-token-result { background: rgba(245,158,11,0.06); border: 1px solid rgba(251,191,36,0.40); }
+  #settings-token-result .token-warning-bar { background: rgba(245,158,11,0.12); border-bottom: 1px solid rgba(251,191,36,0.30); color: #fcd34d; }
+  #settings-token-result .token-warning-text { color: #fde68a; }
+  #settings-token-result .token-warning-icon { color: #fcd34d; }
+  /* Disabled reset submit button */
+  #reset-pw-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+  /* Target email (can be long): clean line wrapping */
+  #reset-pw-email { word-break: break-all; }
+  /* Show/hide toggle: input field with right padding */
+  #reset-pw-input { padding-right: 2.5rem; }
+  /* Admin list rows (users/tokens/shares): stacked on mobile, inline
+     from 640px. Touch targets >=40px on mobile. */
+  .admin-row { display: flex; flex-direction: column; gap: 0.5rem; }
+  .admin-row__actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; }
+  .admin-row__actions > button { min-height: 2.5rem; flex: 1 1 0; }
+  @media (min-width: 640px) {
+    .admin-row { flex-direction: row; align-items: center; }
+    .admin-row__actions > button { min-height: 0; flex: 0 0 auto; }
+  }
