@@ -20,13 +20,18 @@ COPY src/ ./src/
 # repo (KB_REPO_PATH=/app/repo) and commit at runtime.
 RUN useradd --create-home --uid 10001 app && chown -R app:app /app
 
+# PYTHONPATH puts the engine src on the path so `python -m server` resolves the
+# server package (src/server/) — the same invocation cli.py and the test harness
+# use. run() (server/__init__.py) chdir's to the mind itself, so the launch cwd
+# does not matter.
 ENV KB_AUTH_ENABLED=1 \
     KB_REPO_PATH=/app/repo \
     PORT=8765 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src
 
 USER app
 
 EXPOSE 8765
 
-CMD ["python", "src/server.py"]
+CMD ["python", "-m", "server"]
