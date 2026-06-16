@@ -184,15 +184,15 @@ class TestCookieDotFix(unittest.TestCase):
         self.assertGreaterEqual(with_dot, 5, "sample does not cover the 0x2e")
 
     def test_share_tokens_unaffected(self):
-        # Share tokens (make_share_token) keep their format: admin sharing must
-        # still produce a servable link.
+        # The cookie-format fix doesn't touch share links: admin sharing still
+        # produces a servable link.
         headers = auth_headers(self.srv, session_cookie(
             self.srv, ADMIN_EMAIL, ADMIN_PASSWORD))
         resp = self.srv.post("/api/share", headers=headers,
                              json_body={"path": "accueil.md"})
         self.assertEqual(resp.status, 200)
         token = resp.json()["token"]
-        served = self.srv.get(f"/share/{token}")
+        served = self.srv.get(f"/s/{token}")
         self.assertEqual(served.status, 200)
 
 
