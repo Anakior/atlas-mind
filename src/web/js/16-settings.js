@@ -60,7 +60,7 @@ document.querySelectorAll('.share-dur').forEach(btn => {
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      const fullUrl = location.origin + '/share/' + data.token;
+      const fullUrl = location.origin + '/s/' + data.token;
       shareUrl.value = fullUrl;
       shareExpiry.textContent = data.expires_at
         ? t('expiresAt', new Date(data.expires_at * 1000).toLocaleString(LANG))
@@ -454,7 +454,8 @@ async function loadSettingsShares() {
       const exp = item.expires_at ? t('expiresShort', shareFormatDate(item.expires_at)) : t('noExpiry');
       const created = item.created_at ? t('createdShort', shareFormatDate(item.created_at)) : '';
       const pathEsc = escapeHtml(item.path || '');
-      const url = item.token ? location.origin + '/share/' + item.token : '';
+      const broken = item.file_exists === false;
+      const url = item.token ? location.origin + '/s/' + item.token : '';
       const urlEsc = escapeHtml(url);
       const urlLine = url
         ? '<div class="text-ink-300 font-mono text-[10px] truncate mt-0.5" title="' + urlEsc + '">' + urlEsc + '</div>'
@@ -464,12 +465,14 @@ async function loadSettingsShares() {
         : '';
       return '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-xs">' +
         '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-100 font-medium truncate" title="' + pathEsc + '">' + pathEsc + '</div>' +
+          '<div class="text-ink-100 font-medium truncate" title="' + pathEsc + '">' + pathEsc +
+            (broken ? ' <span class="text-rose-300 text-[10px] font-normal">' + t('shareBroken') + '</span>' : '') + '</div>' +
           urlLine +
           '<div class="text-ink-500 text-[10px] mt-0.5">' + escapeHtml(created) + ' &middot; ' + escapeHtml(exp) + '</div>' +
         '</div>' +
         '<div class="admin-row__actions">' +
           copyBtn +
+          (broken ? '<button class="settings-share-reactivate px-3 py-1 text-[11px] bg-navy-700 hover:bg-emerald-500/30 hover:text-emerald-300 text-ink-200 rounded" data-id="' + escapeHtml(item.id || '') + '" data-path="' + pathEsc + '" data-suggested="' + escapeHtml(item.suggested_path || '') + '">' + t('shareReactivate') + '</button>' : '') +
           '<button class="settings-share-revoke px-3 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' + escapeHtml(item.id || '') + '">' + t('revoke') + '</button>' +
         '</div>' +
       '</li>';
@@ -484,6 +487,26 @@ settingsSharesList.addEventListener('click', async (e) => {
   if (copyBtn) {
     try { await navigator.clipboard.writeText(copyBtn.dataset.url); copyBtn.textContent = t('copied'); setTimeout(() => copyBtn.textContent = t('copy'), 1200); }
     catch (_) {}
+    return;
+  }
+  const reactivateBtn = e.target.closest('.settings-share-reactivate');
+  if (reactivateBtn) {
+    // The doc moved/disappeared: point the link at its new path (same URL).
+    const newPath = await promptDialog({
+      title: t('shareReactivateTitle'),
+      message: t('shareReactivateMsg', reactivateBtn.dataset.path || ''),
+      value: reactivateBtn.dataset.suggested || '',
+      placeholder: t('shareReactivatePlaceholder'),
+      confirmLabel: t('shareReactivate'),
+    });
+    if (!newPath) return;
+    try {
+      await settingsFetch('/api/share/' + reactivateBtn.dataset.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ path: newPath.trim() }),
+      });
+      loadSettingsShares();
+    } catch (err) { showSettingsError(err.message); }
     return;
   }
   const revokeBtn = e.target.closest('.settings-share-revoke');

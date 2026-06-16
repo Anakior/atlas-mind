@@ -4,6 +4,8 @@ read-only git history / revision / diff endpoints, plus tree + search.
 All mutating routes are guarded ADMIN_CSRF (PUT/DELETE keep the guard at the verb
 level, so the functions here are pure bodies); the read endpoints are AUTH.
 """
+import sys
+
 import server as _s
 
 
@@ -190,6 +192,12 @@ def move(handler):
         handler._send_json(code, {"error": payload})
         return
     _s.trigger_sync()
+    # Keep any share links pointing at the moved doc alive (in-app move → no
+    # broken window). Best-effort: a registry hiccup must not fail the move.
+    try:
+        _s.get_store().repoint_shares_by_path(payload["from"], payload["to"])
+    except Exception as e:
+        print(f"[share repoint] {e}", file=sys.stderr)
     handler._send_json(200, {"ok": True, **payload})
 
 
@@ -234,6 +242,11 @@ def dir_rename(handler):
     dst.parent.mkdir(parents=True, exist_ok=True)
     src.rename(dst)
     _s.trigger_sync()
+    # Re-point share links of every doc under the renamed folder (best-effort).
+    try:
+        _s.get_store().repoint_shares_under(src_rel, dst_rel)
+    except Exception as e:
+        print(f"[share repoint] {e}", file=sys.stderr)
     handler._send_json(200, {"ok": True, "from": src_rel, "to": dst_rel})
 
 

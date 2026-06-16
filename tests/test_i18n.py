@@ -12,9 +12,6 @@ An unsupported language fails with AtlasConfigError, never with broken English.
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
 import json
 import re
 import sys
@@ -31,8 +28,6 @@ if str(REPO_SRC) not in sys.path:
 
 from config import AtlasConfig, AtlasConfigError  # noqa: E402
 
-LOCAL_DEFAULT_SECRET = b"dev-secret-change-me"
-
 ENGLISH_TOML = """\
 prefix = "Test"
 tagline = "A test knowledge base."
@@ -46,13 +41,6 @@ CLOUD_ENV = {
     "ATLAS_STORE": "file",
     "GIT_PULL_INTERVAL": "3600",
 }
-
-
-def forge_share_token(path: str, expires_at: int, secret: bytes) -> str:
-    payload = json.dumps({"p": path, "e": expires_at}).encode()
-    sig = hmac.new(secret, payload, hashlib.sha256).digest()
-    return (base64.urlsafe_b64encode(payload).decode().rstrip("=") + "."
-            + base64.urlsafe_b64encode(sig).decode().rstrip("="))
 
 
 class TomlAtlasServer(AtlasServer):
@@ -83,7 +71,7 @@ class TestI18nInvalidLang(unittest.TestCase):
 
 class TestI18nEnglishViewerAndShare(unittest.TestCase):
     """Mind lang=en, local mode: dist/index.html and share pages in English
-    (sharing uses a token forged with the default secret, local behavior
+    (the link is created via POST /api/share; local share behavior is
     characterized by test_misc)."""
 
     @classmethod
@@ -105,8 +93,9 @@ class TestI18nEnglishViewerAndShare(unittest.TestCase):
         self.assertNotIn("__LANG__", text)
 
     def test_share_page_english(self):
-        token = forge_share_token("projets/beta.md", 0, LOCAL_DEFAULT_SECRET)
-        resp = self.srv.get(f"/share/{token}")
+        token = self.srv.post(
+            "/api/share", json_body={"path": "projets/beta.md"}).json()["token"]
+        resp = self.srv.get(f"/s/{token}")
         self.assertEqual(resp.status, 200)
         self.assertIn('<html lang="en">', resp.text)
         self.assertIn("Read-only share via", resp.text)
@@ -114,13 +103,20 @@ class TestI18nEnglishViewerAndShare(unittest.TestCase):
         self.assertNotIn("Partage en lecture seule", resp.text)
 
     def test_share_error_pages_english(self):
-        invalid = self.srv.get("/share/not-a-token")
+        invalid = self.srv.get("/s/not-a-token")
         self.assertEqual(invalid.status, 404)
         self.assertIn("Invalid link", invalid.text)
         self.assertNotIn("Lien invalide", invalid.text)
 
-        expired = forge_share_token("accueil.md", 1, LOCAL_DEFAULT_SECRET)
-        resp = self.srv.get(f"/share/{expired}")
+        created = self.srv.post(
+            "/api/share", json_body={"path": "accueil.md"}).json()
+        shares_file = self.srv.root / ".atlas" / "shares.json"
+        shares = json.loads(shares_file.read_text(encoding="utf-8"))
+        for share in shares:
+            if share["id"] == created["id"]:
+                share["expires_at"] = 1
+        shares_file.write_text(json.dumps(shares), encoding="utf-8")
+        resp = self.srv.get(f"/s/{created['token']}")
         self.assertEqual(resp.status, 410)
         self.assertIn("Link expired", resp.text)
 

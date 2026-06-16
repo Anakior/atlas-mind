@@ -262,14 +262,17 @@ class AtlasServer:
         for rel, content in self.mind.items():
             target = self.content_root / rel
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            # newline="" writes the content VERBATIM (LF), like git stores it and
+            # a Unix deployment serves it. Without it, Windows text-mode translation
+            # injects CRLF → every raw-bytes assertion (served .md) would break.
+            target.write_text(content, encoding="utf-8", newline="")
         # Files at the mind root (outside content/): extensions
         # (.atlas/extensions/*), atlas.toml… present BEFORE build.py and the
         # server boot, which discover them at startup.
         for rel, content in self.extra_files.items():
             target = self.root / rel
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            target.write_text(content, encoding="utf-8", newline="")
 
     def _git_env(self) -> dict:
         env = os.environ.copy()

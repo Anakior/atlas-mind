@@ -495,7 +495,7 @@ class TestPobExampleExtension(unittest.TestCase):
     def test_share_page_carries_extension_assets(self):
         token = self.srv.post(
             "/api/share", json_body={"path": "accueil.md"}).json()["token"]
-        resp = self.srv.get(f"/share/{token}")
+        resp = self.srv.get(f"/s/{token}")
         self.assertEqual(resp.status, 200)
         self.assertIn(".poe-card", resp.text)     # injected CSS
         self.assertIn("poe-var-tab", resp.text)   # injected JS (click delegate)

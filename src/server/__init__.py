@@ -67,7 +67,7 @@ from server.constants import (  # noqa: F401
     COOKIE_NAME, CSRF_COOKIE_NAME, MAX_BODY_BYTES, _EMAIL_PATTERN, MAX_EMAIL_LEN,
     MAX_TOKEN_LABEL_LEN, API_ROLE, NODE_LINK_PREFIX, REMOTES_DIR,
     MAX_NODE_FILE_BYTES, PROJECT_URL, _GIT_REV_RE, MCP_PROTOCOL_VERSION,
-    _SHARE_ID_DELETE_PATTERN,
+    _SHARE_ID_PATTERN,
 )
 
 
@@ -100,7 +100,7 @@ from server.pure.notes_md import _notes_path, load_notes, save_notes  # noqa: F4
 from server.pure.auth import (  # noqa: F401  token/CSRF/share/bearer crypto + identity
     _has_control_chars, is_valid_email, _b64url_nopad, _b64url_nopad_decode,
     current_session_epoch, make_token, verify_token, authenticate_user, authenticate,
-    make_share_token, verify_share_token, make_csrf_token, verify_csrf_token,
+    new_share_token, verify_share_token, make_csrf_token, verify_csrf_token,
     consume_recovery_code, _hash_api_token, verify_api_bearer, _verify_mcp_token,
 )
 from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live tasks / search text

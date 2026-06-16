@@ -280,6 +280,11 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         if status != "ok":
             return text_result(payload, is_error=True)
         _s.trigger_sync()
+        # In-app move → keep its share links alive (best-effort).
+        try:
+            _s.get_store().repoint_shares_by_path(payload["from"], payload["to"])
+        except Exception as e:
+            print(f"[share repoint] {e}", file=sys.stderr)
         n, files = payload["links_updated"], len(payload["rewrites"])
         msg = f"Moved: {payload['from']} -> {payload['to']}."
         msg += (f" {n} incoming wikilink(s) rewritten in {files} doc(s)."

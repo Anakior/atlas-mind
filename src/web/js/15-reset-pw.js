@@ -96,7 +96,7 @@ async function refreshShareList() {
     shareExisting.classList.remove('hidden');
     shareExistingCount.textContent = t('nLinks', items.length);
     shareExistingList.innerHTML = items.map(item => {
-      const url = location.origin + '/share/' + item.token;
+      const url = location.origin + '/s/' + item.token;
       const exp = item.expires_at ? t('expiresShort', shareFormatDate(item.expires_at)) : t('noExpiry');
       const created = item.created_at ? t('createdShort', shareFormatDate(item.created_at)) : '';
       return '<li class="bg-navy-900 border subtle-border rounded p-2 flex items-center gap-2 text-xs">' +

@@ -9,7 +9,7 @@ app/router.py; the handlers in routes/*.py.
 """
 import server as _s
 from server.app import router
-from server.constants import _SHARE_ID_DELETE_PATTERN
+from server.constants import _SHARE_ID_PATTERN
 from server.routes import (
     system, auth, setup, share, docs, todos, notes, admin,
     account, hive, apiv1, mcp,
@@ -36,7 +36,7 @@ GET_ROUTES = [
     router.Route(_RK.PREFIX_NOQUERY, "/vendor/", system.static_get, _G.PUBLIC),
     router.Route(_RK.EXACT, "/sw.js", system.sw, _G.PUBLIC),
     router.Route(_RK.EXACT_NOQUERY, "/setup", setup.page, _G.PUBLIC, when=_when_cloud),
-    router.Route(_RK.PREFIX, "/share/", share.page, _G.PUBLIC),
+    router.Route(_RK.PREFIX, "/s/", share.page, _G.PUBLIC),
     router.Route(_RK.EXACT, "/api/node/manifest", hive.manifest, _G.BEARER),
     router.Route(_RK.EXACT_NOQUERY, "/api/node/file", hive.file, _G.BEARER),
     router.Route(_RK.EXACT, "/api/me", auth.me, _G.PUBLIC),
@@ -92,6 +92,7 @@ POST_ROUTES = [
 # todo route matches the /api/todos/<idx> regex (the function re-reads the index).
 PATCH_ROUTES = [
     router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.patch, _G.PUBLIC),
+    router.Route(_RK.REGEX, _SHARE_ID_PATTERN, share.repoint, _G.PUBLIC),
     router.Route(_RK.REGEX, r"^/api/todos/(\d+)$", todos.patch, _G.PUBLIC),
 ]
 
@@ -104,7 +105,7 @@ DELETE_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/tokens", admin.tokens_delete, _G.PUBLIC),
     router.Route(_RK.EXACT, "/api/file", docs.delete, _G.PUBLIC),
     router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.delete, _G.PUBLIC),
-    router.Route(_RK.REGEX, _SHARE_ID_DELETE_PATTERN, share.revoke, _G.PUBLIC),
+    router.Route(_RK.REGEX, _SHARE_ID_PATTERN, share.revoke, _G.PUBLIC),
     router.Route(_RK.REGEX, r"^/api/todos/(\d+)$", todos.delete, _G.PUBLIC),
 ]
 
