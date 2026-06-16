@@ -39,11 +39,12 @@ PROJECT_URL = "https://pypi.org/project/atlas-mind/"
 # slip through to git's argument parser.
 _GIT_REV_RE = re.compile(r"^(?:[0-9a-fA-F]{4,40}|HEAD(?:~\d+)?)$")
 
-# Share-link id for DELETE /api/share/<id>: an EXACT 24-hex legacy id OR a uuid4
-# 8-4-4-4-12 (FileStore). Strict alternation — any other format (e.g. 25 hex) does
-# not match, so it falls through to the todos route (historical bare 404). Used by
-# the DELETE route table and re-matched by routes.share.revoke.
-_SHARE_ID_DELETE_PATTERN = (
+# Share-link id in /api/share/<id> (DELETE revoke, PATCH reactivate): an EXACT
+# 24-hex legacy id OR a uuid4 8-4-4-4-12 (FileStore). Strict alternation — any
+# other format (e.g. 25 hex) does not match, so it falls through to the todos
+# route (historical bare 404). Used by the DELETE/PATCH route tables and re-matched
+# by routes.share.revoke / routes.share.repoint.
+_SHARE_ID_PATTERN = (
     r"^/api/share/([a-fA-F0-9]{24}|"
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
     r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"

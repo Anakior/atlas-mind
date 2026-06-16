@@ -44,7 +44,7 @@ const PRECACHE = [
 ];
 
 // Préfixes same-origin jamais cachés (dynamique, auth-sensible, ou streaming SSE).
-const BYPASS = ['/api/', '/login', '/logout', '/share/', '/mcp/', '/webhook/', '/.well-known/'];
+const BYPASS = ['/api/', '/login', '/logout', '/s/', '/mcp/', '/webhook/', '/.well-known/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -11,10 +11,6 @@ script itself.
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
 import shutil
 import subprocess
 import tempfile
@@ -23,19 +19,11 @@ from pathlib import Path
 
 from harness import AtlasServer, DEFAULT_MIND
 
-LOCAL_DEFAULT_SECRET = b"dev-secret-change-me"  # local mode, no SESSION_SECRET
-
-
-def _forge_share_token(path: str, secret: bytes = LOCAL_DEFAULT_SECRET) -> str:
-    payload = json.dumps({"p": path, "e": 0}).encode()  # e=0 → no expiry
-    sig = hmac.new(secret, payload, hashlib.sha256).digest()
-    enc = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")
-    return f"{enc(payload)}.{enc(sig)}"
-
 
 class TestSharePageScript(unittest.TestCase):
     """projets/beta.md is part of the harness DEFAULT_MIND; frontmatter.md adds a
-    doc with leading YAML frontmatter."""
+    doc with leading YAML frontmatter. Local mode: the link is created via POST
+    /api/share (registry-backed) and served at /s/<token>."""
 
     _MIND = {**DEFAULT_MIND,
              "frontmatter.md": "---\ntags: [foo, bar]\nstatus: draft\n---\n\n"
@@ -50,8 +38,13 @@ class TestSharePageScript(unittest.TestCase):
     def tearDownClass(cls):
         cls.srv.stop()
 
+    def _share_token(self, path: str) -> str:
+        resp = self.srv.post("/api/share", json_body={"path": path})
+        self.assertEqual(resp.status, 200, resp.text[:300])
+        return resp.json()["token"]
+
     def _render_script(self) -> str:
-        resp = self.srv.get(f"/share/{_forge_share_token('projets/beta.md')}")
+        resp = self.srv.get(f"/s/{self._share_token('projets/beta.md')}")
         self.assertEqual(resp.status, 200, resp.text[:300])
         # The first <script> after <body> is the render logic (the second is the
         # mind's extension bundle); the vendor scripts sit in <head>.
@@ -70,7 +63,7 @@ class TestSharePageScript(unittest.TestCase):
         # renders the `tags: …` line followed by its closing `---` as a setext H2
         # that leaks into the page AND the table of contents. The viewer build
         # strips it the same way (build/__init__.py).
-        resp = self.srv.get(f"/share/{_forge_share_token('frontmatter.md')}")
+        resp = self.srv.get(f"/s/{self._share_token('frontmatter.md')}")
         self.assertEqual(resp.status, 200, resp.text[:300])
         self.assertNotIn("tags: [foo, bar]", resp.text)
         self.assertNotIn("status: draft", resp.text)
@@ -80,7 +73,8 @@ class TestSharePageScript(unittest.TestCase):
     def test_render_script_parses(self):
         # node --check parses the script; an invalid regex literal is a parse-time
         # SyntaxError, exactly the failure that blanked the page.
-        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
+        with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8",
+                                         delete=False) as f:
             f.write(self._render_script())
             tmp = f.name
         try:

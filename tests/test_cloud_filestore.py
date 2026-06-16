@@ -9,12 +9,10 @@ Behaviors characterized here (current contract, not necessarily ideal):
 - A failed login (wrong password OR unknown email) returns the SAME 401
   "Invalid credentials" (anti-enumeration, dummy scrypt hash consumed).
 - An account with role 'api' CANNOT log in via password, even a correct one.
-- /api/share/list with a FileStore returns "token": null: the cleartext token
-  is never stored (only its SHA256), the key stays present to preserve the
-  historical response shape.
-- A share token forged with the correct SESSION_SECRET but NEVER recorded in
-  the registry is SERVED (fail-open: only a record marked revoked blocks; the
-  absence of a record does not block).
+- /api/share/list returns the cleartext token: a share link is a capability URL
+  (kept in cleartext so the admin can re-copy it), not an auth secret.
+- A token absent from the registry resolves to nothing → 404 (fail-CLOSED: the
+  registry is the single source of truth for a share's target and validity).
 - The DELETE /api/share/<id> route accepts uuid4 ids (36 chars) AND legacy
   24-hex ids (the FileStore matches by equality, with no imposed format).
 - last_used_at of Bearer tokens goes into .atlas/state.json (volatile), never
@@ -130,15 +128,6 @@ def mint_session_token(email: str, role: str, ts: int, epoch: int = 0):
     token = (base64.urlsafe_b64encode(payload).decode().rstrip("=")
              + "." + base64.urlsafe_b64encode(sig).decode().rstrip("="))
     return token, sig
-
-
-def forge_share_token(path: str, expires_at: int, secret: bytes) -> str:
-    """Exact replica of server.py's make_share_token()."""
-    payload = json.dumps({"p": path, "e": expires_at}).encode()
-    sig = hmac.new(secret, payload, hashlib.sha256).digest()
-    return (base64.urlsafe_b64encode(payload).decode().rstrip("=")
-            + "."
-            + base64.urlsafe_b64encode(sig).decode().rstrip("="))
 
 
 class TestPasswordHelpers(unittest.TestCase):
@@ -412,31 +401,30 @@ class TestCloudFileStoreShares(unittest.TestCase):
         self.assertEqual(share_id.count("-"), 4)
         self.assertEqual(created["path"], "accueil.md")
 
-        # On disk: SHA256 of the token only, never the cleartext token.
+        # On disk: the cleartext token (capability URL) AND its SHA256 index.
         record = next(s for s in self._shares_on_disk() if s["id"] == share_id)
+        self.assertEqual(record["token"], token)
         self.assertEqual(
             record["token_sha256"],
             hashlib.sha256(token.encode()).hexdigest())
-        self.assertNotIn("token", record)
         self.assertEqual(record["created_by"], ADMIN_EMAIL)
 
         # Public link served without a cookie.
-        public = self.srv.get(f"/share/{token}")
+        public = self.srv.get(f"/s/{token}")
         self.assertEqual(public.status, 200)
         self.assertIn("Bienvenue dans le mind de test.", public.text)
 
-        # Admin listing: the token is NOT stored in cleartext, but since it is a
-        # deterministic HMAC of (path, expires_at, SESSION_SECRET) the server
-        # REGENERATES it on the fly → the list exposes a valid, copyable public
-        # link (no longer None, which produced "/share/null" URLs).
+        # Admin listing returns the stored cleartext token so the admin can
+        # re-copy the link, with file_exists telling the UI it is still live.
         listing = self.srv.get(
             "/api/share/list", headers={"Cookie": self.admin_cookie}).json()
         entry = next(d for d in listing if d["id"] == share_id)
-        self.assertEqual(entry["token"], token)  # regenerated, identical to creation
+        self.assertEqual(entry["token"], token)
         self.assertEqual(entry["path"], "accueil.md")
         self.assertFalse(entry["revoked"])
-        # The regenerated link actually works.
-        relink = self.srv.get(f"/share/{entry['token']}")
+        self.assertTrue(entry["file_exists"])
+        # The listed link actually works.
+        relink = self.srv.get(f"/s/{entry['token']}")
         self.assertEqual(relink.status, 200)
         self.assertIn("Bienvenue dans le mind de test.", relink.text)
 
@@ -447,7 +435,7 @@ class TestCloudFileStoreShares(unittest.TestCase):
         self.assertEqual(revoke.status, 200)
         self.assertEqual(revoke.json(), {"ok": True})
 
-        gone = self.srv.get(f"/share/{token}")
+        gone = self.srv.get(f"/s/{token}")
         self.assertEqual(gone.status, 410)
         self.assertIn("revoked", gone.text)  # EN: "Link revoked"
 
@@ -479,6 +467,174 @@ class TestCloudFileStoreShares(unittest.TestCase):
         self.assertTrue(entry["revoked"])
         self.assertIsInstance(entry["revoked_at"], int)
 
+    def test_token_is_short_and_opaque(self):
+        # The link is a short opaque capability key (no signed `payload.sig`),
+        # ~22 url-safe chars — and it resolves.
+        created = self._create_share("accueil.md")
+        token = created["token"]
+        self.assertNotIn(".", token)
+        self.assertLessEqual(len(token), 24)
+        self.assertEqual(self.srv.get(f"/s/{token}").status, 200)
+
+    def test_move_via_app_auto_repoints_share(self):
+        # An in-app move re-points the share automatically: the link keeps working
+        # with no broken window, and the stored path follows the doc.
+        self.srv.put("/api/file",
+                     json_body={"path": "movable.md", "content": "# Movable\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        created = self._create_share("movable.md")
+        moved = self.srv.post(
+            "/api/file/move",
+            json_body={"from": "movable.md", "to": "archive/movable.md"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(moved.status, 200)
+        served = self.srv.get(f"/s/{created['token']}")
+        self.assertEqual(served.status, 200)
+        self.assertIn("Movable", served.text)
+        record = next(s for s in self._shares_on_disk() if s["id"] == created["id"])
+        self.assertEqual(record["path"], "archive/movable.md")
+
+    def test_dir_rename_auto_repoints_share(self):
+        # Renaming a folder in-app re-points the links of the docs it contains.
+        self.srv.put("/api/file",
+                     json_body={"path": "folder/inside.md", "content": "# Inside\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        created = self._create_share("folder/inside.md")
+        renamed = self.srv.post(
+            "/api/dir/rename",
+            json_body={"from": "folder", "to": "folder-renamed"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(renamed.status, 200)
+        self.assertEqual(self.srv.get(f"/s/{created['token']}").status, 200)
+        record = next(s for s in self._shares_on_disk() if s["id"] == created["id"])
+        self.assertEqual(record["path"], "folder-renamed/inside.md")
+
+    def test_broken_link_detected_then_reactivated(self):
+        # A move OUTSIDE the app (raw rename on disk) breaks the link: the public
+        # page 404s and the admin list flags it broken (file_exists False).
+        # Reactivating (PATCH) re-points it → the SAME URL works again.
+        self.srv.put("/api/file",
+                     json_body={"path": "stray.md", "content": "# Stray\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        created = self._create_share("stray.md")
+        (self.srv.content_root / "moved-stray.md").write_text(
+            self.srv.path("stray.md").read_text(encoding="utf-8"), encoding="utf-8")
+        self.srv.path("stray.md").unlink()
+
+        self.assertEqual(self.srv.get(f"/s/{created['token']}").status, 404)
+        listing = self.srv.get(
+            "/api/share/list?path=stray.md",
+            headers={"Cookie": self.admin_cookie}).json()
+        entry = next(d for d in listing if d["id"] == created["id"])
+        self.assertFalse(entry["file_exists"])
+
+        reactivated = self.srv.patch(
+            f"/api/share/{created['id']}",
+            json_body={"path": "moved-stray.md"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(reactivated.status, 200)
+        served = self.srv.get(f"/s/{created['token']}")
+        self.assertEqual(served.status, 200)
+        self.assertIn("Stray", served.text)
+
+    def test_reactivate_rejects_unknown_target(self):
+        created = self._create_share("accueil.md")
+        resp = self.srv.patch(
+            f"/api/share/{created['id']}",
+            json_body={"path": "does/not/exist.md"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(resp.status, 404)
+        self.assertEqual(resp.json(), {"error": "document not found"})
+
+    def test_reactivate_requires_admin(self):
+        created = self._create_share("accueil.md")
+        resp = self.srv.patch(
+            f"/api/share/{created['id']}",
+            json_body={"path": "projets/beta.md"},
+            headers={"Cookie": self.viewer_cookie})
+        self.assertEqual(resp.status, 403)
+
+    def test_reactivate_unknown_or_revoked_404(self):
+        # An unknown share id, AND a revoked share, both refuse reactivation: a
+        # revoked link must not be silently resurrected.
+        unknown = self.srv.patch(
+            "/api/share/00000000-0000-4000-8000-000000000000",
+            json_body={"path": "accueil.md"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(unknown.status, 404)
+        self.assertEqual(unknown.json(), {"error": "not found or revoked"})
+
+        created = self._create_share("accueil.md")
+        self.srv.delete(f"/api/share/{created['id']}",
+                        headers=auth_headers(self.srv, self.admin_cookie))
+        revoked = self.srv.patch(
+            f"/api/share/{created['id']}",
+            json_body={"path": "accueil.md"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(revoked.status, 404)
+        self.assertEqual(revoked.json(), {"error": "not found or revoked"})
+
+    def test_create_with_future_expiry(self):
+        # A positive expires_days yields a sane FUTURE expires_at (server-computed)
+        # and the link serves before it lapses.
+        before = int(time.time())
+        created = self._create_share("accueil.md", expires_days=30)
+        horizon = before + 30 * 86400
+        self.assertGreaterEqual(created["expires_at"], horizon - 5)
+        self.assertLessEqual(created["expires_at"], horizon + 5)
+        self.assertEqual(self.srv.get(f"/s/{created['token']}").status, 200)
+
+    def test_mcp_move_doc_auto_repoints_share(self):
+        # The MCP move_doc tool re-points share links too — a code path distinct
+        # from the HTTP /api/file/move route (its own try/except in mcp_call.py).
+        api_token = secrets.token_hex(32)
+        self.fs.upsert_user(API_EMAIL, {
+            "role": "api",
+            "api_token_hash": hashlib.sha256(api_token.encode()).hexdigest(),
+            "password_hash": "$2b$12$" + "x" * 53,
+        })
+        self.srv.put(
+            "/api/file",
+            json_body={"path": "mcp-movable.md", "content": "# MCP movable\n"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        created = self._create_share("mcp-movable.md")
+        resp = self.srv.post(f"/mcp/{api_token}", json_body={
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "move_doc",
+                       "arguments": {"from": "mcp-movable.md",
+                                     "to": "kept/mcp-movable.md"}},
+        })
+        self.assertEqual(resp.status, 200)
+        self.assertFalse(resp.json()["result"].get("isError"), resp.text)
+        self.assertEqual(self.srv.get(f"/s/{created['token']}").status, 200)
+        record = next(s for s in self._shares_on_disk() if s["id"] == created["id"])
+        self.assertEqual(record["path"], "kept/mcp-movable.md")
+
+    def test_broken_link_suggests_path_via_git_history(self):
+        # An out-of-app `git mv` breaks the link; the admin listing surfaces a
+        # suggested_path resolved from git rename history (one-click reactivation).
+        # Isolated server: no background trigger_sync to race with the git commands.
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            seed_default_users(file_store_of(srv))
+            cookie = session_cookie(srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+            (srv.content_root / "gitmoved.md").write_text(
+                "# Git moved\n", encoding="utf-8", newline="")
+            srv.git("add", "content/gitmoved.md", check=True)
+            srv.git("commit", "-q", "-m", "add gitmoved", check=True)
+            created = srv.post(
+                "/api/share", json_body={"path": "gitmoved.md"},
+                headers=auth_headers(srv, cookie)).json()
+            srv.git("mv", "content/gitmoved.md", "content/renamed-by-git.md",
+                    check=True)
+            srv.git("commit", "-q", "-m", "git mv gitmoved", check=True)
+
+            entry = next(
+                d for d in srv.get("/api/share/list?path=gitmoved.md",
+                                   headers={"Cookie": cookie}).json()
+                if d["id"] == created["id"])
+            self.assertFalse(entry["file_exists"])
+            self.assertEqual(entry.get("suggested_path"), "renamed-by-git.md")
+
     def test_viewer_cannot_create_share_nor_list(self):
         headers = {"Cookie": self.viewer_cookie}
         create = self.srv.post(
@@ -487,21 +643,27 @@ class TestCloudFileStoreShares(unittest.TestCase):
         listing = self.srv.get("/api/share/list", headers=headers)
         self.assertEqual(listing.status, 403)
 
-    def test_forged_expired_token_410(self):
-        # Expiration is checked BEFORE the registry (within the signature itself).
-        forged = forge_share_token("accueil.md", int(time.time()) - 60,
-                                   SESSION_SECRET.encode())
-        resp = self.srv.get(f"/share/{forged}")
+    def test_expired_share_410(self):
+        # Expiry is read from the registry record (not the token): a share whose
+        # stored expires_at is in the past → 410 "expired".
+        created = self._create_share("accueil.md")
+        shares_file = self.srv.root / ".atlas" / "shares.json"
+        shares = json.loads(shares_file.read_text(encoding="utf-8"))
+        for share in shares:
+            if share["id"] == created["id"]:
+                share["expires_at"] = int(time.time()) - 60
+        shares_file.write_text(json.dumps(shares), encoding="utf-8")
+        resp = self.srv.get(f"/s/{created['token']}")
         self.assertEqual(resp.status, 410)
         self.assertIn("expir", resp.text)  # "Lien expir&eacute;" (expired)
 
-    def test_forged_unregistered_token_is_served_fail_open(self):
-        # Characterization: a validly signed token that is ABSENT from the
-        # registry is served (only a revoked record blocks) — fail-open.
-        forged = forge_share_token("projets/beta.md", 0, SESSION_SECRET.encode())
-        resp = self.srv.get(f"/share/{forged}")
-        self.assertEqual(resp.status, 200)
-        self.assertIn("Aucun lien sortant ici.", resp.text)
+    def test_unregistered_token_404_fail_closed(self):
+        # A token absent from the registry resolves to nothing → 404. The registry
+        # is the single source of truth (fail-CLOSED), so a forged/guessed key
+        # cannot be served.
+        resp = self.srv.get(f"/s/{secrets.token_urlsafe(16)}")
+        self.assertEqual(resp.status, 404)
+        self.assertIn("Invalid link", resp.text)
 
     def test_revoke_unknown_uuid_404(self):
         resp = self.srv.delete(
@@ -547,12 +709,10 @@ class TestCloudFileStoreShares(unittest.TestCase):
         # in the git history pushed to GitHub. Two server-side mechanisms:
         # .atlas/.gitignore = "*" (written by FileStore) and /.atlas/ added to
         # .git/info/exclude (written by get_store()).
-        # NON-zero expires_days: tokens are deterministic (HMAC of the
-        # path+expiration pair, with no nonce) — a share accueil.md/exp=0 here
-        # would have exactly the same token as the one in the lifecycle test,
-        # and its non-revoked record would mask the other's revocation
-        # (find_share_by_token returns the first match).
-        self._create_share("accueil.md", expires_days=30)
+        # Share tokens are random (opaque capability keys), so there is no token
+        # collision to engineer between tests: just create a share and assert its
+        # registry file never enters git.
+        self._create_share("accueil.md")
         atlas_dir = self.srv.root / ".atlas"
         self.assertTrue((atlas_dir / "shares.json").exists())
         self.assertEqual(
@@ -569,7 +729,7 @@ class TestCloudFileStoreShares(unittest.TestCase):
     def test_revoke_migrated_24hex_id_accepted(self):
         # Simulates a legacy record: a 24-hex id injected directly into
         # shares.json. The route AND the store accept it.
-        token = forge_share_token("projets/beta.md", 0, SESSION_SECRET.encode())
+        token = secrets.token_urlsafe(16)
         migrated_id = "5f2b8c9d1e3a4b5c6d7e8f90"
         shares = self._shares_on_disk() if (
             self.srv.root / ".atlas" / "shares.json").exists() else []
@@ -585,12 +745,12 @@ class TestCloudFileStoreShares(unittest.TestCase):
         (self.srv.root / ".atlas" / "shares.json").write_text(
             json.dumps(shares), encoding="utf-8")
 
-        self.assertEqual(self.srv.get(f"/share/{token}").status, 200)
+        self.assertEqual(self.srv.get(f"/s/{token}").status, 200)
         revoke = self.srv.delete(
             f"/api/share/{migrated_id}",
             headers=auth_headers(self.srv, self.admin_cookie))
         self.assertEqual(revoke.status, 200)
-        self.assertEqual(self.srv.get(f"/share/{token}").status, 410)
+        self.assertEqual(self.srv.get(f"/s/{token}").status, 410)
 
 
 class TestCloudFileStoreBearer(unittest.TestCase):
@@ -719,18 +879,18 @@ class TestCloudFileStoreCorruptRegistry(unittest.TestCase):
             f"/api/share/{created['id']}",
             headers=auth_headers(self.srv, self.admin_cookie))
         self.assertEqual(revoke.status, 200)
-        self.assertEqual(self.srv.get(f"/share/{token}").status, 410)
+        self.assertEqual(self.srv.get(f"/s/{token}").status, 410)
 
         original = self._corrupt("shares.json")
         try:
-            resp = self.srv.get(f"/share/{token}")
+            resp = self.srv.get(f"/s/{token}")
             self.assertEqual(resp.status, 503)
             self.assertIn("unavailable", resp.text)
         finally:
             self._registry_path("shares.json").write_text(
                 original, encoding="utf-8")
         # Registry restored: the revoked link returns 410 again.
-        self.assertEqual(self.srv.get(f"/share/{token}").status, 410)
+        self.assertEqual(self.srv.get(f"/s/{token}").status, 410)
 
     def test_corrupt_users_json_login_503_not_401(self):
         original = self._corrupt("users.json")

@@ -18,7 +18,6 @@ Findings encoded here (CURRENT behavior, not necessarily desirable):
 - /webhook/github without GITHUB_WEBHOOK_SECRET in the env -> dry 503 (empty
   body), even before reading the body or the signature.
 """
-import base64
 import hashlib
 import hmac
 import json
@@ -28,21 +27,18 @@ import unittest
 
 from harness import AtlasServer
 
-# Hardcoded default in server.py (SESSION_SECRET) -- the harness purges
-# SESSION_SECRET from the env in local mode, so THIS secret is the one signing
-# the share tokens of the test server.
-LOCAL_DEFAULT_SECRET = b"dev-secret-change-me"
-
 WEBHOOK_SECRET = "atlas-test-webhook-secret"
 
 
-def _forge_share_token(path: str, expires_at: int, secret: bytes) -> str:
-    """Exact replica of make_share_token() from server.py."""
-    payload = json.dumps({"p": path, "e": expires_at}).encode()
-    sig = hmac.new(secret, payload, hashlib.sha256).digest()
-    return (base64.urlsafe_b64encode(payload).decode().rstrip("=")
-            + "."
-            + base64.urlsafe_b64encode(sig).decode().rstrip("="))
+def _expire_share_on_disk(srv, share_id: str) -> None:
+    """Push a share's expiry into the past directly in the registry (the API only
+    mints future expiries) — to characterize the 410 "expired" page."""
+    shares_file = srv.root / ".atlas" / "shares.json"
+    shares = json.loads(shares_file.read_text(encoding="utf-8"))
+    for share in shares:
+        if share["id"] == share_id:
+            share["expires_at"] = 1  # 1970 → expired
+    shares_file.write_text(json.dumps(shares), encoding="utf-8")
 
 
 def _raw_sse_request(port: int, path: str, deadline: float = 4.0) -> bytes:
@@ -194,15 +190,17 @@ class TestMiscLocal(unittest.TestCase):
 
     def test_share_create_works_without_auth_in_local_mode(self):
         # SURPRISING: a "cloud" endpoint fully ACTIVE locally, without auth (fake
-        # admin session). Only persistence is skipped -> id null.
+        # admin session). The registry is the source of truth in BOTH modes, so the
+        # link is persisted locally too (id is a real uuid, no longer null).
         resp = self.srv.post("/api/share", json_body={"path": "accueil.md"})
         self.assertEqual(resp.status, 200)
         payload = resp.json()
-        self.assertIsNone(payload["id"])  # local fake session has no persisted registry id
+        self.assertEqual(len(payload["id"]), 36)  # persisted uuid4
         self.assertEqual(payload["path"], "accueil.md")
         self.assertEqual(payload["expires_at"], 0)  # without expires_days -> unlimited
         self.assertTrue(payload["token"])
-        self.assertIn(".", payload["token"])  # format payload_b64.sig_b64
+        # Opaque capability token: a short random key, NOT a signed payload.sig.
+        self.assertNotIn(".", payload["token"])
 
     def test_share_create_rejects_dotdot_path(self):
         resp = self.srv.post("/api/share", json_body={"path": "../secrets.md"})
@@ -215,11 +213,11 @@ class TestMiscLocal(unittest.TestCase):
         self.assertEqual(resp.json(), {"error": "document not found"})
 
     def test_share_link_round_trip_without_auth(self):
-        # The link created locally is served by GET /share/<token> (public
-        # route): the doc content is embedded as JSON in the standalone page.
+        # The link created locally is served by GET /s/<token> (public route):
+        # the doc content is embedded as JSON in the standalone page.
         token = self.srv.post(
             "/api/share", json_body={"path": "accueil.md"}).json()["token"]
-        resp = self.srv.get(f"/share/{token}")
+        resp = self.srv.get(f"/s/{token}")
         self.assertEqual(resp.status, 200)
         self.assertEqual(resp.headers.get("Content-Type"), "text/html; charset=utf-8")
         self.assertEqual(resp.headers.get("X-Robots-Tag"), "noindex, nofollow")
@@ -228,24 +226,28 @@ class TestMiscLocal(unittest.TestCase):
         self.assertIn("Bienvenue dans le mind de test.", resp.text)
 
     def test_share_link_garbage_token_404_invalid_page(self):
-        resp = self.srv.get("/share/pas-un-token")
+        # An opaque token absent from the registry resolves to nothing → 404
+        # (fail-closed).
+        resp = self.srv.get("/s/pas-un-token")
         self.assertEqual(resp.status, 404)
         self.assertIn("Invalid link", resp.text)
 
-    def test_share_token_forgeable_with_default_secret_and_expired_410(self):
-        # SURPRISING: locally SESSION_SECRET keeps its public default
-        # 'dev-secret-change-me' -> anyone can forge a valid token. Here we forge
-        # an EXPIRED token (e=1, epoch 1970) to also characterize the 410 "Lien
-        # expiré" page.
-        forged = _forge_share_token("accueil.md", 1, LOCAL_DEFAULT_SECRET)
-        resp = self.srv.get(f"/share/{forged}")
+    def test_share_link_expired_410(self):
+        # A share whose stored expiry is in the past → 410 "expired" page. We
+        # create it, then push its expiry into the past in the registry.
+        created = self.srv.post(
+            "/api/share", json_body={"path": "accueil.md"}).json()
+        _expire_share_on_disk(self.srv, created["id"])
+        resp = self.srv.get(f"/s/{created['token']}")
         self.assertEqual(resp.status, 410)
         self.assertIn("expir", resp.text)  # "Lien expir&eacute;"
 
-        # And a token forged without expiration is served outright (signature
-        # OK). The share page's <title> = the file name alone (not the path).
-        forged_valid = _forge_share_token("projets/beta.md", 0, LOCAL_DEFAULT_SECRET)
-        resp = self.srv.get(f"/share/{forged_valid}")
+    def test_share_link_valid_served_title_is_filename(self):
+        # A live link is served outright; the share page's <title> = the file name
+        # alone (not the path).
+        token = self.srv.post(
+            "/api/share", json_body={"path": "projets/beta.md"}).json()["token"]
+        resp = self.srv.get(f"/s/{token}")
         self.assertEqual(resp.status, 200)
         self.assertIn("<title>beta.md</title>", resp.text)
         self.assertIn("Aucun lien sortant ici.", resp.text)
