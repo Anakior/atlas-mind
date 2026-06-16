@@ -77,7 +77,7 @@ marked.setOptions({ gfm: true, breaks: false });
 marked.use({ renderer: {
   code({ text, lang }) {
     const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const language = (lang || '').trim().split(/\\s+/)[0];
+    const language = (lang || '').trim().split(/\s+/)[0];
     let html;
     try {
       html = language && hljs.getLanguage(language)
@@ -85,7 +85,7 @@ marked.use({ renderer: {
         : hljs.highlightAuto(text).value;
     } catch (e) { html = esc(text); }
     const cls = language ? ' language-' + esc(language) : '';
-    return '<pre><code class="hljs' + cls + '">' + html + '</code></pre>\\n';
+    return '<pre><code class="hljs' + cls + '">' + html + '</code></pre>\n';
   },
 } });
 // Wikilinks [[target]] / [[target|alias]]: in a share the targets are not
@@ -97,13 +97,13 @@ marked.use({ extensions: [{
   level: 'inline',
   start(src) { return src.indexOf('[['); },
   tokenizer(src) {
-    const m = /^\\[\\[([^\\[\\]\\n]+?)\\]\\]/.exec(src);
+    const m = /^\[\[([^\[\]\n]+?)\]\]/.exec(src);
     if (m) return { type: 'wikilink', raw: m[0], target: m[1].trim() };
   },
   renderer(token) {
     const parts = token.target.split('|');
     let label = (parts[1] || '').trim();
-    if (!label) label = parts[0].split('/').pop().replace(/\\.md$/i, '').replace(/[-_]+/g, ' ').trim();
+    if (!label) label = parts[0].split('/').pop().replace(/\.md$/i, '').replace(/[-_]+/g, ' ').trim();
     const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return '<span class="wikilink">' + esc(label) + '</span>';
   },
@@ -113,7 +113,7 @@ article.innerHTML = DOMPurify.sanitize(marked.parse(CONTENT));
 // Build TOC depuis h2/h3 du contenu
 const headings = article.querySelectorAll('h2, h3');
 if (headings.length >= 2) {
-  const slug = s => s.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const slug = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const used = new Set();
   const tocEl = document.getElementById('toc');
   tocEl.classList.remove('empty');
