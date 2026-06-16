@@ -49,6 +49,20 @@ import sys
 import threading
 import time
 
+# The intra-package imports below are FLAT (`from server.X import …`,
+# `import server as _s`, `import store`/`config`/`build`) so the very same code
+# runs under both entry points. This must be bootstrapped BEFORE the first flat
+# import:
+#   • put this package's parent dir on sys.path so `server`/`store`/`config`/
+#     `build` resolve under `python -m atlas_mind.server` (the pip-installed prod
+#     entry, whose package dir is NOT on the path) as well as `python -m server`
+#     (dev/tests, engine src already on PYTHONPATH);
+#   • alias this module as the flat `server`, so a `from server.X import` binds to
+#     THIS module rather than importing — and double-executing — the package under
+#     a second name.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.modules.setdefault("server", sys.modules[__name__])
+
 from server.constants import (  # noqa: F401
     COOKIE_NAME, CSRF_COOKIE_NAME, MAX_BODY_BYTES, _EMAIL_PATTERN, MAX_EMAIL_LEN,
     MAX_TOKEN_LABEL_LEN, API_ROLE, NODE_LINK_PREFIX, REMOTES_DIR,
@@ -57,7 +71,6 @@ from server.constants import (  # noqa: F401
 )
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # src/ on path (server/ is a sub-package) for sibling imports
 import store  # identity/share registry: FileStore (JSON under .atlas/)
 from config import AtlasConfig, AtlasConfigError, resolve_mind_root
 
