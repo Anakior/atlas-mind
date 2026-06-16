@@ -2,7 +2,7 @@
      Replaces the old browser native prompt: field + confirmation, show/hide
      toggle, live length validation, inline success feedback.
      role=dialog, close with Esc + backdrop click. -->
-<div id="reset-pw-backdrop" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm">
+<div id="reset-pw-backdrop" class="hidden fixed inset-0 overlay-backdrop">
   <div role="dialog" aria-modal="true" aria-labelledby="reset-pw-title"
        class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[24rem] max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
     <div class="flex items-start justify-between gap-3 mb-1">
@@ -46,7 +46,7 @@
   </div>
 </div>
 
-<div id="new-file-backdrop" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+<div id="new-file-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
   <div class="absolute left-1/2 top-[20%] -translate-x-1/2 w-96 max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
     <h3 class="text-base font-semibold text-ink-100 mb-4" data-i18n="newDocHeader">Nouveau document</h3>
     <form id="new-file-form" class="flex flex-col gap-3">
@@ -89,7 +89,7 @@
   </div>
 </div>
 
-<div id="dir-rename-backdrop" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+<div id="dir-rename-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
   <div class="absolute left-1/2 top-[20%] -translate-x-1/2 w-96 max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
     <h3 class="text-base font-semibold text-ink-100 mb-1" data-i18n="renameFolder">Renommer le dossier</h3>
     <p class="text-xs text-ink-400 mb-4"><span data-i18n="currentFolder">Dossier actuel :</span> <code id="dir-rename-current" class="text-ink-300"></code></p>

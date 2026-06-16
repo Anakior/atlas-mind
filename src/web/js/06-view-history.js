@@ -199,39 +199,42 @@ async function openHistory() {
     const when = formatRevDate(rev.date);
     const row = document.createElement('button');
     row.type = 'button';
-    row.className = 'block w-full text-left px-2 py-1.5 rounded hover:bg-white/5 border-b subtle-border';
+    row.className = 'block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 mb-0.5 transition';
     row.innerHTML =
       '<div class="text-ink-200 truncate">' + escapeHtml(rev.subject || ('(' + rev.sha.slice(0, 7) + ')')) + '</div>' +
-      '<div class="text-[10px] text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
+      '<div class="text-xs text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
         (when ? ' · ' + escapeHtml(when) : '') + (rev.author ? ' · ' + escapeHtml(rev.author) : '') + '</div>';
     row.addEventListener('click', () => {
-      historyList.querySelectorAll('button').forEach(b => b.classList.remove('bg-white/10'));
-      row.classList.add('bg-white/10');
-      showRevision(file, revisions, i);
+      historyList.querySelectorAll('button').forEach(b => b.classList.remove('bg-accent/15'));
+      row.classList.add('bg-accent/15');
+      showVersion(file, revisions, i);
     });
     historyList.appendChild(row);
   });
   historyList.querySelector('button')?.click(); // open the latest revision by default
 }
 
-function revisionHeader(file, revisions, i) {
+// `toggle` = { label, handler } for the secondary button: in the document view it
+// switches to the diff ("Voir les changements"), in the diff view it switches back
+// to the document ("Voir cette version"). The document is the default (cf. row click).
+function revisionHeader(file, revisions, i, toggle) {
   const rev = revisions[i];
   const wrap = document.createElement('div');
   wrap.className = 'mb-3 pb-2 border-b subtle-border';
   const when = rev.date ? new Date(rev.date).toLocaleString(LANG) : '';
   wrap.innerHTML =
-    '<div class="text-ink-100">' + escapeHtml(rev.subject || '') + '</div>' +
-    '<div class="text-[10px] text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
+    '<div class="text-ink-100 font-medium">' + escapeHtml(rev.subject || '') + '</div>' +
+    '<div class="text-xs text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
       (when ? ' · ' + escapeHtml(when) : '') + (rev.author ? ' · ' + escapeHtml(rev.author) : '') + '</div>';
   const view = document.createElement('button');
   view.type = 'button';
-  view.className = 'mt-2 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
-  view.textContent = t('historyViewVersion');
-  view.addEventListener('click', () => showVersion(file, revisions, i));
+  view.className = 'mt-2 px-3 py-1.5 text-sm font-medium bg-white/5 hover:bg-white/10 text-ink-200 rounded-lg transition';
+  view.textContent = t(toggle.label);
+  view.addEventListener('click', toggle.handler);
   wrap.appendChild(view);
   const restore = document.createElement('button');
   restore.type = 'button';
-  restore.className = 'mt-2 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
+  restore.className = 'mt-2 px-3 py-1.5 text-sm font-medium bg-accent/15 hover:bg-accent/25 text-accent rounded-lg transition';
   restore.style.marginLeft = '8px';
   restore.textContent = t('historyRestore');
   restore.addEventListener('click', () => revertToRevision(file, rev));
@@ -243,7 +246,8 @@ async function showRevision(file, revisions, i) {
   const rev = revisions[i];
   const parent = revisions[i + 1]; // newest-first → the next entry is the older revision
   historyDetail.innerHTML = '';
-  historyDetail.appendChild(revisionHeader(file, revisions, i));
+  historyDetail.appendChild(revisionHeader(file, revisions, i,
+    { label: 'historyViewVersion', handler: () => showVersion(file, revisions, i) }));
   const body = document.createElement('div');
   body.className = 'text-ink-500';
   body.textContent = '…';
@@ -267,24 +271,27 @@ async function showRevision(file, revisions, i) {
   }
 }
 
+// Default view when a revision is picked: the DOCUMENT at that revision (what the
+// reader cares about first), with a button to switch to the git diff.
 async function showVersion(file, revisions, i) {
   const rev = revisions[i];
+  historyDetail.innerHTML = '';
+  historyDetail.appendChild(revisionHeader(file, revisions, i,
+    { label: 'historyViewChanges', handler: () => showRevision(file, revisions, i) }));
+  const wrap = document.createElement('div');
+  wrap.className = 'prose prose-invert text-base mt-1';
+  wrap.innerHTML = '<p class="text-ink-500">…</p>';
+  historyDetail.appendChild(wrap);
   let data;
   try {
     data = await api('GET', '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha);
-  } catch (e) { return; }
+  } catch (e) {
+    if (historyFile !== file) return;
+    wrap.innerHTML = '<p class="text-rose-400">' + escapeHtml(t('historyError')) + '</p>';
+    return;
+  }
   if (historyFile !== file) return;
-  historyDetail.innerHTML = '';
-  const back = document.createElement('button');
-  back.type = 'button';
-  back.className = 'mb-3 px-2 py-1 text-[10px] bg-navy-600 hover:bg-navy-500 text-ink-100 rounded';
-  back.textContent = t('historyViewChanges');
-  back.addEventListener('click', () => showRevision(file, revisions, i));
-  historyDetail.appendChild(back);
-  const wrap = document.createElement('div');
-  wrap.className = 'prose prose-invert text-sm mt-1';
   wrap.innerHTML = renderMd(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
-  historyDetail.appendChild(wrap);
 }
 
 // Restore a doc to a past revision: writes that revision's content back as the
@@ -318,7 +325,7 @@ function simpleNode(text) {
 
 function plainTextNode(text) {
   const pre = document.createElement('pre');
-  pre.className = 'font-mono text-[11px] text-ink-300';
+  pre.className = 'font-mono text-[15px] leading-relaxed text-ink-300';
   pre.style.whiteSpace = 'pre-wrap';
   pre.style.wordBreak = 'break-word';
   pre.textContent = text || '';
@@ -330,7 +337,7 @@ function plainTextNode(text) {
 // panel renders correctly without a Tailwind rebuild.
 function diffToDom(diffText) {
   const wrap = document.createElement('div');
-  wrap.className = 'font-mono text-[11px]';
+  wrap.className = 'font-mono text-[15px] leading-relaxed';
   wrap.style.whiteSpace = 'pre-wrap';
   wrap.style.wordBreak = 'break-word';
   // Everything before the first @@ is git plumbing (diff --git / index / --- / +++):

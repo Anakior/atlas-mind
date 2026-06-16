@@ -1,4 +1,4 @@
-<div id="palette-backdrop" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+<div id="palette-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
   <div class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[640px] max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 overflow-hidden">
     <div class="border-b subtle-border flex items-center gap-2 px-4">
       <svg class="w-4 h-4 text-ink-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -28,11 +28,11 @@
   </div>
   <div id="graph-tooltip" class="absolute pointer-events-none hidden bg-navy-800/95 border subtle-border text-ink-100 text-xs px-2.5 py-1.5 rounded-md shadow-xl font-sans z-10"></div>
 </div>
-<div id="tasks-overlay" class="hidden fixed inset-0 z-50 overflow-y-auto backdrop-blur-md" style="background:rgba(14,13,18,0.6)">
+<div id="tasks-overlay" class="hidden fixed inset-0 z-50 overflow-y-auto overlay-backdrop">
   <div style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
     <div class="flex items-center justify-between" style="margin-bottom:1.5rem">
       <div>
-        <div class="text-lg font-semibold text-ink-100 font-sans" data-i18n="tasksTitle">Tâches</div>
+        <div class="text-lg font-semibold text-accent font-sans" data-i18n="tasksTitle">Tâches</div>
         <div id="tasks-stats" class="text-xs text-ink-400 font-sans"></div>
       </div>
       <div class="flex items-center gap-2">
@@ -63,20 +63,20 @@
   <div id="toc-links" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
   <div id="toc-notes" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
 </aside>
-<div id="history-overlay" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
-  <div class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[44rem] max-w-[94vw] max-h-[88vh] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 overflow-hidden flex flex-col">
-    <div class="px-4 py-3 border-b subtle-border flex items-center justify-between gap-3">
+<div id="history-overlay" class="hidden fixed inset-0 z-50 overlay-backdrop">
+  <div class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[60rem] max-w-[92vw] max-h-[82vh] rounded-xl overflow-hidden flex flex-col">
+    <div class="px-5 py-4 border-b subtle-border flex items-center justify-between gap-3">
       <div class="min-w-0">
-        <div class="text-[10px] uppercase tracking-[0.12em] text-accent font-bold" data-i18n="historyHeader">Historique</div>
-        <div id="history-path" class="text-[11px] font-mono text-ink-400 truncate"></div>
+        <div class="text-lg font-semibold text-accent font-sans" data-i18n="historyHeader">Historique</div>
+        <div id="history-path" class="text-xs font-mono text-ink-400 truncate mt-0.5"></div>
       </div>
       <button id="history-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-white/5" title="Fermer (Esc)" data-i18n-title="historyClose">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
     <div class="flex" style="min-height:0">
-      <nav id="history-list" class="w-64 shrink-0 overflow-y-auto scrollbar-thin p-2 text-[11px]" style="max-height:72vh;border-right:1px solid rgba(255,255,255,0.08)"></nav>
-      <div id="history-detail" class="flex-1 overflow-y-auto scrollbar-thin px-4 py-3 text-[11px]" style="max-height:72vh"></div>
+      <nav id="history-list" class="w-64 shrink-0 overflow-y-auto scrollbar-thin p-2 text-sm" style="max-height:72vh;border-right:1px solid rgba(255,255,255,0.08)"></nav>
+      <div id="history-detail" class="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 text-base leading-relaxed" style="max-height:72vh"></div>
     </div>
   </div>
 </div>

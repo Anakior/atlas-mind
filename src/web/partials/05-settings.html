@@ -1,20 +1,20 @@
 <!-- Settings panel (admin + cloud mode only). Full screen on mobile,
      centered on desktop. Three tabs: Users, Tokens, Shares. Everything
      goes through fetch() on the /api/admin/* and /api/share/* endpoints. -->
-<div id="settings-backdrop" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
-  <div id="settings-panel" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[44rem] max-w-[94vw] max-h-[88vh] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 flex flex-col overflow-hidden">
+<div id="settings-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
+  <div id="settings-panel" class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[46rem] max-w-[90vw] max-h-[82vh] rounded-xl flex flex-col overflow-hidden">
     <div class="px-5 py-4 border-b subtle-border flex items-center justify-between gap-3 flex-shrink-0">
-      <h3 class="text-base font-semibold text-ink-100" data-i18n="settingsTitle">Param&egrave;tres</h3>
+      <h3 class="text-lg font-semibold text-accent" data-i18n="settingsTitle">Param&egrave;tres</h3>
       <button id="settings-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
     <div id="settings-tabs" class="px-3 pt-3 flex gap-1 border-b subtle-border flex-shrink-0 flex-wrap">
-      <button class="settings-tab px-3 py-2 text-xs font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="users" data-i18n="settingsTabUsers">Utilisateurs</button>
-      <button class="settings-tab px-3 py-2 text-xs font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="tokens" data-i18n="settingsTabTokens">Tokens</button>
-      <button class="settings-tab px-3 py-2 text-xs font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="shares" data-i18n="settingsTabShares">Partages</button>
-      <button class="settings-tab px-3 py-2 text-xs font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="nodes" data-i18n="settingsTabNodes">N&oelig;uds</button>
-      <button class="settings-tab px-3 py-2 text-xs font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="security" data-i18n="settingsTabSecurity">S&eacute;curit&eacute;</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="users" data-i18n="settingsTabUsers">Utilisateurs</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="tokens" data-i18n="settingsTabTokens">Tokens</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="shares" data-i18n="settingsTabShares">Partages</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="nodes" data-i18n="settingsTabNodes">N&oelig;uds</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="security" data-i18n="settingsTabSecurity">S&eacute;curit&eacute;</button>
     </div>
     <div class="flex-1 overflow-y-auto scrollbar-thin p-5">
       <div id="settings-error" class="hidden mb-3 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded px-3 py-2"></div>
@@ -27,12 +27,12 @@
           <div class="min-w-0">
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsEmailLabel">Email</label>
             <input id="settings-user-email" type="email" autocomplete="off" placeholder="user@example.com" data-i18n-placeholder="settingsEmailPlaceholder"
-              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
           </div>
           <div>
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsRoleLabel">R&ocirc;le</label>
             <div class="relative">
-              <select id="settings-user-role" class="w-full appearance-none px-3 pr-9 py-2 bg-navy-900 border subtle-border rounded text-ink-100 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+              <select id="settings-user-role" class="w-full appearance-none px-3 pr-9 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
                 <option value="viewer" data-i18n="settingsRoleViewer">Lecteur</option>
                 <option value="admin" data-i18n="settingsRoleAdmin">Admin</option>
               </select>
@@ -42,10 +42,10 @@
           <div>
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsPasswordLabel">Mot de passe</label>
             <input id="settings-user-password" type="password" autocomplete="new-password" placeholder="8 car. min." data-i18n-placeholder="settingsPasswordPlaceholder"
-              class="w-full sm:w-32 px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+              class="w-full sm:w-32 px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
           </div>
           <div class="sm:col-span-3 flex justify-end">
-            <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium" data-i18n="settingsAddUser">Ajouter</button>
+            <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="settingsAddUser">Ajouter</button>
           </div>
         </form>
         <ul id="settings-users-list" class="space-y-1.5"></ul>
@@ -57,9 +57,9 @@
           <div class="flex-1 min-w-0">
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenLabel">Libell&eacute;</label>
             <input id="settings-token-label" type="text" autocomplete="off" placeholder="claude, mcp-perso&hellip;" data-i18n-placeholder="settingsTokenLabelPlaceholder"
-              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
+              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
-          <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsCreateToken">Cr&eacute;er un token</button>
+          <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0" data-i18n="settingsCreateToken">Cr&eacute;er un token</button>
         </form>
         <!-- One-time display of the token in plain text + MCP connector URL. Strong
              warning banner (the secret NEVER reappears), Close button,
@@ -75,12 +75,12 @@
           <div class="p-3">
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenPlain">Token</label>
             <div class="flex gap-2 mb-3">
-              <input id="settings-token-plain" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded text-ink-100 text-xs font-mono focus:outline-none">
-              <button id="settings-token-copy" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0 inline-flex items-center gap-1.5" data-i18n="copy">Copier</button>
+              <input id="settings-token-plain" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-xs font-mono focus:outline-none">
+              <button id="settings-token-copy" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0 inline-flex items-center gap-1.5" data-i18n="copy">Copier</button>
             </div>
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsMcpUrl">URL connecteur MCP</label>
             <div class="flex gap-2">
-              <input id="settings-token-mcp" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded text-ink-100 text-xs font-mono focus:outline-none">
+              <input id="settings-token-mcp" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-xs font-mono focus:outline-none">
               <button id="settings-token-mcp-copy" class="px-3 py-2 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded flex-shrink-0" data-i18n="copy">Copier</button>
             </div>
           </div>
@@ -101,14 +101,14 @@
           <div class="min-w-0">
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodeName">Nom du n&oelig;ud</label>
             <input id="settings-node-name" type="text" autocomplete="off" placeholder="guide-equipe" data-i18n-placeholder="settingsNodeNamePlaceholder"
-              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
+              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
           <div class="min-w-0">
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodePath">Chemin (dossier ou .md/.html)</label>
             <input id="settings-node-path" type="text" autocomplete="off" placeholder="equipe/onboarding" data-i18n-placeholder="settingsNodePathPlaceholder"
-              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
+              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
-          <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsNodePublish">Publier</button>
+          <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0" data-i18n="settingsNodePublish">Publier</button>
         </form>
         <!-- One-time link: the token is stored hashed, it never reappears. -->
         <div id="settings-node-result" class="hidden mb-5 rounded-lg overflow-hidden">
@@ -122,8 +122,8 @@
           <div class="p-3">
             <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodeLink">Lien du n&oelig;ud</label>
             <div class="flex gap-2">
-              <input id="settings-node-link" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded text-ink-100 text-xs font-mono focus:outline-none">
-              <button id="settings-node-copy" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0 inline-flex items-center gap-1.5" data-i18n="copy">Copier</button>
+              <input id="settings-node-link" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-xs font-mono focus:outline-none">
+              <button id="settings-node-copy" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0 inline-flex items-center gap-1.5" data-i18n="copy">Copier</button>
             </div>
           </div>
         </div>
@@ -140,9 +140,9 @@
             <div class="flex-1 min-w-0">
               <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsRemoteLink">Lien du n&oelig;ud</label>
               <input id="settings-remote-link" type="text" autocomplete="off" placeholder="atlas-node:&hellip;" data-i18n-placeholder="settingsRemoteLinkPlaceholder"
-                class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
+                class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
             </div>
-            <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded font-medium flex-shrink-0" data-i18n="settingsRemoteAdd">S&rsquo;abonner</button>
+            <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0" data-i18n="settingsRemoteAdd">S&rsquo;abonner</button>
           </form>
           <ul id="settings-remotes-list" class="space-y-2"></ul>
         </div>
@@ -160,7 +160,7 @@
             <span id="security-totp-status" class="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-full bg-ink-500/15 text-ink-400 flex-shrink-0" data-i18n="securityTotpStatusOff">Inactif</span>
           </div>
           <div class="mt-3 flex gap-2 flex-wrap">
-            <button id="security-totp-enable" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium" data-i18n="securityTotpEnable">Activer le 2FA</button>
+            <button id="security-totp-enable" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="securityTotpEnable">Activer le 2FA</button>
             <button id="security-totp-disable" class="hidden px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded font-medium" data-i18n="securityTotpDisable">D&eacute;sactiver le 2FA</button>
           </div>
         </div>

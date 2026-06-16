@@ -25,6 +25,10 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 SOURCES = [
     REPO_ROOT / "web" / "viewer.html",
+    # Demonolithified viewer: the dynamically-built classes now live in the JS
+    # modules under web/js/ (not viewer.html's old inline <script>) — scan them
+    # too, otherwise the safelist comes out empty.
+    *sorted((REPO_ROOT / "web" / "js").glob("*.js")),
     *sorted((REPO_ROOT / "examples" / "extensions").rglob("*.js")),
 ]
 OUT = HERE / "safelist.txt"
