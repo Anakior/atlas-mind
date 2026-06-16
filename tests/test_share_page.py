@@ -21,7 +21,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from harness import AtlasServer
+from harness import AtlasServer, DEFAULT_MIND
 
 LOCAL_DEFAULT_SECRET = b"dev-secret-change-me"  # local mode, no SESSION_SECRET
 
@@ -34,11 +34,16 @@ def _forge_share_token(path: str, secret: bytes = LOCAL_DEFAULT_SECRET) -> str:
 
 
 class TestSharePageScript(unittest.TestCase):
-    """projets/beta.md is part of the harness DEFAULT_MIND."""
+    """projets/beta.md is part of the harness DEFAULT_MIND; frontmatter.md adds a
+    doc with leading YAML frontmatter."""
+
+    _MIND = {**DEFAULT_MIND,
+             "frontmatter.md": "---\ntags: [foo, bar]\nstatus: draft\n---\n\n"
+                               "# Real Heading\n\nBody paragraph.\n"}
 
     @classmethod
     def setUpClass(cls):
-        cls.srv = AtlasServer()
+        cls.srv = AtlasServer(mind=cls._MIND)
         cls.srv.start()
 
     @classmethod
@@ -59,6 +64,17 @@ class TestSharePageScript(unittest.TestCase):
         self.assertNotIn(
             "\\\\", self._render_script(),
             "share render script is double-escaped → invalid regexes → blank page")
+
+    def test_frontmatter_stripped_from_body(self):
+        # The leading YAML frontmatter must not reach the embedded body, or marked
+        # renders the `tags: …` line followed by its closing `---` as a setext H2
+        # that leaks into the page AND the table of contents. The viewer build
+        # strips it the same way (build/__init__.py).
+        resp = self.srv.get(f"/share/{_forge_share_token('frontmatter.md')}")
+        self.assertEqual(resp.status, 200, resp.text[:300])
+        self.assertNotIn("tags: [foo, bar]", resp.text)
+        self.assertNotIn("status: draft", resp.text)
+        self.assertIn("Real Heading", resp.text)  # the real body still renders
 
     @unittest.skipUnless(shutil.which("node"), "node not available")
     def test_render_script_parses(self):

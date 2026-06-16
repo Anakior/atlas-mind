@@ -18,8 +18,14 @@ name). These two tests close the two halves of that gap:
 """
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 import tomllib
 import unittest
+from pathlib import Path
 
 from harness import AtlasServer, REPO_ROOT, SRC_DIR
 
@@ -55,6 +61,37 @@ class TestRunsAsInstalledPackage(unittest.TestCase):
             # proves the build module's flat imports also resolve under the
             # installed layout, not only the server's.
             self.assertTrue((srv.root / "dist" / "index.html").is_file())
+
+
+class TestBuildEntryPointInstalled(unittest.TestCase):
+    """`python -m atlas_mind.build` under the pip-installed layout — the build
+    package has the SAME flat imports as server, so it needs the same self-bootstrap
+    (without it: ModuleNotFoundError: No module named 'build.paths' at import). The
+    mind is given via ATLAS_MIND, like a real `atlas build` of an installed engine."""
+
+    def test_build_runs_as_installed_package(self):
+        with tempfile.TemporaryDirectory(prefix="atlas-build-inst-") as tmp:
+            tmp = Path(tmp)
+            shutil.copytree(SRC_DIR, tmp / "pkg" / "atlas_mind",
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            mind = tmp / "mind"
+            (mind / "content").mkdir(parents=True)
+            (mind / "content" / "accueil.md").write_text("# Hi\n", encoding="utf-8")
+            (mind / "atlas.toml").write_text('prefix = "T"\nlang = "en"\n',
+                                             encoding="utf-8")
+            env = dict(os.environ)
+            # atlas_mind importable, but its dir is NOT on the path (installed layout).
+            env["PYTHONPATH"] = str(tmp / "pkg")
+            env["ATLAS_MIND"] = str(mind)
+            env["GIT_CONFIG_GLOBAL"] = os.devnull
+            env["GIT_CONFIG_SYSTEM"] = os.devnull
+            result = subprocess.run(
+                [sys.executable, "-m", "atlas_mind.build"],
+                cwd=str(mind), env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(
+                result.returncode, 0,
+                f"`python -m atlas_mind.build` failed:\n{result.stdout}\n{result.stderr}")
+            self.assertTrue((mind / "dist" / "index.html").is_file())
 
 
 class TestPyprojectPackaging(unittest.TestCase):
