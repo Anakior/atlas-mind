@@ -554,6 +554,14 @@ def run() -> None:
     os.chdir(CONFIG.root)
     migrate_legacy_format()
     threading.Thread(target=_CTX.reload_hub.watch_loop, args=(CONFIG,), daemon=True).start()
+    if CONFIG.dev_mode:
+        # Dev sandbox: rebuild the viewer when its sources (partials/js/css/pages)
+        # change, so `atlas-dev-cloud` is a real edit-and-see loop. The rebuild
+        # updates dist/index.html, which watch_loop() above turns into a browser
+        # reload. Dev-only: in cloud/prod the viewer is built once at boot / on pull.
+        threading.Thread(
+            target=_CTX.reload_hub.watch_sources_loop,
+            args=(CONFIG, _CTX.git_sync.build), daemon=True).start()
     if CONFIG.auth_enabled and not CONFIG.dev_mode:
         # The dev sandbox NEVER pulls/pushes (it would touch prod's GitHub repo):
         # skip the periodic pull loop AND the SIGTERM git-flush entirely.

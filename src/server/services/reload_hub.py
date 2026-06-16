@@ -57,3 +57,49 @@ class ReloadHub:
                 continue
             last_hash = current
             self.broadcast()
+
+    # Editable viewer-source subdirs (never vendor/ or tailwind/node_modules, which
+    # would make the mtime poll crawl over thousands of files every second).
+    _WATCHED_SUBDIRS = ('partials', 'styles', 'js', 'pages', 'i18n')
+
+    def _sources_sig(self, config) -> float:
+        """Newest mtime across the engine's editable web sources (config.web_dir):
+        its top-level files + the editable subdirs, recursively."""
+        latest = 0.0
+        candidates = []
+        try:
+            candidates += [p for p in config.web_dir.iterdir() if p.is_file()]
+        except OSError:
+            pass
+        for sub in self._WATCHED_SUBDIRS:
+            d = config.web_dir / sub
+            if d.is_dir():
+                candidates += [p for p in d.rglob('*') if p.is_file()]
+        for p in candidates:
+            try:
+                latest = max(latest, p.stat().st_mtime)
+            except OSError:
+                pass
+        return latest
+
+    def watch_sources_loop(self, config, build_fn) -> None:
+        """Dev-only: poll the editable web sources and rebuild on change, so editing
+        a partial/js/css/page refreshes the viewer without a manual `atlas build`.
+        The rebuild rewrites dist/index.html, which watch_loop() then detects to push
+        the reload event to the browser. A build error is logged but never kills the
+        watcher. Run as a daemon thread by run() when config.dev_mode."""
+        last = self._sources_sig(config)
+        while True:
+            time.sleep(1)
+            current = self._sources_sig(config)
+            if current == last:
+                continue
+            last = current
+            try:
+                result = build_fn()
+                if getattr(result, 'returncode', 0) != 0:
+                    print(f"[dev-watch] build exited {result.returncode}", flush=True)
+                else:
+                    print("[dev-watch] sources changed -> rebuilt viewer", flush=True)
+            except Exception as e:  # a transient build failure must not stop the loop
+                print(f"[dev-watch] rebuild failed: {e}", flush=True)

@@ -1,4 +1,4 @@
-<div id="quick-capture-backdrop" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm">
+<div id="quick-capture-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
   <div class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[92vw] max-w-md bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
     <h3 class="text-base font-semibold text-ink-100 mb-1" data-i18n="quickCaptureTitle">Capture rapide</h3>
     <p class="text-xs text-ink-500 mb-3"><span data-i18n="quickCaptureHint">Cr&eacute;e une note dans</span> <code class="font-mono text-ink-400">inbox/</code></p>
@@ -16,7 +16,7 @@
   </div>
 </div>
 
-<div id="share-backdrop" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+<div id="share-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
   <div class="absolute left-1/2 top-[18%] -translate-x-1/2 w-[28rem] max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
     <h3 class="text-base font-semibold text-ink-100 mb-1" data-i18n="shareModalTitle">Partager ce document</h3>
     <p id="share-path" class="text-[11px] text-ink-500 font-mono mb-4 truncate"></p>
@@ -55,7 +55,7 @@
   </div>
 </div>
 
-<div id="rename-backdrop" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+<div id="rename-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
   <div class="absolute left-1/2 top-[20%] -translate-x-1/2 w-96 max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
     <h3 id="rename-title" class="text-base font-semibold text-ink-100 mb-4">Renommer</h3>
     <form id="rename-form" class="flex flex-col gap-3">
@@ -82,7 +82,7 @@
   </div>
 </div>
 
-<div id="confirm-backdrop" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm">
+<div id="confirm-backdrop" class="hidden fixed inset-0 z-[60] overlay-backdrop">
   <div class="absolute left-1/2 top-[28%] -translate-x-1/2 w-96 max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
     <h3 id="confirm-title" class="text-base font-semibold text-ink-100 mb-2"></h3>
     <p id="confirm-message" class="text-sm text-ink-300 leading-relaxed mb-4"></p>
@@ -95,7 +95,7 @@
 
 <!-- Generic input modal (replaces the browser's native prompt). Used
      e.g. for the destination of "Appropriate". -->
-<div id="prompt-backdrop" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm">
+<div id="prompt-backdrop" class="hidden fixed inset-0 z-[60] overlay-backdrop">
   <div class="absolute left-1/2 top-[28%] -translate-x-1/2 w-96 max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
     <h3 id="prompt-title" class="text-base font-semibold text-ink-100 mb-2"></h3>
     <p id="prompt-message" class="text-sm text-ink-300 leading-relaxed mb-3"></p>

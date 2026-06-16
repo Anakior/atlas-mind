@@ -1,7 +1,7 @@
 <!-- ── 2FA modal: enrollment (secret + QR + verification + recovery codes)
      and disabling. Above the Settings panel (z-65). Reuses the
      style of the existing modals (dark backdrop, navy card, buttons). ── -->
-<div id="totp-backdrop" class="hidden fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="totp-backdrop" class="hidden fixed inset-0 overlay-backdrop flex items-center justify-center p-4">
   <div id="totp-modal" class="w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70">
     <div class="px-5 py-4 border-b subtle-border flex items-center justify-between gap-3">
       <h3 id="totp-title" class="text-base font-semibold text-ink-100" data-i18n="totpModalTitle">Activer le 2FA</h3>

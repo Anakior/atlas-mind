@@ -28,6 +28,12 @@ const safelist = fs
 module.exports = {
   content: [
     path.join(__dirname, '..', 'viewer.html'),
+    // Demonolithified viewer: the markup + classes now live in partials/, pages/
+    // and the JS modules (not viewer.html anymore). Scan them ALL, otherwise any
+    // newly-used utility (e.g. rounded-2xl) never lands in the precompiled CSS.
+    path.join(__dirname, '..', 'partials', '**', '*.html'),
+    path.join(__dirname, '..', 'pages', '**', '*.html'),
+    path.join(__dirname, '..', 'js', '**', '*.js'),
     path.join(__dirname, '..', '..', 'examples', 'extensions', '**', '*.{js,css,py}'),
   ],
   safelist,

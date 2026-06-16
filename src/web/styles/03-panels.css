@@ -16,3 +16,10 @@
   .md-tb-btn { padding: 5px 9px; border-radius: 4px; color: #b0b1b5; font-size: 12px; font-weight: 500; min-width: 32px; text-align: center; transition: background 0.08s, color 0.08s; }
   .md-tb-btn:hover { background: rgba(255,255,255,0.06); color: #ffffff; }
   .md-tb-sep { width: 1px; background: #2a2a32; margin: 3px 4px; }
+  /* Single backdrop for ALL overlays/modals — one source of truth so they never
+     drift apart (matches the Tasks view: navy tint + 12px blur). */
+  .overlay-backdrop {
+    background: rgba(14, 13, 18, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
