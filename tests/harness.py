@@ -147,6 +147,12 @@ class AtlasServer:
                     written before build/boot — for files outside content/
                     (extensions .atlas/extensions/*, a test atlas.toml…).
       boot_timeout: max delay (s) for /healthz to respond.
+      installed_layout: copy the engine as the `atlas_mind` PACKAGE and launch
+                    `python -m atlas_mind.server` with only the package's PARENT
+                    on PYTHONPATH — the pip-installed prod layout, where the flat
+                    intra-package imports must self-bootstrap (the dotted name is
+                    importable but the package dir is NOT on sys.path). Default
+                    False: engine flat under src/, launched as `python -m server`.
 
     Attributes exposed after start(): root (tmp Path), content_root, dist_dir,
     port, base_url, proc (Popen), log_path (server stdout+stderr).
@@ -155,7 +161,7 @@ class AtlasServer:
     def __init__(self, *, mind: dict | None = None, extra_env: dict | None = None,
                  cookies: bool = False, run_build: bool = True,
                  git_init: bool = True, boot_timeout: float = 15.0,
-                 extra_files: dict | None = None):
+                 extra_files: dict | None = None, installed_layout: bool = False):
         self.mind = dict(DEFAULT_MIND) if mind is None else dict(mind)
         self.extra_env = dict(extra_env or {})
         self.extra_files = dict(extra_files or {})
@@ -163,6 +169,7 @@ class AtlasServer:
         self.run_build = run_build
         self.git_init = git_init
         self.boot_timeout = boot_timeout
+        self.installed_layout = installed_layout
 
         self.root: Path | None = None
         self.content_root: Path | None = None
@@ -174,6 +181,29 @@ class AtlasServer:
         self._log_file = None
         self._opener = None
         self.cookie_jar = http.cookiejar.CookieJar() if cookies else None
+
+    # ── engine layout (flat src vs installed package) ────────────────────────
+
+    def _engine_dir(self) -> Path:
+        """Where the engine source is copied: as the installed `atlas_mind`
+        package (installed_layout) or flat under src/ (default)."""
+        return (self.root / "pkg" / "atlas_mind") if self.installed_layout \
+            else (self.root / "src")
+
+    def _engine_path_dir(self) -> Path:
+        """Directory placed on PYTHONPATH. The installed layout exposes only the
+        package's PARENT, so `atlas_mind` is importable but its own directory is
+        NOT on the path — like a pip install (site-packages on the path, not
+        site-packages/atlas_mind)."""
+        return (self.root / "pkg") if self.installed_layout else (self.root / "src")
+
+    @property
+    def _server_module(self) -> str:
+        return "atlas_mind.server" if self.installed_layout else "server"
+
+    @property
+    def _build_module(self) -> str:
+        return "atlas_mind.build" if self.installed_layout else "build"
 
     # ── lifecycle ────────────────────────────────────────────────────────────
 
@@ -223,8 +253,11 @@ class AtlasServer:
     def _populate(self) -> None:
         ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
         # web/ and templates/ now live INSIDE src/ (the package), so copying src/
-        # brings the engine assets along — no separate copy needed.
-        shutil.copytree(SRC_DIR, self.root / "src", ignore=ignore)
+        # brings the engine assets along — no separate copy needed. The destination
+        # depends on the layout (flat src/ vs the installed atlas_mind/ package).
+        engine_dir = self._engine_dir()
+        engine_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(SRC_DIR, engine_dir, ignore=ignore)
         (self.root / ".gitignore").write_text(TEST_GITIGNORE, encoding="utf-8")
         for rel, content in self.mind.items():
             target = self.content_root / rel
@@ -271,9 +304,9 @@ class AtlasServer:
         + sidecars). PYTHONPATH puts the copied engine src first so `-m build`
         resolves the engine's build with the cwd set to the mind."""
         env = dict(self._git_env())
-        env["PYTHONPATH"] = str(self.root / "src") + os.pathsep + env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = str(self._engine_path_dir()) + os.pathsep + env.get("PYTHONPATH", "")
         result = subprocess.run(
-            [sys.executable, "-m", "build"],
+            [sys.executable, "-m", self._build_module],
             cwd=str(self.root), env=env,
             capture_output=True, text=True, timeout=60,
         )
@@ -307,9 +340,9 @@ class AtlasServer:
             self._log_file = open(self.log_path, "ab")
             server_env = self._server_env(self.port)
             server_env["PYTHONPATH"] = (
-                str(self.root / "src") + os.pathsep + server_env.get("PYTHONPATH", ""))
+                str(self._engine_path_dir()) + os.pathsep + server_env.get("PYTHONPATH", ""))
             self.proc = subprocess.Popen(
-                [sys.executable, "-m", "server"],
+                [sys.executable, "-m", self._server_module],
                 cwd=str(self.root),
                 env=server_env,
                 stdout=self._log_file,
