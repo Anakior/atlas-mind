@@ -14,6 +14,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Same self-bootstrap as src/server/__init__.py: the FLAT intra-package imports
+# below ("from build.X import …") must resolve under BOTH "python -m build"
+# (dev/tests, engine src on PYTHONPATH) and "python -m atlas_mind.build" (the
+# installed package, whose directory is NOT on sys.path). Put the package's parent
+# on the path and alias this module as the flat "build", so a "from build.X import"
+# binds to THIS module instead of re-importing — and double-executing — it.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.modules.setdefault("build", sys.modules[__name__])
+
 from build.paths import (  # noqa: F401  (re-exported as build.*)
     SRC_DIR, WEB_DIR, TEMPLATE, TEMPLATES_DIR, STYLES_DIR, PARTIALS_DIR, JS_DIR,
     SITE_WORDMARK, DEFAULT_SITE_PREFIX, DEFAULT_TAGLINE, DEFAULT_LANG,

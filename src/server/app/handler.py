@@ -456,7 +456,12 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        content = target.read_text(encoding="utf-8")
+        # Strip the leading YAML frontmatter before embedding, exactly like the
+        # viewer build (build/__init__.py): left in, marked renders the `tags: …`
+        # line followed by its closing `---` as a setext H2 that leaks into both
+        # the rendered page and the table of contents.
+        _, content = _s._import_build()._parse_frontmatter(
+            target.read_text(encoding="utf-8"))
         title = target.name
         extensions_css, extensions_js = _s.share_extension_assets()
         body = _s.render_page("share",
