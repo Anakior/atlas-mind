@@ -42,7 +42,22 @@ Issues = "https://github.com/Anakior/atlas-mind/issues"
 # package and are shipped as package data, so a `pip install atlas-mind` wheel is
 # fully self-contained (no clone, no separate assets to fetch).
 [tool.setuptools]
-packages = ["atlas_mind"]
+# EVERY sub-package must be listed. package-dir maps the root `atlas_mind` to
+# src/, and setuptools derives each sub-package's directory from its dotted name
+# (atlas_mind.server.routes -> src/server/routes). A missing entry ships an
+# amputated wheel that ImportErrors at boot (server.py became the server/
+# package, etc.). Top-level modules (config, store, cli) ride along with the
+# `atlas_mind` package itself, so they need no entry.
+packages = [
+    "atlas_mind",
+    "atlas_mind.build",
+    "atlas_mind.server",
+    "atlas_mind.server.app",
+    "atlas_mind.server.pure",
+    "atlas_mind.server.render",
+    "atlas_mind.server.routes",
+    "atlas_mind.server.services",
+]
 package-dir = { "atlas_mind" = "src" }
 
 # Single source of truth for the version: src/__init__.py (__version__). Both the
