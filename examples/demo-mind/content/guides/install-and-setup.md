@@ -139,7 +139,7 @@ anywhere.
 ## Where to go next
 
 - **[[guides/markdown-showcase]]** — everything the renderer supports.
-- **[[features/multi-format]]** — drop in HTML decks, PDFs and Word files too.
+- **[[features/multi-formats]]** — drop in HTML decks, PDFs and Word files too.
 - **[[features/the-mind-graph]]** — watch the links become a graph.
 - Hosting it for real, in depth (tokens, HTTPS, updates): see the project
   [README](https://github.com/Anakior/atlas-mind#deployment).

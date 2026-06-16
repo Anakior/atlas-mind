@@ -3,6 +3,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import sys
 import time
 
@@ -132,44 +133,47 @@ def authenticate(email: str, password: str):
     return user.get("role", "admin") if user else None
 
 
-def make_share_token(path: str, expires_at: int) -> str:
-    payload = json.dumps({"p": path, "e": expires_at}).encode()
-    sig = hmac.new(_s.CONFIG.session_secret, payload, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(payload).decode().rstrip("=") + "." + \
-           base64.urlsafe_b64encode(sig).decode().rstrip("=")
+# Share links are opaque CAPABILITY tokens: a random, unguessable key whose
+# SHA256 is the lookup index into the share registry. Unlike the old signed
+# payload (which baked the target path into the token), the target path now lives
+# in the registry and is mutable — so a link survives the document being moved or
+# renamed (auto re-pointed on an in-app move, reactivatable from the admin UI
+# otherwise). 16 bytes → 128-bit capability, ~22 url-safe characters.
+SHARE_TOKEN_BYTES = 16
+
+
+def new_share_token() -> str:
+    """A fresh opaque share token (random capability key, not a signed payload).
+    Only its SHA256 is the lookup index; the target path is read from the registry."""
+    return secrets.token_urlsafe(SHARE_TOKEN_BYTES)
 
 
 def verify_share_token(token: str):
-    """Returns (path, error_code) where error_code is None|"invalid"|"expired"|"revoked"."""
-    try:
-        payload_b64, sig_b64 = token.split(".")
-        pad = "=" * (-len(payload_b64) % 4)
-        payload = base64.urlsafe_b64decode(payload_b64 + pad)
-        sig_pad = "=" * (-len(sig_b64) % 4)
-        sig = base64.urlsafe_b64decode(sig_b64 + sig_pad)
-        expected = hmac.new(_s.CONFIG.session_secret, payload, hashlib.sha256).digest()
-        if not hmac.compare_digest(sig, expected):
-            return (None, "invalid")
-        data = json.loads(payload)
-        if data.get("e") and time.time() > data["e"]:
-            return (None, "expired")
-        # Revocation check in the FileStore registry. Fail-CLOSED: if the
-        # registry is unreachable we REFUSE the
-        # link (503 "unavailable") rather than risk serving a doc whose
-        # revocation could not be verified. A public link points to potentially
-        # sensitive content: unavailable is better than revocation bypassed
-        # during an outage.
-        if _s.CONFIG.auth_enabled:
-            try:
-                doc = _s.get_store().find_share_by_token(token)
-            except Exception as e:
-                print(f"[verify_share_token] registry check failed: {e}", file=sys.stderr)
-                return (None, "unavailable")
-            if doc and doc.get("revoked"):
-                return (None, "revoked")
-        return (data.get("p"), None)
-    except Exception:
+    """Resolve a share token to its current target path via the registry.
+
+    Returns (path, error_code) with error_code in
+    None | "invalid" | "expired" | "revoked" | "unavailable".
+
+    The registry is the single source of truth (local AND cloud): an unknown
+    token is rejected (fail-CLOSED — a forged/guessed key resolves to nothing),
+    a revoked or expired record is refused, and a registry that cannot be read
+    yields "unavailable" (503) rather than risk leaking. The target path is read
+    from the record (mutable), which is what lets a link outlive a doc move."""
+    if not token:
         return (None, "invalid")
+    try:
+        record = _s.get_store().find_share_by_token(token)
+    except Exception as e:
+        print(f"[verify_share_token] registry lookup failed: {e}", file=sys.stderr)
+        return (None, "unavailable")
+    if not record:
+        return (None, "invalid")
+    if record.get("revoked"):
+        return (None, "revoked")
+    expires_at = record.get("expires_at") or 0
+    if expires_at and time.time() > expires_at:
+        return (None, "expired")
+    return (record.get("path"), None)
 
 
 # CSRF synchronizer token (session-bound double-submit): a READABLE kb_csrf cookie

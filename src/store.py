@@ -6,14 +6,15 @@ FileStore: an on-disk registry with no external dependency.
   Atomic writes (tempfile + os.replace) under a per-file threading.Lock,
   re-read on mtime change. uuid4 ids (str) — find/revoke also accept legacy
   24-hex ids (plain equality, no format enforced).
-  Share tokens are stored as SHA256, never in cleartext (the HMAC
-  verification of the token stays in server.py, only the registry lookup
-  changes).
+  A share token is a capability URL, not an auth secret: it is kept in
+  CLEARTEXT in shares.json so the admin can re-copy the link, alongside its
+  SHA256 lookup index. Only users.json (password hashes, api_token_hash) is
+  hash-only. Resolution is a pure registry lookup — no token signature.
   last_used_at lives in a separate state.json, never in the durable files.
   The directory contains a .gitignore "*": the registry (password hashes,
-  api_token_hash, SHA256 of share tokens) must NEVER be staged by the
-  `git add -A` of trigger_sync/pull_and_rebuild and then pushed to the
-  content's GitHub repo.
+  api_token_hash, AND the cleartext share-link capability tokens) must NEVER
+  be staged by the `git add -A` of trigger_sync/pull_and_rebuild and then
+  pushed to the content's GitHub repo.
   An ABSENT registry file counts as an empty collection; a file that is
   present but corrupted raises (fail-CLOSED in server.py: login 503, share
   link 503, Bearer 401) — an unreadable registry must never pass for empty,
@@ -265,8 +266,12 @@ class FileStore:
     """On-disk users/shares registry (JSON), with no external dependency.
 
     - users.json  : list of {email, password_hash, role, api_token_hash?, …}
-    - shares.json : list of {id, path, token_sha256, expires_at, created_at,
-                    created_by, revoked, revoked_at?} — NEVER a token in cleartext.
+                    (password/token HASHES only — never a cleartext secret).
+    - shares.json : list of {id, path, token, token_sha256, expires_at, created_at,
+                    created_by, revoked, revoked_at?}. A share token is a
+                    capability URL, not an auth secret: it is kept in cleartext so
+                    the admin can re-copy the link, alongside its SHA256 lookup
+                    index. The registry is never committed/pushed (gitignored).
     - state.json  : volatile data (last_used_at per identity), kept separate so
                     the durable files aren't rewritten on every Bearer request.
 
@@ -613,7 +618,9 @@ class FileStore:
 
     def insert_share(self, share: dict) -> str:
         record = dict(share)
-        token = record.pop("token", None)
+        # The cleartext token is KEPT (capability URL, re-copyable by the admin);
+        # token_sha256 is the constant-time lookup index used on each share hit.
+        token = record.get("token")
         record["token_sha256"] = hash_share_token(token or "")
         record["id"] = str(uuid.uuid4())
         with self._locks[self.SHARES_FILE]:
@@ -640,9 +647,8 @@ class FileStore:
         if not include_revoked:
             shares = [s for s in shares if not s.get("revoked", False)]
         shares.sort(key=lambda s: -(s.get("created_at") or 0))
-        # The cleartext token doesn't exist in the FileStore (stored as SHA256):
-        # the "token" key stays present (unchanged response shape) but set to None.
-        return [_normalize_share({**s, "token": None}) for s in shares[:limit]]
+        # The cleartext token is returned so the admin UI shows a copyable link.
+        return [_normalize_share(s) for s in shares[:limit]]
 
     def revoke_share(self, share_id: str) -> bool:
         # Plain equality on the id field: accepts native uuid4s as well as the
@@ -659,6 +665,52 @@ class FileStore:
                 self._write(self.SHARES_FILE, shares)
                 return True
         return False
+
+    def repoint_share(self, share_id: str, new_path: str) -> bool:
+        """Point an existing, non-revoked share at a new target path (reactivate a
+        link whose document was moved/renamed). The token is unchanged — only the
+        stored target moves — so the public link keeps working. Returns False if no
+        active share matches the id."""
+        with self._locks[self.SHARES_FILE]:
+            shares = [dict(s) for s in self._load(self.SHARES_FILE)]
+            for share in shares:
+                if share.get("id") != share_id or share.get("revoked", False):
+                    continue
+                share["path"] = new_path
+                self._write(self.SHARES_FILE, shares)
+                return True
+        return False
+
+    def _repoint_shares(self, matches, rewrite) -> int:
+        """Re-point every active share whose path `matches(path)`, rewriting it via
+        `rewrite(path)`. Returns the count updated (single atomic write). Shared by
+        the file-move and folder-move repointers below."""
+        count = 0
+        with self._locks[self.SHARES_FILE]:
+            shares = [dict(s) for s in self._load(self.SHARES_FILE)]
+            for share in shares:
+                path = share.get("path") or ""
+                if share.get("revoked", False) or not matches(path):
+                    continue
+                share["path"] = rewrite(path)
+                count += 1
+            if count:
+                self._write(self.SHARES_FILE, shares)
+        return count
+
+    def repoint_shares_by_path(self, old_path: str, new_path: str) -> int:
+        """Re-point active shares targeting exactly `old_path` to `new_path` (called
+        when a document is moved/renamed in-app, so its links never break)."""
+        return self._repoint_shares(lambda p: p == old_path, lambda p: new_path)
+
+    def repoint_shares_under(self, old_dir: str, new_dir: str) -> int:
+        """Re-point active shares under a moved folder: a target `old_dir/<rest>`
+        becomes `new_dir/<rest>` (called when a folder is renamed in-app)."""
+        old_prefix = old_dir.rstrip("/") + "/"
+        new_prefix = new_dir.rstrip("/") + "/"
+        return self._repoint_shares(
+            lambda p: p.startswith(old_prefix),
+            lambda p: new_prefix + p[len(old_prefix):])
 
     # ── Atlas nodes (hive, #10) ─────────────────────────────────────────
     def create_node(self, name: str, path: str, token: str) -> dict:

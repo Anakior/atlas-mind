@@ -242,6 +242,11 @@ const STRINGS = {
     revokeConfirmMsg: 'Le lien arrêtera de fonctionner immédiatement. Cette action est irréversible.',
     expiresAt: d => 'Expire le ' + d,
     neverExpires: "N'expire jamais",
+    shareBroken: '(lien cassé)',
+    shareReactivate: 'Réactiver',
+    shareReactivateTitle: 'Réactiver ce lien',
+    shareReactivateMsg: p => `Le document « ${p} » est introuvable (déplacé ou supprimé hors de l'app). Indique son nouveau chemin : le lien repartira sur la même URL.`,
+    shareReactivatePlaceholder: 'dossier/document.md',
     // Paramètres (admin)
     settingsTitle: 'Paramètres',
     settingsTabUsers: 'Utilisateurs',
@@ -637,6 +642,11 @@ const STRINGS = {
     revokeConfirmMsg: 'The link will stop working immediately. This action is irreversible.',
     expiresAt: d => 'Expires on ' + d,
     neverExpires: 'Never expires',
+    shareBroken: '(broken link)',
+    shareReactivate: 'Reactivate',
+    shareReactivateTitle: 'Reactivate this link',
+    shareReactivateMsg: p => `The document "${p}" is missing (moved or deleted outside the app). Enter its new path: the link will resume on the same URL.`,
+    shareReactivatePlaceholder: 'folder/document.md',
     // Settings (admin)
     settingsTitle: 'Settings',
     settingsTabUsers: 'Users',
