@@ -64,7 +64,7 @@
   <div id="toc-notes" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
 </aside>
 <div id="history-overlay" class="hidden fixed inset-0 z-50 overlay-backdrop">
-  <div class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[60rem] max-w-[92vw] max-h-[82vh] rounded-xl overflow-hidden flex flex-col">
+  <div id="history-card" class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl overflow-hidden flex flex-col">
     <div class="px-5 py-4 border-b subtle-border flex items-center justify-between gap-3">
       <div class="min-w-0">
         <div class="text-lg font-semibold text-accent font-sans" data-i18n="historyHeader">Historique</div>
@@ -74,9 +74,9 @@
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
-    <div class="flex" style="min-height:0">
-      <nav id="history-list" class="w-64 shrink-0 overflow-y-auto scrollbar-thin p-2 text-sm" style="max-height:72vh;border-right:1px solid rgba(255,255,255,0.08)"></nav>
-      <div id="history-detail" class="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 text-base leading-relaxed" style="max-height:72vh"></div>
+    <div id="history-body" class="flex" style="min-height:0">
+      <nav id="history-list" class="shrink-0 overflow-y-auto scrollbar-thin p-2 text-sm" style="max-height:82vh;border-right:1px solid rgba(255,255,255,0.08)"></nav>
+      <div id="history-detail" class="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 text-base leading-relaxed" style="max-height:82vh"></div>
     </div>
   </div>
 </div>
