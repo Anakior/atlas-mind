@@ -2,13 +2,13 @@ function renderHtmlFrame(file) {
   btnEdit.classList.add('hidden');   // no inline HTML editing via the viewer
   btnSave.classList.add('hidden');
   btnCancel.classList.add('hidden');
-  // The prose article is narrow and padded: we make it full width for the deck.
+  // The prose article is narrow and padded: full width for the deck.
   contentEl.style.maxWidth = 'none';
   contentEl.style.padding = '0';
   const url = '/' + file.path.split('/').map(encodeURIComponent).join('/') + (file.mtime ? '?v=' + file.mtime : '');
   const u = escapeHtml(url);
-  // Online: iframe src=URL (served by the server). Offline (file://) the absolute
-  // URL doesn't resolve → we inject the embedded content via srcdoc.
+  // Online: iframe src=URL. Offline (file://) the absolute URL doesn't resolve →
+  // inject the embedded content via srcdoc.
   const offlineSrc = (typeof IS_OFFLINE_BUILD !== 'undefined' && IS_OFFLINE_BUILD)
     ? (file.content != null ? file.content
        : (typeof EMBED_CONTENT !== 'undefined' ? EMBED_CONTENT[file.path] : null))
@@ -23,24 +23,20 @@ function renderHtmlFrame(file) {
     + '</div>'
     + '<iframe ' + frameAttr + ' sandbox="allow-scripts" allow="fullscreen" title="' + escapeHtml(file.name) + '" '
     + 'style="width:100%;height:calc(100vh - 150px);border:0;display:block;background:#0b0d13"></iframe>';
-  // Table of contents / backlinks / notes make no sense for a standalone HTML document:
-  // we hide the side panel entirely (restored on the next .md doc via
-  // renderBacklinksFor + buildToc in showMarkdown).
+  // TOC/backlinks/notes + todos widget make no sense over a standalone HTML doc:
+  // hide them (restored on the next .md doc via showMarkdown).
   tocList.innerHTML = '';
   tocLinks.innerHTML = '';
   tocNotes.innerHTML = '';
   tocPanel.classList.add('hidden');
   tocPanel.classList.remove('flex');
   if (typeof tocShow !== 'undefined' && tocShow) tocShow.classList.add('hidden');
-  // The floating todos widget makes no sense over a standalone HTML
-  // document (deck/dashboard): we hide it (restored in showMarkdown/showWelcome).
   document.getElementById('todo-widget')?.classList.add('hidden');
 }
 
-// Rendering of a .pdf document: browser's native PDF viewer in a same-origin
-// iframe (the server serves the PDF as application/pdf; X-Frame-Options
-// SAMEORIGIN allows our own framing). Not indexed (binary); offline,
-// a binary can't be inlined → we offer direct opening.
+// Render a .pdf in the browser's native viewer via a same-origin iframe
+// (X-Frame-Options SAMEORIGIN allows our own framing). Offline, a binary can't be
+// inlined → we offer direct opening instead.
 function renderPdfFrame(file) {
   btnEdit.classList.add('hidden');
   btnSave.classList.add('hidden');
@@ -58,7 +54,7 @@ function renderPdfFrame(file) {
     + '<span class="text-ink-400 font-mono">' + t('pdfDocBanner') + '</span>'
     + '<a href="' + u + '" target="_blank" rel="noopener" class="text-sky-400 hover:underline whitespace-nowrap ml-3">' + t('openFullscreen') + '</a>'
     + '</div>' + body;
-  // Same hides as for a .html: table of contents/backlinks/notes + TOC button + todos widget.
+  // Same hides as for a .html: TOC/backlinks/notes + TOC button + todos widget.
   tocList.innerHTML = '';
   tocLinks.innerHTML = '';
   tocNotes.innerHTML = '';
@@ -84,9 +80,8 @@ function loadMammoth() {
   return _mammothPromise;
 }
 
-// Rendering of a .docx: converted to readable HTML in the browser (mammoth), injected
-// into the .prose article. Read-only (never editing a Word binary), nothing
-// is sent anywhere: everything happens in the browser.
+// Render a .docx: converted to HTML in the browser (mammoth), injected into the
+// .prose article. Read-only, fully client-side (nothing is sent anywhere).
 async function renderDocxFrame(file) {
   btnEdit.classList.add('hidden');
   btnSave.classList.add('hidden');
@@ -94,7 +89,7 @@ async function renderDocxFrame(file) {
   contentEl.style.maxWidth = '';
   contentEl.style.padding = '';
   contentEl.innerHTML = renderSkeleton(file);
-  // Table of contents/backlinks/notes/todos: not relevant for a converted Word doc.
+  // Same hides as for .html/.pdf: TOC/backlinks/notes/todos.
   tocList.innerHTML = ''; tocLinks.innerHTML = ''; tocNotes.innerHTML = '';
   tocPanel.classList.add('hidden'); tocPanel.classList.remove('flex');
   if (typeof tocShow !== 'undefined' && tocShow) tocShow.classList.add('hidden');

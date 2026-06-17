@@ -6,10 +6,8 @@ let _tasksIndex = [];
 
 async function loadTasksIndex() {
   if (IS_OFFLINE_BUILD) return EMBED_TASKS || [];
-  // Online: always fetch fresh — the rollup is live, it changes as you tick boxes.
-  // First let any in-flight checkbox write land: the rollup is computed from the
-  // files on disk, so fetching before the toggle's PUT completes would return the
-  // pre-toggle state (the box would show back unchecked in the list).
+  // Let in-flight checkbox PUTs land first, then fetch fresh: the rollup is read
+  // live from disk, so fetching mid-write would return the pre-toggle state.
   if (_taskWrites.size) await Promise.allSettled([..._taskWrites]);
   try {
     const res = await fetch('/_tasks-index.json', { cache: 'no-cache' });
@@ -26,10 +24,9 @@ async function openTasks() {
 
 function closeTasks() { tasksOverlay.classList.add('hidden'); }
 
-// Skeleton placeholder shown while the live rollup is fetched — same idea (and same
-// .skeleton shimmer) as the document skeleton (renderSkeleton). Mirrors renderTasks's
-// layout (per-doc header + checkbox rows) so swapping in the real content causes no
-// layout jump. Deterministic widths: identical skeleton every open, never uniform.
+// Mirrors renderTasks's layout (per-doc header + checkbox rows) so swapping in the
+// real content causes no layout jump. Deterministic widths via a seeded LCG:
+// identical skeleton every open, never uniform.
 function renderTasksSkeleton() {
   let state = 0x9e3779b9 >>> 0;
   const next = () => (state = (state * 1664525 + 1013904223) >>> 0);
@@ -57,9 +54,9 @@ function showTasksLoading() {
   tasksList.innerHTML = '<div aria-busy="true" aria-label="' + t('tasksLoading') + '">' + renderTasksSkeleton() + '</div>';
 }
 
-// Normalize a task line for matching against rendered text: drop wikilink/link
-// syntax and inline markdown marks, lowercase, collapse spaces. The index stores
-// raw markdown; the rendered doc shows plain text — this bridges the two.
+// Normalize a task line for matching against rendered text: the index stores raw
+// markdown, the rendered doc shows plain text. Drop wikilink/link syntax + inline
+// marks, lowercase, collapse spaces.
 function _normTask(s) {
   return (s || '').toLowerCase()
     .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
@@ -69,9 +66,8 @@ function _normTask(s) {
 }
 
 // Scroll the open doc to the checkbox of `task` and flash it. Primary = the Nth
-// rendered checkbox (task._docIndex); if its text doesn't match (rare drift:
-// blockquote/empty checkboxes marked renders but the index skips), scan for the
-// checkbox whose text matches; last resort = a loose text highlight.
+// rendered checkbox (task._docIndex); on rare index/render drift, fall back to
+// matching by text, then to a loose text highlight.
 function scrollToTaskCheckbox(task) {
   const want = _normTask(task.text);
   const boxes = [...contentEl.querySelectorAll('input[type=checkbox]')];
@@ -94,21 +90,18 @@ function scrollToTaskCheckbox(task) {
   setTimeout(() => { li.style.backgroundColor = ''; }, 1600);
 }
 
-// Render a task's inline markdown (bold/italic/code) like the rest of the app,
-// instead of showing raw ** / backticks. Links/images are stripped to text (the
-// row is itself a button — no nested navigation).
+// Render a task's inline markdown like the rest of the app. Links/images stripped
+// to text (the row is itself a button — no nested navigation).
 function renderTaskText(s) {
-  // marked + DOMPurify are always vendored; on any unexpected error fall back to
-  // ESCAPED text (never raw, unsanitized HTML).
+  // On any unexpected error fall back to ESCAPED text (never raw, unsanitized HTML).
   try {
     return DOMPurify.sanitize(marked.parseInline(s), { FORBID_TAGS: ['a', 'img'] });
   } catch (e) { return escapeHtml(s); }
 }
 
 function renderTasks(tasks) {
-  // Position of each task among its OWN doc's tasks (document order) → matches the
-  // Nth rendered checkbox, so a click scrolls straight to it regardless of the
-  // "show done" filter or any markdown formatting inside the text.
+  // _docIndex = position among its OWN doc's tasks → matches the Nth rendered
+  // checkbox, so a click scrolls straight to it regardless of the "show done" filter.
   const perDoc = {};
   for (const tk of tasks) tk._docIndex = (perDoc[tk.path] = (perDoc[tk.path] ?? -1) + 1);
   const open = tasks.filter(x => !x.done).length;
@@ -140,8 +133,6 @@ function renderTasks(tasks) {
       const box = document.createElement('span');
       box.className = 'flex-shrink-0';
       box.style.marginTop = '3px';
-      // Neutral outlined square when to-do; accent-filled with a check when done
-      // (the accent shows up as a reward, not on every empty box).
       box.innerHTML = task.done
         ? '<svg viewBox="0 0 24 24" fill="none" class="text-accent" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor"/><path d="M7.4 12.4l3 3 6.2-6.7" fill="none" stroke="#0e0d12" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
         : '<svg viewBox="0 0 24 24" fill="none" class="text-ink-500" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="2"/></svg>';
@@ -208,8 +199,8 @@ function graphDraw(st) {
   ctx.clearRect(0, 0, w, h);
   const { cam, nodes, edges, hover } = st;
   const SX = n => n.x * cam.scale + cam.ox, SY = n => n.y * cam.scale + cam.oy;
-  // Mind regions: translucent blobs + label per top-level folder, drawn
-  // FIRST (under the links/nodes) to materialize the brain's "zones".
+  // Mind regions: translucent blob + label per top-level folder, drawn FIRST
+  // (under the links/nodes) to materialize the brain's "zones".
   const regions = {};
   for (const n of nodes) {
     if (n.kind !== 'doc' || !n.region) continue;
@@ -223,8 +214,8 @@ function graphDraw(st) {
     let rad = 70;
     for (const n of rn) rad = Math.max(rad, Math.hypot(n.x - cx, n.y - cy) + 46);
     const scx = cx * cam.scale + cam.ox, scy = cy * cam.scale + cam.oy, sr = rad * cam.scale;
-    // Remote region (mental node from another atlas): AI teal + stronger halo
-    // + dashed ring, to clearly detach it from the personal regions.
+    // Remote region (mental node from another atlas): teal + dashed ring, to
+    // detach it from the personal regions.
     const isRemoteRegion = rn.some(n => n.remote);
     const col = isRemoteRegion ? '#59d0cf' : tagColor(name);
     const grad = ctx.createRadialGradient(scx, scy, sr * 0.2, scx, scy, sr);
@@ -247,8 +238,8 @@ function graphDraw(st) {
   }
   // ── Neural pass: glowing curved synapses + firing pulses + node bloom ──
   const now = performance.now();
-  // 1) Synapses: wikilinks bow into organic arcs (additive glow); tag links stay
-  //    faint and straight — structural scaffolding behind the firing network.
+  // 1) Synapses: wikilinks bow into arcs (additive glow); tag links stay faint
+  //    and straight — structural scaffolding behind the firing network.
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (const e of edges) {
@@ -305,7 +296,7 @@ function graphDraw(st) {
     const dim = hover && n !== hover && !n._adj;
     const orphan = n.kind === 'doc' && n.deg === 0;
     const r = Math.max(2, n.r * cam.scale), x = SX(n), y = SY(n);
-    // Orphans (neither link nor tag) muted when not hovered: disconnected thoughts.
+    // Orphans (no link, no tag) muted when not hovered: disconnected thoughts.
     ctx.globalAlpha = (!dim && !hover && orphan) ? 0.45 : 1;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = dim ? 'rgba(110,110,130,0.3)' : (n.kind === 'tag' ? n.color + '33' : n.color);
@@ -318,8 +309,8 @@ function graphDraw(st) {
   ctx.font = '12px Manrope, system-ui, sans-serif';
   ctx.textBaseline = 'middle';
   for (const n of nodes) {
-    // Node labels only on hover / neighborhood / zoom: the REGION names
-    // (drawn above) carry the orientation, the tags no longer clutter things.
+    // Node labels only on hover / neighborhood / zoom: region names (above)
+    // carry the orientation, so labels don't clutter the default view.
     if (!(n === hover || n._adj || cam.scale > 1.35)) continue;
     ctx.font = (n.kind === 'tag' ? '600 12px' : '12px') + ' Manrope, system-ui, sans-serif';
     ctx.fillStyle = (hover && n !== hover && !n._adj) ? 'rgba(150,150,160,0.5)' : (n.kind === 'tag' ? n.color : '#e5e6e8');
@@ -405,8 +396,8 @@ document.getElementById('graph-close').addEventListener('click', closeGraph);
 document.getElementById('graph-btn').addEventListener('click', openGraph);
 window.addEventListener('resize', () => { if (graphState) resizeGraph(); });
 
-// Embed hero: now that the graph is wired, open it chrome-less. The host iframe
-// is pointer-events:none, so there is nothing to interact with — it just lives.
+// Embed hero: open the graph chrome-less. The host iframe is pointer-events:none,
+// so there is nothing to interact with — it just lives.
 if (EMBED_MIND) {
   const gc = document.getElementById('graph-controls'); if (gc) gc.style.display = 'none';
   openGraph();
@@ -481,7 +472,7 @@ function updateTabBadge() {
 }
 let showDoneTodos = localStorage.getItem('todo-show-done') === '1';
 // Todo categories injected at build time from atlas.toml ([todo].categories);
-// tabs, labels and filter derive from them — no more hard-coded categories.
+// tabs, labels and filter all derive from them.
 const TODO_CATEGORIES = __TODO_CATEGORIES_JSON__;
 const TODO_CATS = TODO_CATEGORIES.map(c => c.cat);
 const TODO_FILTER_LABELS = Object.fromEntries(TODO_CATEGORIES.map(c => [c.cat, c.label]));
@@ -490,7 +481,6 @@ const TODO_FILTER_LABELS = Object.fromEntries(TODO_CATEGORIES.map(c => [c.cat, c
 const tcat = t => (TODO_CATS.includes(t.cat) ? t.cat : TODO_CATS[0]);
 let todoFilter = localStorage.getItem('todo-filter');
 if (!TODO_CATS.includes(todoFilter)) todoFilter = TODO_CATS[0];
-// Generates the filter tabs from the configured categories.
 (function buildTodoFilterTabs() {
   const wrap = document.getElementById('todo-filter');
   if (!wrap) return;

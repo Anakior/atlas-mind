@@ -52,13 +52,12 @@ document.addEventListener('mouseout', (e) => {
 
 function showWelcome() {
   currentFile = null;
-  // Reset the width/padding overrides set by a previous .html render
-  // (renderHtmlFrame): otherwise the home page inherits full-width ("full
-  // screen"). And we restore the todo widget hidden during the HTML preview.
+  // Reset width/padding overrides left by a previous .html render
+  // (renderHtmlFrame), else the home page inherits full-width; restore the
+  // todo widget hidden during the HTML preview.
   contentEl.style.maxWidth = '';
   contentEl.style.padding = '';
   document.getElementById('todo-widget')?.classList.remove('hidden');
-  // Stats by category (based on tree metadata, without content).
   const byCategory = {};
   let totalWords = 0;
   let longestDoc = null;
@@ -76,7 +75,6 @@ function showWelcome() {
   const recent = Object.values(fileMap).filter(f => f.ext === '.md' && f.mtime).sort((a, b) => b.mtime - a.mtime).slice(0, 4);
   const todoSummary = todos.length ? `${todos.filter(t => t.done).length}/${todos.length}` : '–';
 
-  // Activity heatmap
   const HEATMAP_WEEKS = 53;
   const dayMs = 86400 * 1000;
   const now = new Date(); now.setHours(0,0,0,0);
@@ -127,7 +125,6 @@ function showWelcome() {
       '</a>';
   }).join('');
 
-  // Ranking of the longest documents (top 6, proportional bar).
   const longest = Object.values(fileMap)
     .filter(f => f.ext === '.md' && f.words)
     .sort((a, b) => b.words - a.words).slice(0, 6);
@@ -146,7 +143,7 @@ function showWelcome() {
       }).join('')
     : '<span class="text-sm text-ink-500">—</span>';
 
-  // Cloud of all tags (size ∝ number of docs), sorted by frequency.
+  // Tag cloud: font size ∝ number of docs.
   const tagCounts = {};
   for (const f of Object.values(fileMap)) {
     if (f.ext !== '.md') continue;
@@ -159,7 +156,6 @@ function showWelcome() {
     return '<button class="doc-tag" data-hometag="' + escapeHtml(t) + '" style="font-size:' + scale + 'rem">#' + escapeHtml(t) + '<span class="doc-tag-count">' + n + '</span></button>';
   }).join('');
 
-  // Pinned favorites (reuses `pins`).
   const pinnedDocs = pins.map(p => fileMap[p]).filter(Boolean);
   const pinnedHtml = pinnedDocs.length
     ? pinnedDocs.map(f => '<a data-recent-path="' + f.path + '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
@@ -383,8 +379,8 @@ document.getElementById('home-link').addEventListener('click', () => {
 // Download .md button
 document.getElementById('btn-download').addEventListener('click', async () => {
   if (!currentFile) return;
-  // Everything except .md: we download the ORIGINAL served as-is (.html intact, and
-  // for a binary .pdf/.docx loadContent would return text that would corrupt it).
+  // Non-.md: download the ORIGINAL served as-is — loadContent would return text
+  // and corrupt a binary .pdf/.docx.
   if (currentFile.ext !== '.md') {
     const fileUrl = '/' + currentFile.path.split('/').map(encodeURIComponent).join('/');
     const a = document.createElement('a');

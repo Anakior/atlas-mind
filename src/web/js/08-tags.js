@@ -2,13 +2,13 @@ function stripFrontmatter(text) {
   return text.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n?/, '');
 }
 
-// Chips for the doc's tags (clickable → view by tag). '' if no tag.
 function folderTagsOf(path) {
   return path.split('/').slice(0, -1).map(s => s.toLowerCase());
 }
+// Clickable tag chips for the doc (→ view by tag).
 function renderDocTags(file) {
   if (!file || file.ext !== '.md') return '';
-  // Mirror doc = read-only: no +/× (any tag write would return 403).
+  // Mirror doc = read-only: no +/× (any tag write would 403).
   const canEdit = !IS_OFFLINE_BUILD && !window.__viewerMode && !(file.path || '').startsWith('remotes/');
   const folderSet = new Set(folderTagsOf(file.path));
   const chips = (file.tags || []).map(tg => folderSet.has(tg)
@@ -25,8 +25,8 @@ function allTagsList() {
   return [...s].sort();
 }
 
-// Rewrites the `tags:` frontmatter key (custom tags only — folder tags
-// are derived at build time). Empty list → removes the key (and the block if empty).
+// Rewrites the `tags:` frontmatter key (custom tags only — folder tags are derived
+// at build). Empty list → removes the key (and the frontmatter block if it empties).
 function setFrontmatterTags(content, customTags) {
   const tagsLine = customTags.length ? 'tags: [' + customTags.join(', ') + ']' : null;
   const m = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/);
@@ -50,8 +50,8 @@ function setFrontmatterTags(content, customTags) {
   return tagsLine ? '---\n' + tagsLine + '\n---\n\n' + content : content;
 }
 
-// Persists the custom tags: rewrites the frontmatter and PUT /api/file (the server
-// rebuilds + commits). Updates fileMap + re-renders the chips locally.
+// Persists custom tags: rewrite frontmatter, PUT /api/file (server rebuilds +
+// commits), then update fileMap and re-render the chips locally.
 async function persistTags(file, customTags) {
   let raw;
   try { raw = await loadContent(file); } catch (e) { return false; }
@@ -175,10 +175,9 @@ contentEl.addEventListener('click', (e) => {
   }
 });
 
-// Highlights and scrolls to the 1st occurrence of a search term in the rendered
-// doc (when a result is clicked). Walks the text nodes so it doesn't break marked's
-// HTML. Case-insensitive; if there's no exact match (e.g. an accent difference), we
-// leave the scroll at the top.
+// Highlights + scrolls to the 1st occurrence of a search term in the rendered doc.
+// Walks text nodes to avoid breaking marked's HTML. Case-insensitive; on an accent
+// mismatch there's no match and the scroll stays at the top.
 function highlightFirstMatch(container, query) {
   const tokens = query.trim().split(/\s+/)
     .filter(t => t.length >= 2)

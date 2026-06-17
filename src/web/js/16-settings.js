@@ -90,9 +90,8 @@ shareCopy.addEventListener('click', async () => {
 });
 
 // ── Settings panel (admin + cloud mode) ──────────────────────────────────────
-// Entry point: the user-bar gear, visible only when body.admin-cloud is set
-// (cf. /api/me block). Everything goes through fetch() on /api/admin/* and
-// /api/share/* (Content-Type JSON, same origin → basic CSRF).
+// Entry point: user-bar gear, visible only when body.admin-cloud is set. All
+// mutations go through fetch() on /api/admin/* and /api/share/* (JSON, same origin).
 const settingsBtn = document.getElementById('settings-btn');
 const settingsBackdrop = document.getElementById('settings-backdrop');
 const settingsClose = document.getElementById('settings-close');
@@ -109,7 +108,7 @@ const settingsNodeResult = document.getElementById('settings-node-result');
 const settingsRemotesList = document.getElementById('settings-remotes-list');
 const settingsRemoteForm = document.getElementById('settings-remote-form');
 
-// Translates an HTTP status into a human message (never the raw technical detail).
+// HTTP status → human message (never the raw technical detail).
 function settingsHttpMessage(status) {
   if (status === 403 || status === 401) return t('settingsErrForbidden');
   if (status === 409) return t('settingsErrConflict');
@@ -122,8 +121,8 @@ function showSettingsError(message) {
 }
 function clearSettingsError() { settingsError.classList.add('hidden'); }
 
-// Shared JSON fetch for admin mutations: adds the JSON Content-Type, parses the
-// body and raises a readable message (not the server detail) on failure.
+// Shared JSON fetch for admin mutations: adds Content-Type, parses the body and
+// raises a readable message (not the server detail) on failure.
 async function settingsFetch(url, options) {
   const opts = Object.assign({ headers: {} }, options || {});
   if (opts.body) opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers);
@@ -157,7 +156,7 @@ function settingsSelectTab(name) {
   else if (name === 'security') refreshSecurityState();
 }
 
-// Suggests a node name from a path (last segment, slugified).
+// Node name from a path: last segment, slugified.
 function suggestNodeName(path) {
   const base = (String(path).split('/').pop() || path).replace(/\.(md|html)$/i, '');
   return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'noeud';
@@ -184,8 +183,8 @@ function remoteNodeInfo(path) {
   return { name, sourceRel: parts.slice(2).join('/'), fileCount };
 }
 
-// Appropriate from a mirror doc: if it's the node's only file → the whole node;
-// otherwise → just that file. A detached, editable copy in your documents.
+// Appropriate from a mirror doc: node's only file → whole node, otherwise just
+// that file. Produces a detached, editable copy in your documents.
 document.getElementById('btn-node-appropriate').addEventListener('click', async () => {
   if (!currentFile) return;
   const info = remoteNodeInfo(currentFile.path);
@@ -208,9 +207,8 @@ document.getElementById('btn-node-appropriate').addEventListener('click', async 
   } catch (e) { setStatus(t('err', e.message), 'err'); }
 });
 
-// Remove the node from a mirror doc: unsubscribe (the mirror is read-only and
-// resynced — removing a single file would make no sense, it would come back on
-// the next sync; so we remove the entire subscription).
+// Remove from a mirror doc = unsubscribe entirely: a single removed file would
+// just come back on the next sync, so we drop the whole subscription.
 document.getElementById('btn-node-remove').addEventListener('click', async () => {
   if (!currentFile) return;
   const info = remoteNodeInfo(currentFile.path);
@@ -242,10 +240,7 @@ async function loadSettingsUsers() {
       const roleLabel = u.role === 'admin' ? t('settingsRoleAdmin') : t('settingsRoleViewer');
       const roleCls = u.role === 'admin' ? 'text-accent' : 'text-ink-400';
       const emailEsc = escapeHtml(u.email);
-      // Mobile: label + buttons stacked (flex-col), full-width touch targets
-      // >=40px. Desktop (sm:): everything on one line. title for the truncated
-      // email (no hover on mobile, but accessible on desktop hover).
-      // Viewer: "hidden folders" field (ACL #14). Empty = sees everything.
+      // Viewer only: "hidden folders" field (ACL). Empty = sees everything.
       const hiddenBlock = u.role === 'viewer'
         ? '<div class="mt-2 pt-2 border-t subtle-border">' +
             '<label class="text-ink-500 text-[10px] block mb-1">' + escapeHtml(t('settingsHiddenLabel')) + '</label>' +
@@ -386,7 +381,6 @@ async function copyToClipboard(text) {
 }
 
 function flashCopied(btn) {
-  // Confirmation flash (green check) then back to the Copy label.
   btn.textContent = t('copied');
   btn.classList.add('is-copied');
   setTimeout(() => { btn.textContent = t('copy'); btn.classList.remove('is-copied'); }, 1200);
@@ -398,8 +392,7 @@ document.getElementById('settings-token-copy').addEventListener('click', async (
   const ok = await copyToClipboard(input.value);
   if (!ok) { input.select(); document.execCommand('copy'); }
   flashCopied(btn);
-  // The token is copied: we hide the secret after a short flash (it never
-  // reappears — the admin has it in the clipboard).
+  // Hide the secret after the flash — it's in the clipboard and never reappears.
   setTimeout(hideTokenResult, 1400);
 });
 document.getElementById('settings-token-mcp-copy').addEventListener('click', async (e) => {
@@ -412,7 +405,7 @@ document.getElementById('settings-token-mcp-copy').addEventListener('click', asy
 
 function hideTokenResult() {
   settingsTokenResult.classList.add('hidden');
-  // Clears the secret from the DOM once hidden (no residue in the inspector).
+  // Clear the secret from the DOM — no residue in the inspector.
   document.getElementById('settings-token-plain').value = '';
   document.getElementById('settings-token-mcp').value = '';
 }
@@ -429,7 +422,7 @@ settingsTokensList.addEventListener('click', async (e) => {
   });
   if (!ok) return;
   try {
-    // The id is preferred over the label (the label may be reused after revocation).
+    // Prefer id over label: the label may be reused after revocation.
     const body = revokeBtn.dataset.id
       ? { id: revokeBtn.dataset.id }
       : { label: revokeBtn.dataset.label };
@@ -491,7 +484,7 @@ settingsSharesList.addEventListener('click', async (e) => {
   }
   const reactivateBtn = e.target.closest('.settings-share-reactivate');
   if (reactivateBtn) {
-    // The doc moved/disappeared: point the link at its new path (same URL).
+    // Doc moved/disappeared: point the link at its new path (URL stays the same).
     const newPath = await promptDialog({
       title: t('shareReactivateTitle'),
       message: t('shareReactivateMsg', reactivateBtn.dataset.path || ''),
@@ -595,8 +588,8 @@ document.getElementById('settings-node-close').addEventListener('click', hideNod
 settingsNodesList.addEventListener('click', async (e) => {
   const relinkBtn = e.target.closest('.settings-node-relink');
   if (relinkBtn) {
-    // Re-publishing regenerates the token (the old link stops working): we warn
-    // beforehand, it's the only way to get a copyable link back.
+    // Re-publishing regenerates the token (old link dies), but it's the only way
+    // to get a copyable link back — hence the warning.
     const ok = await confirmDialog({
       title: t('settingsNodeRelinkTitle'),
       message: t('settingsNodeRelinkMsg', relinkBtn.dataset.name),
@@ -677,8 +670,8 @@ settingsRemoteForm.addEventListener('submit', async (e) => {
       body: JSON.stringify({ link }),
     });
     input.value = '';
-    // If the issuer was unreachable, the sync fails but the subscription is
-    // created: we report it without blocking (the periodic sync will retry).
+    // Issuer unreachable: sync fails but the subscription is created — report
+    // without blocking (the periodic sync retries).
     if (res && res.sync && res.sync.ok === false) {
       showSettingsError(t('settingsRemoteSyncFailed', res.sync.error || ''));
     }
@@ -704,8 +697,7 @@ settingsRemotesList.addEventListener('click', async (e) => {
   const apprBtn = e.target.closest('.settings-remote-appropriate');
   if (apprBtn) {
     const name = apprBtn.dataset.name;
-    // Free-form destination via modal (no native prompt). Default = the node
-    // name, copied to the root of your documents.
+    // Free-form destination via modal. Default = node name, at the root of your documents.
     const dest = await promptDialog({
       title: t('settingsRemoteAppropriate'),
       message: t('settingsRemoteAppropriatePrompt', name),
@@ -761,8 +753,7 @@ async function refreshUpdateBanner() {
 function openSettings() {
   hideTokenResult();
   settingsBackdrop.classList.remove('hidden');
-  // Admin → Users tab; viewer (no admin tabs) → Security, the only tab meant
-  // for them.
+  // Admin → Users tab; viewer → Security, the only tab meant for them.
   const isAdmin = document.body.classList.contains('admin-cloud');
   settingsSelectTab(isAdmin ? 'users' : 'security');
   if (isAdmin) refreshUpdateBanner();
@@ -777,8 +768,6 @@ document.querySelectorAll('.settings-tab').forEach(tab => {
 });
 
 // ── Minimal QR code generator (no external lib) ───────────────────────────────
-// QR Model 2 encoder, byte mode, error correction level L. Enough for an
-// otpauth:// URI (~120 bytes → version 6/7). Compact but complete rewrite:
-// Galois Field GF(256), Reed-Solomon, optimal mask, fixed patterns.
-// If encoding fails (improbably long URI), the caller falls back to showing
-// the plaintext secret (already present in the modal).
+// QR Model 2, byte mode, EC level L — enough for an otpauth:// URI (~120 bytes →
+// version 6/7). Full encoder: GF(256), Reed-Solomon, optimal mask, fixed patterns.
+// On encoding failure (improbably long URI) the caller falls back to the plaintext secret.

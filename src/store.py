@@ -6,19 +6,16 @@ FileStore: an on-disk registry with no external dependency.
   Atomic writes (tempfile + os.replace) under a per-file threading.Lock,
   re-read on mtime change. uuid4 ids (str) — find/revoke also accept legacy
   24-hex ids (plain equality, no format enforced).
-  A share token is a capability URL, not an auth secret: it is kept in
-  CLEARTEXT in shares.json so the admin can re-copy the link, alongside its
-  SHA256 lookup index. Only users.json (password hashes, api_token_hash) is
-  hash-only. Resolution is a pure registry lookup — no token signature.
+  A share token is a capability URL, not an auth secret: kept in CLEARTEXT in
+  shares.json so the admin can re-copy the link, alongside its SHA256 lookup
+  index. Only users.json (password hashes, api_token_hash) is hash-only.
   last_used_at lives in a separate state.json, never in the durable files.
-  The directory contains a .gitignore "*": the registry (password hashes,
-  api_token_hash, AND the cleartext share-link capability tokens) must NEVER
-  be staged by the `git add -A` of trigger_sync/pull_and_rebuild and then
-  pushed to the content's GitHub repo.
-  An ABSENT registry file counts as an empty collection; a file that is
-  present but corrupted raises (fail-CLOSED in server.py: login 503, share
-  link 503, Bearer 401) — an unreadable registry must never pass for empty,
-  otherwise a link revocation would be silently bypassed.
+  The directory carries a .gitignore "*": the registry (password hashes,
+  api_token_hash, AND the cleartext share-link tokens) must NEVER be staged by
+  the `git add -A` of trigger_sync/pull_and_rebuild and pushed to the content repo.
+  An ABSENT registry file counts as empty; a present-but-corrupted file raises
+  (fail-CLOSED in server.py: login/share 503, Bearer 401) — an unreadable
+  registry must never pass for empty, or a link revocation would be bypassed.
 
 Login timing equalization (anti email-enumeration): dummy_verify is aligned
 with the cost of the hash scheme the accounts actually use — dummy scrypt
@@ -167,9 +164,8 @@ def hash_api_token(token: str) -> str:
     return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
 
 
-# Unusable password sentinel for 'api' accounts (60 chars, looks like bcrypt
-# but never verifies). Historical value shared with cli.py token tooling —
-# an 'api' account rejects login anyway.
+# Unusable password sentinel for 'api' accounts: looks like bcrypt but never
+# verifies. Historical value shared with cli.py — an 'api' account rejects login.
 UNUSABLE_PASSWORD_HASH = "$2b$12$" + "x" * 53
 
 
@@ -181,8 +177,7 @@ def slugify_token_label(label: str) -> str:
     slug = "".join(
         c if c in "abcdefghijklmnopqrstuvwxyz0123456789._-" else "-"
         for c in (label or "").strip().lower())
-    # Collapse consecutive dashes from the replacement, then trim the edges
-    # ("." and "-") — same normalization as the CLI's former re.sub.
+    # Collapse consecutive dashes, then trim the edges ("." and "-").
     while "--" in slug:
         slug = slug.replace("--", "-")
     slug = slug.strip("-.")
@@ -202,13 +197,12 @@ def token_email(label: str) -> str:
 def new_api_token_fields(label: str, *, set_unusable_password: bool) -> tuple:
     """Generate an API token and the block of fields to upsert for its account.
 
-    Format IDENTICAL to cli.py token create:
     secrets.token_hex(32) = 256 bits, only the SHA256 is stored, role 'api'.
     Returns (plaintext_token, fields) — the cleartext is exposed only here, once.
 
     set_unusable_password: True for a NEW 'api' account (sets the non-loggable
-    password sentinel); False to regenerate an existing 'api' account (we don't
-    touch its sentinel password_hash already in place)."""
+    password sentinel); False to regenerate an existing one (its sentinel
+    password_hash stays in place)."""
     import secrets  # local: the boot does not need it
 
     token = secrets.token_hex(32)
@@ -300,21 +294,18 @@ class FileStore:
 
     def _ensure_gitignore(self) -> None:
         """Write <base>/.gitignore = "*": when the registry lives INSIDE the
-        content's git repo (ROOT/.atlas in practice), the `git add -A` of
-        trigger_sync/pull_and_rebuild must never stage it — otherwise password
-        hashes, api_token_hash and SHA256 of share tokens end up in the git
-        history, then on GitHub at push time. Best-effort: a write failure must
-        not prevent the store from working (server.py also adds the directory
-        to .git/info/exclude)."""
+        content's git repo (ROOT/.atlas), the `git add -A` of trigger_sync must
+        never stage it — otherwise password hashes, api_token_hash and share-token
+        SHA256s end up in git history, then on GitHub at push. Best-effort: a write
+        failure must not break the store (server.py also adds it to
+        .git/info/exclude)."""
         try:
             self.base.mkdir(parents=True, exist_ok=True)
             if (self.base / ".git").exists():
-                # The registry directory is itself the root of a git repo
-                # (misconfiguration pointing at a whole mind): a .gitignore "*"
-                # there would hide ALL the content from git — trigger_sync's
-                # `git add -A` would no longer commit anything. AtlasConfig
-                # already refuses store.dir = mind root; belt AND braces for
-                # FileStore instances built directly.
+                # The registry dir is itself a git repo root (misconfig pointing at
+                # a whole mind): a .gitignore "*" would hide ALL content from git.
+                # AtlasConfig already refuses store.dir = mind root; belt-and-braces
+                # for FileStore instances built directly.
                 return
             gitignore = self.base / ".gitignore"
             if not gitignore.exists():
@@ -327,12 +318,10 @@ class FileStore:
     def _load(self, name: str, default_type=list):
         """Parsed file contents, re-read only if the mtime changed.
 
-        ONLY an absent file counts as "empty" (an empty collection). Present but unreadable / unparseable / of an unexpected
-        root type → ValueError: server.py's callers already map store exceptions
-        to fail-CLOSED (login → 503, share link → 503 "unavailable", Bearer →
-        401, /api/share/list → 500). A corrupted registry must NEVER pass for an
-        empty registry, otherwise a revoked link would be re-served (fail-open
-        revocation) and upsert_user would overwrite the file."""
+        ONLY an absent file counts as "empty". Present-but-unreadable /
+        unparseable / wrong root type → ValueError, which server.py maps to
+        fail-CLOSED. A corrupted registry must NEVER pass for an empty one, or a
+        revoked link would be re-served and upsert_user would overwrite the file."""
         path = self.base / name
         try:
             mtime = path.stat().st_mtime_ns
@@ -390,11 +379,11 @@ class FileStore:
         """Timing equalization for unknown email / role 'api'.
 
         Always run the dummy of the NATIVE scheme (scrypt). Run the bcrypt dummy
-        ONLY when the registry actually contains a legacy "$2…" account, so the
+        ONLY when the registry actually holds a legacy "$2…" account, so the
         unknown-email cost matches the heaviest scheme IN USE. Adding bcrypt
-        unconditionally over a scrypt-only registry would itself create the
-        enumeration oracle we are defending against: unknown email =
-        scrypt+bcrypt vs a real account = scrypt-only → measurably faster."""
+        unconditionally over a scrypt-only registry would itself be the
+        enumeration oracle we defend against (unknown = scrypt+bcrypt vs real =
+        scrypt-only → measurably faster)."""
         dummy_verify(password)
         if self._has_bcrypt_account():
             try:
@@ -436,9 +425,9 @@ class FileStore:
             self._write(self.STATE_FILE, state)
 
     # ── TOTP anti-replay (last accepted step per account) ─────────────────────
-    # Stored in state.json (volatile) under a "totp_step:<email>" key, namespaced
-    # so it never collides with last_used_at. Best-effort: a read/write hiccup
-    # must NOT block a legitimate login (the replay check is defense-in-depth).
+    # Stored in state.json (volatile) under "totp_step:<email>", namespaced so it
+    # never collides with last_used_at. Best-effort: a read/write hiccup must NOT
+    # block a legitimate login (the replay check is defense-in-depth).
 
     def get_last_totp_step(self, email: str) -> int:
         if not email:
@@ -476,12 +465,10 @@ class FileStore:
     def consume_recovery_hash(self, email: str, target_hash: str) -> bool:
         """ATOMICALLY remove a single-use recovery-code hash.
 
-        Read/presence-check/removal/write in a SINGLE critical section under
-        self._locks[USERS_FILE]: no released-then-reacquired window between the
-        read and the write like in the former get_user_by_email + upsert_user
-        (two concurrent logins presenting the SAME code could consume it twice).
-        Returns True only if the hash was present AND was removed (constant-time
-        comparison)."""
+        Read/check/remove/write in a SINGLE critical section under USERS_FILE: no
+        read-then-write window where two concurrent logins presenting the SAME
+        code consume it twice. Returns True only if the hash was present AND
+        removed (constant-time comparison)."""
         if not target_hash:
             return False
         with self._locks[self.USERS_FILE]:
@@ -510,12 +497,11 @@ class FileStore:
     def delete_user(self, email: str, *, protect_last_admin: bool = False) -> bool:
         """Delete the account `email`. Returns False if it doesn't exist.
 
-        protect_last_admin: if True, the admin count AND the deletion happen
-        under the SAME USERS_FILE lock — so the anti-lockout guard is atomic
-        (two concurrent DELETEs on the last two admins can no longer both drop
-        to zero). Raises LastAdminError if the deletion would remove the last
-        admin. The CLI leaves this guard at False (deliberate local recovery
-        path)."""
+        protect_last_admin: if True, the admin count AND the deletion run under the
+        SAME USERS_FILE lock, so the anti-lockout guard is atomic (concurrent
+        DELETEs on the last two admins can't both drop to zero). Raises
+        LastAdminError if the deletion would remove the last admin. The CLI leaves
+        this False (deliberate local recovery path)."""
         with self._locks[self.USERS_FILE]:
             users = [dict(u) for u in self._load(self.USERS_FILE)]
             target = next((u for u in users if u.get("email") == email), None)
@@ -760,9 +746,8 @@ class FileStore:
     def add_remote(self, record: dict) -> dict:
         """Register a subscription to a remote node (upsert by local name).
 
-        The token is stored IN CLEARTEXT: we're the client, it must be sent back
-        to the issuer on every sync. .atlas file is gitignored → secret at rest,
-        just like the TOTP secret (to be listed for the final security pass)."""
+        The token is stored IN CLEARTEXT: we're the client, it must be sent back to
+        the issuer on every sync (.atlas is gitignored → secret at rest)."""
         name = record["name"]
         clean = {
             "name": name,

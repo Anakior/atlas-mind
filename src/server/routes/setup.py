@@ -24,8 +24,6 @@ def submit(handler):
     if not handler._check_csrf_base_or_403():
         return
     if not _s.setup_is_open():
-        # An admin already exists (or the window was never opened): the
-        # initial creation is closed for good.
         handler._send_json(409, {"error": "setup already completed"})
         return
     provided = (data.get("setup_token") or "")

@@ -12,9 +12,8 @@ import server as _s
 def verify_node_bearer(authorization_header: str):
     """Returns the node dict {'name', 'path'} for a valid node token, or None.
 
-    Counterpart of verify_api_bearer for NODE tokens (hive, #10). A node
-    token opens neither the v1 API nor the admin: only the manifest and the files
-    of the published subtree, read-only (path carried by the node)."""
+    Counterpart of verify_api_bearer for NODE tokens (hive, #10). A node token opens
+    neither the v1 API nor the admin: only the published subtree, read-only."""
     if not authorization_header:
         return None
     parts = authorization_header.strip().split()
@@ -33,8 +32,8 @@ def verify_node_bearer(authorization_header: str):
 def encode_node_link(origin: str, name: str, path: str, token: str) -> str:
     """Copyable link the recipient pastes to subscribe to a node.
 
-    Opaque but self-contained: origin + token + name + path, as the base64url of
-    a JSON. The subscriber side (Phase B) decodes it to bootstrap the mirror."""
+    Self-contained: origin + token + name + path, as base64url of a JSON. The
+    subscriber side (Phase B) decodes it to bootstrap the mirror."""
     payload = {"url": origin, "name": name, "path": path, "token": token}
     blob = base64.urlsafe_b64encode(
         json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
@@ -47,7 +46,7 @@ def decode_node_link(link: str):
     if not link or not link.startswith(_s.NODE_LINK_PREFIX):
         return None
     blob = link[len(_s.NODE_LINK_PREFIX):].strip()
-    blob += "=" * (-len(blob) % 4)  # re-add the stripped base64url padding
+    blob += "=" * (-len(blob) % 4)  # re-add stripped base64url padding
     try:
         data = json.loads(base64.urlsafe_b64decode(blob).decode())
     except Exception:
@@ -60,9 +59,7 @@ def decode_node_link(link: str):
 
 def _validate_node_path(rel: str):
     """Resolved Path of a publishable node (folder OR .md/.html doc), or None.
-
-    A node can point to a whole folder or a single document: in both cases the
-    path must stay under content_root and must exist."""
+    The path must stay under content_root and must exist."""
     if not rel or rel.startswith("/") or ".." in rel.split("/"):
         return None
     content_root = _s.CONFIG.content_root
@@ -80,9 +77,7 @@ def _validate_node_path(rel: str):
 
 def _iter_node_files(node_path: str):
     """Yields (path_relative_to_node, Path) for each doc published under the node.
-
-    Folder → all docs in the subtree, rebased on the node's root. Single file →
-    a single (file_name, Path) pair."""
+    Folder → subtree rebased on the node root; single file → one (name, Path) pair."""
     node_path = node_path.strip("/")
     prefix = node_path + "/"
     for rel, path in _s._iter_doc_files():
@@ -107,10 +102,9 @@ def _is_readonly_path(rel: str) -> bool:
 
 
 def _is_safe_node_name(name: str) -> bool:
-    """A node/remote name becomes a single directory under content/remotes/, so
-    it must be a safe single path segment: no separator, no path-collapsing
-    component ('.', '..'), no control char, bounded length. A name like '.'
-    would collapse content/remotes/. onto content/remotes/ itself, letting a
+    """A node/remote name becomes a single directory under content/remotes/, so it
+    must be a safe single path segment: no separator, no '.'/'..', no control char,
+    bounded length. A name like '.' would collapse onto remotes/ itself, letting a
     sync wipe every sibling mirror or a delete rmtree the whole tree."""
     if not name or len(name) > 60:
         return False
@@ -158,10 +152,9 @@ def _is_blocked_ip(ip_str: str) -> bool:
 
 
 def _validate_remote_url(url: str) -> None:
-    """Guards the SSRF surface of node subscriptions: the URL comes from a
-    pasted atlas-node: link, so before fetching we require http/https and refuse
-    any host that resolves to a private/loopback/link-local/reserved address
-    (cloud metadata, internal services). Raises ValueError if disallowed."""
+    """Guards the SSRF surface of node subscriptions (URL comes from a pasted
+    atlas-node: link): require http/https and refuse any host resolving to a
+    private/loopback/link-local/reserved address. Raises ValueError if disallowed."""
     import socket
     from urllib.parse import urlsplit
     parts = urlsplit(url)
@@ -171,7 +164,7 @@ def _validate_remote_url(url: str) -> None:
     if not host:
         raise ValueError("missing host")
     if getattr(_s.CONFIG, "allow_private_remotes", False):
-        return  # opt-in: localhost/LAN hive (home lab) — scheme still checked
+        return  # opt-in: localhost/LAN hive — scheme still checked
     try:
         infos = socket.getaddrinfo(
             host, parts.port or (443 if parts.scheme == "https" else 80))
@@ -183,10 +176,9 @@ def _validate_remote_url(url: str) -> None:
 
 
 def _http_get_bearer(url: str, token: str, timeout: float = 15.0) -> bytes:
-    """Fetch a remote node URL with the Bearer token. Hardened against the
-    hive SSRF surface: scheme/host are validated, redirects are NOT
-    followed (a redirect could escape the validation into an internal target),
-    and the response is capped at MAX_NODE_FILE_BYTES."""
+    """Fetch a remote node URL with the Bearer token. Hardened against the hive SSRF
+    surface: scheme/host validated, redirects NOT followed (a redirect could escape
+    validation into an internal target), response capped at MAX_NODE_FILE_BYTES."""
     import urllib.request
     _validate_remote_url(url)
 

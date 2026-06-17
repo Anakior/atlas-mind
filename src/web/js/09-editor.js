@@ -41,9 +41,9 @@ const MD_TOOLBAR_HTML = '' +
   '<button data-md="hr" class="md-tb-btn" title="' + t('tbHr') + '">— HR</button>';
 
 // ─── [[wikilink]] autocomplete in the editor ──────────────────────────────────
-// Triggered by typing `[[`: suggests the .md docs (filtered by name/path),
-// keyboard navigation, insertion of a target that's always resolvable (name only if
-// unique, full path otherwise). 100% client-side, relies on fileMap.
+// Triggered by typing `[[`: suggests docs (filtered by name/path), keyboard nav,
+// inserts an always-resolvable target (name only if unique, full path otherwise).
+// 100% client-side, relies on fileMap.
 let wlOpen = false, wlItems = [], wlActive = 0, wlStart = -1, wlCands = null, wlMenuEl = null;
 function wlMenu() {
   if (wlMenuEl) return wlMenuEl;
@@ -287,9 +287,9 @@ async function saveEdit() {
     currentFile.content = newContent;
     contentCache.set(currentFile.path, newContent);
     currentFile.mtime = data.mtime || Math.floor(Date.now() / 1000);
-    // We re-render once (on exiting edit mode); we neutralize the live-reload SSE
-    // that follows the commit to avoid a 2nd re-render (flash). Same principle as
-    // the checkboxes.
+    // Neutralize the live-reload SSE that follows the commit, to avoid a 2nd
+    // re-render (flash) on top of the one done when exiting edit mode. Same trick
+    // as the checkboxes.
     _selfSaveUntil[currentFile.path] = Date.now() + 6000;
     exitEditMode(true);
   } catch (e) {
@@ -331,8 +331,8 @@ let searchInitPromise = null;
 const SEARCH_FIELDS = ['name', 'path', 'content'];
 const SEARCH_STORE = ['name', 'path', 'preview'];
 
-// Local lib (/vendor/); in an offline build (file://) it is inlined into the
-// monolith by build.py → the typeof short-circuits, no fetch.
+// Local lib (/vendor/); in an offline build (file://) it's inlined into the
+// monolith by build.py, so the typeof short-circuits — no fetch.
 async function loadMiniSearchLib() {
   if (typeof MiniSearch !== 'undefined') return;
   await new Promise((resolve, reject) => {

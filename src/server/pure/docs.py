@@ -1,11 +1,10 @@
 """Document-domain logic: path validation, traversal, move-with-relink, the tree
-ACL, git-history path resolution, the live task rollup, and search-text
-normalization.
+ACL, git-history path resolution, the live task rollup, and search-text normalization.
 
-The first three take their dependencies (content root, build module) explicitly
-(unit-testable without a built config; server/__init__ wraps them with CONFIG-
-injecting shims). The rest read config / git / build through the `server` facade
-(`_s`), like the other pure modules, and are re-exported as `server._*`.
+The first three take their deps (content root, build module) explicitly (unit-testable
+without a built config; server/__init__ wraps them with CONFIG-injecting shims). The
+rest read config/git/build through the `server` facade (`_s`) and are re-exported as
+`server._*`.
 """
 import re
 import sys
@@ -17,9 +16,7 @@ def validate_doc_path(rel: str, content_root):
     """Returns the resolved Path inside content_root, or None if invalid.
 
     Rejects '..', absolute paths, paths outside content_root, and any extension
-    other than .md (prose) or .html (standalone styled document: deck, dashboard…).
-    Both are first-class documents: created/read/edited/moved/shared.
-    """
+    other than .md or .html (both are first-class documents)."""
     if not rel or rel.startswith("/") or ".." in rel.split("/"):
         return None
     if not rel.endswith((".md", ".html")):
@@ -41,7 +38,7 @@ def iter_doc_files(content_root, excluded):
             continue
         if path.name in excluded:
             continue
-        # Skip skill/ (consistent with build.py)
+        # Skip skill/tools/__pycache__ (consistent with build.py)
         parts = path.relative_to(content_root).parts
         if parts and parts[0] in ("skill", "tools", "__pycache__"):
             continue
@@ -51,10 +48,9 @@ def iter_doc_files(content_root, excluded):
 def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build):
     """Move/rename a .md AND rewrite the incoming [[wikilinks]] that target it.
 
-    The move (disk rename) is the priority operation; rewriting the links is
-    best-effort on top of it. We detect the links to fix BEFORE the move (while
-    the source still resolves to its old path), compute the new bodies in memory,
-    perform the move, then apply the rewrites.
+    The disk rename is the priority operation; relinking is best-effort on top.
+    Links to fix are detected BEFORE the move (source still resolves to its old
+    path), new bodies computed in memory, then the move, then the rewrites.
 
     Returns (status, payload):
       "ok"  → payload = {"from","to","rewrites":[{path,count}],"links_updated":N}
@@ -100,7 +96,7 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build):
                 new_target = dst_stem + (".md" if had_md else "")
             new_whole = f"[[{new_target}{sep}{alias}]]"
             if new_whole == whole:
-                return whole  # e.g. pure move, stem unchanged → nothing to rewrite
+                return whole  # stem unchanged → nothing to rewrite
             counter[0] += 1
             return new_whole
         return _replace
@@ -109,7 +105,7 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build):
     pending = []
     for f in md_files:
         if f["path"] == src_canon:
-            continue  # the moved doc: its OUTGOING links don't change
+            continue  # the moved doc: its outgoing links don't change
         counter = [0]
         new_body = build._WIKILINK_RE.sub(_make_replacer(counter), f["body"])
         if counter[0]:
@@ -177,7 +173,7 @@ def _doc_path_history(repo_rel: str) -> dict:
         if re.fullmatch(r"[0-9a-f]{40}", line):
             sha = line
         elif sha and sha not in mapping:
-            mapping[sha] = line  # the followed file's path in that commit's tree
+            mapping[sha] = line  # followed file's path in that commit's tree
     return mapping
 
 
@@ -191,9 +187,9 @@ def _doc_path_at(repo_rel: str, rev: str) -> str:
 
 
 def _live_tasks_index():
-    """The task rollup computed from the CURRENT files (not the build-time dist
-    snapshot), so a box ticked in a document is reflected right away — the same way
-    /api/search and /api/tree are live. Only .md carry GFM checkboxes."""
+    """Task rollup from the CURRENT files (not the build-time dist snapshot), so a
+    ticked box shows right away — like /api/search and /api/tree. Only .md carry
+    GFM checkboxes."""
     build = _s._import_build()
     md_files = []
     for rel, path in iter_doc_files(_s.CONFIG.content_root, build.EXCLUDED_NAMES):
@@ -219,9 +215,8 @@ _HTML_BLOCK_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.S | re.I)
 def _html_to_text(html_src: str) -> str:
     """Extracts the visible text from an .html for indexing/search.
 
-    Without this, search_docs would index all the CSS/JS/markup and return
-    unreadable snippets (`<div style=...>`). We first strip <script>/<style>
-    entirely, then all tags, then roughly clean up the entities."""
+    Without this, search_docs would index CSS/JS/markup and return unreadable
+    snippets. Strip <script>/<style>, then all tags, then roughly clean entities."""
     s = _HTML_BLOCK_RE.sub(" ", html_src)
     s = re.sub(r"<[^>]+>", " ", s)
     s = re.sub(r"&(?:nbsp|amp|lt|gt|quot|#\d+|[a-z]+);", " ", s)

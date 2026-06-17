@@ -15,16 +15,13 @@ from pathlib import Path
 
 from build.paths import WEB_DIR
 
-# ─── Inline annotations (sidecars .notes/<rel>.json) ────────────────────────────
-
 
 def load_all_notes(notes_dir: Path) -> dict:
     """Read all sidecars .notes/**/*.json → {doc_rel: [notes...]}.
 
-    The durable data lives per file (small, committed). Here we only aggregate
-    to produce the disposable index (counters) and the offline embed. Empty or
-    unreadable sidecars are ignored. The key is the doc path (we strip the
-    trailing `.json`)."""
+    Aggregates the per-file durable data into the disposable index (counters) and
+    the offline embed. Empty/unreadable sidecars are ignored; the key is the doc
+    path (trailing `.json` stripped)."""
     out: dict[str, list] = {}
     if not notes_dir.is_dir():
         return out
@@ -42,18 +39,14 @@ def load_all_notes(notes_dir: Path) -> dict:
     return out
 
 
-# ─── New-document skeletons (templates/*.md) ────────────────────────────────────
-
-
 def load_doc_templates(*template_dirs) -> dict:
     """Discover the new-document skeletons: {label: md content},
     label = file name without extension (note.md → "note").
 
-    The folders are merged IN ORDER: a skeleton with the same name from a later
-    folder overrides the previous one — main() passes (engine, mind), so the
-    mind freely adds or overrides the engine's skeletons. Missing folder or
-    unreadable skeleton: ignored (the build must never fail because of a
-    template), just as walk() tolerates an unreadable .md."""
+    Folders merged IN ORDER (a later same-name skeleton overrides) — main()
+    passes (engine, mind), so the mind adds/overrides the engine's skeletons.
+    Missing folder or unreadable skeleton ignored: the build never fails on a
+    template."""
     templates: dict[str, str] = {}
     for directory in template_dirs:
         if directory is None or not directory.is_dir():
@@ -69,18 +62,13 @@ def load_doc_templates(*template_dirs) -> dict:
     return templates
 
 
-# ─── Extensions (viewer assets: <mind>/.atlas/extensions/*.css|*.js) ──────────
-
-
 def load_extension_assets(extensions_dir: Path) -> tuple:
     """Discover the mind's extension assets → (css, js).
 
     Concatenates the *.css then the *.js from <mind>/.atlas/extensions/ in
-    alphabetical order (auto-discovery, each chunk prefixed with a comment
-    holding the file name). Missing folder = ("", ""): a mind without
-    extensions keeps a strictly identical viewer. Unreadable file: stderr
-    warning and we continue — the build must never fail because of an
-    extension, like load_doc_templates."""
+    alphabetical order, each chunk prefixed with a file-name comment. Missing
+    folder → ("", ""); an unreadable file is skipped with a warning — the build
+    never fails on an extension."""
     if not extensions_dir.is_dir():
         return "", ""
     css_parts: list[str] = []
@@ -106,12 +94,10 @@ def concat_sources(directory: Path, suffixes: tuple) -> str:
     """Concatenate the files of `directory` whose suffix is in `suffixes`, sorted
     BY NAME (the NN- numeric prefix fixes the order), joined with '\\n'.
 
-    Used to recollate the split viewer sources (styles/*.css, partials/*.html,
-    js/*.js) into the shell viewer.html at build time. A missing directory → ""
-    (so a concern not yet extracted is a strict no-op). utf-8-sig (BOM tolerance)
-    like the rest of the build; an unreadable fragment is skipped with a warning,
-    never a build failure. Closing-tag neutralisation is the caller's job (it
-    wraps the result with _escape_closing_tag, like the extension assets)."""
+    Recollates the split viewer sources (styles/, partials/, js/) into the shell
+    viewer.html at build time. Missing directory → "" (an unextracted concern is a
+    no-op); an unreadable fragment is skipped with a warning. Closing-tag
+    neutralisation is the caller's job."""
     if directory is None or not directory.is_dir():
         return ""
     parts: list[str] = []
@@ -132,16 +118,13 @@ _CLOSING_HEAD_RE = re.compile(r"</(head)", re.I)
 
 def _escape_closing_tag(text: str, closing_re: re.Pattern) -> str:
     """`</script` → `<\\/script` (same for `</style`): same protection as the
-    JSON placeholders (`</` → `<\\/`), targeted at the closing tag.
+    JSON placeholders, targeted at the closing tag.
 
     A `</script>` inside an extension JS string would close the viewer's inline
-    <script> and inject raw HTML into the page. `<\\/` is equivalent to `</`
-    inside a JS string and remains a valid escape in CSS — we touch nothing
-    else (the extension code is injected as-is)."""
+    <script> and inject raw HTML. `<\\/` is equivalent inside a JS string and a
+    valid escape in CSS — nothing else is touched."""
     return closing_re.sub(r"<\\/\1", text)
 
-
-# ─── Inlining of vendored assets (offline build: file:// monolith) ─────────────
 
 _VENDOR_SCRIPT_RE = re.compile(r'<script src="/vendor/([^"]+)"></script>')
 _VENDOR_LINK_RE = re.compile(r'<link rel="stylesheet" href="/vendor/([^"]+)">')
@@ -184,14 +167,11 @@ def inline_vendor_assets(html_text: str, web_dir: Path | None = None) -> str:
         js = _escape_closing_tag(js, _CLOSING_SCRIPT_RE)
         return f"<script>/* vendor: {rel} */\n{js}</script>"
 
-    # MiniSearch first, as a tag BEFORE any inlining: once the libs are
-    # inlined, `</head>` may appear inside one of their code strings (real
-    # case: DOMPurify embeds '<head></head><body>') and a late replace would
-    # corrupt the script. Here the FIRST `</head>` is indeed the template's:
-    # the JSON placeholders all have their `</` neutralized, and the extension
-    # CSS/JS has its `</head` neutralized on top of `</style` / `</script`
-    # (render_template) — without which a literal `</head>` in an extension
-    # would receive the injection in the middle of its code.
+    # MiniSearch injected BEFORE any inlining: once libs are inlined, `</head>`
+    # may appear inside one of their code strings (e.g. DOMPurify embeds
+    # '<head></head><body>') and a late replace would corrupt the script. At this
+    # point the FIRST `</head>` is the template's — every other source (JSON
+    # placeholders, extension CSS/JS) has its `</head` neutralized upstream.
     minisearch_tag = '<script src="/vendor/minisearch.min.js"></script>'
     if (vendor_dir / "minisearch.min.js").is_file() and minisearch_tag not in html_text:
         html_text = html_text.replace("</head>", minisearch_tag + "\n</head>", 1)

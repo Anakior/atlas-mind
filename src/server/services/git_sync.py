@@ -38,11 +38,9 @@ class GitSync:
         )
 
     def _build_command(self) -> list:
-        """Command to (re)build the viewer: the ENGINE's build run as
-        `python -m build` (never a mind-shipped build — the engine is
-        self-contained). PYTHONPATH (see _build_env) puts the engine package dir
-        first so `-m build` resolves the engine's build even with the cwd set to
-        the mind."""
+        """Command to (re)build the viewer: the ENGINE's build via `python -m
+        build` (never a mind-shipped one). _build_env's PYTHONPATH resolves the
+        engine's build even with the cwd set to the mind."""
         return [sys.executable, "-m", "build"]
 
     def _build_env(self) -> dict:
@@ -69,13 +67,11 @@ class GitSync:
         """Pull latest from GitHub and rebuild index.html. Locked to serialize git
         ops.
 
-        We first commit the PENDING local changes (edit / move / delete done by the
-        endpoints, whose asynchronous trigger_sync commit has not happened yet)
-        before pulling. Above all NO `reset --hard`: for a move it would resurrect
-        the old path (tracked file, deletion undone) while keeping the new path
-        (untracked file, ignored by the reset) → a DUPLICATE online. The build
-        artifacts are gitignored, so they do not block the pull --rebase and have
-        never needed to be discarded.
+        Commits the PENDING local changes (edit/move/delete from the endpoints,
+        whose async trigger_sync commit hasn't fired) before pulling. Above all NO
+        `reset --hard`: for a move it would resurrect the old path while keeping
+        the new one → a DUPLICATE online. Build artifacts are gitignored, so they
+        never block the pull --rebase.
         """
         if self._config.dev_mode:
             # Dev sandbox: rebuild only, never touch git (no push to prod's repo).

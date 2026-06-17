@@ -1,19 +1,18 @@
 /* Service worker — Atlas (viewer PWA)
  *
- * Objectif : chargement instantané + consultation hors-ligne de la PWA, sans
- * casser l'auth (cookie de session same-origin, relayé automatiquement par fetch).
+ * Objectif : chargement instantané + hors-ligne, sans casser l'auth (cookie de
+ * session same-origin relayé par fetch).
  *
  * Stratégies :
- *   - navigations (shell HTML)       → network-first  (frais en ligne, cache hors-ligne)
+ *   - navigations (shell HTML)       → network-first
  *   - assets /vendor/ / .md / JSON   → stale-while-revalidate
- *   - /api/*, login, share, SSE      → bypass total (jamais caché : dynamique / auth)
+ *   - /api/*, login, share, SSE      → bypass (jamais caché : dynamique / auth)
  *
- * CACHE_VERSION embarque la version du moteur (__ENGINE_VERSION__ est remplacé
- * à la volée quand le serveur sert ce fichier). À chaque release le nom de cache
- * change donc, `activate` purge l'ancien cache et `install` reprécache des assets
- * frais — sinon les fichiers vendored non versionnés (tailwind.css, fonts…)
- * restaient bloqués sur leur ancienne copie après un déploiement. Le shell HTML
- * est en network-first et les .md sont versionnés par ?v=<mtime> (URL = cache-buster).
+ * CACHE_VERSION embarque __ENGINE_VERSION__ (substitué quand le serveur sert ce
+ * fichier) : à chaque release le nom de cache change, donc `activate` purge l'ancien
+ * et `install` reprécache — sinon les vendored non versionnés (tailwind.css, fonts…)
+ * resteraient bloqués sur leur ancienne copie après déploiement. Les .md sont
+ * versionnés par ?v=<mtime> (cache-buster d'URL).
  */
 const CACHE_VERSION = 'atlas-cache-__ENGINE_VERSION__';
 const PRECACHE = [
@@ -63,7 +62,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Ne stocke que les réponses exploitables : 200 same-origin/cors, ou opaques (CDN no-cors).
+// Ne cache que les réponses exploitables : 200 same-origin/cors, ou opaques (no-cors).
 function putInCache(request, response) {
   if (!response || (response.status !== 200 && response.type !== 'opaque')) return;
   const copy = response.clone();

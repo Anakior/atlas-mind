@@ -59,8 +59,6 @@ def search(handler):
         limit = min(50, max(1, int(query.get("limit", ["50"])[0])))
     except ValueError:
         limit = 50
-    # Server-side search: transfers O(results), not O(corpus). The online
-    # viewer calls this instead of downloading the entire _search-data.json.
     results = _s._api_search(q, limit)
     hidden = handler._hidden_folders()
     if hidden:
@@ -80,10 +78,9 @@ def history(handler):
         handler._send_json(400, {"error": "invalid path"})
         return
     repo_rel = "content/" + rel
-    # --follow tracks renames/moves (move_doc); /api/revision, /api/diff and
-    # revert resolve the path the file had at each revision (see _doc_path_at),
-    # so pre-move commits still load. -z + \x1f keep records/fields
-    # unambiguous; -n 100 bounds payload.
+    # --follow tracks renames/moves so pre-move commits still load (revision/diff/
+    # revert resolve the path-at-revision via _doc_path_at). -z + \x1f keep
+    # records/fields unambiguous; -n 100 bounds payload.
     fmt = "%H%x1f%an%x1f%aI%x1f%s"
     result = _s.git("log", "--follow", "-n", "100", "--format=" + fmt, "-z",
                  "--", repo_rel)
@@ -141,7 +138,7 @@ def diff(handler):
     to_path = _s._doc_path_at(repo_rel, rev_to)
     if from_path == to_path:
         result = _s.git("diff", rev_from, rev_to, "--", from_path)
-    else:  # the doc was moved/renamed between the two revisions → diff the blobs
+    else:  # moved/renamed between the two revisions → diff the blobs
         result = _s.git("diff", rev_from + ":" + from_path, rev_to + ":" + to_path)
     if result.returncode != 0:
         handler._send_json(500, {"error": result.stderr.strip() or "git diff failed"})
@@ -192,8 +189,8 @@ def move(handler):
         handler._send_json(code, {"error": payload})
         return
     _s.trigger_sync()
-    # Keep any share links pointing at the moved doc alive (in-app move → no
-    # broken window). Best-effort: a registry hiccup must not fail the move.
+    # Keep share links of the moved doc alive. Best-effort: a registry hiccup
+    # must not fail the move.
     try:
         _s.get_store().repoint_shares_by_path(payload["from"], payload["to"])
     except Exception as e:
@@ -211,8 +208,7 @@ def dir_rename(handler):
         if not rel or ".." in rel.split("/") or rel.startswith("/"):
             handler._send_json(400, {"error": "invalid path"})
             return
-    # Blocks reserved / technical folders (remotes/ = read-only remote
-    # mirrors, managed by the sync).
+    # Reserved/technical folders (remotes/ = read-only remote mirrors, sync-managed).
     reserved = {"skill", "tools", ".git", "__pycache__", "node_modules", _s.REMOTES_DIR}
     for part in src_rel.split("/") + dst_rel.split("/"):
         if part in reserved or part.startswith("."):
@@ -232,7 +228,7 @@ def dir_rename(handler):
     if dst.exists():
         handler._send_json(409, {"error": "destination exists"})
         return
-    # Prevents moving into a subfolder of itself
+    # Prevent moving into a subfolder of itself
     try:
         dst.relative_to(src)
         handler._send_json(400, {"error": "destination is inside source"})

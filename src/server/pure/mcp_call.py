@@ -9,9 +9,7 @@ import server as _s
 
 def _doc_corpus():
     """[(rel, name, text)] for every viewer-tracked doc, each file read once.
-
-    utf-8-sig tolerates a BOM. Same source set as _iter_doc_files (dotfolders,
-    EXCLUDED_NAMES and skill/tools/__pycache__ already filtered out)."""
+    Same source set as _iter_doc_files; utf-8-sig tolerates a BOM."""
     out = []
     for rel, path in _s._iter_doc_files():
         try:
@@ -23,9 +21,8 @@ def _doc_corpus():
 
 def _links_graph():
     """Wikilink graph {path: {"out": [...], "in": [...]}} over the whole mind.
-
-    Single source of truth shared with the build/viewer: build_links_index only
-    keeps docs that have at least one edge, so an isolated doc is simply absent."""
+    Shared with build/viewer: build_links_index only keeps docs with at least one
+    edge, so an isolated doc is simply absent."""
     return _s._import_build().build_links_index(
         [{"path": rel, "name": name, "body": text} for rel, name, text in _doc_corpus()])
 
@@ -44,15 +41,15 @@ def _tags_for(build, rel: str, text: str) -> list:
 def _soft_delete(target: Path) -> str:
     """Move a doc into content_root/.trash/ (reversible) instead of erasing it.
 
-    delete_doc is called by an AI, not a human seeing a confirmation box, so a
-    wrong call must stay recoverable. '.trash' is dot-prefixed → automatically
-    hidden from tree/search/links (build EXCLUDED_PREFIXES and _iter_doc_files
-    both skip dot-prefixed parts). Returns the trash-relative path."""
+    delete_doc is called by an AI with no confirmation box, so a wrong call must
+    stay recoverable. '.trash' is dot-prefixed → auto-hidden from tree/search/links
+    (build and _iter_doc_files both skip dot-prefixed parts). Returns the
+    trash-relative path."""
     content_root = _s.CONFIG.content_root
     rel = target.relative_to(content_root)
     dest = content_root / ".trash" / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
-    # Don't clobber an earlier trashed copy of the same doc: suffix -2, -3, …
+    # Don't clobber an earlier trashed copy: suffix -2, -3, …
     n = 2
     while dest.exists():
         dest = dest.with_name(f"{rel.stem}-{n}{rel.suffix}")
@@ -74,9 +71,8 @@ def _api_search(q: str, limit: int) -> list:
         e = _s._doc_entry(rel, path)
         if e is not None:
             entries.append((rel, path, e))
-    # Typo tolerance: a token of at least 4 letters absent from the vocabulary
-    # (as a substring) is replaced by the closest known word. Restores the fuzzy
-    # behavior MiniSearch had on the client side.
+    # Typo tolerance: a 4+-letter token absent from the vocabulary (as a substring)
+    # is replaced by the closest known word — restores MiniSearch's client-side fuzz.
     vocab = set()
     for _, _, e in entries:
         vocab |= e["tokens"]
@@ -169,8 +165,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         except (ValueError, TypeError):
             limit = 10
         tag = (args.get("tag") or "").strip().lower()
-        # Tag filter is additive: without it, identical to before. With it, over-fetch
-        # then keep only the hits that also carry the tag (post-scoring, order kept).
+        # Tag filter is additive: over-fetch then keep only hits that carry the tag.
         hits = _api_search(q, 50 if tag else limit)
         if tag:
             build = _s._import_build()
@@ -245,7 +240,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         old_string = args.get("old_string")
         new_string = args.get("new_string")
         content = args.get("content")
-        # Patch mode: targeted replacement, takes priority over the rewrite.
+        # Patch mode: targeted replacement, takes priority over full rewrite.
         if old_string is not None:
             if not isinstance(old_string, str) or not isinstance(new_string, str):
                 return text_result("'old_string' and 'new_string' must be strings", is_error=True)
@@ -260,7 +255,6 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             target.write_text(current.replace(old_string, new_string, 1), encoding="utf-8")
             _s.trigger_sync()
             return text_result(f"Document edited (targeted replacement): {rel}")
-        # Full rewrite mode.
         if content is not None:
             if not isinstance(content, str):
                 return text_result("'content' must be a string", is_error=True)
@@ -372,9 +366,8 @@ def _mcp_jsonrpc(req: dict):
     params = req.get("params") or {}
     req_id = req.get("id")
 
-    # Notifications have no id → no response
+    # Notifications have no id → no response, just log
     if req_id is None:
-        # We just log for debugging
         sys.stderr.write(f"[mcp] notification: {method}\n")
         sys.stderr.flush()
         return None
@@ -390,8 +383,6 @@ def _mcp_jsonrpc(req: dict):
             return ok({
                 "protocolVersion": _s.MCP_PROTOCOL_VERSION,
                 "capabilities": {"tools": {}},
-                # Machine slug derived from site_name ("Atlas" → "atlas"): see
-                # AtlasConfig.site_slug — neutral by default.
                 "serverInfo": {"name": _s.CONFIG.site_slug, "version": "1.0.0"},
             })
         if method == "ping":
@@ -406,8 +397,7 @@ def _mcp_jsonrpc(req: dict):
             return ok(_mcp_call_tool(tool_name, arguments))
         return err(-32601, f"method not found: {method}")
     except Exception as e:
-        # Log the detail (which may carry server paths) to stderr only; the
-        # client gets a generic message.
+        # Detail (may carry server paths) to stderr only; client gets a generic message.
         sys.stderr.write(f"[mcp] error in {method}: {e}\n")
         sys.stderr.flush()
         return err(-32603, "internal error")

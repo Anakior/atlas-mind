@@ -18,43 +18,27 @@ The viewer.html template defines the placeholders:
   __EMBED_CONTENT__     : null (online) | {path: content} (offline)
   __EMBED_BACKLINKS__   : null (online) | backlinks index (offline)
   __BUILD_TS__          : ISO timestamp
-  __SITE_NAME__         : full name derived as "<prefix> Atlas" (raw text of the
-                          <title>; "Atlas" alone without a prefix)
-  __SITE_PREFIX__       : the prefix alone, HTML-escaped (styled span before the
-                          "Atlas" wordmark of the sidebar H1)
-  __SITE_PREFIX_JSON__  : the same, JSON-encoded (viewer JS constant for the
-                          home page — never raw text inside a template
-                          literal)
-  __SITE_SHORT_NAME__   : short variant (PWA icon / iOS home screen) — the
-                          "Atlas" brand, always
-  __TAGLINE__           : home-page baseline, HTML-escaped (HTML context)
+  __SITE_NAME__         : full name "<prefix> Atlas" (raw <title> text)
+  __SITE_PREFIX__       : the prefix alone, HTML-escaped (sidebar H1 span)
+  __SITE_PREFIX_JSON__  : the same, JSON-encoded (viewer JS constant)
+  __SITE_SHORT_NAME__   : short variant (PWA icon) — the "Atlas" brand
+  __TAGLINE__           : home-page baseline, HTML-escaped
   __TAGLINE_JSON__      : the same, JSON-encoded (viewer JS constant)
   __LANG__              : interface language (<html lang>), "fr" or "en"
-  __TEMPLATES__         : new-document skeletons {label: md content},
-                          discovered in templates/ (engine) merged with
-                          <mind>/templates/ — see load_doc_templates.
-  __EXTENSIONS_CSS__    : CSS of the mind's extensions (concatenation of
-                          <mind>/.atlas/extensions/*.css, alphabetical order),
-                          inlined in a <style> of the viewer — both online AND
-                          offline modes. See load_extension_assets.
-  __EXTENSIONS_JS__     : same for the *.js, inlined in a <script> at the end of
-                          <body>. `</script` is escaped there to `<\\/script`
-                          (same protection as the JSON placeholders) so that
-                          an extension JS string can never close the tag.
-                          `</head` is neutralized the same way in both the CSS
-                          AND the JS of extensions: the offline build injects
-                          MiniSearch by replacing the template's `</head>`,
-                          which must stay the FIRST one in the document (see
-                          inline_vendor_assets).
+  __TEMPLATES__         : new-document skeletons {label: md content} — see
+                          load_doc_templates.
+  __EXTENSIONS_CSS__    : the mind's extension CSS, inlined in a <style> (both
+                          modes). See load_extension_assets.
+  __EXTENSIONS_JS__     : same for the *.js, inlined in a <script>. `</script`
+                          and `</head` are neutralized so an extension JS string
+                          can neither close the tag nor hijack the offline
+                          MiniSearch `</head>` injection (inline_vendor_assets).
 
-dist/manifest.json (PWA) is GENERATED from the config (name/short_name): there
-is no longer a static manifest in web/. The server serves it from dist/.
-
-Paths and exclusions: main() resolves them via AtlasConfig (src/config.py) —
-ATLAS_MIND mind, optional atlas.toml, env takes priority. The engine-relative
-constants below (WEB_DIR, TEMPLATE) plus EXCLUDED_NAMES and the identity
-defaults are the runtime defaults, and a contract consumed by server.py
-(walk, EXCLUDED_NAMES, _WIKILINK_RE, _resolve_wikilink).
+dist/manifest.json (PWA) is GENERATED from the config; the server serves it from
+dist/. Paths/exclusions: main() resolves them via AtlasConfig (src/config.py).
+The engine-relative constants below plus EXCLUDED_NAMES and the identity defaults
+are the runtime defaults, and a contract consumed by server.py (walk,
+EXCLUDED_NAMES, _WIKILINK_RE, _resolve_wikilink).
 """
 from __future__ import annotations
 
@@ -70,8 +54,6 @@ from build import (
 )
 from build.paths import SRC_DIR, TEMPLATES_DIR
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
-
 
 def _load_config():
     """AtlasConfig of the current mind (ATLAS_MIND, atlas.toml, env).
@@ -84,8 +66,7 @@ def _load_config():
     try:
         return AtlasConfig.load()
     except AtlasConfigError as e:
-        # Explicit config error (malformed atlas.toml…): a readable fatal exit
-        # rather than a traceback.
+        # Readable fatal exit rather than a traceback on a malformed atlas.toml.
         sys.exit(f"FATAL: {e}")
 
 
@@ -108,20 +89,16 @@ def main() -> int:
     backlinks_data = dist_dir / "_backlinks.json"
     notes_index_path = dist_dir / "_notes-index.json"
     manifest_path = dist_dir / "manifest.json"
-    # Skeletons: those of the engine (TEMPLATES_DIR, next to src/) then those of
-    # the mind (<mind>/templates, sibling of content/) which add/override.
-    # Mind co-located with the engine: both paths coincide, idempotent merge.
+    # Skeletons: engine (TEMPLATES_DIR) then mind (<mind>/templates) which
+    # add/override; co-located engine+mind → idempotent merge.
     doc_templates = load_doc_templates(TEMPLATES_DIR,
                                        content_root.parent / "templates")
-    # Viewer-side extensions hook: the mind's CSS/JS inlined in both modes
-    # (online and offline).
     extensions_css, extensions_js = load_extension_assets(extensions_dir)
 
     build_ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     dist_dir.mkdir(parents=True, exist_ok=True)
 
-    # PWA manifest generated from the config — written in both modes (the
-    # server serves dist/manifest.json, no longer the static web/ one).
+    # PWA manifest generated from the config, written in both modes.
     manifest_path.write_text(
         json.dumps(render_manifest(site_prefix=site_prefix, tagline=tagline,
                                    lang=lang),
@@ -150,8 +127,7 @@ def main() -> int:
             extensions_css=extensions_css,
             extensions_js=extensions_js,
         )
-        # Self-contained monolith: the /vendor/ assets (libs, CSS, fonts) are
-        # inlined — index-offline.html works in file:// without network.
+        # Inline /vendor/ assets so index-offline.html works in file:// offline.
         html = inline_vendor_assets(html, web_dir)
         out_offline.write_text(html, encoding="utf-8")
         size = out_offline.stat().st_size
@@ -180,19 +156,17 @@ def main() -> int:
     )
     out_online.write_text(html, encoding="utf-8")
 
-    # No more _search-data.json: online search is served by /api/search
-    # (server.py) — O(results) transfer, not the whole corpus on the client side.
+    # Online search is served by /api/search (no static _search-data.json).
     backlinks = build_links_index(accum["md_files"])
     backlinks_data.write_text(json.dumps(backlinks, ensure_ascii=False), encoding="utf-8")
 
-    # Aggregated annotations index (disposable, gitignored): {rel_doc: nb_notes}.
-    # Used only for the tree's "📝 n" badges; the data lives in .notes/.
+    # Annotations index (disposable, gitignored): {rel_doc: nb_notes}, for the
+    # tree's "📝 n" badges; the data lives in .notes/.
     notes_index = {rel: len(ns) for rel, ns in load_all_notes(notes_dir).items()}
     notes_index_path.write_text(json.dumps(notes_index, ensure_ascii=False), encoding="utf-8")
 
-    # The task rollup is served LIVE by the server (/_tasks-index.json, computed
-    # from the current files) — no static snapshot to write here. The offline
-    # build still embeds it via __EMBED_TASKS__ (read-only there anyway).
+    # The task rollup is served LIVE by the server (/_tasks-index.json); no static
+    # snapshot here. The offline build embeds it via __EMBED_TASKS__.
 
     html_size = out_online.stat().st_size
     backlinks_size = backlinks_data.stat().st_size

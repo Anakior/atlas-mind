@@ -40,10 +40,10 @@ def _b64url_nopad_decode(segment: str) -> bytes:
 def current_session_epoch(email: str) -> int:
     """Current session epoch of the account (integer, default 0).
 
-    Bumping this epoch invalidates ALL sessions already issued for this account
-    (logout-all, password reset, TOTP change): verify_token compares the epoch
-    embedded in the cookie against this one. Raises if the registry is
-    unreachable — verify_token treats it as fail-CLOSED (cookie rejected)."""
+    Bumping it invalidates ALL sessions issued for this account (logout-all,
+    password reset, TOTP change): verify_token compares the cookie's epoch against
+    this one. Raises if the registry is unreachable — verify_token treats it as
+    fail-CLOSED (cookie rejected)."""
     user = _s.get_store().get_user_by_email(email)
     if not user:
         return 0
@@ -53,12 +53,10 @@ def current_session_epoch(email: str) -> int:
 def make_token(email: str, role: str, epoch: int = 0) -> str:
     """Signed session cookie: base64url(payload) + '.' + base64url(sig).
 
-    The two segments are encoded SEPARATELY (urlsafe alphabet without '.') then
-    joined by '.'. The old format concatenated payload + b"." + RAW sig before
-    the base64: when the HMAC signature contained a 0x2e byte ('.'), the rsplit
-    of verify_token cut into the signature → ~12% of cookies were
-    self-invalidated. This format removes the ambiguity. The `ep` epoch enables
-    server-side revocation."""
+    Both segments are encoded SEPARATELY (urlsafe alphabet has no '.') then joined
+    by '.', removing the ambiguity of the old format (a 0x2e byte in the raw sig
+    let verify_token's rsplit cut into it → ~12% of cookies self-invalidated). The
+    `ep` epoch enables server-side revocation."""
     payload = json.dumps({
         "email": email, "role": role, "ep": int(epoch), "ts": int(time.time()),
     }).encode()
@@ -75,9 +73,8 @@ def verify_token(token: str):
     a re-login is better than a revoked session being re-validated."""
     try:
         payload_b64, sig_b64 = token.split(".", 1)
-        # split(".", 1) guarantees two segments; a token without '.' (old
-        # format) or with several '.' (impossible with the urlsafe alphabet)
-        # falls into the exception via the decoding that follows.
+        # An old-format token (no '.') falls into the exception via the decoding
+        # below; a second '.' (impossible with the urlsafe alphabet) is rejected here.
         if "." in sig_b64:
             return None
         payload = _b64url_nopad_decode(payload_b64)
@@ -105,17 +102,13 @@ def authenticate_user(email: str, password: str):
     the caller AFTERWARDS, when the account has 2FA active."""
     user = _s.get_store().get_user_by_email(email)
     if not user:
-        # Verify a dummy hash to equalize the response time: without it, an
-        # unknown email responds instantly vs tens/hundreds of ms for a known
-        # email → account enumeration oracle. The dummy is carried by the store
-        # to match the cost of the scheme that ITS accounts actually use (bcrypt
-        # rounds=12 for legacy bcrypt accounts — the old _dummy_bcrypt —, native scrypt +
-        # possible bcrypt on the FileStore side).
+        # Verify a dummy hash to equalize response time: an unknown email replying
+        # instantly vs ms for a known one is an account-enumeration oracle. The
+        # store carries a dummy matching the cost of its real scheme.
         _s.get_store().dummy_verify(password)
         return None
     if user.get("role") == _s.API_ROLE:
-        # Same here: we consume a verification before refusing, so as not to
-        # distinguish an 'api' account from a normal one by timing.
+        # Same timing equalization before refusing (don't distinguish 'api' accounts).
         _s.get_store().dummy_verify(password)
         return None  # API users authenticate via /api/v1 + Bearer token, not by cookie
     # verify_password handles native scrypt AND the legacy bcrypt fallback ("$2…").
@@ -133,12 +126,9 @@ def authenticate(email: str, password: str):
     return user.get("role", "admin") if user else None
 
 
-# Share links are opaque CAPABILITY tokens: a random, unguessable key whose
-# SHA256 is the lookup index into the share registry. Unlike the old signed
-# payload (which baked the target path into the token), the target path now lives
-# in the registry and is mutable — so a link survives the document being moved or
-# renamed (auto re-pointed on an in-app move, reactivatable from the admin UI
-# otherwise). 16 bytes → 128-bit capability, ~22 url-safe characters.
+# Share links are opaque CAPABILITY tokens: a random key whose SHA256 indexes the
+# share registry. The target path lives in the registry (mutable), not in the token,
+# so a link survives the doc being moved/renamed. 16 bytes → 128-bit capability.
 SHARE_TOKEN_BYTES = 16
 
 
@@ -154,11 +144,10 @@ def verify_share_token(token: str):
     Returns (path, error_code) with error_code in
     None | "invalid" | "expired" | "revoked" | "unavailable".
 
-    The registry is the single source of truth (local AND cloud): an unknown
-    token is rejected (fail-CLOSED — a forged/guessed key resolves to nothing),
-    a revoked or expired record is refused, and a registry that cannot be read
-    yields "unavailable" (503) rather than risk leaking. The target path is read
-    from the record (mutable), which is what lets a link outlive a doc move."""
+    The registry is the single source of truth: an unknown token is rejected
+    (fail-CLOSED), a revoked/expired record is refused, and an unreadable registry
+    yields "unavailable" (503) rather than risk leaking. The path is read from the
+    record (mutable), which lets a link outlive a doc move."""
     if not token:
         return (None, "invalid")
     try:
@@ -176,14 +165,11 @@ def verify_share_token(token: str):
     return (record.get("path"), None)
 
 
-# CSRF synchronizer token (session-bound double-submit): a READABLE kb_csrf cookie
-# (not HttpOnly) carries the token; the logged-in page replays it in the
-# X-CSRF-Token header on every mutating request. The token is an
-# HMAC(session_secret, "email|epoch"): deterministic for a given session (so
-# reconstructible server-side without storage) and it changes as soon as the
-# session epoch moves (logout-all / password reset / TOTP). A third-party page
-# CANNOT read the cookie (Same-Origin Policy) nor forge the HMAC (server secret) →
-# it cannot set the correct header.
+# CSRF synchronizer token (session-bound double-submit): a readable kb_csrf cookie
+# carries an HMAC(session_secret, "email|epoch"), replayed in the X-CSRF-Token
+# header on mutating requests. Deterministic per session (reconstructible without
+# storage), rotates with the epoch (logout-all/reset/TOTP). A third-party page can
+# neither read the cookie (SOP) nor forge the HMAC → it can't set the right header.
 def make_csrf_token(email: str, epoch: int) -> str:
     message = f"{email}|{int(epoch)}".encode()
     sig = hmac.new(_s.CONFIG.session_secret, b"csrf:" + message, hashlib.sha256).digest()
@@ -200,11 +186,9 @@ def verify_csrf_token(email: str, epoch: int, provided: str) -> bool:
 def consume_recovery_code(email: str, code: str) -> bool:
     """Consumes a SINGLE-USE recovery code (removes it from the stored list).
 
-    The removal goes through the ATOMIC primitive store.consume_recovery_hash:
-    presence + removal of the hash in A SINGLE critical section (FileStore) or a
-    single conditional removal. Two concurrent logins presenting the SAME
-    code can therefore no longer consume it twice (the old get_user_by_email +
-    upsert_user released the lock between the read and the write).
+    Removal goes through the ATOMIC store.consume_recovery_hash (presence + removal
+    in one critical section), so two concurrent logins with the SAME code can't
+    consume it twice (the old read-then-write released the lock in between).
     Returns False if no code matches (including already consumed)."""
     code = (code or "").strip()
     if not code:
@@ -236,7 +220,7 @@ def verify_api_bearer(authorization_header: str):
         user = _s.get_store().find_api_identity(token_hash)
         if not user:
             return None
-        # Best-effort update, ignore errors (fail-open on store write hiccups).
+        # Best-effort: a store write hiccup must not fail auth.
         try:
             _s.get_store().touch_last_used(user)
         except Exception:

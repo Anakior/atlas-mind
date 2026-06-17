@@ -24,13 +24,12 @@ def static_get(handler):
 
 
 def sw(handler):
-    """Serves sw.js: no-cache (so the browser quickly detects a new
-    version of the SW) and explicit root scope.
+    """Serves sw.js: no-cache (browser detects a new SW version fast) and explicit
+    root scope.
 
-    __ENGINE_VERSION__ is stamped into the worker's CACHE_VERSION so every
-    release uses a fresh cache name: `activate` then purges the old cache and
-    unversioned vendored assets (tailwind.css, fonts) are re-fetched instead
-    of being served stale forever after a deploy."""
+    __ENGINE_VERSION__ is stamped into CACHE_VERSION so each release uses a fresh
+    cache name: `activate` purges the old cache, so unversioned vendored assets
+    (tailwind.css, fonts) are re-fetched instead of served stale after a deploy."""
     target = (_s.CONFIG.web_dir / "sw.js")
     if not target.is_file():
         handler.send_error(404)
@@ -172,7 +171,7 @@ def webhook(handler):
         handler.send_response(401)
         handler.end_headers()
         return
-    # Ignore everything except push events
+    # Only react to push events
     event = handler.headers.get("X-GitHub-Event", "")
     if event == "push":
         threading.Thread(target=_s.pull_and_rebuild, daemon=True).start()
