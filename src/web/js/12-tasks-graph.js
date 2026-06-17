@@ -7,6 +7,10 @@ let _tasksIndex = [];
 async function loadTasksIndex() {
   if (IS_OFFLINE_BUILD) return EMBED_TASKS || [];
   // Online: always fetch fresh — the rollup is live, it changes as you tick boxes.
+  // First let any in-flight checkbox write land: the rollup is computed from the
+  // files on disk, so fetching before the toggle's PUT completes would return the
+  // pre-toggle state (the box would show back unchecked in the list).
+  if (_taskWrites.size) await Promise.allSettled([..._taskWrites]);
   try {
     const res = await fetch('/_tasks-index.json', { cache: 'no-cache' });
     return res.ok ? await res.json() : [];
