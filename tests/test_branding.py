@@ -1,8 +1,8 @@
 """Tests for the engine branding: fixed "Atlas" mark, configurable prefix.
 
-Product decision: "Atlas" is THE MARK -- fixed, always present, styled as
-originally (prefix in Corinthia cursive, "Atlas" wordmark in 'Rubik 80s Fade'
-gold #fbc678). The user only configures an optional PREFIX via the root `prefix`
+Product decision: "Atlas" is THE MARK -- fixed, always present, styled with
+the identity fonts (prefix in Corinthia cursive, "Atlas" wordmark in serif Lora
+deep-gold, "Mind" as the nebula pill). The user only configures an optional PREFIX via the root `prefix`
 key of atlas.toml ("Acme's" -> "Acme's Atlas"; empty -> "Atlas"). The full name
 (site_name) is DERIVED and stays plain text everywhere it surfaces in the clear:
 <title>, PWA manifest, OpenAPI, MCP serverInfo, share footer, boot banner.
@@ -267,11 +267,12 @@ class TestBrandingFromToml(unittest.TestCase):
     def test_dist_index_styles_prefix_and_fixed_wordmark(self):
         text = self.srv.get("/").text
         # Sidebar H1: escaped prefix in the Corinthia span, fixed "Atlas"
-        # wordmark in the 'Rubik 80s Fade' span -- the original styling.
+        # wordmark in serif (Lora) deep-gold, "Mind" as the animated nebula pill.
         self.assertIn(f">{BRANDED_PREFIX_ESCAPED}</span>", text)
         self.assertIn("'Corinthia',cursive", text)
-        self.assertIn("'Rubik 80s Fade',Impact,sans-serif", text)
+        self.assertIn("'Lora',Georgia,serif", text)
         self.assertIn(">Atlas</span>", text)
+        self.assertIn('class="nebula-pill"', text)
         # The product identity's decorative fonts are loaded locally (vendored:
         # /vendor/fonts.css, no more fonts.googleapis request).
         self.assertIn('href="/vendor/fonts.css"', text)
@@ -319,14 +320,14 @@ class TestBrandingLoginPage(unittest.TestCase):
         # The <title> stays the derived name as plain text.
         self.assertIn(f"<title>{BRANDED_NAME_ESCAPED} — Login</title>",
                       resp.text)
-        # Original H1: span.brand (Corinthia) for the escaped prefix,
-        # span.atlas ('Rubik 80s Fade') for the fixed mark.
+        # H1: span.brand (Corinthia) for the escaped prefix, span.atlas (serif
+        # Lora, deep-gold) for the fixed mark, span.mind = the nebula pill.
         self.assertIn(
             f'<h1><span class="brand">{BRANDED_PREFIX_ESCAPED}</span> '
             '<span class="wordmark"><span class="atlas">Atlas</span>'
             '<span class="mind">Mind</span></span></h1>', resp.text)
         self.assertIn("'Corinthia',cursive", resp.text)
-        self.assertIn("'Rubik 80s Fade',Impact,sans-serif", resp.text)
+        self.assertIn("'Lora',Georgia,serif", resp.text)
         # The product identity's fonts are loaded locally (vendored:
         # /vendor/fonts.css, no more fonts.googleapis request).
         self.assertIn('href="/vendor/fonts.css"', resp.text)
