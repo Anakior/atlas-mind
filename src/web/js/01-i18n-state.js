@@ -12,16 +12,16 @@ const STRINGS = {
     copiedBang: 'Copié !',
     validate: 'Valider',
     create: 'Créer',
-    err: m => 'Erreur: ' + m,
-    errSp: m => 'Erreur : ' + m,
+    err: (m) => 'Erreur: ' + m,
+    errSp: (m) => 'Erreur : ' + m,
     nameRequired: 'Nom requis',
     titleRequired: 'Titre requis',
     noSlashes: 'Pas de / ni \\ dans le nom',
     // Dates relatives
     justNow: "à l'instant",
-    minAgo: n => `il y a ${n} min`,
-    hoursAgo: n => `il y a ${n} h`,
-    daysAgo: n => `il y a ${n} j`,
+    minAgo: (n) => `il y a ${n} min`,
+    hoursAgo: (n) => `il y a ${n} h`,
+    daysAgo: (n) => `il y a ${n} j`,
     // Sidebar / arbre
     homeTitle: 'Accueil',
     collapseSidebar: 'Replier (Ctrl+B)',
@@ -40,7 +40,7 @@ const STRINGS = {
     treeRemoteBadge: 'lié',
     remotesLabel: 'Nœuds mentaux',
     shareAsNode: 'Partager en nœud',
-    notesBadge: n => n + ' note(s)',
+    notesBadge: (n) => n + ' note(s)',
     // Barre d'actions du document
     pin: 'Épingler',
     unpin: 'Désépingler',
@@ -53,30 +53,30 @@ const STRINGS = {
     editBtn: '✎ Éditer',
     saveBtn: 'Sauvegarder',
     saving: 'Sauvegarde…',
-    modifiedAgo: d => 'modifié ' + d,
+    modifiedAgo: (d) => 'modifié ' + d,
     readingTime: (min, words) => `${min} min · ${words} mots`,
     // Contenu / rendu
     loadingDoc: 'Chargement du document',
-    loadError: m => 'Erreur de chargement : ' + m,
+    loadError: (m) => 'Erreur de chargement : ' + m,
     offlineMissing: 'contenu manquant dans le build offline',
-    brokenLink: tgt => 'Doc introuvable : ' + tgt,
+    brokenLink: (tgt) => 'Doc introuvable : ' + tgt,
     htmlDocBanner: 'Document HTML · rendu isolé (clique dans le cadre pour naviguer au clavier)',
     pdfDocBanner: 'Document PDF · aperçu',
     pdfOfflineHint: 'Aperçu PDF indisponible en mode hors-ligne —',
-    docxError: e => `Impossible d'afficher ce document Word (${e}). Télécharger :`,
+    docxError: (e) => `Impossible d'afficher ce document Word (${e}). Télécharger :`,
     openFullscreen: 'Ouvrir en plein écran ↗',
-    cantLoadDoc: m => 'Impossible de charger le document: ' + m,
+    cantLoadDoc: (m) => 'Impossible de charger le document: ' + m,
     fileModeNoEdit: 'Édition indisponible en mode hors-ligne',
     // Tags
     folderTagTitle: 'Tag de dossier (toujours présent)',
     removeTag: 'Retirer',
     addTag: 'Ajouter un tag',
-    tagSaveFailed: m => 'Échec de la sauvegarde du tag : ' + m,
+    tagSaveFailed: (m) => 'Échec de la sauvegarde du tag : ' + m,
     tagEditorTitle: 'Tags custom',
     tagPlaceholder: 'nouveau tag…',
     tagEditorHint: 'Entrée pour ajouter · les tags de dossier restent toujours',
     noCustomTags: 'Aucun tag custom.',
-    docsWithTag: n => n + ' document' + (n > 1 ? 's' : '') + ' avec ce tag.',
+    docsWithTag: (n) => n + ' document' + (n > 1 ? 's' : '') + ' avec ce tag.',
     // Panneau latéral (sommaire / liens / notes)
     tocHeader: 'Sur ce doc',
     hideToc: 'Masquer (Ctrl+J)',
@@ -94,40 +94,43 @@ const STRINGS = {
     historyViewChanges: 'Voir les changements',
     historyRestore: 'Restaurer cette version',
     historyRestoreBtn: 'Restaurer',
-    historyRestoreConfirm: 'Elle remplacera le contenu actuel du document. Rien n’est perdu : la version actuelle restera dans l’historique, tu pourras y revenir.',
+    historyRestoreConfirm:
+      'Elle remplacera le contenu actuel du document. Rien n’est perdu : la version actuelle restera dans l’historique, tu pourras y revenir.',
     historyRestored: 'Version restaurée.',
     historyRestoreError: 'Échec de la restauration.',
-    referencedBy: n => `← Référencé par (${n})`,
-    outgoingLinks: n => `→ Sortantes (${n})`,
-    sameTopic: n => `~ Même sujet (${n})`,
+    referencedBy: (n) => `← Référencé par (${n})`,
+    outgoingLinks: (n) => `→ Sortantes (${n})`,
+    sameTopic: (n) => `~ Même sujet (${n})`,
     // Annotations
     noteBtn: 'Noter',
-    sanitizerMissing: 'Sanitizer introuvable : rendu bloqué (aucun HTML non assaini). Vérifie /vendor/purify.min.js et le build.',
+    sanitizerMissing:
+      'Sanitizer introuvable : rendu bloqué (aucun HTML non assaini). Vérifie /vendor/purify.min.js et le build.',
     appropriateDestPlaceholder: 'dossier/copie',
-    notesTitle: n => `Notes (${n})`,
+    notesTitle: (n) => `Notes (${n})`,
     copyAllNotes: 'Copier toutes les notes',
-    notesCopied: n => `${n} note${n > 1 ? 's' : ''} copiée${n > 1 ? 's' : ''} dans le presse-papier`,
+    notesCopied: (n) =>
+      `${n} note${n > 1 ? 's' : ''} copiée${n > 1 ? 's' : ''} dans le presse-papier`,
     orphanShort: '⚠ passage introuvable',
-    orphanLong: q => '⚠ Passage introuvable (texte modifié) — “' + q + '”',
+    orphanLong: (q) => '⚠ Passage introuvable (texte modifié) — “' + q + '”',
     notePlaceholder: 'Ta note sur ce passage…',
-    noteSaveFailed: m => 'Échec de l’enregistrement de la note : ' + m,
-    actionFailed: m => 'Échec : ' + m,
+    noteSaveFailed: (m) => 'Échec de l’enregistrement de la note : ' + m,
+    actionFailed: (m) => 'Échec : ' + m,
     deleteNoteTitle: 'Supprimer cette note ?',
-    deleteNoteMsg: txt => 'L’annotation « ' + txt + ' » sera définitivement supprimée.',
+    deleteNoteMsg: (txt) => 'L’annotation « ' + txt + ' » sera définitivement supprimée.',
     // Recherche
     searching: 'Recherche…',
-    noResults: q => `Aucun résultat pour "${q}"`,
-    nResults: n => n + ' résultat' + (n > 1 ? 's' : ''),
+    noResults: (q) => `Aucun résultat pour "${q}"`,
+    nResults: (n) => n + ' résultat' + (n > 1 ? 's' : ''),
     cappedSuffix: ' (50 affichés)',
-    paletteResultsCapped: n => n + ' résultats (30 affichés)',
+    paletteResultsCapped: (n) => n + ' résultats (30 affichés)',
     cdnFailMiniSearch: 'Impossible de charger MiniSearch',
     // Accueil
     heatNone: 'Aucune modif',
-    heatCount: n => n + ' modif' + (n > 1 ? 's' : ''),
+    heatCount: (n) => n + ' modif' + (n > 1 ? 's' : ''),
     statDocs: 'Documents',
     statDocsSub: 'markdown',
     statWords: 'Mots totaux',
-    statWordsSub: n => `~${n} min lecture`,
+    statWordsSub: (n) => `~${n} min lecture`,
     statWeek: 'Cette semaine',
     statWeekSub: 'docs modifiés (vs précédente)',
     statTodoSub: 'fait / total',
@@ -174,32 +177,33 @@ const STRINGS = {
     tasksEmpty: 'Aucune tâche à faire 🎉',
     tasksLoading: 'Chargement des tâches',
     tasksStats: (open, total) => open + ' à faire · ' + total + ' au total',
-    nDocs: n => n + ' doc' + (n > 1 ? 's' : ''),
+    nDocs: (n) => n + ' doc' + (n > 1 ? 's' : ''),
     // Widget to-do
-    nPending: n => `${n} à faire`,
-    addTodoIn: label => 'Ajouter dans ' + label + '…',
+    nPending: (n) => `${n} à faire`,
+    addTodoIn: (label) => 'Ajouter dans ' + label + '…',
     todoAddPlaceholder: 'Ajouter une tâche…',
     enterKey: 'Entrée',
-    showDone: n => `Afficher faits (${n})`,
-    hideDone: n => `Masquer faits (${n})`,
+    showDone: (n) => `Afficher faits (${n})`,
+    hideDone: (n) => `Masquer faits (${n})`,
     clearDoneTitle: 'Supprimer toutes les tâches faites',
     clearDoneBtn: 'Vider faits',
-    noTasksIn: label => `Aucune tâche dans ${label}. Ajoute-en une.`,
-    allDone: done => `Tout est fait ${done > 0 ? `(${done} masqu${done > 1 ? 'ées' : 'ée'})` : ''}`,
+    noTasksIn: (label) => `Aucune tâche dans ${label}. Ajoute-en une.`,
+    allDone: (done) =>
+      `Tout est fait ${done > 0 ? `(${done} masqu${done > 1 ? 'ées' : 'ée'})` : ''}`,
     updated: 'Modifié',
     synced: 'Synchronisé',
-    offlinePrefix: m => 'Hors-ligne: ' + m,
+    offlinePrefix: (m) => 'Hors-ligne: ' + m,
     fileModeTodoStatus: 'Indisponible en mode hors-ligne',
     adding: 'Ajout…',
     added: 'Ajouté',
     doneStatus: 'Terminé',
     reopened: 'Réouvert',
     deletedStatus: 'Supprimé',
-    clearDoneConfirmTitle: n => `Vider ${n} tâche${n > 1 ? 's' : ''} faite${n > 1 ? 's' : ''} ?`,
+    clearDoneConfirmTitle: (n) => `Vider ${n} tâche${n > 1 ? 's' : ''} faite${n > 1 ? 's' : ''} ?`,
     clearDoneConfirmMsg: 'Les tâches cochées seront définitivement supprimées.',
     clearBtn: 'Vider',
     clearing: 'Vidage…',
-    nCleared: n => `${n} supprimé${n > 1 ? 'es' : 'e'}`,
+    nCleared: (n) => `${n} supprimé${n > 1 ? 'es' : 'e'}`,
     serverRequired: 'Serveur requis',
     fileModeTodosHtml: 'Les tâches sont indisponibles en mode hors-ligne',
     // Modales document (renommer / déplacer / supprimer / nouveau)
@@ -213,7 +217,8 @@ const STRINGS = {
     docMoved: 'Document deplace',
     docRenamed: 'Document renomme',
     deleteDocTitle: 'Supprimer ce document ?',
-    deleteDocMsg: path => 'Le fichier "' + path + '" sera definitivement supprime (un commit Git garde l\'historique).',
+    deleteDocMsg: (path) =>
+      'Le fichier "' + path + '" sera definitivement supprime (un commit Git garde l\'historique).',
     docDeleted: 'Document supprime',
     newDocHeader: 'Nouveau document',
     templateLabel: 'Template',
@@ -232,20 +237,22 @@ const STRINGS = {
     shareOther: 'Autre durée',
     done: 'Terminé',
     shareExistingHeader: 'Liens existants pour ce document',
-    nLinks: n => n + (n > 1 ? ' liens' : ' lien'),
-    expiresShort: d => 'expire ' + d,
+    nLinks: (n) => n + (n > 1 ? ' liens' : ' lien'),
+    expiresShort: (d) => 'expire ' + d,
     noExpiry: 'sans expiration',
-    createdShort: d => 'créé ' + d,
+    createdShort: (d) => 'créé ' + d,
     revokeTitle: 'Revoquer',
     revoke: 'Révoquer',
     revokeConfirmTitle: 'Révoquer ce lien ?',
-    revokeConfirmMsg: 'Le lien arrêtera de fonctionner immédiatement. Cette action est irréversible.',
-    expiresAt: d => 'Expire le ' + d,
+    revokeConfirmMsg:
+      'Le lien arrêtera de fonctionner immédiatement. Cette action est irréversible.',
+    expiresAt: (d) => 'Expire le ' + d,
     neverExpires: "N'expire jamais",
     shareBroken: '(lien cassé)',
     shareReactivate: 'Réactiver',
     shareReactivateTitle: 'Réactiver ce lien',
-    shareReactivateMsg: p => `Le document « ${p} » est introuvable (déplacé ou supprimé hors de l'app). Indique son nouveau chemin : le lien repartira sur la même URL.`,
+    shareReactivateMsg: (p) =>
+      `Le document « ${p} » est introuvable (déplacé ou supprimé hors de l'app). Indique son nouveau chemin : le lien repartira sur la même URL.`,
     shareReactivatePlaceholder: 'dossier/document.md',
     // Paramètres (admin)
     settingsTitle: 'Paramètres',
@@ -277,9 +284,10 @@ const STRINGS = {
     settingsTogglePassword: 'Afficher / masquer le mot de passe',
     settingsDeleteUser: 'Supprimer',
     settingsDeleteUserTitle: 'Supprimer cet utilisateur ?',
-    settingsDeleteUserMsg: e => `Le compte ${e} sera supprimé définitivement.`,
+    settingsDeleteUserMsg: (e) => `Le compte ${e} sera supprimé définitivement.`,
     settingsLastAdmin: 'Impossible de supprimer le dernier admin.',
-    settingsUpdateAvailable: 'Mise à jour disponible : version {latest} (vous avez {current}). Voir sur PyPI →',
+    settingsUpdateAvailable:
+      'Mise à jour disponible : version {latest} (vous avez {current}). Voir sur PyPI →',
     settingsNoUsers: 'Aucun utilisateur.',
     settingsTokenLabel: 'Libellé',
     settingsTokenLabelPlaceholder: 'claude, mcp-perso...',
@@ -289,13 +297,14 @@ const STRINGS = {
     settingsMcpUrl: 'URL connecteur MCP',
     settingsRevokeToken: 'Révoquer',
     settingsRevokeTokenTitle: 'Révoquer ce token ?',
-    settingsRevokeTokenMsg: l => `Le token « ${l} » cessera de fonctionner immédiatement.`,
+    settingsRevokeTokenMsg: (l) => `Le token « ${l} » cessera de fonctionner immédiatement.`,
     settingsNoTokens: 'Aucun token API.',
     settingsTokenRevoked: 'révoqué',
     settingsSharesHint: 'Liens publics actifs vers des documents.',
     settingsNoShares: 'Aucun lien de partage actif.',
     settingsTabNodes: 'Nœuds',
-    settingsNodesHint: 'Publie un dossier ou un document en nœud : un autre atlas pourra s’y abonner en lecture seule via le lien.',
+    settingsNodesHint:
+      'Publie un dossier ou un document en nœud : un autre atlas pourra s’y abonner en lecture seule via le lien.',
     settingsNodeName: 'Nom du nœud',
     settingsNodeNamePlaceholder: 'guide-equipe',
     settingsNodePath: 'Chemin (dossier ou .md/.html)',
@@ -306,9 +315,11 @@ const STRINGS = {
     settingsNoNodes: 'Aucun nœud publié.',
     settingsNodeRelink: 'Nouveau lien',
     settingsNodeRelinkTitle: 'Régénérer le lien ?',
-    settingsNodeRelinkMsg: n => `Republier « ${n} » génère un nouveau lien ; l’ancien cessera de fonctionner.`,
+    settingsNodeRelinkMsg: (n) =>
+      `Republier « ${n} » génère un nouveau lien ; l’ancien cessera de fonctionner.`,
     settingsRevokeNodeTitle: 'Révoquer ce nœud ?',
-    settingsRevokeNodeMsg: n => `Le nœud « ${n} » et son lien cesseront de fonctionner immédiatement. Les abonnés perdront l’accès.`,
+    settingsRevokeNodeMsg: (n) =>
+      `Le nœud « ${n} » et son lien cesseront de fonctionner immédiatement. Les abonnés perdront l’accès.`,
     settingsNodesPublished: 'Mes nœuds publiés',
     settingsRemotesHeader: 'Abonnements',
     settingsRemotesHint: 'Colle le lien d’un nœud partagé pour le suivre en lecture seule.',
@@ -316,26 +327,31 @@ const STRINGS = {
     settingsRemoteLinkPlaceholder: 'atlas-node:…',
     settingsRemoteAdd: 'S’abonner',
     settingsNoRemotes: 'Aucun abonnement.',
-    settingsRemoteSynced: d => 'synchronisé ' + d,
+    settingsRemoteSynced: (d) => 'synchronisé ' + d,
     settingsRemoteNeverSynced: 'jamais synchronisé',
-    settingsRemoteFrom: h => 'depuis ' + h,
-    settingsRemoteError: msg => 'erreur : ' + msg,
+    settingsRemoteFrom: (h) => 'depuis ' + h,
+    settingsRemoteError: (msg) => 'erreur : ' + msg,
     settingsRemoteSync: 'Synchroniser',
-    settingsRemoteSyncFailed: msg => `Synchronisation impossible (émetteur injoignable ?) : ${msg}`,
+    settingsRemoteSyncFailed: (msg) =>
+      `Synchronisation impossible (émetteur injoignable ?) : ${msg}`,
     settingsRemoteAppropriate: 'S’approprier',
     settingsRemoteAppropriateTitle: 'Copier ce nœud dans tes documents (copie éditable, détachée)',
-    settingsRemoteAppropriatePrompt: n => `S’approprier « ${n} » : destination dans tes documents ?`,
-    settingsRemoteAppropriated: c => `Copié (${c} fichier(s)). La copie est éditable dans tes documents.`,
+    settingsRemoteAppropriatePrompt: (n) =>
+      `S’approprier « ${n} » : destination dans tes documents ?`,
+    settingsRemoteAppropriated: (c) =>
+      `Copié (${c} fichier(s)). La copie est éditable dans tes documents.`,
     settingsRemoteRemove: 'Se désabonner',
     settingsRemoteRemoveTitle: 'Se désabonner ?',
-    settingsRemoteRemoveMsg: n => `Le miroir local de « ${n} » sera supprimé. Tu pourras te réabonner avec le lien.`,
+    settingsRemoteRemoveMsg: (n) =>
+      `Le miroir local de « ${n} » sera supprimé. Tu pourras te réabonner avec le lien.`,
     nodeAppropriateBtn: 'S’approprier',
     nodeAppropriateTitle: 'Copier ce nœud dans tes documents (copie éditable, détachée)',
-    nodeAppropriateWholePrompt: n => `S’approprier le nœud « ${n} » entier : destination dans tes documents ?`,
-    nodeAppropriateFilePrompt: f => `S’approprier « ${f} » : destination dans tes documents ?`,
+    nodeAppropriateWholePrompt: (n) =>
+      `S’approprier le nœud « ${n} » entier : destination dans tes documents ?`,
+    nodeAppropriateFilePrompt: (f) => `S’approprier « ${f} » : destination dans tes documents ?`,
     nodeRemoveBtn: 'Retirer',
     nodeRemoveTitle: 'Se désabonner de ce nœud',
-    settingsErrForbidden: "Accès refusé : droits administrateur requis.",
+    settingsErrForbidden: 'Accès refusé : droits administrateur requis.',
     settingsErrConflict: 'Conflit : cette opération a été refusée.',
     settingsErrGeneric: 'Une erreur est survenue. Réessaie.',
     // Sécurité (2FA + sessions)
@@ -347,24 +363,29 @@ const STRINGS = {
     securityTotpEnable: 'Activer le 2FA',
     securityTotpDisable: 'Désactiver le 2FA',
     securitySessionsTitle: 'Sessions',
-    securitySessionsHint: 'Déconnecte tous les appareils où ce compte est connecté, y compris celui-ci.',
+    securitySessionsHint:
+      'Déconnecte tous les appareils où ce compte est connecté, y compris celui-ci.',
     securityLogoutAll: 'Déconnecter toutes mes sessions',
     securityLogoutAllConfirmTitle: 'Déconnecter toutes les sessions ?',
-    securityLogoutAllConfirmMsg: 'Tu seras déconnecté ici et sur tous tes autres appareils. Tu devras te reconnecter.',
+    securityLogoutAllConfirmMsg:
+      'Tu seras déconnecté ici et sur tous tes autres appareils. Tu devras te reconnecter.',
     securityLogoutAllConfirm: 'Tout déconnecter',
     // Modale 2FA
     totpModalTitle: 'Activer le 2FA',
     totpModalDisableTitle: 'Désactiver le 2FA',
-    totpScanHint: 'Scanne ce QR code avec ton application d’authentification, ou ajoute la clé manuellement.',
+    totpScanHint:
+      'Scanne ce QR code avec ton application d’authentification, ou ajoute la clé manuellement.',
     totpSecretLabel: 'Clé secrète',
     totpVerifyLabel: 'Code de vérification',
     totpConfirmEnable: 'Confirmer et activer',
     totpInvalidCode: 'Code invalide. Vérifie l’heure de ton téléphone et réessaie.',
-    totpRecoveryWarn: 'Conserve ces codes de secours en lieu sûr. Ils ne seront plus jamais affichés et chacun ne fonctionne qu’une fois.',
+    totpRecoveryWarn:
+      'Conserve ces codes de secours en lieu sûr. Ils ne seront plus jamais affichés et chacun ne fonctionne qu’une fois.',
     totpRecoveryCopy: 'Copier les codes',
     totpEnabledToast: '2FA activé.',
     totpDisabledToast: '2FA désactivé.',
-    totpDisableHint: 'Saisis un code de ton application (ou un code de secours) pour désactiver le 2FA.',
+    totpDisableHint:
+      'Saisis un code de ton application (ou un code de secours) pour désactiver le 2FA.',
     totpConfirmDisable: 'Désactiver',
     totpCodeRequired: 'Saisis un code.',
     securityLoggedOutAll: 'Toutes les sessions ont été déconnectées.',
@@ -412,16 +433,16 @@ const STRINGS = {
     copiedBang: 'Copied!',
     validate: 'Confirm',
     create: 'Create',
-    err: m => 'Error: ' + m,
-    errSp: m => 'Error: ' + m,
+    err: (m) => 'Error: ' + m,
+    errSp: (m) => 'Error: ' + m,
     nameRequired: 'Name required',
     titleRequired: 'Title required',
     noSlashes: 'No / or \\ in the name',
     // Relative dates
     justNow: 'just now',
-    minAgo: n => `${n} min ago`,
-    hoursAgo: n => `${n} h ago`,
-    daysAgo: n => `${n} d ago`,
+    minAgo: (n) => `${n} min ago`,
+    hoursAgo: (n) => `${n} h ago`,
+    daysAgo: (n) => `${n} d ago`,
     // Sidebar / tree
     homeTitle: 'Home',
     collapseSidebar: 'Collapse (Ctrl+B)',
@@ -440,7 +461,7 @@ const STRINGS = {
     treeRemoteBadge: 'linked',
     remotesLabel: 'Mental nodes',
     shareAsNode: 'Share as node',
-    notesBadge: n => n + ' note(s)',
+    notesBadge: (n) => n + ' note(s)',
     // Document action bar
     pin: 'Pin',
     unpin: 'Unpin',
@@ -453,30 +474,31 @@ const STRINGS = {
     editBtn: '✎ Edit',
     saveBtn: 'Save',
     saving: 'Saving…',
-    modifiedAgo: d => 'modified ' + d,
+    modifiedAgo: (d) => 'modified ' + d,
     readingTime: (min, words) => `${min} min · ${words} words`,
     // Content / rendering
     loadingDoc: 'Loading document',
-    loadError: m => 'Load error: ' + m,
+    loadError: (m) => 'Load error: ' + m,
     offlineMissing: 'content missing from the offline build',
-    brokenLink: tgt => 'Document not found: ' + tgt,
-    htmlDocBanner: 'HTML document · isolated rendering (click inside the frame for keyboard navigation)',
+    brokenLink: (tgt) => 'Document not found: ' + tgt,
+    htmlDocBanner:
+      'HTML document · isolated rendering (click inside the frame for keyboard navigation)',
     pdfDocBanner: 'PDF document · preview',
     pdfOfflineHint: 'PDF preview unavailable offline —',
-    docxError: e => `Can't display this Word document (${e}). Download:`,
+    docxError: (e) => `Can't display this Word document (${e}). Download:`,
     openFullscreen: 'Open full screen ↗',
-    cantLoadDoc: m => 'Could not load the document: ' + m,
+    cantLoadDoc: (m) => 'Could not load the document: ' + m,
     fileModeNoEdit: 'Editing unavailable in offline mode',
     // Tags
     folderTagTitle: 'Folder tag (always present)',
     removeTag: 'Remove',
     addTag: 'Add a tag',
-    tagSaveFailed: m => 'Failed to save the tag: ' + m,
+    tagSaveFailed: (m) => 'Failed to save the tag: ' + m,
     tagEditorTitle: 'Custom tags',
     tagPlaceholder: 'new tag…',
     tagEditorHint: 'Enter to add · folder tags always remain',
     noCustomTags: 'No custom tags.',
-    docsWithTag: n => n + ' document' + (n > 1 ? 's' : '') + ' with this tag.',
+    docsWithTag: (n) => n + ' document' + (n > 1 ? 's' : '') + ' with this tag.',
     // Side panel (outline / links / notes)
     tocHeader: 'On this doc',
     hideToc: 'Hide (Ctrl+J)',
@@ -494,40 +516,42 @@ const STRINGS = {
     historyViewChanges: 'View changes',
     historyRestore: 'Restore this version',
     historyRestoreBtn: 'Restore',
-    historyRestoreConfirm: 'It will replace the document’s current content. Nothing is lost: the current version stays in the history, you can come back to it.',
+    historyRestoreConfirm:
+      'It will replace the document’s current content. Nothing is lost: the current version stays in the history, you can come back to it.',
     historyRestored: 'Version restored.',
     historyRestoreError: 'Restore failed.',
-    referencedBy: n => `← Referenced by (${n})`,
-    outgoingLinks: n => `→ Outgoing (${n})`,
-    sameTopic: n => `~ Same topic (${n})`,
+    referencedBy: (n) => `← Referenced by (${n})`,
+    outgoingLinks: (n) => `→ Outgoing (${n})`,
+    sameTopic: (n) => `~ Same topic (${n})`,
     // Annotations
     noteBtn: 'Note',
-    sanitizerMissing: 'Sanitizer not found: rendering blocked (never unsanitized HTML). Check /vendor/purify.min.js and the build.',
+    sanitizerMissing:
+      'Sanitizer not found: rendering blocked (never unsanitized HTML). Check /vendor/purify.min.js and the build.',
     appropriateDestPlaceholder: 'folder/copy',
-    notesTitle: n => `Notes (${n})`,
+    notesTitle: (n) => `Notes (${n})`,
     copyAllNotes: 'Copy all notes',
-    notesCopied: n => `${n} note${n > 1 ? 's' : ''} copied to clipboard`,
+    notesCopied: (n) => `${n} note${n > 1 ? 's' : ''} copied to clipboard`,
     orphanShort: '⚠ passage not found',
-    orphanLong: q => '⚠ Passage not found (text changed) — “' + q + '”',
+    orphanLong: (q) => '⚠ Passage not found (text changed) — “' + q + '”',
     notePlaceholder: 'Your note on this passage…',
-    noteSaveFailed: m => 'Failed to save the note: ' + m,
-    actionFailed: m => 'Failed: ' + m,
+    noteSaveFailed: (m) => 'Failed to save the note: ' + m,
+    actionFailed: (m) => 'Failed: ' + m,
     deleteNoteTitle: 'Delete this note?',
-    deleteNoteMsg: txt => 'The annotation “' + txt + '” will be permanently deleted.',
+    deleteNoteMsg: (txt) => 'The annotation “' + txt + '” will be permanently deleted.',
     // Search
     searching: 'Searching…',
-    noResults: q => `No results for "${q}"`,
-    nResults: n => n + ' result' + (n === 1 ? '' : 's'),
+    noResults: (q) => `No results for "${q}"`,
+    nResults: (n) => n + ' result' + (n === 1 ? '' : 's'),
     cappedSuffix: ' (50 shown)',
-    paletteResultsCapped: n => n + ' results (30 shown)',
+    paletteResultsCapped: (n) => n + ' results (30 shown)',
     cdnFailMiniSearch: 'Could not load MiniSearch',
     // Home
     heatNone: 'No changes',
-    heatCount: n => n + ' change' + (n > 1 ? 's' : ''),
+    heatCount: (n) => n + ' change' + (n > 1 ? 's' : ''),
     statDocs: 'Documents',
     statDocsSub: 'markdown',
     statWords: 'Total words',
-    statWordsSub: n => `~${n} min read`,
+    statWordsSub: (n) => `~${n} min read`,
     statWeek: 'This week',
     statWeekSub: 'docs modified (vs previous)',
     statTodoSub: 'done / total',
@@ -574,32 +598,32 @@ const STRINGS = {
     tasksEmpty: 'Nothing to do 🎉',
     tasksLoading: 'Loading tasks',
     tasksStats: (open, total) => open + ' to do · ' + total + ' total',
-    nDocs: n => n + ' doc' + (n > 1 ? 's' : ''),
+    nDocs: (n) => n + ' doc' + (n > 1 ? 's' : ''),
     // To-do widget
-    nPending: n => `${n} to do`,
-    addTodoIn: label => 'Add to ' + label + '…',
+    nPending: (n) => `${n} to do`,
+    addTodoIn: (label) => 'Add to ' + label + '…',
     todoAddPlaceholder: 'Add a task…',
     enterKey: 'Enter',
-    showDone: n => `Show done (${n})`,
-    hideDone: n => `Hide done (${n})`,
+    showDone: (n) => `Show done (${n})`,
+    hideDone: (n) => `Hide done (${n})`,
     clearDoneTitle: 'Delete all completed tasks',
     clearDoneBtn: 'Clear done',
-    noTasksIn: label => `No tasks in ${label}. Add one.`,
-    allDone: done => `All done ${done > 0 ? `(${done} hidden)` : ''}`,
+    noTasksIn: (label) => `No tasks in ${label}. Add one.`,
+    allDone: (done) => `All done ${done > 0 ? `(${done} hidden)` : ''}`,
     updated: 'Updated',
     synced: 'Synced',
-    offlinePrefix: m => 'Offline: ' + m,
+    offlinePrefix: (m) => 'Offline: ' + m,
     fileModeTodoStatus: 'Unavailable in offline mode',
     adding: 'Adding…',
     added: 'Added',
     doneStatus: 'Done',
     reopened: 'Reopened',
     deletedStatus: 'Deleted',
-    clearDoneConfirmTitle: n => `Clear ${n} completed task${n > 1 ? 's' : ''}?`,
+    clearDoneConfirmTitle: (n) => `Clear ${n} completed task${n > 1 ? 's' : ''}?`,
     clearDoneConfirmMsg: 'Checked tasks will be permanently deleted.',
     clearBtn: 'Clear',
     clearing: 'Clearing…',
-    nCleared: n => `${n} deleted`,
+    nCleared: (n) => `${n} deleted`,
     serverRequired: 'Server required',
     fileModeTodosHtml: 'To-dos are unavailable in offline mode',
     // Document modals (rename / move / delete / new)
@@ -613,7 +637,8 @@ const STRINGS = {
     docMoved: 'Document moved',
     docRenamed: 'Document renamed',
     deleteDocTitle: 'Delete this document?',
-    deleteDocMsg: path => 'The file "' + path + '" will be permanently deleted (a Git commit keeps the history).',
+    deleteDocMsg: (path) =>
+      'The file "' + path + '" will be permanently deleted (a Git commit keeps the history).',
     docDeleted: 'Document deleted',
     newDocHeader: 'New document',
     templateLabel: 'Template',
@@ -632,20 +657,21 @@ const STRINGS = {
     shareOther: 'Another duration',
     done: 'Done',
     shareExistingHeader: 'Existing links for this document',
-    nLinks: n => n + (n > 1 ? ' links' : ' link'),
-    expiresShort: d => 'expires ' + d,
+    nLinks: (n) => n + (n > 1 ? ' links' : ' link'),
+    expiresShort: (d) => 'expires ' + d,
     noExpiry: 'no expiry',
-    createdShort: d => 'created ' + d,
+    createdShort: (d) => 'created ' + d,
     revokeTitle: 'Revoke',
     revoke: 'Revoke',
     revokeConfirmTitle: 'Revoke this link?',
     revokeConfirmMsg: 'The link will stop working immediately. This action is irreversible.',
-    expiresAt: d => 'Expires on ' + d,
+    expiresAt: (d) => 'Expires on ' + d,
     neverExpires: 'Never expires',
     shareBroken: '(broken link)',
     shareReactivate: 'Reactivate',
     shareReactivateTitle: 'Reactivate this link',
-    shareReactivateMsg: p => `The document "${p}" is missing (moved or deleted outside the app). Enter its new path: the link will resume on the same URL.`,
+    shareReactivateMsg: (p) =>
+      `The document "${p}" is missing (moved or deleted outside the app). Enter its new path: the link will resume on the same URL.`,
     shareReactivatePlaceholder: 'folder/document.md',
     // Settings (admin)
     settingsTitle: 'Settings',
@@ -677,9 +703,10 @@ const STRINGS = {
     settingsTogglePassword: 'Show / hide password',
     settingsDeleteUser: 'Delete',
     settingsDeleteUserTitle: 'Delete this user?',
-    settingsDeleteUserMsg: e => `The account ${e} will be permanently deleted.`,
+    settingsDeleteUserMsg: (e) => `The account ${e} will be permanently deleted.`,
     settingsLastAdmin: 'Cannot delete the last admin.',
-    settingsUpdateAvailable: 'Update available: version {latest} (you have {current}). View on PyPI →',
+    settingsUpdateAvailable:
+      'Update available: version {latest} (you have {current}). View on PyPI →',
     settingsNoUsers: 'No users.',
     settingsTokenLabel: 'Label',
     settingsTokenLabelPlaceholder: 'claude, my-mcp...',
@@ -689,13 +716,14 @@ const STRINGS = {
     settingsMcpUrl: 'MCP connector URL',
     settingsRevokeToken: 'Revoke',
     settingsRevokeTokenTitle: 'Revoke this token?',
-    settingsRevokeTokenMsg: l => `The token "${l}" will stop working immediately.`,
+    settingsRevokeTokenMsg: (l) => `The token "${l}" will stop working immediately.`,
     settingsNoTokens: 'No API tokens.',
     settingsTokenRevoked: 'revoked',
     settingsSharesHint: 'Active public links to documents.',
     settingsNoShares: 'No active share links.',
     settingsTabNodes: 'Nodes',
-    settingsNodesHint: 'Publish a folder or a document as a node: another atlas can subscribe to it read-only via the link.',
+    settingsNodesHint:
+      'Publish a folder or a document as a node: another atlas can subscribe to it read-only via the link.',
     settingsNodeName: 'Node name',
     settingsNodeNamePlaceholder: 'team-guide',
     settingsNodePath: 'Path (folder or .md/.html)',
@@ -706,9 +734,11 @@ const STRINGS = {
     settingsNoNodes: 'No published nodes.',
     settingsNodeRelink: 'New link',
     settingsNodeRelinkTitle: 'Regenerate link?',
-    settingsNodeRelinkMsg: n => `Re-publishing "${n}" generates a new link; the old one will stop working.`,
+    settingsNodeRelinkMsg: (n) =>
+      `Re-publishing "${n}" generates a new link; the old one will stop working.`,
     settingsRevokeNodeTitle: 'Revoke this node?',
-    settingsRevokeNodeMsg: n => `Node "${n}" and its link will stop working immediately. Subscribers will lose access.`,
+    settingsRevokeNodeMsg: (n) =>
+      `Node "${n}" and its link will stop working immediately. Subscribers will lose access.`,
     settingsNodesPublished: 'My published nodes',
     settingsRemotesHeader: 'Subscriptions',
     settingsRemotesHint: 'Paste a shared node link to follow it read-only.',
@@ -716,23 +746,26 @@ const STRINGS = {
     settingsRemoteLinkPlaceholder: 'atlas-node:…',
     settingsRemoteAdd: 'Subscribe',
     settingsNoRemotes: 'No subscriptions.',
-    settingsRemoteSynced: d => 'synced ' + d,
+    settingsRemoteSynced: (d) => 'synced ' + d,
     settingsRemoteNeverSynced: 'never synced',
-    settingsRemoteFrom: h => 'from ' + h,
-    settingsRemoteError: msg => 'error: ' + msg,
+    settingsRemoteFrom: (h) => 'from ' + h,
+    settingsRemoteError: (msg) => 'error: ' + msg,
     settingsRemoteSync: 'Sync',
-    settingsRemoteSyncFailed: msg => `Sync failed (publisher unreachable?): ${msg}`,
+    settingsRemoteSyncFailed: (msg) => `Sync failed (publisher unreachable?): ${msg}`,
     settingsRemoteAppropriate: 'Make mine',
     settingsRemoteAppropriateTitle: 'Copy this node into your documents (editable, detached copy)',
-    settingsRemoteAppropriatePrompt: n => `Make "${n}" yours: destination in your documents?`,
-    settingsRemoteAppropriated: c => `Copied (${c} file(s)). The copy is editable in your documents.`,
+    settingsRemoteAppropriatePrompt: (n) => `Make "${n}" yours: destination in your documents?`,
+    settingsRemoteAppropriated: (c) =>
+      `Copied (${c} file(s)). The copy is editable in your documents.`,
     settingsRemoteRemove: 'Unsubscribe',
     settingsRemoteRemoveTitle: 'Unsubscribe?',
-    settingsRemoteRemoveMsg: n => `The local mirror of "${n}" will be deleted. You can re-subscribe with the link.`,
+    settingsRemoteRemoveMsg: (n) =>
+      `The local mirror of "${n}" will be deleted. You can re-subscribe with the link.`,
     nodeAppropriateBtn: 'Make mine',
     nodeAppropriateTitle: 'Copy this node into your documents (editable, detached copy)',
-    nodeAppropriateWholePrompt: n => `Make the whole node "${n}" yours: destination in your documents?`,
-    nodeAppropriateFilePrompt: f => `Make "${f}" yours: destination in your documents?`,
+    nodeAppropriateWholePrompt: (n) =>
+      `Make the whole node "${n}" yours: destination in your documents?`,
+    nodeAppropriateFilePrompt: (f) => `Make "${f}" yours: destination in your documents?`,
     nodeRemoveBtn: 'Remove',
     nodeRemoveTitle: 'Unsubscribe from this node',
     settingsErrForbidden: 'Access denied: administrator rights required.',
@@ -747,10 +780,12 @@ const STRINGS = {
     securityTotpEnable: 'Enable 2FA',
     securityTotpDisable: 'Disable 2FA',
     securitySessionsTitle: 'Sessions',
-    securitySessionsHint: 'Sign out every device where this account is signed in, including this one.',
+    securitySessionsHint:
+      'Sign out every device where this account is signed in, including this one.',
     securityLogoutAll: 'Sign out all my sessions',
     securityLogoutAllConfirmTitle: 'Sign out all sessions?',
-    securityLogoutAllConfirmMsg: 'You will be signed out here and on all your other devices. You will need to sign in again.',
+    securityLogoutAllConfirmMsg:
+      'You will be signed out here and on all your other devices. You will need to sign in again.',
     securityLogoutAllConfirm: 'Sign out everywhere',
     // 2FA modal
     totpModalTitle: 'Enable 2FA',
@@ -760,7 +795,8 @@ const STRINGS = {
     totpVerifyLabel: 'Verification code',
     totpConfirmEnable: 'Confirm and enable',
     totpInvalidCode: 'Invalid code. Check your phone’s clock and try again.',
-    totpRecoveryWarn: 'Keep these recovery codes somewhere safe. They will never be shown again and each one works only once.',
+    totpRecoveryWarn:
+      'Keep these recovery codes somewhere safe. They will never be shown again and each one works only once.',
     totpRecoveryCopy: 'Copy codes',
     totpEnabledToast: '2FA enabled.',
     totpDisabledToast: '2FA disabled.',
@@ -805,18 +841,28 @@ const STRINGS = {
 function t(key, ...args) {
   const dict = STRINGS[LANG] || STRINGS.fr;
   let entry = dict[key];
+
   if (entry === undefined) entry = STRINGS.fr[key];
+
   if (entry === undefined) return key;
+
   return typeof entry === 'function' ? entry(...args) : entry;
 }
 
 // Static HTML labels via data-i18n / -title / -placeholder. Single source of
 // truth = STRINGS; the FR text in the markup is only a fallback when JS is off.
 function applyStaticI18n() {
-  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
 }
+
 applyStaticI18n();
 
 const treeEl = document.getElementById('tree');
@@ -848,31 +894,53 @@ let editTextarea = null;
 function relativeDate(epoch) {
   if (!epoch) return '';
   const diff = Date.now() / 1000 - epoch;
+
   if (diff < 60) return t('justNow');
+
   if (diff < 3600) return t('minAgo', Math.floor(diff / 60));
+
   if (diff < 86400) return t('hoursAgo', Math.floor(diff / 3600));
+
   if (diff < 86400 * 7) return t('daysAgo', Math.floor(diff / 86400));
-  return new Date(epoch * 1000).toLocaleDateString(LANG, { day: 'numeric', month: 'short', year: 'numeric' });
+
+  return new Date(epoch * 1000).toLocaleDateString(LANG, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 function slugify(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
 }
 
-let mdCount = 0, otherCount = 0;
+let mdCount = 0,
+  otherCount = 0;
 const fileMap = {};
+
 function index(node) {
   for (const c of node.children || []) {
     if (c.type === 'file') {
       fileMap[c.path] = c;
-      if (c.ext === '.md') mdCount++; else otherCount++;
+
+      if (c.ext === '.md') mdCount++;
+      else otherCount++;
     } else index(c);
   }
 }
+
 index(TREE);
 statsEl.textContent = t('statsLine', mdCount, otherCount);
 

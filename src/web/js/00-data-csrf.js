@@ -27,32 +27,52 @@ const SITE_PREFIX = __SITE_PREFIX_JSON__;
 //      before /api/me responds.
 // Refreshed via setCsrfToken() after any epoch bump (logout-all, TOTP enable/disable).
 let csrfToken = null;
-let meState = null;       // latest /api/me (email, role, cloud, totp_enabled…)
-let totpEnabled = false;  // 2FA state of the current account (cloud)
+let meState = null; // latest /api/me (email, role, cloud, totp_enabled…)
+let totpEnabled = false; // 2FA state of the current account (cloud)
+
 function readCsrfCookie() {
   const m = document.cookie.match(/(?:^|;\s*)kb_csrf=([^;]+)/);
+
   return m ? decodeURIComponent(m[1]) : null;
 }
-function setCsrfToken(token) { if (token) csrfToken = token; }
-function currentCsrfToken() { return csrfToken || readCsrfCookie(); }
+
+function setCsrfToken(token) {
+  if (token) csrfToken = token;
+}
+
+function currentCsrfToken() {
+  return csrfToken || readCsrfCookie();
+}
+
 (function installCsrfFetch() {
   const nativeFetch = window.fetch.bind(window);
   const MUTATING = { POST: 1, PUT: 1, PATCH: 1, DELETE: 1 };
-  window.fetch = function(input, init) {
+
+  window.fetch = function (input, init) {
     init = init || {};
-    const method = (init.method || (typeof input !== 'string' && input && input.method) || 'GET').toUpperCase();
+    const method = (
+      init.method ||
+      (typeof input !== 'string' && input && input.method) ||
+      'GET'
+    ).toUpperCase();
     // Only mutating requests to a relative (same-origin) URL: an absolute URL
     // (CDN, external) must never receive our token.
-    const url = (typeof input === 'string') ? input : (input && input.url) || '';
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
     const sameOrigin = url && !/^https?:\/\//i.test(url);
+
     if (MUTATING[method] && sameOrigin) {
       const token = currentCsrfToken();
+
       if (token) {
-        const headers = new Headers(init.headers || (typeof input !== 'string' && input && input.headers) || {});
+        const headers = new Headers(
+          init.headers || (typeof input !== 'string' && input && input.headers) || {},
+        );
+
         if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', token);
         init = Object.assign({}, init, { headers });
       }
     }
+
     return nativeFetch(input, init);
   };
 })();

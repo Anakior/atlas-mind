@@ -5,50 +5,84 @@ function renderSkeleton(file) {
   let state = (file && file.path ? hashStr(file.path) : 1) || 1;
   const next = () => (state = (state * 1664525 + 1013904223) >>> 0);
   const range = (min, max) => min + (next() % (max - min + 1));
-  const coin = (p) => (next() % 100) < (p * 100);
+  const coin = (p) => next() % 100 < p * 100;
 
   const parts = [];
   const para = (lines) => {
     const rows = [];
+
     for (let i = 0; i < lines; i++) {
       const isLast = i === lines - 1;
       const isPenult = i === lines - 2;
       let w;
+
       if (isLast) w = range(35, 70);
       else if (isPenult && coin(0.4)) w = range(78, 94);
       else w = range(95, 100);
       rows.push('<div class="skeleton" style="height:.95rem;width:' + w + '%;"></div>');
     }
-    return '<div style="display:flex;flex-direction:column;gap:.55rem;margin-bottom:1.75rem;">' + rows.join('') + '</div>';
+
+    return (
+      '<div style="display:flex;flex-direction:column;gap:.55rem;margin-bottom:1.75rem;">' +
+      rows.join('') +
+      '</div>'
+    );
   };
-  const h2 = () => '<div class="skeleton-h2" style="height:1.6rem;width:' + range(28, 58) + '%;margin-bottom:1rem;margin-top:.5rem;"></div>';
-  const code = () => '<div class="skeleton-code" style="height:' + range(4, 9) + 'rem;margin-bottom:1.75rem;"></div>';
+
+  const h2 = () =>
+    '<div class="skeleton-h2" style="height:1.6rem;width:' +
+    range(28, 58) +
+    '%;margin-bottom:1rem;margin-top:.5rem;"></div>';
+  const code = () =>
+    '<div class="skeleton-code" style="height:' +
+    range(4, 9) +
+    'rem;margin-bottom:1.75rem;"></div>';
 
   // Title + meta (always present)
-  parts.push('<div class="skeleton-title" style="height:2.4rem;width:' + range(48, 78) + '%;margin-bottom:1rem;"></div>');
-  parts.push('<div style="display:flex;gap:.5rem;margin-bottom:2rem;">'
-    + '<div class="skeleton" style="height:.7rem;width:' + range(5, 9) + 'rem;"></div>'
-    + '<div class="skeleton" style="height:.7rem;width:' + range(4, 7) + 'rem;"></div>'
-    + '</div>');
+  parts.push(
+    '<div class="skeleton-title" style="height:2.4rem;width:' +
+      range(48, 78) +
+      '%;margin-bottom:1rem;"></div>',
+  );
+  parts.push(
+    '<div style="display:flex;gap:.5rem;margin-bottom:2rem;">' +
+      '<div class="skeleton" style="height:.7rem;width:' +
+      range(5, 9) +
+      'rem;"></div>' +
+      '<div class="skeleton" style="height:.7rem;width:' +
+      range(4, 7) +
+      'rem;"></div>' +
+      '</div>',
+  );
 
   // First paragraph (always)
   parts.push(para(range(3, 5)));
 
   // 1 to 3 sections (h2 + paragraph, sometimes a code block)
   const sections = range(1, 3);
+
   for (let s = 0; s < sections; s++) {
     parts.push(h2());
     parts.push(para(range(2, 5)));
+
     if (coin(0.4)) parts.push(code());
   }
 
-  return '<div class="not-prose" aria-busy="true" aria-label="' + t('loadingDoc') + '">' + parts.join('') + '</div>';
+  return (
+    '<div class="not-prose" aria-busy="true" aria-label="' +
+    t('loadingDoc') +
+    '">' +
+    parts.join('') +
+    '</div>'
+  );
 }
 
 function hashStr(s) {
   // djb2 — small stable fingerprint to seed the skeleton's LCG
   let h = 5381;
+
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+
   return h;
 }
 
@@ -68,8 +102,10 @@ async function showMarkdown(file, highlightQuery) {
     ? t('remotesLabel') + ' / ' + file.path.slice('remotes/'.length)
     : file.path;
   const parts = [];
+
   if (file.mtime) parts.push(t('modifiedAgo', relativeDate(file.mtime)));
   const rt = readingTimeFromWords(file.words);
+
   if (rt) parts.push(t('readingTime', rt.minutes, rt.words.toLocaleString(LANG)));
   breadcrumbDate.textContent = parts.length ? '· ' + parts.join(' · ') : '';
   breadcrumbActions.classList.remove('hidden');
@@ -78,6 +114,7 @@ async function showMarkdown(file, highlightQuery) {
   // (write → 403), no Share (don't re-share others' content), no ⋯ menu
   // (rename/move/delete → 403).
   const isRemoteDoc = (file.path || '').startsWith('remotes/');
+
   btnEdit.classList.toggle('hidden', isRemoteDoc);
   btnSave.classList.add('hidden');
   btnCancel.classList.add('hidden');
@@ -86,47 +123,75 @@ async function showMarkdown(file, highlightQuery) {
   // Remote node actions: only on a mirror doc, never offline (no server to
   // appropriate/remove against — the buttons would 404).
   const showNodeActions = isRemoteDoc && !IS_OFFLINE_BUILD;
+
   document.getElementById('btn-node-appropriate')?.classList.toggle('hidden', !showNodeActions);
   document.getElementById('btn-node-remove')?.classList.toggle('hidden', !showNodeActions);
   // Download button label = the doc's actual extension (.md/.html/.pdf/.docx).
   const dlExt = document.getElementById('btn-download-ext');
+
   if (dlExt) dlExt.textContent = file.ext || '';
   // Close any history panel left open from the previous doc so it never shows
   // stale revisions; the button itself is gated by historyAvailable().
   closeHistory();
   document.getElementById('btn-history')?.classList.toggle('hidden', !historyAvailable(file));
   updatePinButton(file);
-  document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tree-item').forEach((el) => el.classList.remove('active'));
   const active = document.querySelector(`[data-path="${file.path}"]`);
+
   if (active) {
     active.classList.add('active');
     let p = active.parentElement;
+
     while (p && p !== treeEl) {
       if (p.tagName === 'UL' && p.classList.contains('hidden')) {
         p.classList.remove('hidden');
         const btn = p.previousElementSibling;
+
         if (btn) btn.querySelector('.caret')?.classList.add('open');
       }
+
       p = p.parentElement;
     }
   }
+
   document.querySelector('main').scrollTop = 0;
+
   // .html document → standalone render in an isolated iframe, no markdown pipeline.
-  if (file.ext === '.html') { renderHtmlFrame(file); return; }
+  if (file.ext === '.html') {
+    renderHtmlFrame(file);
+
+    return;
+  }
+
   // .pdf document → browser's native viewer in an iframe, no markdown.
-  if (file.ext === '.pdf') { renderPdfFrame(file); return; }
+  if (file.ext === '.pdf') {
+    renderPdfFrame(file);
+
+    return;
+  }
+
   // Word document → converted to readable HTML in the browser (read-only).
-  if (file.ext === '.docx') { renderDocxFrame(file); return; }
+  if (file.ext === '.docx') {
+    renderDocxFrame(file);
+
+    return;
+  }
+
   let content;
+
   try {
     content = await loadContent(file);
   } catch (e) {
     if (currentFile !== file) return;
-    contentEl.innerHTML = '<div class="text-rose-400 text-sm">' + escapeHtml(t('loadError', e.message)) + '</div>';
+    contentEl.innerHTML =
+      '<div class="text-rose-400 text-sm">' + escapeHtml(t('loadError', e.message)) + '</div>';
+
     return;
   }
+
   if (currentFile !== file) return;
   const body = stripFrontmatter(content);
+
   contentEl.innerHTML = renderDocTags(file) + renderMd(body);
   attachCopyButtons();
   wireTaskCheckboxes(file, content);
@@ -135,7 +200,10 @@ async function showMarkdown(file, highlightQuery) {
   renderNotesFor(file);
   // Extensions hook: the doc has just been rendered (path + markdown without
   // frontmatter). Extensions listen to decorate / track the current doc.
-  document.dispatchEvent(new CustomEvent('atlas:doc-rendered', { detail: { path: file.path, markdown: body } }));
+  document.dispatchEvent(
+    new CustomEvent('atlas:doc-rendered', { detail: { path: file.path, markdown: body } }),
+  );
+
   if (highlightQuery) highlightFirstMatch(contentEl, highlightQuery);
 }
 
@@ -156,8 +224,15 @@ function historyAvailable(file) {
   // showMarkdown calls this synchronously before its first await, so on an initial
   // deep-link it can run before that const is initialized (TDZ).
   const serverMode = location.protocol === 'http:' || location.protocol === 'https:';
-  return !!file && file.ext === '.md' && serverMode && !IS_OFFLINE_BUILD
-    && !window.__viewerMode && !(file.path || '').startsWith('remotes/');
+
+  return (
+    !!file &&
+    file.ext === '.md' &&
+    serverMode &&
+    !IS_OFFLINE_BUILD &&
+    !window.__viewerMode &&
+    !(file.path || '').startsWith('remotes/')
+  );
 }
 
 function closeHistory() {
@@ -168,11 +243,15 @@ function closeHistory() {
 function formatRevDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  return isNaN(d) ? '' : d.toLocaleDateString(LANG, { day: 'numeric', month: 'short', year: 'numeric' });
+
+  return isNaN(d)
+    ? ''
+    : d.toLocaleDateString(LANG, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 async function openHistory() {
   const file = currentFile;
+
   if (!historyAvailable(file)) return;
   historyFile = file;
   historyPathEl.textContent = file.path;
@@ -180,31 +259,46 @@ async function openHistory() {
   historyDetail.innerHTML = '<div class="text-ink-500">' + escapeHtml(t('historyPick')) + '</div>';
   historyOverlay.classList.remove('hidden');
   let data;
+
   try {
     data = await api('GET', '/api/history?path=' + encodeURIComponent(file.path));
   } catch (e) {
     if (historyFile !== file) return;
-    historyList.innerHTML = '<div class="text-rose-400 px-2 py-1">' + escapeHtml(t('historyError')) + '</div>';
+    historyList.innerHTML =
+      '<div class="text-rose-400 px-2 py-1">' + escapeHtml(t('historyError')) + '</div>';
+
     return;
   }
+
   if (historyFile !== file) return; // user closed / navigated mid-load
   const revisions = data.revisions || [];
+
   if (!revisions.length) {
-    historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">' + escapeHtml(t('historyEmpty')) + '</div>';
+    historyList.innerHTML =
+      '<div class="text-ink-500 px-2 py-1">' + escapeHtml(t('historyEmpty')) + '</div>';
+
     return;
   }
+
   historyList.innerHTML = '';
   revisions.forEach((rev, i) => {
     const when = formatRevDate(rev.date);
     const row = document.createElement('button');
+
     row.type = 'button';
-    row.className = 'block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 mb-0.5 transition';
+    row.className =
+      'block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 mb-0.5 transition';
     row.innerHTML =
-      '<div class="text-ink-200 truncate">' + escapeHtml(rev.subject || ('(' + rev.sha.slice(0, 7) + ')')) + '</div>' +
-      '<div class="text-xs text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
-        (when ? ' · ' + escapeHtml(when) : '') + (rev.author ? ' · ' + escapeHtml(rev.author) : '') + '</div>';
+      '<div class="text-ink-200 truncate">' +
+      escapeHtml(rev.subject || '(' + rev.sha.slice(0, 7) + ')') +
+      '</div>' +
+      '<div class="text-xs text-ink-500 font-mono mt-0.5">' +
+      escapeHtml(rev.sha.slice(0, 7)) +
+      (when ? ' · ' + escapeHtml(when) : '') +
+      (rev.author ? ' · ' + escapeHtml(rev.author) : '') +
+      '</div>';
     row.addEventListener('click', () => {
-      historyList.querySelectorAll('button').forEach(b => b.classList.remove('bg-accent/15'));
+      historyList.querySelectorAll('button').forEach((b) => b.classList.remove('bg-accent/15'));
       row.classList.add('bg-accent/15');
       showVersion(file, revisions, i);
     });
@@ -218,47 +312,80 @@ async function openHistory() {
 function revisionHeader(file, revisions, i, toggle) {
   const rev = revisions[i];
   const wrap = document.createElement('div');
+
   wrap.className = 'mb-3 pb-2 border-b subtle-border';
   const when = rev.date ? new Date(rev.date).toLocaleString(LANG) : '';
+
   wrap.innerHTML =
-    '<div class="text-ink-100 font-medium">' + escapeHtml(rev.subject || '') + '</div>' +
-    '<div class="text-xs text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) +
-      (when ? ' · ' + escapeHtml(when) : '') + (rev.author ? ' · ' + escapeHtml(rev.author) : '') + '</div>';
+    '<div class="text-ink-100 font-medium">' +
+    escapeHtml(rev.subject || '') +
+    '</div>' +
+    '<div class="text-xs text-ink-500 font-mono mt-0.5">' +
+    escapeHtml(rev.sha.slice(0, 7)) +
+    (when ? ' · ' + escapeHtml(when) : '') +
+    (rev.author ? ' · ' + escapeHtml(rev.author) : '') +
+    '</div>';
   const view = document.createElement('button');
+
   view.type = 'button';
-  view.className = 'mt-2 px-3 py-1.5 text-sm font-medium bg-white/5 hover:bg-white/10 text-ink-200 rounded-lg transition';
+  view.className =
+    'mt-2 px-3 py-1.5 text-sm font-medium bg-white/5 hover:bg-white/10 text-ink-200 rounded-lg transition';
   view.textContent = t(toggle.label);
   view.addEventListener('click', toggle.handler);
   wrap.appendChild(view);
   const restore = document.createElement('button');
+
   restore.type = 'button';
-  restore.className = 'mt-2 px-3 py-1.5 text-sm font-medium bg-accent/15 hover:bg-accent/25 text-accent rounded-lg transition';
+  restore.className =
+    'mt-2 px-3 py-1.5 text-sm font-medium bg-accent/15 hover:bg-accent/25 text-accent rounded-lg transition';
   restore.style.marginLeft = '8px';
   restore.textContent = t('historyRestore');
   restore.addEventListener('click', () => revertToRevision(file, rev));
   wrap.appendChild(restore);
+
   return wrap;
 }
 
 async function showRevision(file, revisions, i) {
   const rev = revisions[i];
   const parent = revisions[i + 1]; // newest-first → the next entry is the older revision
+
   historyDetail.innerHTML = '';
-  historyDetail.appendChild(revisionHeader(file, revisions, i,
-    { label: 'historyViewVersion', handler: () => showVersion(file, revisions, i) }));
+  historyDetail.appendChild(
+    revisionHeader(file, revisions, i, {
+      label: 'historyViewVersion',
+      handler: () => showVersion(file, revisions, i),
+    }),
+  );
   const body = document.createElement('div');
+
   body.className = 'text-ink-500';
   body.textContent = '…';
   historyDetail.appendChild(body);
+
   try {
     if (parent) {
-      const data = await api('GET', '/api/diff?path=' + encodeURIComponent(file.path) +
-        '&from=' + parent.sha + '&to=' + rev.sha);
+      const data = await api(
+        'GET',
+        '/api/diff?path=' +
+          encodeURIComponent(file.path) +
+          '&from=' +
+          parent.sha +
+          '&to=' +
+          rev.sha,
+      );
+
       if (historyFile !== file) return;
-      body.replaceWith((data.diff && data.diff.trim()) ? diffToDom(data.diff) : simpleNode(t('historyNoChange')));
+      body.replaceWith(
+        data.diff && data.diff.trim() ? diffToDom(data.diff) : simpleNode(t('historyNoChange')),
+      );
     } else {
       // Oldest revision: no parent to diff against → show the full version as introduced.
-      const data = await api('GET', '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha);
+      const data = await api(
+        'GET',
+        '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha,
+      );
+
       if (historyFile !== file) return;
       body.replaceWith(plainTextNode(data.content));
     }
@@ -273,21 +400,33 @@ async function showRevision(file, revisions, i) {
 // reader cares about first), with a button to switch to the git diff.
 async function showVersion(file, revisions, i) {
   const rev = revisions[i];
+
   historyDetail.innerHTML = '';
-  historyDetail.appendChild(revisionHeader(file, revisions, i,
-    { label: 'historyViewChanges', handler: () => showRevision(file, revisions, i) }));
+  historyDetail.appendChild(
+    revisionHeader(file, revisions, i, {
+      label: 'historyViewChanges',
+      handler: () => showRevision(file, revisions, i),
+    }),
+  );
   const wrap = document.createElement('div');
+
   wrap.className = 'prose prose-invert text-base mt-1';
   wrap.innerHTML = '<p class="text-ink-500">…</p>';
   historyDetail.appendChild(wrap);
   let data;
+
   try {
-    data = await api('GET', '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha);
+    data = await api(
+      'GET',
+      '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha,
+    );
   } catch (e) {
     if (historyFile !== file) return;
     wrap.innerHTML = '<p class="text-rose-400">' + escapeHtml(t('historyError')) + '</p>';
+
     return;
   }
+
   if (historyFile !== file) return;
   wrap.innerHTML = renderMd(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
 }
@@ -301,13 +440,17 @@ async function revertToRevision(file, rev) {
     message: t('historyRestoreConfirm'),
     confirmLabel: t('historyRestoreBtn'),
   });
+
   if (!ok) return;
+
   try {
     await api('POST', '/api/revert', { path: file.path, rev: rev.sha });
   } catch (e) {
     setStatus(t('historyRestoreError'), 'err');
+
     return;
   }
+
   contentCache.delete(file.path); // force a fresh load of the restored content
   closeHistory();
   setStatus(t('historyRestored'), 'info');
@@ -316,17 +459,21 @@ async function revertToRevision(file, rev) {
 
 function simpleNode(text) {
   const d = document.createElement('div');
+
   d.className = 'text-ink-500';
   d.textContent = text;
+
   return d;
 }
 
 function plainTextNode(text) {
   const pre = document.createElement('pre');
+
   pre.className = 'font-mono text-[15px] leading-relaxed text-ink-300';
   pre.style.whiteSpace = 'pre-wrap';
   pre.style.wordBreak = 'break-word';
   pre.textContent = text || '';
+
   return pre;
 }
 
@@ -334,6 +481,7 @@ function plainTextNode(text) {
 // the green/emerald utilities aren't in the precompiled tailwind.css.
 function diffToDom(diffText) {
   const wrap = document.createElement('div');
+
   wrap.className = 'font-mono text-[15px] leading-relaxed';
   wrap.style.whiteSpace = 'pre-wrap';
   wrap.style.wordBreak = 'break-word';
@@ -341,36 +489,48 @@ function diffToDom(diffText) {
   // +++, noise for a reader). Each @@ → a thin separator. After the first @@ every
   // line is content, so a content line starting with --- is rendered, not skipped.
   let hunks = 0;
+
   for (const line of (diffText || '').split('\n')) {
     if (line.startsWith('@@')) {
       if (hunks > 0) {
         const sep = document.createElement('div');
+
         sep.className = 'border-t subtle-border';
         sep.style.margin = '8px 0';
         wrap.appendChild(sep);
       }
+
       hunks++;
       continue;
     }
+
     if (hunks === 0) continue;
     const row = document.createElement('div');
+
     row.className = 'px-2';
+
     if (line[0] === '+') {
-      row.style.color = '#86efac'; row.style.background = 'rgba(16,185,129,0.10)';
+      row.style.color = '#86efac';
+      row.style.background = 'rgba(16,185,129,0.10)';
     } else if (line[0] === '-') {
-      row.style.color = '#fca5a5'; row.style.background = 'rgba(244,63,94,0.10)';
+      row.style.color = '#fca5a5';
+      row.style.background = 'rgba(244,63,94,0.10)';
     } else {
       row.className += ' text-ink-400';
     }
+
     row.textContent = line === '' ? ' ' : line;
     wrap.appendChild(row);
   }
+
   return wrap;
 }
 
 document.getElementById('btn-history').addEventListener('click', openHistory);
 document.getElementById('history-close').addEventListener('click', closeHistory);
-historyOverlay.addEventListener('click', (e) => { if (e.target === historyOverlay) closeHistory(); });
+historyOverlay.addEventListener('click', (e) => {
+  if (e.target === historyOverlay) closeHistory();
+});
 
 // Render a .html doc (slide deck, dashboard…) as-is in a sandboxed iframe.
 // sandbox="allow-scripts" runs its JS but isolates it in an opaque origin (no
