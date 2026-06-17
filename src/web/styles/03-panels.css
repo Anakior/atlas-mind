@@ -23,3 +23,8 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
+  /* History overlay (desktop): roomy card + wider revision list so the diff/version
+     pane isn't cramped. Plain CSS (not arbitrary Tailwind utilities) → no
+     tailwind.css recompile. The mobile full-screen override lives in 06-mobile.css. */
+  #history-card { width: 108rem; max-width: 94vw; max-height: 90vh; }
+  #history-list { width: 19rem; }

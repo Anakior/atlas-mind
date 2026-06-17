@@ -96,6 +96,23 @@
     /* Stackable tabs: they can wrap to a new line on small screens */
     #settings-tabs { gap: 0.25rem !important; }
     .settings-tab { flex: 1 1 auto; text-align: center; }
+    /* History overlay: full-screen + stacked columns (else the 256px revision
+       list crushes the detail pane to ~70px on a phone) */
+    #history-card {
+      left: 0 !important; right: 0 !important; top: 0 !important; bottom: 0 !important;
+      transform: none !important;
+      width: 100vw !important; max-width: 100vw !important;
+      height: 100vh !important; max-height: 100vh !important;
+      border-radius: 0 !important; border: 0 !important;
+    }
+    #history-body { flex: 1 1 auto !important; flex-direction: column !important; min-height: 0 !important; }
+    #history-list {
+      width: 100% !important;
+      max-height: 35vh !important;
+      border-right: 0 !important;
+      border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+    }
+    #history-detail { flex: 1 1 auto !important; max-height: none !important; min-height: 0 !important; }
     /* Avoid horizontal scroll of the entire page */
     main, body, html { overflow-x: hidden !important; }
   }

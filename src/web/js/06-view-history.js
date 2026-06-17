@@ -227,7 +227,7 @@ function historyAvailable(file) {
 
   return (
     !!file &&
-    file.ext === '.md' &&
+    (file.ext === '.md' || file.ext === '.html') &&
     serverMode &&
     !IS_OFFLINE_BUILD &&
     !window.__viewerMode &&
@@ -325,23 +325,29 @@ function revisionHeader(file, revisions, i, toggle) {
     (when ? ' · ' + escapeHtml(when) : '') +
     (rev.author ? ' · ' + escapeHtml(rev.author) : '') +
     '</div>';
+  // Actions in a flex-wrap row (gap, no per-button margin): stay left-aligned
+  // whether they sit on one line (desktop) or wrap to two (mobile) — the old
+  // marginLeft hack left the wrapped button indented by 8px.
+  const actions = document.createElement('div');
+
+  actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:8px';
   const view = document.createElement('button');
 
   view.type = 'button';
   view.className =
-    'mt-2 px-3 py-1.5 text-sm font-medium bg-white/5 hover:bg-white/10 text-ink-200 rounded-lg transition';
+    'px-3 py-1.5 text-sm font-medium bg-white/5 hover:bg-white/10 text-ink-200 rounded-lg transition';
   view.textContent = t(toggle.label);
   view.addEventListener('click', toggle.handler);
-  wrap.appendChild(view);
+  actions.appendChild(view);
   const restore = document.createElement('button');
 
   restore.type = 'button';
   restore.className =
-    'mt-2 px-3 py-1.5 text-sm font-medium bg-accent/15 hover:bg-accent/25 text-accent rounded-lg transition';
-  restore.style.marginLeft = '8px';
+    'px-3 py-1.5 text-sm font-medium bg-accent/15 hover:bg-accent/25 text-accent rounded-lg transition';
   restore.textContent = t('historyRestore');
   restore.addEventListener('click', () => revertToRevision(file, rev));
-  wrap.appendChild(restore);
+  actions.appendChild(restore);
+  wrap.appendChild(actions);
 
   return wrap;
 }
@@ -410,7 +416,9 @@ async function showVersion(file, revisions, i) {
   );
   const wrap = document.createElement('div');
 
-  wrap.className = 'prose prose-invert text-base mt-1';
+  // max-w-none: let the rendered version fill the (now wide) detail pane instead
+  // of the default ~65ch prose cap, so md uses the room on large screens.
+  wrap.className = 'prose prose-invert max-w-none text-base mt-1';
   wrap.innerHTML = '<p class="text-ink-500">…</p>';
   historyDetail.appendChild(wrap);
   let data;
@@ -428,6 +436,25 @@ async function showVersion(file, revisions, i) {
   }
 
   if (historyFile !== file) return;
+
+  // .html doc: render the past version as-is in a sandboxed iframe (no markdown
+  // pipeline), mirroring the live render (cf. renderHtmlFrame). srcdoc set as a
+  // property so the raw HTML is never concatenated into the viewer DOM; its JS
+  // runs in an opaque origin (allow-scripts, no same-origin) with no access to
+  // the viewer's cookies/DOM.
+  if (file.ext === '.html') {
+    const frame = document.createElement('iframe');
+
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.title = file.name;
+    frame.srcdoc = data.content || '';
+    frame.style.cssText =
+      'width:100%;height:60vh;border:0;display:block;background:#0b0d13;border-radius:.5rem';
+    wrap.replaceWith(frame);
+
+    return;
+  }
+
   wrap.innerHTML = renderMd(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
 }
 
