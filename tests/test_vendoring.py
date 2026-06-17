@@ -48,7 +48,11 @@ VIEWER_SOURCE = _viewer_source()
 # to http(s)://… "Doc anchor" URLs (comments, links in help strings, SVG xmlns)
 # trigger NO network request and are therefore out of scope.
 _EXTERNAL_LOAD_RE = re.compile(
-    r"""(?:src|href)\s*=\s*["']https?://"""
+    # Resource LOADS only: src= (script/img/iframe…), href= on a <link> (stylesheet/
+    # icon/preload), url()/@import in CSS. A navigation <a href="https://…"> is a doc
+    # anchor (no network request, cf. above) and is intentionally NOT matched.
+    r"""\bsrc\s*=\s*["']https?://"""
+    r"""|<link\b[^>]*\bhref\s*=\s*["']https?://"""
     r"""|url\(\s*["']?https?://"""
     r"""|@import\s+["']https?://""", re.I)
 

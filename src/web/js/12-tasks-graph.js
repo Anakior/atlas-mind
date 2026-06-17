@@ -755,3 +755,27 @@ function renderTodoFilterTabs() {
       pending > 0 ? `${TODO_FILTER_LABELS[cat]} (${pending})` : TODO_FILTER_LABELS[cat];
   });
 }
+
+// ── Read-only demo banner ────────────────────────────────────────────────────
+// Shown ONLY on the static/offline build (the demo) — the live server has working
+// write features, so it never appears there. Dismissible per tab session: a new
+// visitor still sees it, but it doesn't nag while browsing.
+(function () {
+  if (!IS_OFFLINE_BUILD || window.__viewerMode) return;
+  const banner = document.getElementById('demo-banner');
+  if (!banner) return;
+  try {
+    if (sessionStorage.getItem('demoBannerDismissed') === '1') return;
+  } catch (e) {
+    /* sessionStorage unavailable (file://, private mode) → just show it */
+  }
+  banner.classList.remove('hidden');
+  document.getElementById('demo-banner-close')?.addEventListener('click', () => {
+    banner.classList.add('hidden');
+    try {
+      sessionStorage.setItem('demoBannerDismissed', '1');
+    } catch (e) {
+      /* ignore */
+    }
+  });
+})();
