@@ -13,14 +13,12 @@ def login_page(handler):
 
 
 def login(handler):
-    # Read the body before any return (keep-alive: don't leave unread data
-    # on the socket).
+    # Read the body before any return (keep-alive: don't leave unread data on the socket).
     body = handler._read_body().decode("utf-8", "replace")
     client_ip = handler._client_ip()
     ctype = handler.headers.get("Content-Type", "")
     is_json = "application/json" in ctype
-    # Per-IP rate limit: response consistent with the rest (JSON for the SPA,
-    # HTML page for the form POST).
+    # Per-IP rate limit: response shape matches the request (JSON / HTML form).
     if not _s.login_rate_limit_ok(client_ip):
         handler._login_error(is_json, _s._t("login_rate_limited"), 429)
         return
@@ -46,9 +44,8 @@ def login(handler):
     try:
         user = _s.authenticate_user(email, password) if email and password else None
     except Exception as e:
-        # Atlas unreachable: a clean 503 rather than an opaque 500. (Browsing
-        # content with an already-issued cookie does not touch the registry — only
-        # session creation depends on it.)
+        # Atlas unreachable: clean 503 rather than an opaque 500 (only session
+        # creation touches the registry; browsing with a live cookie doesn't).
         print(f"[login] backend auth indisponible: {e}", file=sys.stderr)
         handler._send_login_page(
             error=_s._t("login_backend_unavailable"),
@@ -61,15 +58,11 @@ def login(handler):
 
     role = user.get("role", "admin")
     if user.get("totp_enabled"):
-        # Second factor required BEFORE setting the cookie. With no code
-        # provided, we signal the client to ask for one (NOT an auth error:
-        # the password was correct, the failure counter is NOT incremented).
-        # We answer 200 — and NOT 401 — in this case: it's a progression
-        # signal ("move to the code step"), not a failure. A 401 on a fetch
-        # triggers a console.error "Failed to load resource: 401" in every
-        # browser; the JS tests data.totp_required BEFORE the status and does
-        # not set a cookie here, so the 200 is harmless (401 stays reserved
-        # for real credential/code failures).
+        # Second factor required BEFORE the cookie. No code provided → signal the
+        # client to ask for one. We answer 200 (NOT 401): it's a progression signal,
+        # not an auth failure (password was correct, failure counter untouched), and
+        # a 401 would log a console.error in every browser. The JS tests
+        # data.totp_required before the status and sets no cookie here.
         if not totp_code and not recovery_code:
             handler._login_error(is_json, _s._t("login_totp_required"), 200,
                               extra={"totp_required": True})
@@ -112,10 +105,9 @@ def me(handler):
         "role": sess.get("role", "admin"),
         "cloud": _s.CONFIG.auth_enabled,
     }
-    # Cloud mode only: the CSRF token (also set as a readable kb_csrf
-    # cookie) and the 2FA state. Locally (auth disabled) the
-    # session is fake and the store isn't necessarily reachable —
-    # we don't query it (CSRF is useless on a 127.0.0.1 instance).
+    # Cloud only: CSRF token (also set as a readable kb_csrf cookie) and 2FA state.
+    # Locally (auth disabled) the session is fake and the store may be unreachable, and
+    # CSRF is useless on 127.0.0.1, so we don't query it.
     if _s.CONFIG.auth_enabled:
         epoch = _s.current_session_epoch(email)
         user = _s.get_store().get_user_by_email(email) or {}

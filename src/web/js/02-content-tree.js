@@ -13,7 +13,7 @@ async function loadContent(file) {
     file.content = c;
     return c;
   }
-  // Online mode: fetch via the static server (versioned by mtime for cache busting).
+  // Versioned by mtime for cache busting.
   const url = '/' + file.path.split('/').map(encodeURIComponent).join('/') + (file.mtime ? '?v=' + file.mtime : '');
   const res = await fetch(url);
   if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -23,12 +23,11 @@ async function loadContent(file) {
   return text;
 }
 
-// State shared between todo widget and showWelcome (declared early to avoid TDZ)
+// Shared between todo widget and showWelcome; declared early to avoid TDZ.
 let todos = [];
-// Notes index {path: count} for the tree badges — also declared early:
-// decorateTreeBadges() is called at top-level right after the tree is rendered,
-// before the annotations section (otherwise TDZ → ReferenceError and badges
-// missing on first render).
+// Notes index {path: count} for tree badges. Declared early: decorateTreeBadges()
+// runs at top-level right after the tree renders, before the annotations section
+// (otherwise TDZ → ReferenceError, badges missing on first render).
 let notesIndex = null;
 
 const ICONS = {
@@ -58,21 +57,17 @@ function renderTree(node, depth = 0, prefix = '') {
     const li = document.createElement('li');
     if (child.type === 'dir') {
       const childPath = prefix ? prefix + '/' + child.name : child.name;
-      // remotes/ = mirrors of remote nodes: visually distinct + read-only
-      // (the rename button is hidden by .tree-remote in CSS).
+      // remotes/ = mirrors of remote nodes: read-only (rename hidden by .tree-remote CSS).
       const isRemoteRoot = childPath === 'remotes';
       const isRemote = isRemoteRoot || childPath.startsWith('remotes/');
       const btn = document.createElement('button');
       btn.className = 'tree-item group w-full text-left px-2 py-1.5 rounded flex items-center gap-2 font-semibold text-ink-100' + (isRemote ? ' tree-remote' : '');
       btn.dataset.dirPath = childPath;
-      // remotes/ umbrella → label « Mental nodes » (mirrors of other atlases);
-      // the teal network icon is enough to flag it (no text badge); the direct
-      // children keep their name + get their origin via decorate.
+      // remotes/ umbrella → label « Mental nodes »; children keep their name
+      // and get their origin via decorateRemoteOrigins().
       const dirLabel = isRemoteRoot ? t('remotesLabel') : child.name;
-      // « Share as node » button on hover (not on mirrors: we don't
-      // re-publish another atlas's content).
+      // « Share as node » on hover, not on mirrors (don't re-publish another atlas's content).
       const dirShareBtn = isRemote ? '' : `<span class="dir-share-btn tree-action-btn tree-action-btn--share" title="${t('shareAsNode')}">${LINK_ICON}</span>`;
-      // Order consistent with files: rename (✎) then share (🔗).
       btn.innerHTML = `<span class="caret text-xs text-ink-400">&#9656;</span>${isRemoteRoot ? REMOTE_FOLDER_ICON : FOLDER_ICON}<span class="truncate min-w-0 flex-1" data-name="${child.name.replace(/"/g, '&quot;')}">${dirLabel}</span><span class="dir-rename-btn tree-action-btn" title="${t('renameFolder')}">${PENCIL_ICON}</span>${dirShareBtn}`;
       const sub = renderTree(child, depth + 1, childPath);
       sub.classList.add('hidden');
@@ -109,7 +104,7 @@ function renderTree(node, depth = 0, prefix = '') {
         : '';
       a.innerHTML = `${iconFor(child.ext)}${nameHtml}${fileRenameBtn}${fileShareBtn}`;
       if (child.ext === '.md' || child.ext === '.html' || child.ext === '.pdf' || child.ext === '.docx') {
-        // .md → marked ; .html → iframe ; .pdf → native preview ; .docx → mammoth (showMarkdown dispatches).
+        // showMarkdown dispatches: .md → marked, .html → iframe, .pdf → native, .docx → mammoth.
         a.addEventListener('click', (e) => {
           if (e.target.closest('.file-share-btn')) { e.preventDefault(); e.stopPropagation(); openPublishNode(child.path); return; }
           if (e.target.closest('.file-rename-btn')) { e.preventDefault(); e.stopPropagation(); showMarkdown(child); openRenameModal('rename'); return; }
@@ -153,13 +148,9 @@ decorateTreeBadges();
 decorateRemoteOrigins();
 
 marked.setOptions({ gfm: true, breaks: false });
-// Code block highlighting: marked ≥ v5 REMOVED the `highlight` option
-// from setOptions (silently ignored by the vendored marked v15) → custom
-// `code` renderer that calls highlight.js at render time (inline equivalent
-// of marked-highlight, without an extra lib). Applies to every renderMd
-// call (doc, edit preview, offline cache). The hljs output
-// (spans + hljs-* classes) survives DOMPurify; the `hljs` class on the
-// <code> enables the vendored highlight-github-dark theme.
+// marked ≥ v5 removed the `highlight` setOptions option (silently ignored by the
+// vendored v15), so we highlight in a custom `code` renderer instead. The hljs
+// output survives DOMPurify; the `hljs` class enables the vendored github-dark theme.
 marked.use({ renderer: {
   code({ text, lang }) {
     const language = (lang || '').trim().split(/\s+/)[0];
@@ -175,10 +166,8 @@ marked.use({ renderer: {
 } });
 
 // ─── Wikilinks [[doc]] ─────────────────────────────────────────────────────────
-// Resolution of a target to a path (same logic as the build): direct path,
-// otherwise file name (stem). Maps built once over fileMap.
-// Docs you can open are all valid [[wikilink]] targets — not just Markdown but
-// standalone HTML decks, PDFs and Word docs too.
+// Target → path resolution (same logic as the build): direct path, else stem.
+// Maps built once over fileMap. Any openable doc is a valid target, not just .md.
 const WL_TARGET_EXTS = ['.md', '.html', '.pdf', '.docx'];
 let _wlMaps = null;
 function wlMaps() {

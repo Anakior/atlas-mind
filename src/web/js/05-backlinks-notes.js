@@ -30,8 +30,8 @@ async function renderBacklinksFor(file) {
   const resolve = (paths) => (paths || []).map(p => fileMap[p]).filter(Boolean);
   const incoming = resolve(entry.in);
   const outgoing = resolve(entry.out);
-  // Docs on the same topic: shared tags (excluding the current doc), ranked by number of
-  // shared tags then recency.
+  // Same-topic docs: shared tags (excluding the current doc), ranked by shared-tag
+  // count then recency.
   const tagSet = new Set(file.tags || []);
   const shared = (f) => (f.tags || []).filter(t => tagSet.has(t)).length;
   const related = tagSet.size
@@ -66,14 +66,14 @@ async function renderBacklinksFor(file) {
 }
 
 // ─── Passage annotations ─────────────────────────────────────────────────────
-// Data: sidecar .notes/<doc>.json on the server side (offline: EMBED_NOTES). Anchoring
-// by text-quote (exact + prefix/suffix + approx. pos) in the W3C Web Annotation style:
+// Data: sidecar .notes/<doc>.json server-side (offline: EMBED_NOTES). Text-quote
+// anchoring (exact + prefix/suffix + approx. pos), W3C Web Annotation style:
 // resilient to text shifts; if the passage disappears the note becomes orphaned.
-const CTX_LEN = 60;            // length of the captured prefix/suffix context
+const CTX_LEN = 60;            // captured prefix/suffix context length
 const notesCanEdit = () => !IS_OFFLINE_BUILD && !window.__viewerMode;
 let notesForDoc = [];          // notes of the current doc (anchors resolved on the fly)
-// notesIndex ({path: count}, tree badges): declared at the top of the script,
-// near `todos`, so it's visible from the top-level decorateTreeBadges().
+// notesIndex ({path: count}, tree badges) is declared at the top of the script so
+// it's visible from the top-level decorateTreeBadges().
 
 const noteAddBtn = document.getElementById('kb-note-add');
 const notePop = document.getElementById('kb-note-pop');
@@ -136,9 +136,9 @@ function locateAnchor(a) {
   return { start: best, end: best + a.exact.length };
 }
 
-// Wraps the global text range [start,end) in <mark> (one per traversed text
-// node). Sets the data-* and the click handler. Injected AFTER DOMPurify → the
-// note text (escaped on display) never goes through markdown rendering.
+// Wraps the global text range [start,end) in <mark> (one per traversed text node),
+// with data-* + click handler. Injected AFTER DOMPurify, so the note text never
+// goes through markdown rendering.
 function highlightRange(start, end, note) {
   const walker = document.createTreeWalker(contentEl, NodeFilter.SHOW_TEXT);
   let acc = 0, n;
@@ -182,7 +182,7 @@ async function renderNotesFor(file) {
   if (currentFile !== file) return;               // page changed during the fetch
   notesForDoc = notes;
   if (!notes.length) { applyToc(); return; }
-  // Highlighting: we resolve each anchor in the rendered DOM.
+  // Resolve each anchor in the rendered DOM and highlight it.
   notes.forEach(note => {
     const loc = locateAnchor(note);
     note._orphan = !(loc && highlightRange(loc.start, loc.end, note));
@@ -200,8 +200,8 @@ function renderNotesPanel(file) {
       '<span class="kb-note-meta">' + (note._orphan ? t('orphanShort') : '“' + escapeHtml(note.exact.length > 40 ? note.exact.slice(0, 40) + '…' : note.exact) + '”') + '</span>' +
     '</button>';
   tocNotes.classList.add('border-t', 'panel-divider');
-  // Header with counter + « copy all notes » button (useful for
-  // sharing annotations, including from a read-only remote node).
+  // Header with counter + « copy all notes » button (share annotations, incl.
+  // from a read-only remote node).
   tocNotes.innerHTML =
     '<div class="px-2 pb-1 flex items-center justify-between gap-2">' +
       '<span class="text-[10px] uppercase tracking-[0.12em] text-amber-300 font-bold">' + t('notesTitle', notesForDoc.length) + '</span>' +
@@ -216,14 +216,13 @@ function renderNotesPanel(file) {
       if (!note) return;
       const mark = contentEl.querySelector('mark.kb-annot[data-note-id="' + CSS.escape(note.id) + '"]');
       if (mark) { mark.scrollIntoView({ behavior: 'smooth', block: 'center' }); openNotePopForExisting(note, mark); }
-      else openNotePopForExisting(note, el);   // orphan: popover anchored on the row
+      else openNotePopForExisting(note, el);   // orphan: anchor the popover on the row
     });
   });
   applyToc();
 }
 
-// Copies all notes of the current doc as markdown (quote + note), to share them
-// — handy especially on a read-only remote node.
+// Copies all notes of the current doc as markdown (quote + note) for sharing.
 async function copyAllNotes(btn) {
   if (!notesForDoc.length) return;
   const lines = [];
@@ -262,7 +261,6 @@ function closeNotePop() {
   contentEl.querySelectorAll('mark.kb-annot.kb-annot-active').forEach(m => m.classList.remove('kb-annot-active'));
 }
 
-// Create popover (selection → note)
 function openNotePopForNew(anchor, rect) {
   pendingAnchor = anchor;
   notePop.innerHTML =
@@ -277,7 +275,6 @@ function openNotePopForNew(anchor, rect) {
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNewNote(ta.value); });
 }
 
-// Read / edit / delete popover for an existing note
 function openNotePopForExisting(note, anchorEl) {
   closeNotePop();
   contentEl.querySelectorAll('mark.kb-annot[data-note-id="' + CSS.escape(note.id) + '"]').forEach(m => m.classList.add('kb-annot-active'));
@@ -346,10 +343,9 @@ async function deleteNote(note) {
   refreshNotes();
 }
 
-// Full re-render of the current doc (re-fetch notes + clean re-highlight)
-// AND live update of the tree badge. We recount the doc's notes from the
-// SOURCE (/api/notes) because _notes-index.json is only regenerated at the next
-// build — without this, the badge only showed up after a reload.
+// Full re-render of the current doc + live tree-badge update. We recount notes
+// from the SOURCE (/api/notes) because _notes-index.json is only regenerated at
+// the next build — without this the badge only appeared after a reload.
 async function refreshNotes() {
   if (!currentFile) return;
   const path = currentFile.path;
@@ -365,12 +361,12 @@ async function refreshNotes() {
   showMarkdown(currentFile);
 }
 
-// Text selection → floating "Note" button (edit mode only).
-// We store the anchor + the rect at the time of selection: the tap on the button
-// therefore doesn't need the selection to survive (on mobile, the tap collapses it).
+// Text selection → floating "Note" button (edit mode only). We store the anchor +
+// rect at selection time, so the button tap doesn't need the selection to survive
+// (on mobile the tap collapses it).
 function updateNoteButton() {
-  // Notes anchor into a markdown document: no meaning on the home page
-  // (no currentFile) nor on a .html/.pdf (rendered in an isolated iframe).
+  // Notes anchor into a markdown doc: no meaning on the home page (no currentFile)
+  // nor a .html/.pdf (isolated iframe).
   if (!notesCanEdit() || editMode || notePop.style.display === 'block'
       || !currentFile || currentFile.ext !== '.md') {
     noteAddBtn.style.display = 'none';
@@ -390,9 +386,9 @@ function updateNoteButton() {
   noteAddBtn.style.top = (window.scrollY + rect.bottom + 8) + 'px';
   noteAddBtn.style.left = Math.max(8, left) + 'px';
 }
-// Desktop: immediate mouseup. Mobile/keyboard: selectionchange (touch handles,
-// no mouseup) debounced to fire only once the selection has stabilized —
-// the delay also protects the tap on the button (the collapse doesn't clear before the click).
+// Desktop: immediate mouseup. Mobile/keyboard: selectionchange (touch handles emit
+// no mouseup) debounced until the selection stabilizes — the delay also lets the
+// button tap land before the collapse clears it.
 let _selTimer = null;
 contentEl.addEventListener('mouseup', () => setTimeout(updateNoteButton, 10));
 document.addEventListener('selectionchange', () => {
@@ -407,7 +403,6 @@ function triggerNoteCreate() {
 noteAddBtn.addEventListener('click', triggerNoteCreate);
 // dedicated touchend: on mobile the click can be swallowed by the selection dismiss.
 noteAddBtn.addEventListener('touchend', (e) => { e.preventDefault(); triggerNoteCreate(); });
-// Tap/click outside the popover/button/highlight → we close.
 function maybeCloseOutside(e) {
   if (!notePop.contains(e.target) && e.target !== noteAddBtn && !noteAddBtn.contains(e.target)
       && !e.target.closest('mark.kb-annot') && !e.target.closest('.kb-note-row')) {
@@ -442,7 +437,6 @@ async function decorateTreeBadges() {
     if (!link) continue;
     const badge = document.createElement('span');
     badge.className = 'kb-tree-badge';
-    // Heroicons icon (note bubble) + counter, consistent with the rest of the UI.
     badge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg><span>' + idx[path] + '</span>';
     badge.title = t('notesBadge', idx[path]);
     link.appendChild(badge);

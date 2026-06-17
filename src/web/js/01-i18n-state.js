@@ -810,10 +810,8 @@ function t(key, ...args) {
   return typeof entry === 'function' ? entry(...args) : entry;
 }
 
-// Static HTML labels: data-i18n (text), data-i18n-title (tooltip),
-// data-i18n-placeholder (placeholder). Applied at boot in BOTH languages
-// (single source of truth = STRINGS, the FR text in the markup is only a
-// fallback when JS is off).
+// Static HTML labels via data-i18n / -title / -placeholder. Single source of
+// truth = STRINGS; the FR text in the markup is only a fallback when JS is off.
 function applyStaticI18n() {
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });

@@ -38,7 +38,7 @@ function closePalette() {
 function renderPaletteResults(q) {
   const raw = q.trim();
   q = raw.toLowerCase();
-  // Instant: actions + files whose name or path contains the query.
+  // Instant pass: actions + files matched by name/path.
   const nav = [];
   for (const a of PALETTE_ACTIONS) {
     if (!q || a.label.toLowerCase().includes(q)) nav.push({ kind: 'action', ...a });
@@ -54,9 +54,8 @@ function renderPaletteResults(q) {
   paletteNav = nav;
   paletteContent = [];
   paintPalette();
-  // Plus: full-text search (content) via getSearchHits — same engine as the
-  // search bar (server when online / MiniSearch offline, fuzzy included). Async +
-  // debounced; we skip files already listed by name/path.
+  // Async pass: full-text content search via getSearchHits (same engine as the
+  // search bar). Debounced; skips files already listed by name/path.
   const seq = ++paletteSearchSeq;
   clearTimeout(paletteSearchDebounce);
   if (q.length >= 2) {
@@ -190,9 +189,9 @@ function renderPinned() {
 btnPin.addEventListener('click', () => { if (currentFile) togglePin(currentFile.path); });
 renderPinned();
 
-// Embed mode (#mind): the landing page iframes this viewer to show a live,
-// chrome-less The Mind as its hero. We only build the base view here; the graph
-// is opened (and its controls hidden) once the graph is fully wired, below.
+// Embed mode (#mind): the landing page iframes this viewer for a chrome-less
+// live Mind hero. We only build the base view here; the graph is opened (controls
+// hidden) once it is fully wired, below.
 const EMBED_MIND = location.hash.replace(/^#/, '') === 'mind';
 if (EMBED_MIND) {
   showWelcome();
@@ -220,24 +219,21 @@ function tagColor(tag) {
 async function openGraph() {
   const idx = await loadBacklinksIndex();
   graphOverlay.classList.remove('hidden');
-  // Nodes = all .md files; edges = wikilinks (undirected, deduplicated).
   const nodes = [], byPath = {}, tagNodes = {};
-  // Every previewable document is a node (not just Markdown): media docs cluster
-  // by folder tag / region like any other thought.
+  // Every previewable doc is a node (not just Markdown), so media docs cluster by region too.
   const GRAPH_EXTS = new Set(['.md', '.html', '.pdf', '.docx']);
   for (const f of Object.values(fileMap)) {
     if (!GRAPH_EXTS.has(f.ext)) continue;
     const parts = f.path.split('/');
-    // Mirror doc (remotes/<source>/…) → its own region per source, prefixed with a
-    // diamond to avoid any collision with a directory of the same name + to signal
-    // that we are leaving the personal content.
+    // Mirror doc (remotes/<source>/…) → own region per source, diamond-prefixed to
+    // avoid colliding with a same-named directory and to signal non-personal content.
     const isRemote = f.path.startsWith('remotes/');
     const region = isRemote ? ('⧫ ' + (parts[1] || 'node')) : (parts.length > 1 ? parts[0] : '');
     const n = { kind: 'doc', path: f.path, name: f.name.replace(/\.(md|html|pdf|docx)$/i, ''),
       doctype: f.ext, tags: f.tags || [],
       region, remote: isRemote, mtime: f.mtime || 0, recent: false,
       x: (Math.random() - 0.5) * 520, y: (Math.random() - 0.5) * 520, vx: 0, vy: 0, deg: 0 };
-    // AI teal color for remote mental nodes; otherwise color = region.
+    // Remote nodes get AI teal; otherwise color = region.
     n.color = isRemote ? '#59d0cf' : tagColor(region);
     nodes.push(n); byPath[f.path] = n;
   }
@@ -264,10 +260,9 @@ async function openGraph() {
       if (s && t) { edges.push({ s, t, kind: 'link' }); s.deg++; t.deg++; linkCount++; }
     }
   }
-  // Docs = main nodes (larger, size ∝ connections = hubs); tags = subordinate
-  // smaller points that fade behind the regions.
+  // Node radius: docs larger than tags, scaled by degree (hubs grow).
   for (const n of nodes) n.r = (n.kind === 'tag' ? 3 : 5) + Math.sqrt(n.deg) * (n.kind === 'tag' ? 1.2 : 2.6);
-  // "Active thoughts": recently edited docs (< 14 days) → halo at render time.
+  // Docs edited < 14 days ago → halo at render time ("active thoughts").
   const RECENT_CUTOFF = (Date.now() / 1000) - 14 * 86400;
   for (const n of nodes) if (n.kind === 'doc') n.recent = n.mtime > RECENT_CUTOFF;
   graphStats.textContent = t('graphStats', docCount, linkCount, Object.keys(tagNodes).length);
@@ -276,7 +271,7 @@ async function openGraph() {
   graphState.cam.ox = graphCanvas.clientWidth / 2;
   graphState.cam.oy = graphCanvas.clientHeight / 2;
   // Embed hero: pre-settle the layout off-screen so it appears already organized
-  // (no nodes flying into place on the landing page); only pulses/breathing move.
+  // (no nodes flying into place on the landing page).
   if (EMBED_MIND) { for (let i = 0; i < 480; i++) graphSimStep(graphState); graphState.ticks = 480; }
   cancelAnimationFrame(graphRaf);
   graphLoop();
@@ -290,6 +285,5 @@ function closeGraph() {
 }
 
 // ─── Tasks rollup — every - [ ] / - [x] across the mind in one view ───────────
-// Reads the embedded EMBED_TASKS (offline) or /_tasks-index.json (server). A row
-// click opens its doc and scrolls to the task text (highlightFirstMatch), exactly
-// like a search result. Works in both build modes (the index is embedded offline).
+// Reads EMBED_TASKS (offline) or /_tasks-index.json (server). A row click opens
+// its doc and scrolls to the task text (highlightFirstMatch), like a search result.

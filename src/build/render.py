@@ -19,8 +19,6 @@ from build.paths import (
     DEFAULT_TODO_CATEGORIES, TEMPLATE, STYLES_DIR, PARTIALS_DIR, JS_DIR,
 )
 
-# ─── Template rendering ───────────────────────────────────────────────────────
-
 
 def _derive_site_name(site_prefix: str) -> str:
     """Full name derived from the prefix (mirror of AtlasConfig.site_name):
@@ -40,8 +38,7 @@ def _engine_version() -> str:
     except Exception:
         pass
     try:
-        # The atlas_mind package __init__ (src/__init__.py) holds __version__;
-        # from this sub-package that is two levels up.
+        # The atlas_mind package __init__ (src/__init__.py) holds __version__.
         init = (Path(__file__).resolve().parent.parent / "__init__.py").read_text(encoding="utf-8")
         match = re.search(r'__version__\s*=\s*"([^"]+)"', init)
         if match:
@@ -63,25 +60,19 @@ def render_template(*, tree: dict, embed_content: dict | None,
                     extensions_css: str = "",
                     extensions_js: str = "") -> str:
     template = (template_path or TEMPLATE).read_text(encoding="utf-8")
-    # Phase 1 — inline the split viewer sources back into the shell, BEFORE the
-    # placeholder pass: the fragments are the viewer's own trusted source (CSS /
-    # HTML markup / app JS, byte-moved from the former monolith), so their own
-    # injection placeholders (__DATA__, __VERSION__, __SITE_PREFIX__, …) must JOIN
-    # the single substitution pass below, exactly as when everything was one file.
-    # Distinct tokens, replacement values never contain these three → safe. Until a
-    # concern is extracted its directory is absent (concat_sources → "") → no-op.
+    # Phase 1 — inline the split viewer sources (trusted CSS/HTML/JS fragments)
+    # back into the shell BEFORE the placeholder pass, so their own placeholders
+    # (__DATA__, __VERSION__, …) join the single substitution below. An
+    # unextracted concern's dir is absent (concat_sources → "") → no-op.
     template = template.replace("__STYLES__", concat_sources(STYLES_DIR, (".css",)))
     template = template.replace("__BODY__", concat_sources(PARTIALS_DIR, (".html",)))
     template = template.replace("__APP_JS__", concat_sources(JS_DIR, (".js",)))
     # Phase 2 — JSON encode and protect </script> termination.
     def _enc(obj) -> str:
         return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
-    # Escaped identity (quote=True): injected into HTML text and attributes
-    # (title, meta content="…", H1 span). On the JS side, the viewer re-reads
-    # the name from document.title and receives prefix and tagline as
-    # JSON-encoded constants (__SITE_PREFIX_JSON__ / __TAGLINE_JSON__) — no text
-    # placeholder ends up inside a template literal, so neither a backtick nor a
-    # ${…} coming from atlas.toml can break the script or inject code into it.
+    # Identity is HTML-escaped (injected into title/meta/H1). The JS side gets
+    # prefix and tagline as JSON-encoded constants — no text placeholder lands in
+    # a template literal, so a backtick or ${…} from atlas.toml can't break out.
     site_name = _derive_site_name(site_prefix)
     replacements = {
         "__BUILD_TS__": build_ts,
@@ -101,13 +92,10 @@ def render_template(*, tree: dict, embed_content: dict | None,
         "__EMBED_NOTES__": _enc(embed_notes) if embed_notes is not None else "null",
         "__EMBED_TASKS__": _enc(embed_tasks) if embed_tasks is not None else "null",
         "__TEMPLATES__": _enc(doc_templates if doc_templates is not None else {}),
-        # Extension code injected AS-IS (not JSON) into a <style> / <script> of
-        # the viewer; the container's closing tag is neutralized so the content
-        # cannot escape it, and `</head` too: the extensions' <style> lives
-        # INSIDE the template's <head>, yet the offline build injects MiniSearch
-        # by replacing the document's first `</head>` (inline_vendor_assets) — a
-        # literal `</head>` in an extension would hijack that injection in the
-        # middle of the CSS.
+        # Extension code injected AS-IS into a <style>/<script>; the container's
+        # closing tag is neutralized so it can't escape, and `</head` too: the
+        # offline build injects MiniSearch at the document's first `</head>`, so a
+        # literal `</head>` in an extension would hijack that injection.
         "__EXTENSIONS_CSS__": _escape_closing_tag(
             _escape_closing_tag(extensions_css, _CLOSING_STYLE_RE),
             _CLOSING_HEAD_RE),
@@ -115,12 +103,9 @@ def render_template(*, tree: dict, embed_content: dict | None,
             _escape_closing_tag(extensions_js, _CLOSING_SCRIPT_RE),
             _CLOSING_HEAD_RE),
     }
-    # Substitution in ONE pass over the template: the injected values are never
-    # re-scanned, so a mind document that literally contains "__SITE_NAME__",
-    # "__BUILD_TS__" or "__TEMPLATES__" is never rewritten (a chain of
-    # successive .replace would re-read the result of the previous ones).
-    # Sorted by decreasing length: __TAGLINE_JSON__ wins over __TAGLINE__,
-    # __SITE_PREFIX_JSON__ over __SITE_PREFIX__.
+    # ONE pass over the template (injected values never re-scanned), so a mind
+    # doc that literally contains "__SITE_NAME__" etc. is never rewritten. Sorted
+    # by decreasing length so __TAGLINE_JSON__ wins over __TAGLINE__.
     pattern = re.compile("|".join(
         re.escape(placeholder)
         for placeholder in sorted(replacements, key=len, reverse=True)))

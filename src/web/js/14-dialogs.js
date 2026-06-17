@@ -62,7 +62,7 @@ renameForm.addEventListener('submit', async (e) => {
   let name = renameName.value.trim();
   if (!name) { renameError.textContent = t('nameRequired'); renameError.classList.remove('hidden'); return; }
   if (/[\\\/]/.test(name)) { renameError.textContent = t('noSlashes'); renameError.classList.remove('hidden'); return; }
-  // Preserve the original extension (.md or .html) if the user did not enter it.
+  // Preserve the original extension if the user didn't type it.
   if (!/\.(md|html)$/i.test(name)) {
     const ext = (/\.(md|html)$/i.exec(currentFile.path) || [, 'md'])[1].toLowerCase();
     name += '.' + ext;
@@ -79,7 +79,7 @@ renameForm.addEventListener('submit', async (e) => {
     });
     if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || ('HTTP ' + res.status)); }
     closeRenameModal();
-    // Transfer the content cache to the new path to avoid a needless re-fetch
+    // Move the content cache to the new path to avoid a needless re-fetch.
     const cached = contentCache.get(currentFile.path);
     if (cached !== undefined) {
       contentCache.delete(currentFile.path);
@@ -173,9 +173,8 @@ function promptDialog(opts) {
 }
 
 // ── Reset password modal (admin + cloud) ─────────────────────────────────────
-// Replaces the old native browser prompt. Entry + confirmation, show/hide
-// toggle, length validation (min 8) and live equality check, inline
-// success feedback, auto focus, close on Esc / backdrop click.
+// Replaces the native prompt: entry + confirmation, length validation (min 8),
+// live equality check, show/hide toggle, inline success.
 const RESET_PW_MIN = 8;
 const resetPwBackdrop = document.getElementById('reset-pw-backdrop');
 const resetPwForm = document.getElementById('reset-pw-form');
@@ -203,9 +202,8 @@ function resetPwValidationError() {
 
 function refreshResetPwState() {
   resetPwError.classList.add('hidden');
-  // The button stays enabled as long as both fields are filled; the precise
-  // error is shown on submit. We only disable it if the 1st field is
-  // too short (immediate signal, without blocking the confirmation entry).
+  // Disable only while the 1st field is too short (immediate signal, doesn't block
+  // typing the confirmation); otherwise stay enabled and show the precise error on submit.
   const tooShort = resetPwInput.value.length < RESET_PW_MIN;
   resetPwSubmit.disabled = tooShort || resetPwConfirm.value.length === 0;
 }

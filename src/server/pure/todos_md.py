@@ -9,9 +9,8 @@ TODO_HEADER = "# To-do\n\nEditable from the widget in the bottom-right of the vi
 
 
 def _norm_cat(value):
-    # Todo categories (CONFIG.todo_categories, default "travail"/"personnel"):
-    # stored in the todo file under H2 sections (## Travail / ## Personnel);
-    # the widget filters by category. See parse_todos / write_todos.
+    # Categories (CONFIG.todo_categories) stored under H2 sections; unknown
+    # values fall back to the default. See parse_todos / write_todos.
     v = (value or "").strip().lower()
     return v if v in _s.CONFIG.todo_categories else _s.CONFIG.todo_cat_default
 
@@ -39,8 +38,8 @@ def parse_todos(text):
 
 
 def write_todos(todos):
-    # Grouped by H2 section (## Travail / ## Personnel). We always emit every
-    # section to keep the todo file readable and stable, even when empty.
+    # Grouped by H2 section; every section is always emitted (even empty) to keep
+    # the todo file stable.
     parts = []
     for cat in _s.CONFIG.todo_categories:
         parts.append("## {}\n\n".format(_s.CONFIG.todo_cat_headers[cat]))

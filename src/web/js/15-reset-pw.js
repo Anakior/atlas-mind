@@ -21,9 +21,8 @@ function closeResetPassword() {
 }
 
 function onResetPwKey(e) {
-  // stopPropagation: Esc closes ONLY the reset modal (on top of the
-  // Settings panel), not the panel beneath. Listener in capture phase to
-  // run before the document's global handler.
+  // Capture-phase + stopPropagation so Esc closes ONLY this modal (stacked over
+  // Settings), not the panel beneath, and runs before the global handler.
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeResetPassword(); }
 }
 
@@ -53,7 +52,6 @@ resetPwForm.addEventListener('submit', async (e) => {
     });
     clearSettingsError();
     resetPwSuccess.classList.remove('hidden');
-    // Give time to read the success feedback, then close again.
     resetPwCloseTimer = setTimeout(closeResetPassword, 1200);
   } catch (err) {
     resetPwError.textContent = err.message;

@@ -71,10 +71,9 @@ class RemoteSync:
                     _atomic_write_bytes(dest, body)
                 # 2. Delete locally whatever disappeared from the remote manifest.
                 #    Guard: an empty manifest while the mirror still holds files is
-                #    almost always a transient publisher error (offline read, mid
-                #    git-rebase, renamed source) — keep the last good copy rather
-                #    than wiping it (the deletion would otherwise be committed and
-                #    pushed). It self-heals on the next good sync.
+                #    almost always a transient publisher error — keep the last good
+                #    copy (else the deletion gets committed/pushed). Self-heals on
+                #    the next good sync.
                 existing = [p for p in mirror.rglob("*") if p.is_file()]
                 if wanted or not existing:
                     for path in existing:

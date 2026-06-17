@@ -56,8 +56,8 @@ async function showMarkdown(file, highlightQuery) {
   if (editMode) exitEditMode(false);
   currentFile = file;
   // Reset the overrides set by HTML rendering (cf. renderHtmlFrame): a .md doc
-  // that follows a .html must get back the width/padding of the prose article, and the
-  // todos widget (hidden during the HTML preview) must reappear.
+  // after a .html must get back the prose width/padding, and the todos widget
+  // (hidden during the HTML preview) must reappear.
   contentEl.style.maxWidth = '';
   contentEl.style.padding = '';
   document.getElementById('todo-widget')?.classList.remove('hidden');
@@ -74,26 +74,25 @@ async function showMarkdown(file, highlightQuery) {
   breadcrumbDate.textContent = parts.length ? '· ' + parts.join(' · ') : '';
   breadcrumbActions.classList.remove('hidden');
   breadcrumbActions.classList.add('flex');
-  // Mirror doc (under remotes/) = mental node of another atlas, read-only:
-  // no Edit (writing returns 403), no Share (we don't re-share
-  // someone else's content), no ⋯ menu (rename/move/delete = 403 too).
+  // Mirror doc (under remotes/) = read-only mental node of another atlas: no Edit
+  // (write → 403), no Share (don't re-share others' content), no ⋯ menu
+  // (rename/move/delete → 403).
   const isRemoteDoc = (file.path || '').startsWith('remotes/');
   btnEdit.classList.toggle('hidden', isRemoteDoc);
   btnSave.classList.add('hidden');
   btnCancel.classList.add('hidden');
   document.getElementById('btn-share')?.classList.toggle('hidden', isRemoteDoc);
   document.getElementById('btn-more-wrap')?.classList.toggle('hidden', isRemoteDoc);
-  // Remote node actions: visible ONLY on a mirror doc, and never in an offline
-  // build (no server to appropriate/remove against — the buttons would 404).
+  // Remote node actions: only on a mirror doc, never offline (no server to
+  // appropriate/remove against — the buttons would 404).
   const showNodeActions = isRemoteDoc && !IS_OFFLINE_BUILD;
   document.getElementById('btn-node-appropriate')?.classList.toggle('hidden', !showNodeActions);
   document.getElementById('btn-node-remove')?.classList.toggle('hidden', !showNodeActions);
   // Download button label = the doc's actual extension (.md/.html/.pdf/.docx).
   const dlExt = document.getElementById('btn-download-ext');
   if (dlExt) dlExt.textContent = file.ext || '';
-  // History: button only for markdown docs in server mode (the history API is
-  // absent in offline builds / read-only views). Close any panel left open from
-  // the previous doc so it never shows stale revisions.
+  // Close any history panel left open from the previous doc so it never shows
+  // stale revisions; the button itself is gated by historyAvailable().
   closeHistory();
   document.getElementById('btn-history')?.classList.toggle('hidden', !historyAvailable(file));
   updatePinButton(file);
@@ -153,9 +152,9 @@ const historyPathEl = document.getElementById('history-path');
 let historyFile = null;
 
 function historyAvailable(file) {
-  // Inline the protocol check rather than referencing the `isServerMode` const:
-  // showMarkdown calls this synchronously (before its first await), so on an
-  // initial deep-link it runs before that const is initialized (TDZ).
+  // Inline the protocol check rather than reference the `isServerMode` const:
+  // showMarkdown calls this synchronously before its first await, so on an initial
+  // deep-link it can run before that const is initialized (TDZ).
   const serverMode = location.protocol === 'http:' || location.protocol === 'https:';
   return !!file && file.ext === '.md' && serverMode && !IS_OFFLINE_BUILD
     && !window.__viewerMode && !(file.path || '').startsWith('remotes/');
@@ -214,9 +213,8 @@ async function openHistory() {
   historyList.querySelector('button')?.click(); // open the latest revision by default
 }
 
-// `toggle` = { label, handler } for the secondary button: in the document view it
-// switches to the diff ("Voir les changements"), in the diff view it switches back
-// to the document ("Voir cette version"). The document is the default (cf. row click).
+// `toggle` = { label, handler } for the secondary button: document view ↔ diff
+// view. The document is the default (cf. row click).
 function revisionHeader(file, revisions, i, toggle) {
   const rev = revisions[i];
   const wrap = document.createElement('div');
@@ -294,9 +292,9 @@ async function showVersion(file, revisions, i) {
   wrap.innerHTML = renderMd(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
 }
 
-// Restore a doc to a past revision: writes that revision's content back as the
-// current file (a forward-moving change, kept in git history). Admin-only on the
-// server; CSRF is auto-injected by the global fetch wrapper.
+// Restore a doc to a past revision by writing that content back as a new,
+// forward-moving change (kept in git history). Admin-only server-side; CSRF is
+// auto-injected by the global fetch wrapper.
 async function revertToRevision(file, rev) {
   const ok = await confirmDialog({
     title: t('historyRestore'),
@@ -332,18 +330,16 @@ function plainTextNode(text) {
   return pre;
 }
 
-// Unified diff → escaped, color-coded DOM. Diff colors use inline styles (no
-// emerald/green utility is compiled into the precompiled tailwind.css), so the
-// panel renders correctly without a Tailwind rebuild.
+// Unified diff → escaped, color-coded DOM. Diff colors use inline styles because
+// the green/emerald utilities aren't in the precompiled tailwind.css.
 function diffToDom(diffText) {
   const wrap = document.createElement('div');
   wrap.className = 'font-mono text-[15px] leading-relaxed';
   wrap.style.whiteSpace = 'pre-wrap';
   wrap.style.wordBreak = 'break-word';
-  // Everything before the first @@ is git plumbing (diff --git / index / --- / +++):
-  // pure noise for a reader, skipped. Each @@ starts a hunk → a thin separator
-  // instead of the raw marker. After the first @@, every line is real content
-  // (so a content line starting with --- is rendered, not mistaken for a header).
+  // Skip everything before the first @@ (git plumbing: diff --git / index / --- /
+  // +++, noise for a reader). Each @@ → a thin separator. After the first @@ every
+  // line is content, so a content line starting with --- is rendered, not skipped.
   let hunks = 0;
   for (const line of (diffText || '').split('\n')) {
     if (line.startsWith('@@')) {
@@ -356,7 +352,7 @@ function diffToDom(diffText) {
       hunks++;
       continue;
     }
-    if (hunks === 0) continue; // pre-hunk header lines
+    if (hunks === 0) continue;
     const row = document.createElement('div');
     row.className = 'px-2';
     if (line[0] === '+') {
@@ -376,8 +372,7 @@ document.getElementById('btn-history').addEventListener('click', openHistory);
 document.getElementById('history-close').addEventListener('click', closeHistory);
 historyOverlay.addEventListener('click', (e) => { if (e.target === historyOverlay) closeHistory(); });
 
-// Rendering of a .html document: standalone page (slide deck, dashboard…) served
-// as-is in a sandboxed iframe. sandbox="allow-scripts" lets its JS run
-// (keyboard navigation, animations) while isolating it in an opaque origin
-// (no access to the viewer's DOM/cookies); allow="fullscreen" allows
-// fullscreen mode. The raw HTML is never injected into the viewer's DOM.
+// Render a .html doc (slide deck, dashboard…) as-is in a sandboxed iframe.
+// sandbox="allow-scripts" runs its JS but isolates it in an opaque origin (no
+// access to the viewer's DOM/cookies); allow="fullscreen" enables fullscreen.
+// The raw HTML is never injected into the viewer's DOM.

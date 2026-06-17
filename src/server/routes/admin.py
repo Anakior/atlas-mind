@@ -67,10 +67,9 @@ def users_password(handler):
             # An 'api' account has no usable password: no reset.
             handler._send_json(404, {"error": "user not found"})
             return
-        # Bump the epoch AT THE SAME TIME as the new hash: a password reset
-        # invalidates all existing sessions of the account (a stolen cookie
-        # becomes unusable). reset_login_failures also unlocks the account
-        # (the admin takes responsibility for the manual unlock).
+        # Bump the epoch together with the new hash: a password reset invalidates
+        # all existing sessions (a stolen cookie becomes unusable).
+        # reset_login_failures also unlocks the account (manual admin unlock).
         _s.get_store().upsert_user(email, {
             "password_hash": store.hash_password(password),
             "session_epoch": int(user.get("session_epoch") or 0) + 1,
@@ -122,10 +121,9 @@ def users_delete(handler):
         if user is None:
             handler._send_json(404, {"error": "user not found"})
             return
-        # Pre-check for a readable 409 BEFORE any write; the REAL guard
-        # against lockout is atomic in delete_user (count + deletion under
-        # the same lock/transaction) — two concurrent DELETEs on the last two
-        # admins can no longer both fall to zero.
+        # Pre-check for a readable 409; the REAL anti-lockout guard is atomic in
+        # delete_user (count + deletion under one lock), so two concurrent DELETEs
+        # on the last admins can't both fall to zero.
         if user.get("role") == "admin" and _s.get_store().count_admins() <= 1:
             handler._send_json(409, {"error": "cannot delete the last admin"})
             return
@@ -409,8 +407,8 @@ def remotes_appropriate(handler):
         copied = 1
     else:
         sources = [p for p in src.rglob("*") if p.is_file()]
-        # Mirror the single-file 409 guard: never silently overwrite the
-        # admin's own (non-mirror) documents — appropriate makes a NEW copy.
+        # Like the single-file 409 guard: never silently overwrite the admin's
+        # own docs — appropriate always makes a NEW copy.
         if any((dest_path / f.relative_to(src).as_posix()).exists()
                for f in sources):
             handler._send_json(409, {"error": "destination exists"})

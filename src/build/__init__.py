@@ -1,12 +1,10 @@
 """build — the viewer build pipeline (public facade).
 
 `python -m build` is the entrypoint (see __main__); the logic lives in the
-submodules: paths (engine paths + identity defaults), parse (pure indexing),
-assets (extensions + vendor inlining), render (template substitution). This
-module re-exports the public surface that server.py reaches via _import_build
-and that the tests import, and it owns the tree walk + the EXCLUDED_NAMES
-exclusion set (server.py monkey-patches build.EXCLUDED_NAMES at runtime; walk
-reads it at call time, so the override takes effect)."""
+submodules: paths, parse, assets, render. Re-exports the public surface that
+server.py reaches via _import_build and that the tests import, and owns the tree
+walk + EXCLUDED_NAMES (server.py monkey-patches it at runtime; walk reads it at
+call time, so the override takes effect)."""
 from __future__ import annotations
 
 import re
@@ -15,11 +13,10 @@ import sys
 from pathlib import Path
 
 # Same self-bootstrap as src/server/__init__.py: the FLAT intra-package imports
-# below ("from build.X import …") must resolve under BOTH "python -m build"
-# (dev/tests, engine src on PYTHONPATH) and "python -m atlas_mind.build" (the
-# installed package, whose directory is NOT on sys.path). Put the package's parent
-# on the path and alias this module as the flat "build", so a "from build.X import"
-# binds to THIS module instead of re-importing — and double-executing — it.
+# below ("from build.X import …") must resolve under BOTH "python -m build" and
+# "python -m atlas_mind.build" (installed package, whose dir is NOT on sys.path).
+# Put the package's parent on the path and alias this module as "build", so a
+# "from build.X import" binds to THIS module instead of double-executing it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.modules.setdefault("build", sys.modules[__name__])
 
@@ -40,12 +37,10 @@ from build.assets import (  # noqa: F401
 from build.render import render_template, render_manifest  # noqa: F401
 
 # Tree exclusions. server.py overrides EXCLUDED_NAMES from CONFIG.excluded_names
-# at runtime (_import_build); walk() reads it AT CALL TIME, so the override takes
-# effect. EXCLUDED_PREFIXES keeps dotfiles (.notes/, etc.) out of the tree.
+# at runtime (_import_build); walk() reads it AT CALL TIME. EXCLUDED_PREFIXES
+# keeps dotfiles (.notes/, etc.) out of the tree.
 EXCLUDED_NAMES = {"quick.md"}
 EXCLUDED_PREFIXES = (".",)
-
-# ─── Tree walk ────────────────────────────────────────────────────────────────
 
 
 def _count_words(text: str) -> int:
@@ -57,19 +52,16 @@ def _git_commit_dates(repo_root: Path) -> dict[str, int]:
 
     `repo_root` is the git repo root of the MIND (the parent of content/).
 
-    The activity heatmap must reflect when docs were actually written, not their
-    disk mtime: git does not preserve mtime (clone/pull/checkout/reset reset it
-    to the time of the operation), so on the Fly server all files inherit the
-    date of the last deployment. We read the commit date instead.
+    The activity heatmap must reflect when docs were actually written, not disk
+    mtime: git does not preserve mtime (clone/pull/checkout reset it), so on Fly
+    all files would inherit the last deployment date. We use the commit date.
 
-    `git log` outputs in reverse-chronological order → the 1st occurrence of a
-    path is its most recent commit. Returns {} if git is unavailable (fallback
-    on st_mtime).
+    `git log` outputs reverse-chronological → the 1st occurrence of a path is its
+    most recent commit. Returns {} if git is unavailable (st_mtime fallback).
 
-    NB: recomputed on every walk() call (via _accum), and most definitely NOT
-    cached at the module level — the server is a long-lived process that calls
-    walk() again on /api/tree after each pull; a cache would freeze the dates
-    until restart.
+    Recomputed on every walk() call (via _accum), never cached at module level:
+    the long-lived server calls walk() again on /api/tree after each pull; a
+    cache would freeze the dates until restart.
     """
     try:
         out = subprocess.run(
@@ -87,8 +79,7 @@ def _git_commit_dates(repo_root: Path) -> dict[str, int]:
         if line.startswith("__C__"):
             ts = int(line[5:])
         elif line and ts:
-            # Repo-relative paths (content/projets/x.md); we strip the content/
-            # prefix to match the doc identity (rel = relative_to content/).
+            # Strip the content/ prefix to match the doc identity (rel).
             key = line[8:] if line.startswith("content/") else line
             if key not in dates:
                 dates[key] = ts
@@ -120,9 +111,9 @@ def walk(path: Path, *, content_root: Path | None = None,
         excluded_prefixes = EXCLUDED_PREFIXES
     if _accum is None:
         _accum = {"md_files": []}
-    # Computed once per top-level walk() (recursive calls find it already
-    # present), never cached at the module level — see _git_commit_dates. The
-    # git repo root of the mind = parent of content/.
+    # Computed once per top-level walk() (recursive calls reuse it), never cached
+    # at module level — see _git_commit_dates. The mind's git root = parent of
+    # content/.
     if "git_dates" not in _accum:
         _accum["git_dates"] = _git_commit_dates(content_root.parent)
     node = {"name": path.name, "type": "dir", "children": []}
@@ -151,7 +142,7 @@ def walk(path: Path, *, content_root: Path | None = None,
             "path": rel,
             "ext": ext,
             # Git commit date (true writing activity); st_mtime fallback for
-            # unversioned files or files outside the git repo. See _git_commit_dates.
+            # unversioned files. See _git_commit_dates.
             "mtime": _accum["git_dates"].get(rel, int(child.stat().st_mtime)),
         }
         # Folder-derived tags apply to EVERY file (md, html, pdf, docx, …) so
@@ -160,22 +151,18 @@ def walk(path: Path, *, content_root: Path | None = None,
         tags = _folder_tags(rel)
         if ext == ".md":
             try:
-                # utf-8-sig absorbs the BOM (Windows editors: Notepad,
-                # PowerShell Out-File) which would otherwise break the
-                # frontmatter match (_FM_RE anchored on ^---) and display the
-                # tags block in plain text.
+                # utf-8-sig absorbs the BOM (Windows editors) which would
+                # otherwise break the frontmatter match (_FM_RE anchored on ^---).
                 text = child.read_text(encoding="utf-8-sig")
             except (OSError, UnicodeDecodeError) as e:
                 # A single unreadable .md must not fail the WHOLE rebuild (the
-                # webhook would stay stuck on the old version). We keep the node
-                # in the tree but without metadata, just as load_all_notes
-                # tolerates a faulty sidecar.
+                # webhook would stay stuck on the old version): keep the node
+                # without metadata.
                 print(f"[build] skip metadata for {rel}: {e}", file=sys.stderr)
                 text = None
             if text is not None:
                 tags_fm, body = _parse_frontmatter(text)
-                # Tags = parent folders (always) ∪ frontmatter (custom). Folder
-                # tags remain even if the doc has explicit tags.
+                # Tags = parent folders (always) ∪ frontmatter (custom).
                 for t in tags_fm:
                     if t not in tags:
                         tags.append(t)
@@ -185,11 +172,10 @@ def walk(path: Path, *, content_root: Path | None = None,
                 if embed_content:
                     file_node["content"] = text
         elif ext == ".html":
-            # Self-contained HTML document (deck, dashboard): no frontmatter nor
-            # wikilinks to parse. We count the words of the visible text (tags
-            # stripped) for the reading time, and embed it as-is in the offline
-            # build. body="" → ignored by the wikilink scan; still a possible
-            # [[link]] target via by_path/by_stem.
+            # Self-contained HTML doc (deck, dashboard): no frontmatter/wikilinks.
+            # Count the visible text (tags stripped) for the reading time and
+            # embed it as-is offline. body="" → skipped by the wikilink scan, but
+            # still a possible [[link]] target via by_path/by_stem.
             try:
                 text = child.read_text(encoding="utf-8-sig")
             except (OSError, UnicodeDecodeError) as e:

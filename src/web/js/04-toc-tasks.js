@@ -11,19 +11,13 @@ function wireTaskCheckboxes(file, fullContent) {
       const desired = box.checked;
       const newContent = toggleNthTaskMarker(docContent, index, desired);
       if (newContent == null) { box.checked = !desired; return; }
-      // Happy flow: the box is already checked (native toggle), we advance the
-      // optimistic state right away and send the PUT IN THE BACKGROUND — no wait, no
-      // re-render. We set the returned mtime on currentFile so the
-      // live-reload SSE that follows the commit doesn't re-render the doc needlessly.
+      // Optimistic: advance local state now, PUT in the background, no re-render.
       const prev = docContent;
       docContent = newContent;
       contentCache.set(file.path, newContent);
       if (currentFile && currentFile.path === file.path) currentFile.content = newContent;
-      // The server commit will trigger a live-reload SSE; we neutralize it for
-      // this doc for a few seconds (we already have the correct render).
-      _selfSaveUntil[file.path] = Date.now() + 6000;
-      // Tracked in _taskWrites so the live task rollup (loadTasksIndex) waits for
-      // this write to land before reading /_tasks-index.json off the disk.
+      _selfSaveUntil[file.path] = Date.now() + 6000;   // mute the self-triggered SSE reload
+      // Tracked in _taskWrites so the rollup waits for it before reading from disk.
       const write = fetch('/api/file', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

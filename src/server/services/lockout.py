@@ -18,7 +18,7 @@ import time
 
 LOCKOUT_THRESHOLD = 5          # failures before the first lock
 LOCKOUT_BASE_SECONDS = 60      # duration of the 1st lock
-LOCKOUT_MAX_SECONDS = 3600     # backoff cap (1 h)
+LOCKOUT_MAX_SECONDS = 3600     # backoff cap
 _AUTH_STATE_FILE = "auth_state.json"
 
 
@@ -51,11 +51,9 @@ class LockoutTracker:
     def _ensure_gitignored(directory) -> None:
         """Drops a .gitignore "*" in the registry directory if it does not exist.
 
-        The store_dir lives by default under ROOT/.atlas, INSIDE the content repo:
-        auth_state.json (per-email failure counters) must never be committed.
-        FileStore already writes this .gitignore; we also drop it here as a
-        backstop to cover the lockout file. Best-effort (a failure does not block
-        the login)."""
+        store_dir lives by default under ROOT/.atlas, INSIDE the content repo:
+        auth_state.json must never be committed. FileStore already writes this
+        .gitignore; this is a backstop covering the lockout file. Best-effort."""
         try:
             directory.mkdir(parents=True, exist_ok=True)
             if (directory / ".git").exists():

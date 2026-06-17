@@ -3,9 +3,8 @@ function renderTodos() {
   const total = inCat.length;
   const done = inCat.filter(t => t.done).length;
   const pendingAll = todos.filter(t => !t.done).length;
-  // The title always shows the cumulative total (both categories), collapsed or
-  // expanded: a single, unambiguous behavior. The remaining count per category is
-  // already visible on the Work/Personal tabs (renderTodoFilterTabs).
+  // Title shows the cumulative total across both categories; the per-category
+  // remaining count already lives on the Work/Personal tabs.
   todoCount.textContent = pendingAll ? t('nPending', pendingAll) : '';
   todoBubbleCount.textContent = pendingAll > 9 ? '9+' : String(pendingAll);
   todoBubbleCount.classList.toggle('empty', pendingAll === 0);
@@ -14,7 +13,6 @@ function renderTodos() {
   updateHomeTodoStat();
   updateTabBadge();
 
-  // Controls bar: visible as soon as there is at least one completed task
   const controls = document.getElementById('todo-controls');
   const toggleLabel = document.getElementById('todo-toggle-label');
   const toggleIcon = document.getElementById('todo-toggle-icon');
@@ -24,7 +22,6 @@ function renderTodos() {
     toggleLabel.textContent = showDoneTodos
       ? t('hideDone', done)
       : t('showDone', done);
-    // Chevron rotation: down when hidden (can reveal), up when shown
     toggleIcon.style.transform = showDoneTodos ? 'rotate(180deg)' : '';
   } else {
     controls.classList.add('hidden');
@@ -154,7 +151,6 @@ todoList.addEventListener('click', async (e) => {
   }
 });
 
-// Work / Personal filter — stored in localStorage
 document.getElementById('todo-filter').addEventListener('click', (e) => {
   const btn = e.target.closest('.todo-filter-btn');
   if (!btn || btn.dataset.cat === todoFilter) return;
@@ -163,14 +159,12 @@ document.getElementById('todo-filter').addEventListener('click', (e) => {
   renderTodos();
 });
 
-// Toggle display of completed tasks
 document.getElementById('todo-toggle-done').addEventListener('click', () => {
   showDoneTodos = !showDoneTodos;
   localStorage.setItem('todo-show-done', showDoneTodos ? '1' : '0');
   renderTodos();
 });
 
-// Clear all completed tasks
 document.getElementById('todo-clear-done').addEventListener('click', async () => {
   const doneTodos = todos.filter(t => t.done && tcat(t) === todoFilter);
   if (doneTodos.length === 0) return;
@@ -181,9 +175,8 @@ document.getElementById('todo-clear-done').addEventListener('click', async () =>
     destructive: true,
   });
   if (!ok) return;
-  // Delete by descending id (the server indexes by position in the list,
-  // so deleting index N first shifts all > N — we take the largest
-  // ones first to keep indices stable on the server side).
+  // Delete largest id first: the server indexes by position, so deleting N shifts
+  // all > N; descending order keeps the remaining indices valid.
   const idsDesc = doneTodos.map(t => t.id).sort((a, b) => b - a);
   try {
     setStatus(t('clearing'), 'info');

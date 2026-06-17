@@ -25,10 +25,9 @@ def logout_all(handler):
 
 
 def totp_init(handler):
-    """POST /api/account/totp/init: generates a candidate TOTP secret and
-    returns the otpauth:// URI + the plaintext secret (shown ONCE). The
-    secret is NOT active yet: it must be confirmed via /enable. We store it
-    as pending (totp_pending_secret) until confirmation."""
+    """POST /api/account/totp/init: generates a candidate TOTP secret, returns the
+    otpauth:// URI + plaintext secret (shown ONCE). Not active yet — stored as
+    totp_pending_secret until confirmed via /enable."""
     sess = handler._session()
     email = sess.get("email")
     user = _s.get_store().get_user_by_email(email) or {}
@@ -78,8 +77,8 @@ def totp_enable(handler):
         print(f"[account] totp enable: {e}", file=sys.stderr)
         handler._send_json(503, {"error": "registry unavailable"})
         return
-    # The epoch changed: we reissue fresh cookies so we don't log out
-    # the user who just enabled their 2FA from THIS session.
+    # Epoch changed: reissue fresh cookies so we don't log out the user who just
+    # enabled 2FA from THIS session.
     new_epoch = _s.current_session_epoch(email)
     handler.send_response(200)
     for cookie in handler._session_cookie_pair(

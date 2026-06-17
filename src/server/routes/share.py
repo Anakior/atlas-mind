@@ -25,10 +25,10 @@ def _suggest_current_path(old_rel: str):
     admin reactivation prompt, never authoritative."""
     repo_old = "content/" + old_rel
     try:
-        # No pathspec: restricting to the old path BEFORE rename detection would
-        # hide the "add" side and degrade the rename to a plain delete. -M over the
-        # full tree keeps the "R<score>\t<src>\t<dst>" rows; the log is newest-first,
-        # so the first row whose source is repo_old is the latest move.
+        # No pathspec: restricting to the old path before rename detection would
+        # degrade the rename to a plain delete. -M over the full tree keeps the
+        # "R<score>\t<src>\t<dst>" rows; log is newest-first, so the first row whose
+        # source is repo_old is the latest move.
         out = _s.git("log", "-M", "--diff-filter=R", "--name-status", "--format=")
     except Exception:
         return None

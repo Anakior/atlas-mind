@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import re
 
-# ─── Frontmatter (tags) + wikilinks graph ──────────────────────────────────────
-
 _FM_RE = re.compile(r"^---[ \t]*\r?\n(.*?)\r?\n---[ \t]*\r?\n?", re.S)
 
 

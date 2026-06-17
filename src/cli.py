@@ -49,8 +49,7 @@ from config import AtlasConfig, AtlasConfigError  # noqa: E402
 
 MIN_PASSWORD_LENGTH = 8
 DEFAULT_TOKEN_LABEL = "claude"
-# Unusable-password sentinel for 'api' accounts: source of truth in store.py
-# (shared with the server's admin endpoints).
+# Source of truth in store.py (shared with the server's admin endpoints).
 UNUSABLE_PASSWORD_HASH = store.UNUSABLE_PASSWORD_HASH
 
 
@@ -83,9 +82,9 @@ def _file_store(config: AtlasConfig) -> store.FileStore:
 
 
 def _run_build(mind: Path, *, offline: bool = False) -> int:
-    """Build the mind's viewer via `python -m build` (inherited output, visible to
-    the user). Always the ENGINE's build: PYTHONPATH puts the engine src first, so
-    a mind never builds with its own (now-forbidden) shipped build."""
+    """Build the mind's viewer via `python -m build` (inherited output). Always the
+    ENGINE's build: PYTHONPATH puts the engine src first, so a mind never builds
+    with its own (now-forbidden) shipped build."""
     env = os.environ.copy()
     env["ATLAS_MIND"] = str(mind)
     env["PYTHONPATH"] = str(ENGINE_SRC) + os.pathsep + env.get("PYTHONPATH", "")
@@ -110,8 +109,7 @@ def _format_timestamp(value) -> str:
 DEFAULT_TAGLINE_EN = "Personal knowledge base."
 DEFAULT_TAGLINE_FR = "Base de connaissances personnelle."
 
-# atlas.toml is parameterized by the chosen prefix/tagline/lang (see
-# _render_atlas_toml). Only THIS template is .format()'d — the scaffolded docs
+# Only THIS template is .format()'d (prefix/tagline/lang) — the scaffolded docs
 # below are written verbatim (they contain literal { } that are not placeholders).
 ATLAS_TOML_TEMPLATE = """\
 # Atlas mind configuration — every key is optional.
@@ -591,12 +589,9 @@ def cmd_init(args) -> int:
     # keeps it out of the viewer (EXCLUDED_PREFIXES).
     _scaffold_file(mind / "content" / "inbox" / ".gitkeep", "", created, kept)
     # Extensions hook (CSS/JS inlined at build, *.py loaded at server boot):
-    # empty, ready-to-use folder — mechanism documented in a comment in
-    # atlas.toml.
+    # empty ready-to-use folder, documented in atlas.toml.
     _scaffold_file(mind / ".atlas" / "extensions" / ".gitkeep", "",
                    created, kept)
-    # "AI-native" scaffolding: Atlas is designed as the external memory shared
-    # with an AI assistant. We ship enough to bootstrap that workflow.
     for rel, content in _scaffold_docs(lang):
         _scaffold_file(mind / rel, content, created, kept)
 
@@ -609,8 +604,7 @@ def cmd_init(args) -> int:
         print(f"  kept    : {path.relative_to(mind)} (existing, untouched)")
     print(f"  git     : {git_message}")
     print()
-    # Absolute paths in the next-steps so every command is copy-pasteable from
-    # ANY working directory (a relative `git -C <dir>` only works from the parent).
+    # Absolute paths so every command is copy-pasteable from ANY working directory.
     print("Next steps:")
     print(f"  {_invocation()} serve {mind}")
     print(f"  {_invocation()} user add {mind} --email you@example.com")
@@ -652,7 +646,7 @@ def cmd_serve(args) -> int:
     # puts the engine src first so `-m server` resolves the engine's server.
     os.execve(sys.executable,
               [sys.executable, "-m", "server"], env)
-    return 0  # never reached
+    return 0  # unreachable
 
 
 def cmd_build(args) -> int:
@@ -664,10 +658,9 @@ def cmd_build(args) -> int:
 
 
 # ─── deploy ──────────────────────────────────────────────────────────────────
-# `atlas deploy` scaffolds ready-to-use deployment files (cloud mode) into
-# <mind>/deploy/ and prints a step-by-step "going online" guide. The templates
-# are self-contained (they pull the engine from PyPI) so they work for a plain
-# `pip install atlas-mind` user, with no clone of this repo.
+# Scaffolds deployment files into <mind>/deploy/ + prints a "going online" guide.
+# The templates are self-contained (pull the engine from PyPI) so they work for a
+# plain `pip install atlas-mind` user, with no clone of this repo.
 
 DEPLOY_DOCKERFILE = """\
 # Atlas Mind container image — installs the engine from PyPI.
@@ -1028,10 +1021,9 @@ def _fly_wizard(mind: Path, app_name: str, region: str) -> int:
 def cmd_deploy(args) -> int:
     mind = _require_mind(args.dir)
 
-    # Fly needs a globally-unique app name. Default = a slug of the mind folder
-    # (so no manual edit); prompt on a TTY; --app overrides. Always normalized to
-    # a valid name. The chosen name is baked into the generated fly.toml AND the
-    # printed commands, so the whole guide is copy-pasteable as-is.
+    # Fly needs a globally-unique app name (default = slug of the mind folder,
+    # prompted on a TTY, --app overrides). Baked into the generated fly.toml AND
+    # the printed commands so the whole guide is copy-pasteable as-is.
     app_name = None
     if args.target == "fly":
         chosen = args.app
@@ -1102,8 +1094,7 @@ def cmd_deploy(args) -> int:
         print( "  Follow the commented header of deploy/atlas.service (create the atlas user,")
         print( "  the venv, install atlas-mind, place your mind, set SESSION_SECRET via")
         print( "  `systemctl edit atlas`, then enable the service). Front it with Caddy/nginx for TLS.")
-    # Symmetry with `update`: the upgrade command is printed right next to the
-    # deploy, so "going online" and "staying up to date" are never two hunts.
+    # Print the upgrade command right next to the deploy (mirror of `update`).
     print()
     update_hint = f"{_invocation()} update --target {args.target}"
     if args.target == "fly" and app_name:
@@ -1113,10 +1104,10 @@ def cmd_deploy(args) -> int:
 
 
 def cmd_update(args) -> int:
-    """Update a DEPLOYED instance to the newest engine — the mirror of `deploy`,
-    so "staying up to date" is never a separate hunt. Prints the exact command
-    for the target (and runs it with --run for fly/compose). The pip-based images
-    cache the install layer, hence the --no-cache that forces the new version."""
+    """Update a DEPLOYED instance to the newest engine (mirror of `deploy`). Prints
+    the exact command for the target (runs it with --run for fly/compose). The
+    pip-based images cache the install layer, hence the --no-cache that forces the
+    new version."""
     target = args.target
 
     if target == "fly":
@@ -1171,9 +1162,8 @@ def cmd_update(args) -> int:
 
 def _normalize_email(raw: str) -> str:
     email = (raw or "").strip().lower()
-    # \s covers space, tab and newline (a stored control character would be
-    # re-printed raw by `atlas user list`); both sides of the @ are
-    # mandatory ("@" alone used to pass before).
+    # \s rejects whitespace/control chars (would be re-printed raw by `user list`);
+    # both sides of the @ are mandatory.
     if not re.fullmatch(r"[^@\s]+@[^@\s]+", email):
         raise CliError(f"invalid email: {raw!r}")
     return email
@@ -1261,8 +1251,8 @@ def cmd_token_create(args) -> int:
             f"{email} is already taken by a {existing.get('role')!r} account — "
             "choose another label.")
 
-    # Token format (256 bits, SHA256 stored, role 'api') factored into
-    # store.new_api_token_fields — shared with the server's admin endpoints.
+    # Token format factored into store.new_api_token_fields — shared with the
+    # server's admin endpoints.
     token, fields = store.new_api_token_fields(
         args.label, set_unusable_password=existing is None)
     file_store.upsert_user(email, fields)
@@ -1374,8 +1364,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--force", action="store_true",
                         help="Scaffold even if the directory is not empty "
                              "(existing files are kept).")
-    # Personalization: prompted interactively on a TTY, or set via these flags
-    # (and --yes to skip the prompts entirely — CI/non-interactive).
+    # Prompted on a TTY, or set via these flags (--yes skips the prompts).
     p_init.add_argument("--lang", choices=("en", "fr"), default=None,
                         help="Interface language (default: en).")
     p_init.add_argument("--prefix", default=None,
@@ -1498,10 +1487,8 @@ def main(argv=None) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     except (OSError, ValueError) as e:
-        # Environment errors (PermissionError on init/mkstemp, full disk…) and
-        # corrupted registry (ValueError "users.json illisible ou corrompu"
-        # from store._load, deliberately raised for the server's fail-closed):
-        # human message, never a traceback for these cases.
+        # Environment errors (PermissionError, full disk…) and corrupted registry
+        # (ValueError from store._load): human message, never a traceback.
         print(f"Error: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

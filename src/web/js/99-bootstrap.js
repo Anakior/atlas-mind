@@ -1,7 +1,7 @@
 if (isServerMode) {
   fetch('/api/me').then(r => r.json()).then(data => {
     meState = data;
-    // CSRF token: authoritative for all mutating requests (cf. fetch wrapper).
+    // Authoritative CSRF token for all mutating requests (cf. fetch wrapper).
     if (data.csrf_token) setCsrfToken(data.csrf_token);
     if (typeof data.totp_enabled === 'boolean') totpEnabled = data.totp_enabled;
     if (data.cloud && data.authenticated && data.email) {
@@ -13,14 +13,12 @@ if (isServerMode) {
       document.body.classList.add('viewer-mode');
       window.__viewerMode = true;
     }
-    // Settings gear: reserved for admins in cloud mode (account/token
-    // management only makes sense where auth is active). Locally the simulated
-    // admin has no one to manage; so we don't expose the panel.
+    // Settings gear: cloud admins only — account/token management is moot
+    // without active auth, and the local simulated admin has no one to manage.
     if (data.cloud && data.authenticated && data.role === 'admin') {
       document.body.classList.add('admin-cloud');
     }
-    // Security tab (2FA + sessions): any authenticated account in cloud mode,
-    // admin OR viewer. Shown via the cloud-authed class (cf. CSS).
+    // Security tab (2FA + sessions): any authenticated cloud account, admin OR viewer.
     if (data.cloud && data.authenticated) {
       document.body.classList.add('cloud-authed');
       refreshSecurityState();
@@ -30,7 +28,7 @@ if (isServerMode) {
   refresh();
   setInterval(refresh, 10000);
 
-  // Soft reload: instead of location.reload(), we fetch /api/tree and update the DOM.
+  // Soft reload: fetch /api/tree and patch the DOM in place instead of location.reload().
   async function softReload() {
     if (editMode) return;
     if (document.querySelector('.todo-edit')) return;
@@ -40,9 +38,8 @@ if (isServerMode) {
     if (!dirRenameBackdrop.classList.contains('hidden')) return;
     // Extension modals ([data-atlas-modal]): same consideration as the native ones.
     if (document.querySelector('[data-atlas-modal]:not(.hidden)')) return;
-    // Echo of an edit we just made ourselves (checkbox toggle): the viewer
-    // already shows the right state, we skip this reload to avoid the flash
-    // (the window extends on each toggle, then live-reload resumes).
+    // Skip the echo of an edit we just made ourselves (checkbox toggle) to avoid a
+    // flash; the window extends on each toggle, then live-reload resumes.
     if (currentFile && _selfSaveUntil[currentFile.path] && Date.now() < _selfSaveUntil[currentFile.path]) return;
     try {
       const res = await fetch('/api/tree');
@@ -109,11 +106,10 @@ if (isServerMode) {
     es.addEventListener('error', () => {});
   } catch (e) {}
 
-  // Service worker: offline + instant loading (PWA). Cf. /sw.js. On deploy the new
-  // SW (skipWaiting + clients.claim in sw.js) takes control → we reload ONCE to pick
-  // up the fresh shell/assets, so an update never needs a manual unregister. We skip
-  // the first-ever install (no prior controller) and never clobber an open editor —
-  // a deferred update is retried when the tab regains focus.
+  // Service worker (offline + instant loading PWA, cf. /sw.js). On deploy the new
+  // SW takes control → reload ONCE to pick up fresh assets (no manual unregister).
+  // Skip the first-ever install, never clobber an open editor (deferred update
+  // retried when the tab regains focus).
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     let _swReloading = false, _swUpdatePending = false, _swReg = null;
     const _hadController = !!navigator.serviceWorker.controller;
@@ -134,16 +130,14 @@ if (isServerMode) {
     });
     window.addEventListener('load', () => {
       // updateViaCache:'none' → the SW script is always revalidated against the
-      // network (server already sends Cache-Control:no-cache), so a new version is
-      // detected promptly. reg.update() forces that check on each load.
+      // network, so a new version is detected promptly; reg.update() forces that check.
       navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
         .then((reg) => { _swReg = reg; reg.update(); })
         .catch((e) => console.warn('SW register failed', e));
     });
   }
 } else {
-  // file:// mode: no server. If we have an EMBED_CONTENT, we can still read.
-  // Otherwise (never in practice), we degrade.
+  // file:// mode: no server. Reading still works via EMBED_CONTENT.
   todoList.innerHTML = '<li class="px-3 py-4 text-center text-xs text-slate-500">' + t('fileModeTodosHtml') + '</li>';
   todoInput.disabled = true;
   todoForm.querySelector('button').disabled = true;

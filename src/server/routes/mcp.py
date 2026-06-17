@@ -12,7 +12,6 @@ def handle(handler):
     - GET with Accept: text/event-stream → SSE stream (keep-alive, for
       server→client notifications); otherwise 405.
     """
-    # Extract the token from the path: /mcp/<token>[/...]
     parts = handler.path.split("?", 1)[0].strip("/").split("/")
     if len(parts) < 2 or parts[0] != "mcp":
         handler._send_json(404, {"error": "not found"})
@@ -21,7 +20,7 @@ def handle(handler):
     if not _s._verify_mcp_token(token):
         handler._send_json(401, {"error": "invalid mcp token"})
         return
-    # Rate limit (shared with the REST API)
+    # Rate limit shared with the REST API.
     if not _s.api_rate_limit_ok(_s._hash_api_token(token)):
         handler._send_json(429, {"error": "rate limit exceeded"})
         return
@@ -61,7 +60,6 @@ def handle(handler):
             handler._send_json(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
             return
 
-        # Batch or single request
         if isinstance(req, list):
             responses = [r for r in (_s._mcp_jsonrpc(item) for item in req) if r is not None]
             if not responses:

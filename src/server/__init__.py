@@ -49,17 +49,13 @@ import sys
 import threading
 import time
 
-# The intra-package imports below are FLAT (`from server.X import …`,
-# `import server as _s`, `import store`/`config`/`build`) so the very same code
-# runs under both entry points. This must be bootstrapped BEFORE the first flat
-# import:
-#   • put this package's parent dir on sys.path so `server`/`store`/`config`/
-#     `build` resolve under `python -m atlas_mind.server` (the pip-installed prod
-#     entry, whose package dir is NOT on the path) as well as `python -m server`
-#     (dev/tests, engine src already on PYTHONPATH);
-#   • alias this module as the flat `server`, so a `from server.X import` binds to
-#     THIS module rather than importing — and double-executing — the package under
-#     a second name.
+# Intra-package imports below are FLAT so the same code runs under both entry
+# points. Bootstrapped BEFORE the first flat import:
+#   • put the parent dir on sys.path so `server`/`store`/`config`/`build` resolve
+#     under `python -m atlas_mind.server` (pip prod, package dir NOT on the path)
+#     as well as `python -m server` (dev/tests);
+#   • alias this module as flat `server` so `from server.X import` binds to THIS
+#     module instead of re-importing (and double-executing) the package.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.modules.setdefault("server", sys.modules[__name__])
 
@@ -75,22 +71,18 @@ import store  # identity/share registry: FileStore (JSON under .atlas/)
 from config import AtlasConfig, AtlasConfigError, resolve_mind_root
 
 # WHITE-BOX TEST CONTRACT — tests/test_admin.py imports server._is_newer and
-# server._evict_stale_buckets; keep these two re-exports for the life of the package.
+# server._evict_stale_buckets; keep these two re-exports.
 from server.services.rate_limit import _evict_stale_buckets  # noqa: F401
 from server.services.update_check import _is_newer, _version_tuple  # noqa: F401
 
 from server.context import AppContext, AtlasHTTPServer
 from server.pure import docs  # document-domain logic (path validation / traversal / move)
 
-# The SINGLE server configuration object (paths, port, auth, todos, store…).
-# Built in __main__ — after the possible clone in cloud mode, so that
-# <mind>/atlas.toml is readable at read time. No more reassignment of derived
-# globals: everything goes through CONFIG (env > toml > defaults,
-# see src/config.py).
+# The single server config object. Built in run() AFTER the possible cloud clone
+# so <mind>/atlas.toml is readable (env > toml > defaults, see src/config.py).
 CONFIG = None  # type: AtlasConfig
-# The application context (config + services), built once by run() and carried by
-# AtlasHTTPServer (self.server.context). The migration moves readers off the
-# module globals onto it, one concern at a time — see plan-appcontext.
+# Application context (config + services), built once by run() and carried by
+# AtlasHTTPServer (self.server.context).
 _CTX = None  # type: AppContext
 
 from server.pure.todos_md import (  # noqa: F401
@@ -123,13 +115,11 @@ from server.extensions import load_server_extensions  # noqa: F401
 def _exclude_store_dir_from_git(store_dir):
     """Adds the registry directory to .git/info/exclude (idempotent).
 
-    The registry (password hashes, api_token_hash, SHA256 of share-tokens)
-    lives by default under ROOT/.atlas — INSIDE the content git repo that
-    trigger_sync/pull_and_rebuild commit via `git add -A` then push to GitHub.
-    Without exclusion, these derived secrets enter the git history forever (and
-    state.json, rewritten on every Bearer request, generates commit churn).
-    Belt AND braces with the .gitignore "*" that FileStore writes in its own
-    directory. Best-effort: a failure does not block the boot."""
+    The registry (password/token hashes) lives by default under ROOT/.atlas,
+    INSIDE the content repo that trigger_sync commits via `git add -A` and pushes.
+    Without exclusion these secrets would enter git history forever (and
+    state.json's per-request churn). Belt-and-braces with the "*" .gitignore
+    FileStore writes. Best-effort: a failure does not block boot."""
     git_dir = CONFIG.root / ".git"
     if not git_dir.is_dir():
         return
@@ -156,23 +146,21 @@ def _exclude_store_dir_from_git(store_dir):
 
 
 def build_store(config):
-    """Build the identity/share registry (FileStore, see src/store.py) and
-    best-effort exclude its directory from git — it holds password/token hashes
-    and must never be committed/pushed. Called once from run().
+    """Build the identity/share registry (FileStore) and best-effort exclude its
+    directory from git — it holds password/token hashes and must never be
+    committed. Called once from run().
 
-    config.store_dir: registry location, default <mind>/.atlas (overridden by env
-    ATLAS_STORE_DIR or atlas.toml). In cloud, point it at a persistent volume
-    outside the repo (the Fly rootfs is ephemeral AND the content repo must not
-    carry credentials); without a volume, cloud LOSES users/shares on every
-    machine recreation — the registry is deliberately never committed/pushed."""
+    config.store_dir defaults to <mind>/.atlas. In cloud, point it at a persistent
+    volume outside the repo (the Fly rootfs is ephemeral AND the content repo must
+    not carry credentials); without a volume, cloud LOSES users/shares on every
+    machine recreation."""
     st = store.FileStore(config.store_dir)
     _exclude_store_dir_from_git(config.store_dir)
     return st
 
 
 def get_store():
-    """The identity/share registry (FileStore). Single delegation seam to the
-    AppContext — the call sites read it unchanged."""
+    """The identity/share registry (FileStore). Delegation seam to the AppContext."""
     return _CTX.store
 
 
@@ -219,17 +207,13 @@ def reset_login_failures(email: str) -> None:
     _CTX.lockout.reset_failures(email)
 
 
-# ─── API Bearer auth (for external connectors: Claude.ai, MCP, etc.) ───
+# ─── API Bearer auth (external connectors: Claude.ai, MCP, etc.) ───
 #
-# The /api/v1/* endpoints are protected by a Bearer token independent of the
-# cookie system. The token is stored in the registry as a SHA256 hash on the
-# claude@api.local user.
-#
-# Permissions of the 'api' role via REST /api/v1: read (search/file GET/tree/recent)
-# + create (POST /api/v1/file refuses overwriting). Any other operation (DELETE,
-# PUT edit, move, share, todos) returns 403, even with a valid token.
-# Note: the MCP (/mcp/<token>) additionally exposes editing (edit_doc) because
-# Claude first reads the doc then amends it; REST overwriting stays forbidden.
+# /api/v1/* is protected by a Bearer token independent of the cookie system
+# (SHA256 hash on the api user). The 'api' role via REST is read + create only
+# (POST /api/v1/file refuses overwrite); any other op (DELETE, PUT, move, share,
+# todos) returns 403. MCP (/mcp/<token>) additionally exposes edit_doc (Claude
+# reads then amends); REST overwriting stays forbidden.
 
 def api_rate_limit_ok(token_hash: str) -> bool:
     """Requests per API token (60s sliding window). Delegates to the limiter."""
@@ -255,8 +239,7 @@ def _safe_int(value, default: int = 0) -> int:
 
 
 def git(*args, cwd=None, check=False, timeout=60):
-    """Run a git command in the mind repo. Single delegation seam to the GitSync
-    service — the history/diff/config call sites read it unchanged."""
+    """Run a git command in the mind repo. Delegation seam to the GitSync service."""
     return _CTX.git_sync.run(*args, cwd=cwd, check=check, timeout=timeout)
 
 
@@ -278,8 +261,8 @@ def current_version():
     except Exception:
         pass
     try:
-        # The atlas_mind package __init__ (src/__init__.py) holds __version__;
-        # from this server sub-package that is two levels up.
+        # The atlas_mind package __init__ (src/__init__.py) holds __version__,
+        # two levels up from this server sub-package.
         init = (Path(__file__).resolve().parent.parent / "__init__.py").read_text(encoding="utf-8")
         match = re.search(r'__version__\s*=\s*"([^"]+)"', init)
         if match:
@@ -295,11 +278,11 @@ def latest_pypi_version():
 
 
 def ensure_repo_cloned(root: Path) -> bool:
-    """Clone the repo into `root` if not already present. Cloud mode only.
+    """Clone the repo into `root` if not present. Cloud mode only.
 
     Reads GITHUB_REPO_URL from the env (not CONFIG: atlas.toml lives INSIDE the
-    clone, it does not exist yet at this stage). Returns True if a fresh clone
-    happened — __main__ then sets the git identity (CONFIG.git_author_*)."""
+    not-yet-existing clone). Returns True on a fresh clone — run() then sets the
+    git identity."""
     if (root / ".git").exists():
         return False
     repo_url = os.environ.get("GITHUB_REPO_URL")
@@ -314,8 +297,8 @@ def ensure_repo_cloned(root: Path) -> bool:
             timeout=120,
         )
     except subprocess.TimeoutExpired:
-        # Without a timeout, a GitHub slow at boot hung the server indefinitely →
-        # a silent Fly restart loop. We fail outright instead.
+        # Without a timeout, a slow GitHub at boot hung the server indefinitely
+        # (silent Fly restart loop). Fail outright instead.
         sys.exit("git clone timed out after 120s")
     if result.returncode != 0:
         print(
@@ -335,9 +318,8 @@ def pull_and_rebuild():
 def git_pull_loop():
     """Fallback periodic pull (the webhook does instant sync when active).
 
-    Piggyback: we also resync the subscribed remote nodes at the same cadence —
-    a refreshed mirror triggers an index rebuild so it shows up. Orchestrates the
-    GitSync (+ remote sync) services; the per-concern state lives in them."""
+    Piggybacks a resync of subscribed remote nodes at the same cadence — a
+    refreshed mirror triggers an index rebuild so it shows up."""
     while True:
         time.sleep(CONFIG.git_pull_interval)
         _CTX.git_sync.pull_and_rebuild()
@@ -351,13 +333,10 @@ def git_pull_loop():
 def _graceful_flush(signum, frame):
     """SIGTERM (Fly before a stop/redeploy) → flush git before dying.
 
-    The Fly rootfs is ephemeral: a write present on the local disk but not yet
-    pushed to GitHub would be lost if the machine is recreated with a fresh
-    rootfs. trigger_sync pushes in the background, but a redeploy landing right
-    in that window would cut the daemon thread. Here we push the pending changes
-    DURING the grace period (kill_timeout in deploy/fly.toml.example), closing the
-    only durability gap that neither the pull loop nor the non-suspend covers
-    (deploy/migration during the not-yet-pushed window)."""
+    The Fly rootfs is ephemeral: a write on local disk but not yet pushed is lost
+    if the machine is recreated. trigger_sync pushes in the background, but a
+    redeploy landing in that window would cut the daemon thread. Here we push
+    pending changes DURING the grace period, closing that durability gap."""
     print("[shutdown] SIGTERM -> flushing git (commit + push) before exit", flush=True)
     try:
         _CTX.git_sync.pull_and_rebuild()
@@ -368,13 +347,13 @@ def _graceful_flush(signum, frame):
 
 
 def trigger_sync():
-    """Background commit + push of local edits (todos / file PUT). Delegates to the
-    GitSync service."""
+    """Background commit + push of local edits (todos / file PUT). Delegates to
+    GitSync."""
     _CTX.git_sync.trigger_sync()
 
 
-# Todos (pure/todos_md.py) and pass-through annotations (pure/notes_md.py) are
-# re-exported above. Only the legacy-format migration stays here (boot-time IO).
+# Only the legacy-format migration stays here (boot-time IO); todos/notes are
+# re-exported above.
 
 
 def migrate_legacy_format():
@@ -393,8 +372,8 @@ def migrate_legacy_format():
         write_todos([{"id": i, **t} for i, t in enumerate(todos)])
 
 
-# Live reload (local-dev): the SSE fan-out + the dist/index.html watcher both live
-# in the ReloadHub service; run() starts reload_hub.watch_loop as a daemon thread.
+# Live reload (local-dev): SSE fan-out + dist/index.html watcher live in the
+# ReloadHub service; run() starts reload_hub.watch_loop as a daemon thread.
 
 
 from server.render.i18n import _strings, _t  # noqa: F401
@@ -406,12 +385,10 @@ from server.render.pages import (  # noqa: F401
 def _import_build():
     """Imports (and caches) the ENGINE's build.py.
 
-    The engine is self-contained: we ALWAYS import its own build.py (the engine's
-    src/ is on sys.path, placed at the top of this module), NEVER any
-    src/build.py that might be present in the cloned mind — otherwise a historical
-    repo with the old embedded engine would run old code on the new image
-    (clone↔image shadowing). The configured exclusions are injected into the
-    module, the single source of truth consumed here (build.EXCLUDED_NAMES)."""
+    ALWAYS the engine's own build.py (engine src/ on sys.path), NEVER any
+    src/build.py present in the cloned mind — else a historical repo with the old
+    embedded engine would run old code on the new image (clone↔image shadowing).
+    Configured exclusions are injected into build.EXCLUDED_NAMES (single source)."""
     import build as _build
     _build.EXCLUDED_NAMES = CONFIG.excluded_names
     return _build
@@ -461,9 +438,9 @@ from server.app.handler import Handler  # noqa: E402
 
 
 def _seed_dev_admin() -> None:
-    """Dev sandbox only: create a known admin (dev@local / dev) if none exists, so
+    """Dev sandbox only: create a known admin (dev@local / dev) if none exists so
     /login works immediately. Skipped with ATLAS_DEV_FRESH=1 (to exercise the
-    first-boot /setup flow instead). Best-effort — a failure does not block boot."""
+    first-boot /setup flow). Best-effort — a failure does not block boot."""
     try:
         registry = get_store()
         if registry.has_admin():
@@ -484,18 +461,15 @@ def run() -> None:
     config, start the background threads and serve forever. Invoked by
     `python -m server` (see __main__); a plain `import server` never triggers it."""
     global CONFIG, _CTX
-    # Any clone can only depend on the env: atlas.toml lives INSIDE the mind,
-    # which does not yet exist on the cloud side at this point.
+    # The clone can only depend on the env: atlas.toml lives INSIDE the mind,
+    # which doesn't exist yet on the cloud side here.
     mind_root = resolve_mind_root()
     freshly_cloned = False
     if os.environ.get("KB_AUTH_ENABLED"):
-        # Fail-fast BEFORE the clone when the env EXPLICITLY carries an empty or
-        # default SESSION_SECRET: otherwise each iteration of the Fly restart
-        # loop would pay for a full clone (network, PAT, disk write) before
-        # dying on the guard below. A SESSION_SECRET absent from the env is
-        # still accepted at this point: atlas.toml (which lives INSIDE the
-        # clone) can provide it — the full guard after AtlasConfig.load remains
-        # the authority.
+        # Fail-fast BEFORE the clone on an explicitly empty/default SESSION_SECRET,
+        # so a Fly restart loop doesn't pay for a full clone before dying. A secret
+        # ABSENT from the env is still accepted here — atlas.toml (inside the clone)
+        # may provide it; the full guard after AtlasConfig.load is the authority.
         env_secret = os.environ.get("SESSION_SECRET")
         if env_secret is not None and env_secret in ("", "dev-secret-change-me"):
             sys.exit(
@@ -504,18 +478,16 @@ def run() -> None:
             )
         freshly_cloned = ensure_repo_cloned(mind_root)
 
-    # The config is built HERE, and nowhere else: after the clone, so that
-    # <mind>/atlas.toml is readable. No more reassignment of path globals —
-    # everything derived from it goes through CONFIG.
+    # Config built HERE and nowhere else: after the clone, so <mind>/atlas.toml
+    # is readable. Everything derived goes through CONFIG.
     try:
         CONFIG = AtlasConfig.load(root=mind_root)
     except AtlasConfigError as e:
         sys.exit(f"FATAL: {e}")
 
     if CONFIG.auth_enabled:
-        # Refuse to start in cloud with the default secret: it is public (in
-        # this file) → forgeable session AND share tokens = total auth bypass.
-        # Better to crash than to run wide open.
+        # Refuse to start in cloud with the default secret: it is public →
+        # forgeable session AND share tokens = total auth bypass. Crash instead.
         if not CONFIG.session_secret or CONFIG.session_secret == b"dev-secret-change-me":
             sys.exit(
                 "FATAL: SESSION_SECRET not set in cloud mode (KB_AUTH_ENABLED=1).\n"
@@ -523,29 +495,26 @@ def run() -> None:
             )
 
     # Build the application context (config + store + services) now that CONFIG is
-    # final and the secret guard has passed; the HTTP server carries it, and
-    # get_store() / GitSync / the extensions / maybe_init read it. Built BEFORE the
-    # cold-start git identity + rebuild below, which now go through _CTX.git_sync.
+    # final and the secret guard has passed; the HTTP server carries it. Built
+    # BEFORE the cold-start git identity + rebuild below (which go through
+    # _CTX.git_sync).
     _CTX = AppContext.build(CONFIG, build_store(CONFIG))
 
     if CONFIG.auth_enabled:
         if freshly_cloned:
-            # The bot's git identity is set on the fresh clone only (as before);
-            # the values come from CONFIG (historical defaults).
+            # Set the bot's git identity on the fresh clone only (values from CONFIG).
             git("config", "user.email", CONFIG.git_author_email)
             git("config", "user.name", CONFIG.git_author_name)
         # Rebuild the viewer on cold start in case the cloned repo is fresh.
         _CTX.git_sync.build()
 
-    # The mind's server extensions: loaded once at boot into the context's route
-    # list. A broken extension is reported on stderr and ignored — the server
-    # still starts.
+    # Mind's server extensions, loaded once at boot. A broken one is reported on
+    # stderr and ignored — the server still starts.
     load_server_extensions(CONFIG, _CTX.extension_routes)
 
-    # First-boot (cloud mode): if no admin exists, generate and print a setup
-    # token, opening the /setup window to create the first admin. In the dev
-    # sandbox we seed a known admin first (unless ATLAS_DEV_FRESH=1) so /login works
-    # right away; maybe_init then no-ops (an admin already exists).
+    # First-boot (cloud): if no admin exists, generate+print a setup token to open
+    # the /setup window. The dev sandbox seeds a known admin first (unless
+    # ATLAS_DEV_FRESH=1), making maybe_init a no-op.
     if CONFIG.auth_enabled:
         if CONFIG.dev_mode and not os.environ.get("ATLAS_DEV_FRESH"):
             _seed_dev_admin()
@@ -555,16 +524,15 @@ def run() -> None:
     migrate_legacy_format()
     threading.Thread(target=_CTX.reload_hub.watch_loop, args=(CONFIG,), daemon=True).start()
     if CONFIG.dev_mode:
-        # Dev sandbox: rebuild the viewer when its sources (partials/js/css/pages)
-        # change, so `atlas-dev-cloud` is a real edit-and-see loop. The rebuild
-        # updates dist/index.html, which watch_loop() above turns into a browser
-        # reload. Dev-only: in cloud/prod the viewer is built once at boot / on pull.
+        # Dev sandbox: rebuild the viewer when its sources change for a real
+        # edit-and-see loop (the rebuilt dist/index.html drives watch_loop's
+        # browser reload). Dev-only: cloud/prod builds once at boot / on pull.
         threading.Thread(
             target=_CTX.reload_hub.watch_sources_loop,
             args=(CONFIG, _CTX.git_sync.build), daemon=True).start()
     if CONFIG.auth_enabled and not CONFIG.dev_mode:
-        # The dev sandbox NEVER pulls/pushes (it would touch prod's GitHub repo):
-        # skip the periodic pull loop AND the SIGTERM git-flush entirely.
+        # The dev sandbox NEVER pulls/pushes (would touch prod's GitHub repo): skip
+        # the periodic pull loop AND the SIGTERM git-flush.
         threading.Thread(target=git_pull_loop, daemon=True).start()
         # Flush unpushed writes when Fly stops the machine (deploy/scale).
         signal.signal(signal.SIGTERM, _graceful_flush)
@@ -576,8 +544,8 @@ def run() -> None:
     try:
         todo_display = CONFIG.todo_file.relative_to(CONFIG.root)
     except ValueError:
-        # [todo].file absolute and outside the mind (supported by AtlasConfig):
-        # displayed as-is instead of killing the boot on the relative_to.
+        # [todo].file absolute and outside the mind: display as-is instead of
+        # killing the boot on the relative_to.
         todo_display = CONFIG.todo_file
     print(f"Todo -> {todo_display}")
     print("Ctrl+C to stop")

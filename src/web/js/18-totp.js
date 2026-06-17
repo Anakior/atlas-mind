@@ -16,7 +16,7 @@ securityTotpEnableBtn.addEventListener('click', async () => {
     totpSecretValue.value = data.secret || '';
     totpVerifyCode.value = '';
     // QR rendered client-side; silent fallback to the plaintext secret if the
-    // URI is too long for our encoder (unlikely case).
+    // URI is too long for our encoder.
     totpQr.innerHTML = '';
     const ok = data.otpauth_uri && QR.render(totpQr, data.otpauth_uri, 184);
     totpQr.classList.toggle('hidden', !ok);
@@ -37,13 +37,12 @@ totpVerifyForm.addEventListener('submit', async (e) => {
   totpVerifySubmit.disabled = true;
   try {
     const data = await settingsFetch('/api/account/totp/enable', { method: 'POST', body: JSON.stringify({ code }) });
-    // enable bumps the epoch → new cookies (session + kb_csrf) are set. We
-    // reload the CSRF token from the fresh cookie so the following mutating
-    // requests don't break.
+    // enable bumps the epoch → fresh session + kb_csrf cookies; reload the CSRF
+    // token so the next mutating requests don't break.
     setCsrfToken(readCsrfCookie());
     totpEnabled = true;
     refreshSecurityState();
-    // Shows the recovery codes ONCE.
+    // Recovery codes are shown ONCE.
     pendingRecoveryCodes = Array.isArray(data.recovery_codes) ? data.recovery_codes : [];
     totpRecoveryList.innerHTML = pendingRecoveryCodes
       .map(c => '<li class="bg-black/40 border subtle-border rounded px-2 py-1.5 text-center select-all">' + escapeHtml(c) + '</li>').join('');
@@ -110,8 +109,7 @@ securityLogoutAllBtn.addEventListener('click', async () => {
   securityLogoutAllBtn.disabled = true;
   try {
     await settingsFetch('/api/account/logout-all', { method: 'POST', body: JSON.stringify({}) });
-    // The epoch changed: the current session is revoked. We redirect to the
-    // login page (the cookie was cleared server-side).
+    // Epoch changed: current session is revoked (cookie cleared server-side) → /login.
     window.location = '/login';
   } catch (err) {
     showSettingsError(err.message || t('settingsErrGeneric'));

@@ -57,18 +57,16 @@ import re
 import sys
 import tomllib
 
-# The installed package directory (src/, a.k.a. the `atlas_mind` package): holds
-# the engine code AND the bundled assets (web/, templates/) so a pip wheel is
-# self-contained. ENGINE_ROOT is its parent (the repo root when run from source).
+# The installed package directory (src/, the `atlas_mind` package): engine code
+# + bundled assets (web/, templates/) so a pip wheel is self-contained.
+# ENGINE_ROOT is its parent (the repo root when run from source).
 PACKAGE_DIR = Path(__file__).resolve().parent
 ENGINE_ROOT = PACKAGE_DIR.parent
 
 CONFIG_FILENAME = "atlas.toml"
 
-# "Atlas Mind" is THE BRAND: fixed, always present, styled by the viewer and the
-# login page ("Atlas" as display, "Mind" as suffix). The user only configures an
-# optional PREFIX (root key `prefix` in atlas.toml):
-# "Acme" → "Acme Atlas Mind", empty → "Atlas Mind".
+# "Atlas Mind" is THE BRAND: fixed, always present. The user only configures an
+# optional PREFIX (root key `prefix`): "Acme" → "Acme Atlas Mind", empty → "Atlas Mind".
 SITE_WORDMARK = "Atlas Mind"
 DEFAULT_SITE_PREFIX = ""
 DEFAULT_TAGLINE = "Personal knowledge base."
@@ -78,11 +76,9 @@ VALID_LANGS = ("fr", "en")
 # Defaults = exact historical values.
 DEFAULT_PORT = 8765
 DEFAULT_SESSION_SECRET = "dev-secret-change-me"
-# Session cookie lifetime (seconds). 30 days: a compromise between convenience
-# (not having to log in again every day) and the exposure window of a stolen
-# cookie. Replaces the former "~10 years" (equivalent to a lifelong session).
-# The real invalidation control remains the server-side session epoch
-# (logout-all / password reset / TOTP change bump the epoch).
+# Session cookie lifetime (seconds). 30 days: convenience vs the exposure window
+# of a stolen cookie. The real invalidation control is the server-side session
+# epoch (logout-all / password reset / TOTP change bump it).
 DEFAULT_SESSION_MAX_AGE = 30 * 86400
 DEFAULT_GIT_PULL_INTERVAL = 300
 DEFAULT_STORE_KIND = "file"
@@ -95,10 +91,10 @@ DEFAULT_EXCLUDED_NAMES = frozenset({"quick.md"})
 
 
 class AtlasConfigError(Exception):
-    """Invalid configuration (malformed atlas.toml, value of the wrong type...).
+    """Invalid configuration (malformed atlas.toml, wrong value type...).
 
-    Always carries an actionable message: callers (server.py, build.py) turn it
-    into a readable fatal exit, never into a silent crash."""
+    Always carries an actionable message: callers turn it into a readable fatal
+    exit, never a silent crash."""
 
 
 VALID_STORE_KINDS = ("file",)
@@ -118,9 +114,8 @@ _KNOWN_TOML_KEYS = {
 _KNOWN_TOML_TOP_LEVEL = (frozenset({"prefix", "tagline", "lang"})
                          | frozenset(_KNOWN_TOML_KEYS))
 
-# Keys renamed over versions: difflib would never match "site_name" to "prefix"
-# (no useful common letters), so the unknown-key warning points explicitly to
-# the replacement.
+# Keys renamed over versions: difflib would never match "site_name" to "prefix",
+# so the unknown-key warning points explicitly to the replacement.
 _RENAMED_TOML_KEYS = {"site_name": "prefix"}
 
 
@@ -134,10 +129,9 @@ def _slugify(value: str) -> str:
 
 def _warn_unknown_toml_keys(data: dict) -> None:
     """Reports on stderr (non-fatal) any unknown atlas.toml section or key: a
-    typo (auth_enable, [sever]...) must never be silently ignored — the user
-    would believe their config was applied. A warning and not an error, so that
-    an atlas.toml written for a newer engine remains usable (forward
-    compatibility)."""
+    typo (auth_enable, [sever]...) must never be silently ignored. A warning, not
+    an error, so an atlas.toml written for a newer engine stays usable (forward
+    compat)."""
     def warn(label: str, unknown: str, known) -> None:
         renamed = _RENAMED_TOML_KEYS.get(unknown)
         suggestion = ([renamed] if renamed
@@ -152,7 +146,7 @@ def _warn_unknown_toml_keys(data: dict) -> None:
             continue
         known_keys = _KNOWN_TOML_KEYS.get(key)
         if known_keys is None or not isinstance(value, dict):
-            continue  # known scalar key, or malformed table (_table will raise)
+            continue  # known scalar key, or malformed table (_table raises later)
         for sub_key in value:
             if sub_key not in known_keys:
                 warn(f"key {key}.{sub_key}", sub_key, known_keys)
@@ -197,7 +191,7 @@ def _toml_str(table: dict, section: str, key: str, default: str) -> str:
     if value is None:
         return default
     if not isinstance(value, str):
-        # empty section = atlas.toml root key (site_name, tagline, lang).
+        # empty section = atlas.toml root key (prefix, tagline, lang).
         label = f"{section}.{key}" if section else key
         raise AtlasConfigError(f"atlas.toml: {label} must be a string")
     return value
@@ -256,19 +250,17 @@ class AtlasConfig:
         self.dist_dir = self.root / "dist"
         self.index_file = self.dist_dir / "index.html"
         self.notes_dir = self.root / ".notes"
-        # Extension hook (spec decision: two hooks, not a plugin system): FIXED
-        # location relative to the mind. build.py discovers the *.css / *.js to
-        # inline into the viewer there, server.py loads the *.py there at boot.
-        # Missing directory = no extensions, behavior unchanged.
+        # Extension hook: FIXED location relative to the mind. build.py inlines
+        # the *.css/*.js there, server.py loads the *.py there at boot. Missing
+        # directory = no extensions.
         self.extensions_dir = self.root / ".atlas" / "extensions"
-        # Viewer assets ship inside the package (src/web) so a pip-installed wheel
-        # is self-contained — always the package's web/, never the mind's.
+        # Viewer assets ship inside the package (src/web) so a pip wheel is
+        # self-contained — always the package's web/, never the mind's.
         self.web_dir = PACKAGE_DIR / "web"
 
         # ── instance identity (configurable branding) ──────────────────────
-        # The "Atlas" brand is FIXED (SITE_WORDMARK); only the prefix is
-        # configurable. Empty (or blank) = no prefix → "Atlas" alone, the
-        # <title>/manifest can never come out without a name.
+        # Brand is FIXED (SITE_WORDMARK); only the prefix is configurable. Empty
+        # = "Atlas" alone — the <title>/manifest never come out without a name.
         self.prefix = _toml_str(data, "", "prefix",
                                 DEFAULT_SITE_PREFIX).strip()
         self.tagline = (_toml_str(data, "", "tagline", DEFAULT_TAGLINE).strip()
@@ -276,13 +268,11 @@ class AtlasConfig:
         self.lang = (_toml_str(data, "", "lang", DEFAULT_LANG).strip().lower()
                      or DEFAULT_LANG)
         if self.lang not in VALID_LANGS:
-            # Injected into <html lang> and consumed by the i18n phase: an
-            # unsupported language must fail clearly, not show up as broken
-            # English later on.
+            # Injected into <html lang> and the i18n phase: an unsupported
+            # language must fail clearly, not become broken English later.
             raise AtlasConfigError(
                 f"lang must be 'fr' or 'en' (got {self.lang!r})")
-        # Derived machine name (MCP serverInfo): "Acme Atlas" →
-        # "acme-atlas", without a prefix → "atlas".
+        # Derived machine name (MCP serverInfo): "Acme Atlas" → "acme-atlas".
         self.site_slug = _slugify(self.site_name)
 
         # ── server ─────────────────────────────────────────────────────────
@@ -291,8 +281,7 @@ class AtlasConfig:
         else:
             self.port = _toml_int(server, "server", "port", DEFAULT_PORT)
         if not 0 <= self.port <= 65535:
-            # Without this bound, the bind blows up later as a raw OverflowError
-            # — exactly the crash AtlasConfigError promises to avoid.
+            # Without this bound the bind blows up later as a raw OverflowError.
             raise AtlasConfigError(
                 f"PORT / server.port must be between 0 and 65535 "
                 f"(got {self.port})")
@@ -311,15 +300,14 @@ class AtlasConfig:
                                DEFAULT_SESSION_SECRET)
         self.session_secret = secret.encode()
 
-        # Dev sandbox (ATLAS_DEV=1): turn the CLOUD features on locally (login,
-        # setup, share, 2FA, admin…) while staying ISOLATED from prod — no git
-        # push/pull (run() + GitSync gate on dev_mode), bound to 127.0.0.1, a fixed
-        # non-default secret, and a seeded dev admin. NEVER set ATLAS_DEV in prod.
+        # Dev sandbox (ATLAS_DEV=1): cloud features on locally (login, setup,
+        # share, 2FA, admin…) but ISOLATED from prod — no git push/pull, bound to
+        # 127.0.0.1, fixed non-default secret, seeded dev admin. NEVER in prod.
         self.dev_mode = bool(env.get("ATLAS_DEV"))
         if self.dev_mode:
             self.auth_enabled = True
             if secret in ("", DEFAULT_SESSION_SECRET):
-                # A stable non-sentinel secret so sessions survive a restart and the
+                # Stable non-sentinel secret: sessions survive a restart and the
                 # run() default-secret guard passes.
                 self.session_secret = b"atlas-dev-sandbox-secret-not-for-production"
 
@@ -331,8 +319,7 @@ class AtlasConfig:
                                              "session_max_age",
                                              DEFAULT_SESSION_MAX_AGE)
         if self.session_max_age <= 0:
-            # A cookie with Max-Age <= 0 would expire immediately (login loop);
-            # we refuse rather than open an unusable instance.
+            # Max-Age <= 0 expires the cookie immediately (login loop).
             raise AtlasConfigError(
                 f"SESSION_MAX_AGE / server.session_max_age must be positive "
                 f"(got {self.session_max_age})")
@@ -345,8 +332,7 @@ class AtlasConfig:
                                                "git_pull_interval",
                                                DEFAULT_GIT_PULL_INTERVAL)
         if self.git_pull_interval < 0:
-            # time.sleep(negative) would silently kill the git_pull_loop thread
-            # (periodic sync lost in the cloud).
+            # time.sleep(negative) would silently kill the git_pull_loop thread.
             raise AtlasConfigError(
                 f"GIT_PULL_INTERVAL / server.git_pull_interval must be "
                 f"positive or zero (got {self.git_pull_interval})")
@@ -359,25 +345,21 @@ class AtlasConfig:
         self.github_webhook_secret = webhook_secret.encode()
 
         # Trusted header for the client IP behind a reverse proxy (login rate
-        # limit). If it carries a list (X-Forwarded-For stacked by
-        # nginx/Caddy), server.py takes the LAST element — the only one set by
-        # the trusted proxy, the preceding ones being supplied by the client
-        # (forgeable). None (default): on Fly, server.py trusts Fly-Client-IP
-        # (platform-injected); otherwise it falls back to the socket peer and
-        # does NOT trust client headers (a forgeable X-Forwarded-First would let
-        # an attacker rotate it to bypass the login rate limit). Self-hosters
-        # behind a proxy should set this header explicitly.
+        # limit). On a list (X-Forwarded-For stacked by nginx/Caddy), server.py
+        # takes the LAST element — the only one set by the trusted proxy, the rest
+        # being client-forgeable. None (default): trust Fly-Client-IP on Fly only,
+        # else the socket peer; client headers are NOT trusted (a forgeable XFF
+        # would bypass the login rate limit). Self-hosters set this explicitly.
         # `or` semantics: an EMPTY env value falls back to atlas.toml.
         trusted_ip_header = (env.get("ATLAS_TRUSTED_IP_HEADER")
                              or _toml_str(server, "server",
                                           "trusted_ip_header", ""))
         self.trusted_ip_header = trusted_ip_header.strip() or None
 
-        # Hive SSRF guard: by default a pasted node link may only point at
-        # a PUBLIC host (the subscribe client refuses URLs resolving to
-        # loopback/private/link-local/reserved addresses — cloud metadata,
-        # internal services). Set this True to also allow localhost/LAN remotes
-        # (home-lab hive between instances on a private network).
+        # Hive SSRF guard: by default a pasted node link may only point at a
+        # PUBLIC host (subscribe refuses loopback/private/link-local/reserved —
+        # cloud metadata, internal services). True also allows localhost/LAN
+        # remotes (home-lab hive on a private network).
         allow_private_env = env.get("ATLAS_ALLOW_PRIVATE_REMOTES", "").strip()
         if allow_private_env:
             self.allow_private_remotes = allow_private_env.lower() in (
@@ -386,10 +368,9 @@ class AtlasConfig:
             self.allow_private_remotes = _toml_bool(
                 server, "server", "allow_private_remotes", False)
 
-        # Update check: the admin Settings panel shows a discreet banner when a
-        # newer atlas-mind is on PyPI. It is the ONLY outbound call the engine
-        # makes on its own (cached ~1/day, admin-only, best-effort). Opt out to
-        # disable that single network call entirely.
+        # Update check: admin Settings banner when a newer atlas-mind is on PyPI.
+        # The ONLY outbound call the engine makes on its own (cached ~1/day,
+        # admin-only, best-effort). Opt out to disable that single network call.
         update_check_env = env.get("ATLAS_UPDATE_CHECK", "").strip()
         if update_check_env:
             self.update_check = update_check_env.lower() in (
@@ -399,14 +380,13 @@ class AtlasConfig:
                 server, "server", "update_check", True)
 
         # ── identity/share registry ────────────────────────────────────────
-        # `or` (and not presence): an EMPTY env value falls back to the next
-        # level — historical semantics of ATLAS_STORE / ATLAS_STORE_DIR.
+        # `or` (not presence): an EMPTY env value falls back to the next level
+        # (historical ATLAS_STORE / ATLAS_STORE_DIR semantics).
         self.store_kind = (env.get("ATLAS_STORE")
                            or _toml_str(store, "store", "kind", "")
                            or DEFAULT_STORE_KIND).strip().lower()
         if self.store_kind not in VALID_STORE_KINDS:
-            # Reject anything but 'file' explicitly: a typo must fail loudly at
-            # boot rather than degrade into an unintelligible runtime error.
+            # Reject anything but 'file': a typo must fail loudly at boot.
             raise AtlasConfigError(
                 f"store.kind / ATLAS_STORE must be 'file' "
                 f"(got {self.store_kind!r})")
@@ -416,9 +396,8 @@ class AtlasConfig:
                           else self.root / ".atlas")
         store_dir_resolved = self.store_dir.resolve()
         if store_dir_resolved == self.root:
-            # FileStore would write its catch-all "*" .gitignore AT THE ROOT of
-            # the content repo: all of content/ would become invisible to git,
-            # and trigger_sync's git add -A would no longer push anything.
+            # FileStore's catch-all "*" .gitignore at the repo root would make all
+            # of content/ invisible to git, so trigger_sync would push nothing.
             raise AtlasConfigError(
                 "store.dir / ATLAS_STORE_DIR cannot be the mind root "
                 f"({self.store_dir}) — use a dedicated subfolder "
@@ -457,7 +436,7 @@ class AtlasConfig:
                 "atlas.toml: todo.categories cannot be empty")
         self.todo_categories = tuple(categories)
         self.todo_cat_default = self.todo_categories[0]
-        # "work" → "Work", "personal" → "Personal": derived H2 headers.
+        # Derived H2 headers ("work" → "Work").
         self.todo_cat_headers = {c: c.capitalize() for c in self.todo_categories}
 
         # ── build ──────────────────────────────────────────────────────────
@@ -467,9 +446,8 @@ class AtlasConfig:
 
     @property
     def site_name(self) -> str:
-        """Full name DERIVED from the prefix (raw text: <title>, manifest,
-        OpenAPI, boot banner, shares footer): "<prefix> Atlas", or "Atlas"
-        alone without a prefix."""
+        """Full name derived from the prefix (used in <title>, manifest, OpenAPI,
+        boot banner, shares footer): "<prefix> Atlas", or "Atlas" alone."""
         if not self.prefix:
             return SITE_WORDMARK
         return f"{self.prefix} {SITE_WORDMARK}"

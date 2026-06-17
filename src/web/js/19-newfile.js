@@ -56,9 +56,8 @@ async function refreshTreeOrReload() {
   else location.reload();
 }
 
-// Externalized skeletons (DOC_TEMPLATES injected at build): substitution
-// tokens {{title}}, {{date}} (long form, UI locale) and {{isoDate}}
-// (YYYY-MM-DD). Any unknown kind (including 'blank') falls back to the title only.
+// Fills a DOC_TEMPLATES skeleton: tokens {{title}}, {{date}} (UI locale long
+// form), {{isoDate}} (YYYY-MM-DD). Unknown kind (incl. 'blank') → title only.
 function buildTemplateContent(kind, title) {
   const template = DOC_TEMPLATES && DOC_TEMPLATES[kind];
   if (!template) {
@@ -73,9 +72,7 @@ function buildTemplateContent(kind, title) {
     .replaceAll('{{isoDate}}', isoDate);
 }
 
-// Options of the "Template" select generated from DOC_TEMPLATES: the label is
-// the skeleton's file name, added after "Blank" (first option, a reserved value
-// that cannot be overridden by a skeleton).
+// "Blank" stays the reserved first option; skeleton names cannot override it.
 (function populateTemplateOptions() {
   for (const name of Object.keys(DOC_TEMPLATES || {}).sort()) {
     if (name === 'blank') continue;
@@ -87,18 +84,12 @@ function buildTemplateContent(kind, title) {
 })();
 
 // ─── Extension templates + window.Atlas API ───────────────────────────────────
-// Second half of the extensions hook (the first being the inlining of the
-// mind's *.css/*.js by build.py): an extension loaded after this script can
-// register a new-document template and drive the viewer through the small
-// window.Atlas API. Events emitted by the viewer (document):
-//   - atlas:doc-rendered {path, markdown}: a doc has just been (re)rendered;
-//   - atlas:edit-enter: switching to edit mode.
-// An extension modal carrying [data-atlas-modal] blocks the soft-reload while
-// it is visible (like the native modals).
+// Extensions (loaded after this script, inlined by build.py) register a
+// new-document template and drive the viewer via window.Atlas. Events emitted on
+// document: atlas:doc-rendered {path, markdown}, atlas:edit-enter.
+// A modal carrying [data-atlas-modal] blocks the soft-reload while visible.
 const templateProviders = Object.create(null);
 
-// Shows the form block of the selected extension template (and only it), its
-// name placeholder, and pre-fills the suggested folder if empty.
 function updateTemplateExtras() {
   const active = templateProviders[newFileTemplate.value] || null;
   for (const value in templateProviders) {
@@ -119,8 +110,7 @@ window.Atlas = {
   refresh: refreshTreeOrReload,
   // Markdown doc currently displayed ({path}) or null.
   currentDoc() { return currentFile ? { path: currentFile.path } : null; },
-  // Invalidates a doc's cache (after a write outside the viewer): the next
-  // display re-fetches the content.
+  // Drop a doc's cache after a write outside the viewer → next display re-fetches.
   invalidateDoc(path) {
     contentCache.delete(path);
     if (currentFile && currentFile.path === path) {
@@ -205,8 +195,7 @@ newFileForm.addEventListener('submit', async (e) => {
 
   let content;
   if (provider) {
-    // Extension template: its generator produces the content (and a fallback
-    // slug for the empty file name). Thrown error = user message.
+    // Extension generator produces the content (+ fallback slug). Thrown error = user message.
     try {
       const built = await provider.generate();
       content = built.content;
@@ -289,7 +278,7 @@ dirRenameForm.addEventListener('submit', async (e) => {
     });
     if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || ('HTTP ' + res.status)); }
     closeDirRenameModal();
-    // Transfers the content caches to the new paths + updates currentFile
+    // Re-key the content caches under the new prefix + update currentFile.
     const oldPrefix = dirRenameSourcePath + '/';
     const newPrefix = newPath + '/';
     const toMove = [];

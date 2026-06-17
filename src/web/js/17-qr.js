@@ -16,10 +16,9 @@ const QR = (function() {
     return poly;
   }
   function rsEncode(data, ecLen) {
-    // GF(256) polynomial division: buffer = data followed by ecLen zeros, we
-    // reduce symbol by symbol by the generator polynomial (degree ecLen,
-    // ecLen+1 coefficients). The final remainder = the ecLen correction bytes.
-    const gen = rsGenPoly(ecLen); // longueur ecLen+1, gen[0] === 1
+    // GF(256) polynomial division of (data + ecLen zeros) by the generator;
+    // the remainder is the ecLen correction bytes.
+    const gen = rsGenPoly(ecLen); // length ecLen+1, gen[0] === 1
     const buf = data.concat(new Array(ecLen).fill(0));
     for (let i = 0; i < data.length; i++) {
       const coef = buf[i];
@@ -28,13 +27,11 @@ const QR = (function() {
     }
     return buf.slice(data.length);
   }
-  // Error correction level L. [version, totalCodewords, ecPerBlock, blocks,
-  // maxPayloadBytes]. Exact ISO/IEC 18004 values (cross-checked against a
-  // reference implementation). WARNING: from v6 on, the data is split into
-  // MULTIPLE RS blocks (ec per block ≠ total ec) then interleaved — a single
-  // block at 36 EC produces an unreadable QR.
-  // maxPayloadBytes = dataCodewords − header overhead (4-bit mode + 8-bit
-  // counter up to v9, i.e. 2 full bytes of margin).
+  // EC level L. [version, totalCodewords, ecPerBlock, blocks, maxPayloadBytes].
+  // Exact ISO/IEC 18004 values. WARNING: from v6 on the data is split into
+  // MULTIPLE RS blocks (ecPerBlock ≠ total ec) then interleaved — treating it as
+  // a single block produces an unreadable QR.
+  // maxPayloadBytes = dataCodewords − header overhead (mode + counter, ~2 bytes up to v9).
   const VERSIONS = [
     [1, 26, 7, 1, 17], [2, 44, 10, 1, 32], [3, 70, 15, 1, 53],
     [4, 100, 20, 1, 78], [5, 134, 26, 1, 106], [6, 172, 18, 2, 134],
@@ -42,11 +39,10 @@ const QR = (function() {
     [10, 346, 18, 4, 271],
   ];
   function pickVersion(len) {
-    // len = payload bytes; overhead mode(4 bits) + counter(8/16 bits).
     for (const v of VERSIONS) { if (len <= v[4]) return v; }
     return null;
   }
-  // Coordinates of the alignment patterns per version (center).
+  // Alignment pattern centers per version.
   const ALIGN = { 1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34], 7: [6, 22, 38], 8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50] };
   function buildMatrix(version, codewords) {
     const size = 17 + version * 4;
@@ -95,11 +91,9 @@ const QR = (function() {
         setF(r, size - 11 + c, bit);
       }
     }
-    // Reserves EXACTLY the format-info modules (same cells as placeFormat).
-    // Copy 1: row 8 cols 0-8 + column 8 rows 0-8 (around the top-left finder).
-    // Copy 2: column 8 rows size-7..size-1 + row 8 cols size-8..size-1.
-    // Over-reserving (e.g. col 8 row size-8 = dark module already placed, or
-    // neighboring data cells) would shift the data placement → unreadable QR.
+    // Reserve EXACTLY the format-info modules (same cells as placeFormat).
+    // Over-reserving (dark module, neighboring data cells) would shift data
+    // placement → unreadable QR.
     for (let i = 0; i <= 8; i++) { reserved[8][i] = true; reserved[i][8] = true; }
     for (let i = 0; i < 7; i++) reserved[size - 1 - i][8] = true; // col 8, rows size-1..size-7
     for (let i = 0; i < 8; i++) reserved[8][size - 1 - i] = true; // row 8, cols size-1..size-8
@@ -226,7 +220,7 @@ const QR = (function() {
     for (let i = 0; i < maxData; i++) for (const blk of dataBlocks) if (i < blk.length) finalCw.push(blk[i]);
     for (let i = 0; i < ecLen; i++) for (const blk of ecBlocks) finalCw.push(blk[i]);
     const { m, reserved, size } = buildMatrix(version, finalCw);
-    // Picks the best mask (minimal penalty).
+    // Pick the mask with the minimal penalty.
     let best = null, bestPen = Infinity;
     for (let mask = 0; mask < 8; mask++) {
       const masked = applyMask(m, reserved, size, mask);
@@ -289,8 +283,7 @@ const totpDisableCancel = document.getElementById('totp-disable-cancel');
 let pendingRecoveryCodes = [];
 
 function refreshSecurityState() {
-  // Reflects the current 2FA state (totpEnabled updated by /api/me and by the
-  // enable/disable actions).
+  // totpEnabled is updated by /api/me and by the enable/disable actions.
   securityTotpStatus.textContent = totpEnabled ? t('securityTotpStatusOn') : t('securityTotpStatusOff');
   securityTotpStatus.classList.toggle('bg-emerald-500/20', totpEnabled);
   securityTotpStatus.classList.toggle('text-emerald-300', totpEnabled);
@@ -309,11 +302,9 @@ function closeTotpModal() {
   pendingRecoveryCodes = [];
 }
 function onTotpKey(e) {
-  // Escape closes the 2FA modal ONLY (on top of the Settings panel).
-  // Capture listener + stopPropagation: Escape NEVER closes the Settings panel
-  // underneath while the 2FA modal is open. While the recovery codes are shown
-  // we block Escape (explicit "Done" click required) while also preventing it
-  // from bubbling up to the global handler.
+  // Capture + stopPropagation so Escape closes only the 2FA modal, never the
+  // Settings panel underneath. While recovery codes are shown, Escape is blocked
+  // entirely (explicit "Done" required).
   if (e.key !== 'Escape') return;
   e.preventDefault(); e.stopPropagation();
   if (totpStepRecovery.classList.contains('hidden')) closeTotpModal();
