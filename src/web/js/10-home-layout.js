@@ -297,7 +297,7 @@ function showWelcome() {
     : '<div class="text-sm text-ink-500">' + t('noFavorites') + '</div>';
 
   contentEl.innerHTML = `
-    <h1 class="!mb-2"><span style="font-family:'Corinthia',cursive;font-weight:700;font-size:1.5em;line-height:1">${escapeHtml(SITE_PREFIX)}</span> <span style="position:relative;display:inline-block;line-height:1"><span class="text-[#fbc678]" style="font-style:italic;font-weight:400;font-family:'Rubik 80s Fade',Impact,sans-serif;letter-spacing:0.02em">Atlas</span><span style="position:absolute;top:-1.05em;right:-1em;font-size:0.3em;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#e5e6e8;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:1em 0;padding:0.22em 0.6em;line-height:1.25;font-family:system-ui,-apple-system,sans-serif;opacity:0.3">Mind</span></span></h1>
+    <h1 class="!mb-2"><span style="font-family:'Corinthia',cursive;font-weight:700;font-size:1.7em;line-height:.9;color:#eef0f2">${escapeHtml(SITE_PREFIX)}</span> <span style="display:inline-flex;align-items:center;gap:.4em;line-height:1;margin-left:.22em"><span style="font-family:'Lora',Georgia,serif;font-style:italic;font-weight:600;font-size:1.3em;color:#e8941c;text-shadow:0 1px 2px rgba(0,0,0,0.6),0 0 1px rgba(0,0,0,0.85)">Atlas</span><span class="nebula-pill">Mind</span></span></h1>
     <p class="lead text-ink-400 !mt-0">${escapeHtml(TAGLINE)}</p>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 not-prose mt-6 mb-8">
       <div class="border subtle-border rounded-lg p-4 bg-black/15">
