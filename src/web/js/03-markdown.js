@@ -44,22 +44,46 @@ function renderMd(md) {
 
 // Interactive Markdown checkboxes: clicking a task-list checkbox
 // (`- [ ]` / `- [x]`) toggles the state AND rewrites the line in the .md file via
-// PUT /api/file. The order of checkboxes in the DOM follows the order of markers
-// in the source (marked renders in document order), so the DOM index = the Nth
-// markdown marker — we flip that very marker.
+// PUT /api/file. The clicked box is the Nth rendered checkbox; to flip the right
+// source line we must count markers EXACTLY as marked emits checkboxes — otherwise
+// the Nth box maps to the wrong line. Two divergences to mirror:
+//   • a `- [ ]` inside a fenced code block (``` / ~~~) renders NO checkbox → skip it;
+//   • a blockquoted task (`> - [ ]`) DOES render a checkbox → count it (strip the
+//     `>` prefix first). Note marked here does not honour a fence nested in a
+//     blockquote, so fences are detected only OUTSIDE blockquotes.
 // Window (per path) signaling we just wrote this doc ourselves (checkbox
 // toggle): the live-reload SSE that follows the commit must then NOT re-render
 // the doc (the viewer already reflects the change) — cf. softReload.
 const _selfSaveUntil = {};
+// In-flight checkbox writes (the PUT /api/file fired by a task toggle). The task
+// rollup is computed LIVE from the files on disk, so opening the list right after
+// ticking a box must wait for that write to land — otherwise the GET reads the
+// pre-toggle file and the box shows back unchecked. loadTasksIndex awaits these.
+const _taskWrites = new Set();
 const TASK_MARK_RE = /^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/;
+const _FENCE_RE = /^(?:`{3,}|~{3,})/;
+const _BQ_RE = /^\s*>[ \t]?/;            // one blockquote level
+// Strip every leading blockquote level → [content, wasQuoted].
+function _stripBlockquote(line) {
+  let s = line, quoted = false;
+  while (_BQ_RE.test(s)) { s = s.replace(_BQ_RE, ''); quoted = true; }
+  return [s, quoted];
+}
 function toggleNthTaskMarker(content, index, checked) {
   const lines = content.split('\n');
-  let n = -1;
+  let n = -1, inFence = false;
   for (let i = 0; i < lines.length; i++) {
-    if (!TASK_MARK_RE.test(lines[i])) continue;
+    const [unquoted, quoted] = _stripBlockquote(lines[i]);
+    // Top-level fence toggles code mode (its tasks render no checkbox); a fence
+    // inside a blockquote is not honoured by marked here, so we ignore it.
+    if (!quoted && _FENCE_RE.test(lines[i].trimStart())) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    if (!TASK_MARK_RE.test(unquoted)) continue;
     n++;
     if (n === index) {
-      lines[i] = lines[i].replace(TASK_MARK_RE, '$1' + (checked ? 'x' : ' ') + '$3');
+      // Rewrite the marker on the unquoted body, preserving the `>` prefix.
+      const prefix = lines[i].slice(0, lines[i].length - unquoted.length);
+      lines[i] = prefix + unquoted.replace(TASK_MARK_RE, '$1' + (checked ? 'x' : ' ') + '$3');
       return lines.join('\n');
     }
   }

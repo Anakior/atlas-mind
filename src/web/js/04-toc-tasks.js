@@ -22,7 +22,9 @@ function wireTaskCheckboxes(file, fullContent) {
       // The server commit will trigger a live-reload SSE; we neutralize it for
       // this doc for a few seconds (we already have the correct render).
       _selfSaveUntil[file.path] = Date.now() + 6000;
-      fetch('/api/file', {
+      // Tracked in _taskWrites so the live task rollup (loadTasksIndex) waits for
+      // this write to land before reading /_tasks-index.json off the disk.
+      const write = fetch('/api/file', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: file.path, content: newContent })
@@ -39,6 +41,8 @@ function wireTaskCheckboxes(file, fullContent) {
         box.checked = !desired;
         alert(t('err', e.message));
       });
+      _taskWrites.add(write);
+      write.finally(() => _taskWrites.delete(write));
     });
   });
 }
