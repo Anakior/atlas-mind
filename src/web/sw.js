@@ -16,7 +16,9 @@
  */
 const CACHE_VERSION = 'atlas-cache-__ENGINE_VERSION__';
 const PRECACHE = [
-  '/', '/manifest.json', '/icon.svg',
+  '/',
+  '/manifest.json',
+  '/icon.svg',
   // Libs vendorées (chargées par le shell — voir web/viewer.html).
   '/vendor/tailwind.css',
   '/vendor/fonts.css',
@@ -47,18 +49,22 @@ const BYPASS = ['/api/', '/login', '/logout', '/s/', '/mcp/', '/webhook/', '/.we
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION)
+    caches
+      .open(CACHE_VERSION)
       .then((c) => c.addAll(PRECACHE))
       .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting())  // un asset de precache absent ne doit pas bloquer l'install
+      .catch(() => self.skipWaiting()), // un asset de precache absent ne doit pas bloquer l'install
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))),
+      )
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -66,12 +72,14 @@ self.addEventListener('activate', (event) => {
 function putInCache(request, response) {
   if (!response || (response.status !== 200 && response.type !== 'opaque')) return;
   const copy = response.clone();
+
   caches.open(CACHE_VERSION).then((c) => c.put(request, copy));
 }
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  if (req.method !== 'GET') return;  // on ne touche qu'aux GET
+
+  if (req.method !== 'GET') return; // on ne touche qu'aux GET
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
@@ -85,10 +93,12 @@ self.addEventListener('fetch', (event) => {
         .then((res) => {
           // Ne pas cacher une redirection vers /login comme si c'était le shell.
           if (res.ok && !res.redirected) putInCache('/', res);
+
           return res;
         })
-        .catch(() => caches.match('/'))
+        .catch(() => caches.match('/')),
     );
+
     return;
   }
 
@@ -96,9 +106,14 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(req).then((cached) => {
       const network = fetch(req)
-        .then((res) => { putInCache(req, res); return res; })
+        .then((res) => {
+          putInCache(req, res);
+
+          return res;
+        })
         .catch(() => cached);
+
       return cached || network;
-    })
+    }),
   );
 });

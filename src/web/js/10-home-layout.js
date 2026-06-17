@@ -1,43 +1,74 @@
 function renderRecent() {
-  const files = Object.values(fileMap).filter(f => f.ext === '.md' && f.mtime).sort((a, b) => b.mtime - a.mtime).slice(0, 3);
+  const files = Object.values(fileMap)
+    .filter((f) => f.ext === '.md' && f.mtime)
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, 3);
+
   if (files.length === 0) return;
   recentSection.classList.remove('hidden');
-  recentList.innerHTML = files.map(f => `
+  recentList.innerHTML = files
+    .map(
+      (f) => `
     <li class="overflow-hidden"><a class="tree-item w-full flex flex-col px-2 py-1 rounded cursor-pointer" data-path="${f.path}">
       <span class="block text-xs text-ink-200 truncate w-full" data-name="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
       <span class="text-[10px] text-ink-500">${relativeDate(f.mtime)}</span>
     </a></li>
-  `).join('');
-  recentList.querySelectorAll('a').forEach(a => {
-    a.addEventListener('click', (e) => { e.preventDefault(); const f = fileMap[a.dataset.path]; if (f) { showMarkdown(f); history.replaceState(null, '', '#' + encodeURIComponent(f.path)); } });
+  `,
+    )
+    .join('');
+  recentList.querySelectorAll('a').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const f = fileMap[a.dataset.path];
+
+      if (f) {
+        showMarkdown(f);
+        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+      }
+    });
   });
 }
+
 renderRecent();
 
 // Custom tooltip for truncated filenames
 const tooltipEl = document.createElement('div');
-tooltipEl.className = 'fixed pointer-events-none bg-navy-800/95 border subtle-border text-ink-100 text-xs px-3 py-1.5 rounded-md shadow-2xl shadow-black/70 z-50 opacity-0 max-w-md whitespace-nowrap font-medium';
-tooltipEl.style.cssText += ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:opacity 0.12s ease, transform 0.12s ease;transform:translateY(-50%) translateX(-4px);';
+
+tooltipEl.className =
+  'fixed pointer-events-none bg-navy-800/95 border subtle-border text-ink-100 text-xs px-3 py-1.5 rounded-md shadow-2xl shadow-black/70 z-50 opacity-0 max-w-md whitespace-nowrap font-medium';
+tooltipEl.style.cssText +=
+  ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:opacity 0.12s ease, transform 0.12s ease;transform:translateY(-50%) translateX(-4px);';
 document.body.appendChild(tooltipEl);
 
 function isTruncated(el) {
   return el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
 }
+
 function positionTooltip(target) {
   const rect = target.getBoundingClientRect();
   const GAP = 14;
-  tooltipEl.style.left = (rect.right + GAP) + 'px';
-  tooltipEl.style.top = (rect.top + rect.height / 2) + 'px';
+
+  tooltipEl.style.left = rect.right + GAP + 'px';
+  tooltipEl.style.top = rect.top + rect.height / 2 + 'px';
   requestAnimationFrame(() => {
     const tipRect = tooltipEl.getBoundingClientRect();
+
     if (tipRect.right > window.innerWidth - 8) {
-      tooltipEl.style.left = (rect.left - tipRect.width - GAP) + 'px';
+      tooltipEl.style.left = rect.left - tipRect.width - GAP + 'px';
     }
   });
 }
+
 document.addEventListener('mouseover', (e) => {
   const target = e.target.closest('[data-name]');
-  if (!target || !isTruncated(target)) { tooltipEl.style.opacity = '0'; tooltipEl.style.transform = 'translateY(-50%) translateX(-4px)'; return; }
+
+  if (!target || !isTruncated(target)) {
+    tooltipEl.style.opacity = '0';
+    tooltipEl.style.transform = 'translateY(-50%) translateX(-4px)';
+
+    return;
+  }
+
   tooltipEl.textContent = target.dataset.name;
   positionTooltip(target);
   tooltipEl.style.opacity = '1';
@@ -61,106 +92,208 @@ function showWelcome() {
   const byCategory = {};
   let totalWords = 0;
   let longestDoc = null;
+
   for (const f of Object.values(fileMap)) {
     if (f.ext !== '.md') continue;
     const parts = f.path.split('/');
     const cat = parts.length >= 2 ? parts[0] + (parts.length >= 3 ? '/' + parts[1] : '') : 'root';
+
     byCategory[cat] = (byCategory[cat] || 0) + 1;
+
     if (f.words) {
       totalWords += f.words;
+
       if (!longestDoc || f.words > longestDoc.words) longestDoc = { file: f, words: f.words };
     }
   }
+
   const catEntries = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
-  const recent = Object.values(fileMap).filter(f => f.ext === '.md' && f.mtime).sort((a, b) => b.mtime - a.mtime).slice(0, 4);
-  const todoSummary = todos.length ? `${todos.filter(t => t.done).length}/${todos.length}` : '–';
+  const recent = Object.values(fileMap)
+    .filter((f) => f.ext === '.md' && f.mtime)
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, 4);
+  const todoSummary = todos.length ? `${todos.filter((t) => t.done).length}/${todos.length}` : '–';
 
   const HEATMAP_WEEKS = 53;
   const dayMs = 86400 * 1000;
-  const now = new Date(); now.setHours(0,0,0,0);
+  const now = new Date();
+
+  now.setHours(0, 0, 0, 0);
   const todayDow = (now.getDay() + 6) % 7;
   const monday = new Date(now.getTime() - todayDow * dayMs);
   const startDate = new Date(monday.getTime() - (HEATMAP_WEEKS - 1) * 7 * dayMs);
   const cells = Array.from({ length: HEATMAP_WEEKS * 7 }, () => 0);
-  let weekModif = 0, prevWeekModif = 0;
+  let weekModif = 0,
+    prevWeekModif = 0;
   const startOfThisWeek = monday.getTime() / 1000;
   const startOfPrevWeek = (monday.getTime() - 7 * dayMs) / 1000;
+
   for (const f of Object.values(fileMap)) {
     if (f.ext !== '.md' || !f.mtime) continue;
-    const d = new Date(f.mtime * 1000); d.setHours(0,0,0,0);
+    const d = new Date(f.mtime * 1000);
+
+    d.setHours(0, 0, 0, 0);
     const diffDays = Math.floor((d.getTime() - startDate.getTime()) / dayMs);
+
     if (diffDays >= 0 && diffDays < HEATMAP_WEEKS * 7) {
       const week = Math.floor(diffDays / 7);
       const day = diffDays % 7;
+
       cells[week * 7 + day] += 1;
     }
+
     if (f.mtime >= startOfThisWeek) weekModif += 1;
     else if (f.mtime >= startOfPrevWeek) prevWeekModif += 1;
   }
+
   const maxCell = Math.max(1, ...cells);
   const heatmapCells = [];
+
   for (let w = 0; w < HEATMAP_WEEKS; w++) {
     for (let d = 0; d < 7; d++) {
       const count = cells[w * 7 + d];
-      const intensity = count === 0 ? 0 : Math.min(4, Math.ceil(count / maxCell * 4));
+      const intensity = count === 0 ? 0 : Math.min(4, Math.ceil((count / maxCell) * 4));
       const cellDate = new Date(startDate.getTime() + (w * 7 + d) * dayMs);
-      const color = ['#1a1820', 'rgba(29,155,209,0.18)', 'rgba(29,155,209,0.36)', 'rgba(29,155,209,0.6)', '#1d9bd1'][intensity];
-      const dateStr = cellDate.toLocaleDateString(LANG, { weekday: 'short', day: 'numeric', month: 'short' });
+      const color = [
+        '#1a1820',
+        'rgba(29,155,209,0.18)',
+        'rgba(29,155,209,0.36)',
+        'rgba(29,155,209,0.6)',
+        '#1d9bd1',
+      ][intensity];
+      const dateStr = cellDate.toLocaleDateString(LANG, {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      });
       const tip = (count === 0 ? t('heatNone') : t('heatCount', count)) + ' · ' + dateStr;
-      heatmapCells.push('<div data-tip="' + tip + '" style="background:' + color + ';border-radius:2px;cursor:default;"></div>');
+
+      heatmapCells.push(
+        '<div data-tip="' +
+          tip +
+          '" style="background:' +
+          color +
+          ';border-radius:2px;cursor:default;"></div>',
+      );
     }
   }
+
   const weekDelta = weekModif - prevWeekModif;
   const weekDeltaTxt = weekDelta === 0 ? '=' : (weekDelta > 0 ? '+' : '') + weekDelta;
   const weekDeltaColor = weekDelta > 0 ? '#4ade80' : weekDelta < 0 ? '#f87171' : '#868a90';
 
-  const categoryItems = catEntries.map(([cat, n]) => {
-    return '<div class="flex items-center justify-between px-3 py-2 rounded border subtle-border bg-black/15 hover:bg-black/25 transition"><span class="text-sm text-ink-200 font-mono truncate">' + escapeHtml(cat) + '</span><span class="text-xs text-ink-400 font-semibold ml-2">' + n + '</span></div>';
-  }).join('');
+  const categoryItems = catEntries
+    .map(([cat, n]) => {
+      return (
+        '<div class="flex items-center justify-between px-3 py-2 rounded border subtle-border bg-black/15 hover:bg-black/25 transition"><span class="text-sm text-ink-200 font-mono truncate">' +
+        escapeHtml(cat) +
+        '</span><span class="text-xs text-ink-400 font-semibold ml-2">' +
+        n +
+        '</span></div>'
+      );
+    })
+    .join('');
 
-  const recentItems = recent.map(f => {
-    return '<a data-recent-path="' + f.path + '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
-      '<div class="text-sm text-ink-100 font-medium font-sans truncate">' + escapeHtml(f.name) + '</div>' +
-      '<div class="text-[11px] text-ink-500 mt-0.5 font-sans">' + relativeDate(f.mtime) + ' · ' + escapeHtml(f.path.split('/').slice(0, -1).join('/') || t('rootLabel')) + '</div>' +
-      '</a>';
-  }).join('');
+  const recentItems = recent
+    .map((f) => {
+      return (
+        '<a data-recent-path="' +
+        f.path +
+        '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
+        '<div class="text-sm text-ink-100 font-medium font-sans truncate">' +
+        escapeHtml(f.name) +
+        '</div>' +
+        '<div class="text-[11px] text-ink-500 mt-0.5 font-sans">' +
+        relativeDate(f.mtime) +
+        ' · ' +
+        escapeHtml(f.path.split('/').slice(0, -1).join('/') || t('rootLabel')) +
+        '</div>' +
+        '</a>'
+      );
+    })
+    .join('');
 
   const longest = Object.values(fileMap)
-    .filter(f => f.ext === '.md' && f.words)
-    .sort((a, b) => b.words - a.words).slice(0, 6);
+    .filter((f) => f.ext === '.md' && f.words)
+    .sort((a, b) => b.words - a.words)
+    .slice(0, 6);
   const maxWords = longest.length ? longest[0].words : 1;
   const rankingHtml = longest.length
-    ? longest.map((f, i) => {
-        const pct = Math.max(4, Math.round(100 * f.words / maxWords));
-        return '<a data-recent-path="' + f.path + '" class="block cursor-pointer group">'
-          + '<div class="flex items-center gap-2">'
-          + '<span class="text-ink-500 font-mono text-xs w-4 text-right">' + (i + 1) + '</span>'
-          + '<span class="text-sm text-ink-200 group-hover:text-accent truncate flex-1">' + escapeHtml(f.name) + '</span>'
-          + '<span class="text-[11px] text-ink-500 font-mono whitespace-nowrap">' + f.words.toLocaleString(LANG) + '</span>'
-          + '</div>'
-          + '<div class="h-1 mt-1 ml-6 rounded bg-black/30 overflow-hidden"><div class="h-full rounded" style="width:' + pct + '%;background:rgba(29,155,209,0.55)"></div></div>'
-          + '</a>';
-      }).join('')
+    ? longest
+        .map((f, i) => {
+          const pct = Math.max(4, Math.round((100 * f.words) / maxWords));
+
+          return (
+            '<a data-recent-path="' +
+            f.path +
+            '" class="block cursor-pointer group">' +
+            '<div class="flex items-center gap-2">' +
+            '<span class="text-ink-500 font-mono text-xs w-4 text-right">' +
+            (i + 1) +
+            '</span>' +
+            '<span class="text-sm text-ink-200 group-hover:text-accent truncate flex-1">' +
+            escapeHtml(f.name) +
+            '</span>' +
+            '<span class="text-[11px] text-ink-500 font-mono whitespace-nowrap">' +
+            f.words.toLocaleString(LANG) +
+            '</span>' +
+            '</div>' +
+            '<div class="h-1 mt-1 ml-6 rounded bg-black/30 overflow-hidden"><div class="h-full rounded" style="width:' +
+            pct +
+            '%;background:rgba(29,155,209,0.55)"></div></div>' +
+            '</a>'
+          );
+        })
+        .join('')
     : '<span class="text-sm text-ink-500">—</span>';
 
   // Tag cloud: font size ∝ number of docs.
   const tagCounts = {};
+
   for (const f of Object.values(fileMap)) {
     if (f.ext !== '.md') continue;
-    for (const t of (f.tags || [])) tagCounts[t] = (tagCounts[t] || 0) + 1;
-  }
-  const tagEntries = Object.entries(tagCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const maxTagCount = tagEntries.length ? tagEntries[0][1] : 1;
-  const tagCloud = tagEntries.map(([t, n]) => {
-    const scale = (0.78 + 0.5 * (n / maxTagCount)).toFixed(2);
-    return '<button class="doc-tag" data-hometag="' + escapeHtml(t) + '" style="font-size:' + scale + 'rem">#' + escapeHtml(t) + '<span class="doc-tag-count">' + n + '</span></button>';
-  }).join('');
 
-  const pinnedDocs = pins.map(p => fileMap[p]).filter(Boolean);
+    for (const t of f.tags || []) tagCounts[t] = (tagCounts[t] || 0) + 1;
+  }
+
+  const tagEntries = Object.entries(tagCounts).sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  const maxTagCount = tagEntries.length ? tagEntries[0][1] : 1;
+  const tagCloud = tagEntries
+    .map(([t, n]) => {
+      const scale = (0.78 + 0.5 * (n / maxTagCount)).toFixed(2);
+
+      return (
+        '<button class="doc-tag" data-hometag="' +
+        escapeHtml(t) +
+        '" style="font-size:' +
+        scale +
+        'rem">#' +
+        escapeHtml(t) +
+        '<span class="doc-tag-count">' +
+        n +
+        '</span></button>'
+      );
+    })
+    .join('');
+
+  const pinnedDocs = pins.map((p) => fileMap[p]).filter(Boolean);
   const pinnedHtml = pinnedDocs.length
-    ? pinnedDocs.map(f => '<a data-recent-path="' + f.path + '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
-        '<div class="text-sm text-ink-100 font-medium font-sans truncate">' + escapeHtml(f.name) + '</div>' +
-        '<div class="text-[11px] text-ink-500 mt-0.5 font-sans truncate">' + escapeHtml(f.path.split('/').slice(0, -1).join('/') || t('rootLabel')) + '</div></a>').join('')
+    ? pinnedDocs
+        .map(
+          (f) =>
+            '<a data-recent-path="' +
+            f.path +
+            '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
+            '<div class="text-sm text-ink-100 font-medium font-sans truncate">' +
+            escapeHtml(f.name) +
+            '</div>' +
+            '<div class="text-[11px] text-ink-500 mt-0.5 font-sans truncate">' +
+            escapeHtml(f.path.split('/').slice(0, -1).join('/') || t('rootLabel')) +
+            '</div></a>',
+        )
+        .join('')
     : '<div class="text-sm text-ink-500">' + t('noFavorites') + '</div>';
 
   contentEl.innerHTML = `
@@ -174,7 +307,7 @@ function showWelcome() {
       </div>
       <div class="border subtle-border rounded-lg p-4 bg-black/15">
         <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t('statWords')}</div>
-        <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${(totalWords/1000).toFixed(1)}k</div>
+        <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${(totalWords / 1000).toFixed(1)}k</div>
         <div class="text-[11px] text-ink-400 mt-0.5">${t('statWordsSub', Math.round(totalWords / 220))}</div>
       </div>
       <div class="border subtle-border rounded-lg p-4 bg-black/15">
@@ -236,45 +369,66 @@ function showWelcome() {
       <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">N</kbd> ${t('hintNewTodo')}</span>
     </div>
   `;
-  contentEl.querySelectorAll('[data-recent-path]').forEach(a => {
+  contentEl.querySelectorAll('[data-recent-path]').forEach((a) => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
       const f = fileMap[a.dataset.recentPath];
-      if (f) { showMarkdown(f); history.replaceState(null, '', '#' + encodeURIComponent(f.path)); }
+
+      if (f) {
+        showMarkdown(f);
+        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+      }
     });
   });
-  contentEl.querySelectorAll('[data-hometag]').forEach(b => b.addEventListener('click', (e) => {
-    e.preventDefault(); showTag(b.dataset.hometag);
-  }));
+  contentEl.querySelectorAll('[data-hometag]').forEach((b) =>
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      showTag(b.dataset.hometag);
+    }),
+  );
   const homeGraphBtn = contentEl.querySelector('#home-graph-btn');
+
   if (homeGraphBtn) homeGraphBtn.addEventListener('click', openGraph);
   // Instant floating tooltip on the activity heatmap
   const hm = contentEl.querySelector('#home-heatmap');
+
   if (hm) {
     let tip = document.getElementById('hm-tip');
+
     if (!tip) {
       tip = document.createElement('div');
       tip.id = 'hm-tip';
-      tip.style.cssText = 'position:fixed;z-index:60;pointer-events:none;opacity:0;transition:opacity .1s;background:#1a1d29;border:1px solid #2a2c36;color:#e5e7eb;font:500 11px system-ui,sans-serif;padding:4px 8px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.45);white-space:nowrap;';
+      tip.style.cssText =
+        'position:fixed;z-index:60;pointer-events:none;opacity:0;transition:opacity .1s;background:#1a1d29;border:1px solid #2a2c36;color:#e5e7eb;font:500 11px system-ui,sans-serif;padding:4px 8px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.45);white-space:nowrap;';
       document.body.appendChild(tip);
     }
+
     hm.addEventListener('mouseover', (e) => {
       const cell = e.target.closest('[data-tip]');
-      if (cell) { tip.textContent = cell.dataset.tip; tip.style.opacity = '1'; }
-      else { tip.style.opacity = '0'; }
+
+      if (cell) {
+        tip.textContent = cell.dataset.tip;
+        tip.style.opacity = '1';
+      } else {
+        tip.style.opacity = '0';
+      }
     });
     hm.addEventListener('mousemove', (e) => {
-      tip.style.left = (e.clientX + 12) + 'px';
-      tip.style.top = (e.clientY - 34) + 'px';
+      tip.style.left = e.clientX + 12 + 'px';
+      tip.style.top = e.clientY - 34 + 'px';
     });
-    hm.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
+    hm.addEventListener('mouseleave', () => {
+      tip.style.opacity = '0';
+    });
   }
+
   breadcrumbPath.textContent = '/';
   breadcrumbDate.textContent = '';
   breadcrumbActions.classList.add('hidden');
   breadcrumbActions.classList.remove('flex');
   tocPanel.classList.add('hidden');
   tocPanel.classList.remove('flex');
+
   if (typeof tocShow !== 'undefined' && tocShow) tocShow.classList.add('hidden');
 }
 
@@ -287,7 +441,10 @@ const tocShow = document.getElementById('toc-show');
 
 let sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === '1';
 let tocHiddenMap = {};
-try { tocHiddenMap = JSON.parse(localStorage.getItem('toc-hidden-per-doc') || '{}'); } catch(e) {}
+
+try {
+  tocHiddenMap = JSON.parse(localStorage.getItem('toc-hidden-per-doc') || '{}');
+} catch (e) {}
 
 const isMobile = () => window.matchMedia('(max-width: 767px)').matches;
 
@@ -295,8 +452,10 @@ function applySidebar() {
   if (isMobile()) {
     sidebarEl.style.marginLeft = '';
     sidebarShowInline.classList.remove('hidden');
+
     return;
   }
+
   if (sidebarCollapsed) {
     sidebarEl.style.marginLeft = '-20rem';
     sidebarShowInline.classList.remove('hidden');
@@ -305,40 +464,59 @@ function applySidebar() {
     sidebarShowInline.classList.add('hidden');
   }
 }
+
 function toggleSidebar() {
   if (isMobile()) {
     document.body.classList.toggle('sidebar-open');
+
     return;
   }
+
   sidebarCollapsed = !sidebarCollapsed;
   localStorage.setItem('sidebar-collapsed', sidebarCollapsed ? '1' : '0');
   applySidebar();
 }
 
 const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+
 sidebarBackdrop.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
 treeEl.addEventListener('click', (e) => {
-  if (isMobile() && e.target.closest('a[data-path]')) document.body.classList.remove('sidebar-open');
+  if (isMobile() && e.target.closest('a[data-path]'))
+    document.body.classList.remove('sidebar-open');
 });
 window.addEventListener('resize', () => {
   if (!isMobile()) document.body.classList.remove('sidebar-open');
   applySidebar();
   applyToc();
 });
+
 function isTocHiddenForCurrent() {
   if (!currentFile) return false;
+
   return tocHiddenMap[currentFile.path] === true;
 }
+
 function applyToc() {
-  if (!currentFile) { tocPanel.classList.add('hidden'); tocPanel.classList.remove('flex'); tocShow.classList.add('hidden'); return; }
+  if (!currentFile) {
+    tocPanel.classList.add('hidden');
+    tocPanel.classList.remove('flex');
+    tocShow.classList.add('hidden');
+
+    return;
+  }
+
   const hasContent = tocList.children.length >= 2 || tocHasLinks || tocHasNotes;
+
   if (isMobile()) {
     tocPanel.classList.add('hidden');
     tocPanel.classList.remove('flex');
     tocShow.classList.toggle('hidden', !hasContent);
+
     return;
   }
+
   const hidden = isTocHiddenForCurrent();
+
   if (hidden || !hasContent) {
     tocPanel.classList.add('hidden');
     tocPanel.classList.remove('flex');
@@ -349,17 +527,24 @@ function applyToc() {
     tocShow.classList.add('hidden');
   }
 }
+
 function toggleToc() {
   if (!currentFile) return;
+
   if (isMobile()) {
     const wasHidden = tocPanel.classList.contains('hidden');
+
     tocPanel.classList.toggle('hidden', !wasHidden);
     tocPanel.classList.toggle('flex', wasHidden);
     tocShow.classList.toggle('hidden', wasHidden);
+
     return;
   }
+
   const path = currentFile.path;
+
   tocHiddenMap[path] = !isTocHiddenForCurrent();
+
   if (!tocHiddenMap[path]) delete tocHiddenMap[path];
   localStorage.setItem('toc-hidden-per-doc', JSON.stringify(tocHiddenMap));
   applyToc();
@@ -379,24 +564,36 @@ document.getElementById('home-link').addEventListener('click', () => {
 // Download .md button
 document.getElementById('btn-download').addEventListener('click', async () => {
   if (!currentFile) return;
+
   // Non-.md: download the ORIGINAL served as-is — loadContent would return text
   // and corrupt a binary .pdf/.docx.
   if (currentFile.ext !== '.md') {
     const fileUrl = '/' + currentFile.path.split('/').map(encodeURIComponent).join('/');
     const a = document.createElement('a');
+
     a.href = fileUrl;
     a.download = currentFile.name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+
     return;
   }
+
   let content;
-  try { content = await loadContent(currentFile); }
-  catch (e) { alert(t('cantLoadDoc', e.message)); return; }
+
+  try {
+    content = await loadContent(currentFile);
+  } catch (e) {
+    alert(t('cantLoadDoc', e.message));
+
+    return;
+  }
+
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
+
   a.href = url;
   a.download = currentFile.name;
   document.body.appendChild(a);
@@ -412,8 +609,7 @@ const paletteList = document.getElementById('palette-list');
 const paletteCount = document.getElementById('palette-count');
 let paletteItems = [];
 let paletteIdx = 0;
-let paletteNav = [];          // actions + files matched by name/path (instant)
-let paletteContent = [];      // files matched by content (async, via getSearchHits)
+let paletteNav = []; // actions + files matched by name/path (instant)
+let paletteContent = []; // files matched by content (async, via getSearchHits)
 let paletteSearchDebounce = null;
 let paletteSearchSeq = 0;
-
