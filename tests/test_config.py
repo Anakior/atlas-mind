@@ -28,6 +28,15 @@ import config  # noqa: E402
 from config import AtlasConfig, AtlasConfigError, resolve_mind_root  # noqa: E402
 
 
+def abs_path(*parts: str) -> str:
+    """An absolute path valid on the host OS (POSIX: /srv/x; Windows: C:\\srv\\x).
+
+    A bare "/srv/x" literal is NOT absolute on Windows (Path.is_absolute() is
+    False without a drive), so config treats it as mind-relative and the
+    exact-path assertions below break there — this keeps them cross-platform."""
+    return os.path.abspath(os.path.join(os.sep, *parts))
+
+
 class ConfigTestBase(unittest.TestCase):
     """A bare temporary mind per test (and a loader without ambient env)."""
 
@@ -101,7 +110,7 @@ class TestEnvOverrides(ConfigTestBase):
             "GIT_PULL_INTERVAL": "42",
             "GITHUB_WEBHOOK_SECRET": "hook",
             "ATLAS_STORE": "file",
-            "ATLAS_STORE_DIR": "/srv/registry",
+            "ATLAS_STORE_DIR": abs_path("srv", "registry"),
             "GITHUB_REPO_URL": "https://example.com/env.git",
         })
         self.assertEqual(cfg.port, 9999)
@@ -110,7 +119,7 @@ class TestEnvOverrides(ConfigTestBase):
         self.assertEqual(cfg.git_pull_interval, 42)
         self.assertEqual(cfg.github_webhook_secret, b"hook")
         self.assertEqual(cfg.store_kind, "file")
-        self.assertEqual(cfg.store_dir, Path("/srv/registry"))
+        self.assertEqual(cfg.store_dir, Path(abs_path("srv", "registry")))
         self.assertEqual(cfg.github_repo_url, "https://example.com/env.git")
 
     def test_kb_auth_enabled_keeps_historic_truthiness(self):
@@ -189,11 +198,11 @@ excluded_names = ["secret.md"]
         cfg = self.load(env={
             "PORT": "7777",
             "SESSION_SECRET": "env-secret",
-            "ATLAS_STORE_DIR": "/srv/from-env",
+            "ATLAS_STORE_DIR": abs_path("srv", "from-env"),
         })
         self.assertEqual(cfg.port, 7777)
         self.assertEqual(cfg.session_secret, b"env-secret")
-        self.assertEqual(cfg.store_dir, Path("/srv/from-env"))  # env beats toml dir
+        self.assertEqual(cfg.store_dir, Path(abs_path("srv", "from-env")))  # env beats toml dir
         # Keys not covered by the env stay from the toml.
         self.assertEqual(cfg.git_pull_interval, 60)
 

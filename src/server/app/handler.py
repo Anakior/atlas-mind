@@ -689,7 +689,12 @@ class Handler(SimpleHTTPRequestHandler):
                 target.relative_to(_s.CONFIG.dist_dir)
                 if target.is_file():
                     body = target.read_bytes()
-                    self._send_bytes(200, body, "text/html; charset=utf-8")
+                    # no-store: the shell inlines the app JS (__APP_JS__), so it
+                    # MUST be revalidated every load — otherwise the browser's HTTP
+                    # cache serves a stale shell (old JS) to the SW's network-first
+                    # fetch, and a deploy only lands after a manual hard reload.
+                    self._send_bytes(200, body, "text/html; charset=utf-8",
+                                     [("Cache-Control", "no-store")])
                     return
             except (ValueError, OSError):
                 pass
