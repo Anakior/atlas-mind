@@ -592,6 +592,7 @@ class TestCloudFileStoreShares(unittest.TestCase):
             "role": "api",
             "api_token_hash": hashlib.sha256(api_token.encode()).hexdigest(),
             "password_hash": "$2b$12$" + "x" * 53,
+            "acts_as": ADMIN_EMAIL,  # bound to admin → may move (owner-level write)
         })
         self.srv.put(
             "/api/file",

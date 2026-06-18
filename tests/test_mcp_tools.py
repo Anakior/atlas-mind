@@ -27,15 +27,20 @@ if _TESTS_DIR not in sys.path:
     sys.path.insert(0, _TESTS_DIR)
 
 from harness import AtlasServer  # noqa: E402
-from test_cloud_filestore import cloud_env, file_store_of, API_EMAIL  # noqa: E402
+from test_cloud_filestore import cloud_env, file_store_of, API_EMAIL, ADMIN_EMAIL  # noqa: E402
 
 
 def _seed_api_token(srv):
     token = secrets.token_hex(32)
-    file_store_of(srv).upsert_user(API_EMAIL, {
+    fs = file_store_of(srv)
+    # Model B: a token is bound to a human via acts_as. Here it acts as the admin
+    # so the write tools (delete_doc, doc_revert, move_doc) are authorized.
+    fs.upsert_user(ADMIN_EMAIL, {"role": "admin"})
+    fs.upsert_user(API_EMAIL, {
         "role": "api",
         "api_token_hash": hashlib.sha256(token.encode()).hexdigest(),
         "password_hash": "$2b$12$" + "x" * 53,  # unusable sentinel
+        "acts_as": ADMIN_EMAIL,
     })
     return token
 

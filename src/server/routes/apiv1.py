@@ -60,6 +60,7 @@ def post(handler):
     sess = handler._require_api_bearer()
     if not sess:
         return
+    ctx = _s.viewer_ctx(sess)
     if handler.path != "/api/v1/file":
         handler._send_json(404, {"error": "unknown endpoint"})
         return
@@ -70,6 +71,9 @@ def post(handler):
     if not target:
         handler._send_json(400, {"error": "invalid path (must be a .md or .html inside root, no '..')"})
         return
+    if not _s.can_read(rel, ctx):  # create where you can see; the new doc is owned by you
+        handler._send_json(403, {"error": "insufficient permission to create at this location"})
+        return
     if target.exists():
         handler._send_json(409, {"error": "document already exists (create-only token)"})
         return
@@ -78,5 +82,10 @@ def post(handler):
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
+    if ctx.primary and not ctx.is_admin:  # ownership-on-create (model B)
+        try:
+            _s.get_store().set_owner(rel, ctx.primary)
+        except Exception:
+            pass
     _s.trigger_sync()
     handler._send_json(201, {"ok": True, "path": rel, "mtime": int(target.stat().st_mtime)})
