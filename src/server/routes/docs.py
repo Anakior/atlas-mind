@@ -40,8 +40,8 @@ def tree(handler):
     """GET /api/tree — the navigable document tree, filtered per-viewer (auth)."""
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
-        hidden = handler._hidden_folders()
-        keep = (lambda p: not _s._path_hidden(p, hidden)) if hidden else None
+        ctx = handler._viewer_ctx()
+        keep = None if ctx.is_admin else (lambda p: _s.can_read(p, ctx))
         tree = _s._filter_tree(tree, keep)
         handler._send_json(200, tree)
     except Exception as e:
@@ -61,10 +61,8 @@ def search(handler):
         limit = min(50, max(1, int(query.get("limit", ["50"])[0])))
     except ValueError:
         limit = 50
-    results = _s._api_search(q, limit)
-    hidden = handler._hidden_folders()
-    if hidden:
-        results = [r for r in results if not _s._path_hidden(r.get("path", ""), hidden)]
+    ctx = handler._viewer_ctx()
+    results = _s._api_search(q, limit, None if ctx.is_admin else ctx)
     handler._send_json(200, results)
 
 
