@@ -225,7 +225,8 @@ def verify_api_bearer(authorization_header: str):
             _s.get_store().touch_last_used(user)
         except Exception:
             pass
-        return {"email": user.get("email", "claude@api.local"), "role": _s.API_ROLE}
+        return {"email": user.get("email", "claude@api.local"), "role": _s.API_ROLE,
+                "acts_as": user.get("acts_as")}
     except Exception as e:
         print(f"[verify_api_bearer] registry lookup failed: {e}", file=sys.stderr)
         return None
@@ -249,3 +250,24 @@ def _verify_mcp_token(token: str) -> bool:
     except Exception as e:
         print(f"[verify_mcp_token] registry lookup failed: {e}", file=sys.stderr)
         return False
+
+
+def resolve_mcp_identity(token: str):
+    """Identity {email, role, acts_as?} behind an MCP token (/mcp/<token>), or
+    None. Unlike _verify_mcp_token (a bool), it KEEPS the identity so the dispatch
+    can enforce per-document ACL. Touches last_used best-effort."""
+    if not token:
+        return None
+    try:
+        user = _s.get_store().find_api_identity(_hash_api_token(token))
+        if not user:
+            return None
+        try:
+            _s.get_store().touch_last_used(user)
+        except Exception:
+            pass
+        return {"email": user.get("email", "claude@api.local"),
+                "role": _s.API_ROLE, "acts_as": user.get("acts_as")}
+    except Exception as e:
+        print(f"[resolve_mcp_identity] registry lookup failed: {e}", file=sys.stderr)
+        return None

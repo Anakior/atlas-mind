@@ -94,10 +94,14 @@ from server.pure.auth import (  # noqa: F401  token/CSRF/share/bearer crypto + i
     current_session_epoch, make_token, verify_token, authenticate_user, authenticate,
     new_share_token, verify_share_token, make_csrf_token, verify_csrf_token,
     consume_recovery_code, _hash_api_token, verify_api_bearer, _verify_mcp_token,
+    resolve_mcp_identity,
 )
 from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live tasks / search text
     _path_hidden, _filter_tree, _valid_git_rev, _doc_path_history, _doc_path_at,
     _live_tasks_index, _normalize_text, _html_to_text, _HTML_BLOCK_RE,
+)
+from server.pure.acl import (  # noqa: F401  per-document ACL (model B — partage à la Notion)
+    ViewerCtx, viewer_ctx, effective_level, can_read, can_write, LEVELS,
 )
 from server.pure.hive import (  # noqa: F401  federation node links / mirror / fetch
     encode_node_link, decode_node_link, verify_node_bearer, _validate_node_path,
