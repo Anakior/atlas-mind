@@ -91,12 +91,18 @@ class Handler(SimpleHTTPRequestHandler):
         return [f.strip("/") for f in folders if isinstance(f, str) and f.strip("/")]
 
     def _viewer_ctx(self):
-        """Per-request ACL context (model B). Admin / local mode / no-auth → admin
-        bypass (sees everything). A logged-in viewer → subject to the per-document
-        ACL. The 'api' role never reaches here (no cookie session)."""
+        """Per-request ACL context (model B). No session (local mode / no-auth) →
+        superuser bypass (single operator on their own machine). A logged-in
+        account (admin or viewer) → subject to the per-document ACL; the admin
+        additionally curates the commons but does NOT see another user's private
+        doc. The 'api' role never reaches here (no cookie session)."""
         sess = self._session()
-        if not sess or sess.get("role") == "admin":
-            return _s.ViewerCtx(set(), True, None)
+        # Local mode (auth disabled) = single operator on their own machine →
+        # superuser, regardless of the simulated admin session. (Cloud always has
+        # a real session behind the AUTH guard; no-session is treated the same,
+        # defensively.)
+        if not _s.CONFIG.auth_enabled or not sess:
+            return _s.ViewerCtx(set(), True, None, superuser=True)
         return _s.viewer_ctx(sess)
 
     def _serve_index_filtered(self, rel):
@@ -104,7 +110,7 @@ class Handler(SimpleHTTPRequestHandler):
         can't read REMOVED (else the Mind/backlinks leak their names). Admin (no
         restriction) → fast static gzip path."""
         ctx = self._viewer_ctx()
-        if ctx.is_admin:
+        if ctx.superuser:
             self._serve_static_gzip(rel, "application/json; charset=utf-8")
             return
         try:
@@ -615,7 +621,7 @@ class Handler(SimpleHTTPRequestHandler):
         # (no-existence-oracle). The same posixpath-normalized form is checked, so
         # %2f / double-slash tricks can't slip a private doc past the gate.
         _vctx = self._viewer_ctx()
-        if not _vctx.is_admin and not _s.can_read(_decoded, _vctx):
+        if not _vctx.superuser and not _s.can_read(_decoded, _vctx):
             self.send_error(404)
             return
         # _backlinks.json: served gzip + ETag 304 (static handler doesn't compress).
@@ -632,7 +638,7 @@ class Handler(SimpleHTTPRequestHandler):
         if rel == "_tasks-index.json":
             tasks = _s._live_tasks_index()
             ctx = self._viewer_ctx()
-            if not ctx.is_admin:
+            if not ctx.superuser:
                 tasks = [t for t in tasks if _s.can_read(t.get("path", ""), ctx)]
             self._send_json(200, tasks)
             return

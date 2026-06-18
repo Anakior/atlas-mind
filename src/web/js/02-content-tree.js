@@ -101,12 +101,23 @@ function renderTree(node, depth = 0, prefix = '') {
       const dirShareBtn = isRemote
         ? ''
         : `<span class="dir-share-btn tree-action-btn tree-action-btn--share" title="${t('shareAsNode')}">${LINK_ICON}</span>`;
+      // Manage the folder's ACL (model B): cascades to children by inheritance.
+      const dirAccessBtn = isRemote
+        ? ''
+        : `<span class="dir-access-btn tree-action-btn" title="${t('aclBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/></svg></span>`;
 
-      btn.innerHTML = `<span class="caret text-xs text-ink-400">&#9656;</span>${isRemoteRoot ? REMOTE_FOLDER_ICON : FOLDER_ICON}<span class="truncate min-w-0 flex-1" data-name="${child.name.replace(/"/g, '&quot;')}">${dirLabel}</span><span class="dir-rename-btn tree-action-btn" title="${t('renameFolder')}">${PENCIL_ICON}</span>${dirShareBtn}`;
+      btn.innerHTML = `<span class="caret text-xs text-ink-400">&#9656;</span>${isRemoteRoot ? REMOTE_FOLDER_ICON : FOLDER_ICON}<span class="truncate min-w-0 flex-1" data-name="${child.name.replace(/"/g, '&quot;')}">${dirLabel}</span>${dirAccessBtn}<span class="dir-rename-btn tree-action-btn" title="${t('renameFolder')}">${PENCIL_ICON}</span>${dirShareBtn}`;
       const sub = renderTree(child, depth + 1, childPath);
 
       sub.classList.add('hidden');
       btn.addEventListener('click', (e) => {
+        if (e.target.closest('.dir-access-btn')) {
+          e.stopPropagation();
+          if (window.openAccessFor) window.openAccessFor(childPath);
+
+          return;
+        }
+
         if (e.target.closest('.dir-share-btn')) {
           e.stopPropagation();
           openPublishNode(childPath);
@@ -230,9 +241,15 @@ async function decorateRemoteOrigins() {
   }
 }
 
-treeEl.appendChild(renderTree(TREE));
-decorateTreeBadges();
-decorateRemoteOrigins();
+// In SERVER mode the baked tree is the FULL build-time view (generated as the
+// owner). Never render it — a viewer would see private names in the menu. The
+// bootstrap fetches /api/tree (filtered per account) on init via softReload().
+// Only the offline/file:// build renders the embedded tree directly.
+if (!location.protocol.startsWith('http')) {
+  treeEl.appendChild(renderTree(TREE));
+  decorateTreeBadges();
+  decorateRemoteOrigins();
+}
 
 marked.setOptions({ gfm: true, breaks: false });
 // marked ≥ v5 removed the `highlight` setOptions option (silently ignored by the

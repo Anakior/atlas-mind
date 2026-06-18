@@ -41,7 +41,7 @@ def tree(handler):
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
         ctx = handler._viewer_ctx()
-        keep = None if ctx.is_admin else (lambda p: _s.can_read(p, ctx))
+        keep = None if ctx.superuser else (lambda p: _s.can_read(p, ctx))
         tree = _s._filter_tree(tree, keep)
         handler._send_json(200, tree)
     except Exception as e:
@@ -62,7 +62,7 @@ def search(handler):
     except ValueError:
         limit = 50
     ctx = handler._viewer_ctx()
-    results = _s._api_search(q, limit, None if ctx.is_admin else ctx)
+    results = _s._api_search(q, limit, None if ctx.superuser else ctx)
     handler._send_json(200, results)
 
 

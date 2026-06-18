@@ -37,12 +37,17 @@ class ViewerCtx:
     - ``is_admin``: bypasses the ACL entirely (sees/owns everything).
     - ``primary``: the principal stamped as ``owner`` on create (or None).
     """
-    __slots__ = ("principals", "is_admin", "primary")
+    __slots__ = ("principals", "is_admin", "primary", "superuser")
 
-    def __init__(self, principals, is_admin, primary):
+    def __init__(self, principals, is_admin, primary, superuser=False):
         self.principals = frozenset(principals)
+        # is_admin: curates the COMMONS (owner-level on ownerless paths) but is
+        # NOT special inside another user's private space.
         self.is_admin = is_admin
         self.primary = primary
+        # superuser: full bypass (sees everything), reserved for LOCAL mode — the
+        # single operator on their own machine. Never set from a cloud identity.
+        self.superuser = superuser
 
 
 # Anonymous caller (no session, no token): no principals → only share-links and
@@ -111,11 +116,12 @@ def _ancestors(rel):
 def effective_level(rel, ctx, store=None):
     """The level ``ctx`` effectively has on ``rel``, or ``None`` for no access.
 
-    Order: admin bypass → owner → most-permissive applicable grant → *socle
-    commun* (``view``) when no owner governs the chain.
+    Order: superuser bypass → owner of the doc → most-permissive grant → on a
+    commons (ownerless) path the admin curates (owner) and others get *view*.
+    A doc owned by someone else is hidden even from the admin.
     """
-    if ctx.is_admin:
-        return "owner"
+    if ctx.superuser:
+        return "owner"  # local single-operator → full bypass
     store = store or _s.get_store()
     now = int(time.time())
 
@@ -125,20 +131,15 @@ def effective_level(rel, ctx, store=None):
         if entry:
             present.append((idx, entry))
 
-    if not present:
-        return "view" if "*" in ctx.principals else None
-
     # Most-specific entry that declares an owner = the privacy boundary.
-    owner_idx = None
+    owner_idx, owner = None, None
     for idx, entry in present:
         if entry.get("owner"):
-            owner_idx = idx
-            if entry["owner"] in ctx.principals:
-                return "owner"
+            owner_idx, owner = idx, entry["owner"]
             break
 
-    # Most permissive grant among applicable entries (at or below the boundary;
-    # ancestors above an owned boundary are cut — the inheritance trap).
+    # Most permissive grant for ctx among applicable entries (at or below the
+    # boundary; ancestors above an owned boundary are cut — the inheritance trap).
     best = None
     for idx, entry in present:
         if owner_idx is not None and idx > owner_idx:
@@ -152,11 +153,20 @@ def effective_level(rel, ctx, store=None):
             rank = LEVELS.get(g.get("level"))
             if rank and (best is None or rank > LEVELS[best]):
                 best = g["level"]
+
+    if owner is not None:
+        # Private space (owned). NO admin bypass: the admin sees it only as the
+        # owner or via an explicit grant, exactly like anyone else.
+        if owner in ctx.principals:
+            return "owner"
+        return best  # a grant level, or None (hidden — including from the admin)
+
+    # Not governed by an owner → commons. The admin CURATES it (owner-level); any
+    # other authenticated account gets at least view, raised by a matching grant.
+    if ctx.is_admin:
+        return "owner"
     if best is not None:
         return best
-
-    if owner_idx is not None:
-        return None  # owned, ctx is neither owner nor grantee → private
     return "view" if "*" in ctx.principals else None
 
 
@@ -169,3 +179,10 @@ def can_write(rel, ctx, need="edit", store=None):
     """True if ``ctx`` reaches ``need`` (``edit`` or ``owner``) on ``rel``."""
     level = effective_level(rel, ctx, store)
     return level is not None and LEVELS[level] >= LEVELS[need]
+
+
+def can_manage(rel, ctx, store=None):
+    """True if ``ctx`` may change the *sharing* of ``rel`` — it resolves to
+    ``owner``: it owns the doc, OR it is the admin/superuser on a commons (no
+    owner) doc. The admin does NOT manage another user's private doc."""
+    return effective_level(rel, ctx, store) == "owner"

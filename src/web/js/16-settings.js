@@ -192,7 +192,8 @@ function settingsSelectTab(name) {
   else if (name === 'nodes') {
     loadSettingsNodes();
     loadSettingsRemotes();
-  } else if (name === 'security') refreshSecurityState();
+  } else if (name === 'groups') loadSettingsGroups();
+  else if (name === 'security') refreshSecurityState();
 }
 
 // Node name from a path: last segment, slugified.
@@ -1113,6 +1114,129 @@ settingsRemotesList.addEventListener('click', async (e) => {
     showSettingsError(err.message);
   }
 });
+
+// ── Groups (model B principals group:<name>) ──
+async function loadSettingsGroups() {
+  const list = document.getElementById('settings-groups-list');
+
+  if (!list) return;
+  list.innerHTML = '';
+
+  try {
+    const groups = await settingsFetch('/api/admin/groups'); // { name: [emails] }
+    const names = Object.keys(groups || {}).sort();
+
+    if (!names.length) {
+      list.innerHTML = '<li class="text-xs text-ink-500">' + t('settingsNoGroups') + '</li>';
+
+      return;
+    }
+
+    list.innerHTML = names
+      .map((name) => {
+        const members = groups[name] || [];
+        const nameEsc = escapeHtml(name);
+        const membersEsc = escapeHtml(members.join(', '));
+
+        return (
+          '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-xs">' +
+          '<div class="admin-row">' +
+          '<div class="flex-1 min-w-0">' +
+          '<div class="text-ink-100 font-medium font-mono truncate">' +
+          nameEsc +
+          '</div>' +
+          '<div class="text-ink-400 text-[11px] mt-0.5 truncate" title="' +
+          membersEsc +
+          '">' +
+          (members.length
+            ? membersEsc
+            : '<span class="text-ink-500">' + t('settingsGroupEmpty') + '</span>') +
+          '</div>' +
+          '</div>' +
+          '<div class="admin-row__actions">' +
+          '<button class="settings-group-edit px-3 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
+          nameEsc +
+          '" data-members="' +
+          membersEsc +
+          '">' +
+          t('settingsGroupEdit') +
+          '</button>' +
+          '<button class="settings-group-del px-3 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
+          nameEsc +
+          '">' +
+          t('settingsGroupDelete') +
+          '</button>' +
+          '</div>' +
+          '</div>' +
+          '</li>'
+        );
+      })
+      .join('');
+  } catch (e) {
+    showSettingsError(e.message);
+  }
+}
+
+const settingsGroupForm = document.getElementById('settings-group-form');
+
+if (settingsGroupForm) {
+  settingsGroupForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearSettingsError();
+    const name = document.getElementById('settings-group-name').value.trim();
+    const members = document
+      .getElementById('settings-group-members')
+      .value.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    try {
+      await settingsFetch('/api/admin/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name, members }),
+      });
+      settingsGroupForm.reset();
+      loadSettingsGroups();
+    } catch (err) {
+      showSettingsError(err.message);
+    }
+  });
+
+  document.getElementById('settings-groups-list').addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('.settings-group-edit');
+
+    if (editBtn) {
+      document.getElementById('settings-group-name').value = editBtn.dataset.name;
+      document.getElementById('settings-group-members').value = editBtn.dataset.members;
+      document.getElementById('settings-group-name').focus();
+
+      return;
+    }
+
+    const delBtn = e.target.closest('.settings-group-del');
+
+    if (delBtn) {
+      const ok = await confirmDialog({
+        title: t('settingsGroupDeleteTitle'),
+        message: t('settingsGroupDeleteMsg', delBtn.dataset.name),
+        confirmLabel: t('settingsGroupDelete'),
+        destructive: true,
+      });
+
+      if (!ok) return;
+
+      try {
+        await settingsFetch('/api/admin/groups', {
+          method: 'DELETE',
+          body: JSON.stringify({ name: delBtn.dataset.name }),
+        });
+        loadSettingsGroups();
+      } catch (err) {
+        showSettingsError(err.message);
+      }
+    }
+  });
+}
 
 async function refreshUpdateBanner() {
   // Admin-only, best-effort: never block Settings if the check fails/offline.
