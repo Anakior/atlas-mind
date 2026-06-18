@@ -21,6 +21,11 @@
     <div class="text-[11px] text-ink-500 font-sans" id="graph-stats"></div>
   </div>
   <div id="graph-controls" class="absolute top-4 right-4 flex items-center gap-3">
+    <div class="flex items-center rounded-lg overflow-hidden border subtle-border text-[11px] font-sans bg-white/5">
+      <button id="graph-mode-organic" class="px-2.5 py-1 text-white bg-white/15 transition" data-i18n="graphModeOrganic">Cerveau</button>
+      <button id="graph-mode-structured" class="px-2.5 py-1 text-ink-400 hover:text-white transition" data-i18n="graphModeStructured">Carte</button>
+    </div>
+    <button id="graph-tags-toggle" class="px-2 py-1 rounded-lg border subtle-border text-[11px] font-sans text-ink-400 hover:text-white transition" title="Afficher / masquer les tags" data-i18n-title="graphTagsToggle">#tags</button>
     <span class="text-[10px] text-ink-500 font-sans hidden sm:inline" data-i18n="graphHint">molette : zoom · glisser : déplacer · clic : ouvrir</span>
     <button id="graph-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>

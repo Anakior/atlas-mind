@@ -233,7 +233,8 @@ function graphSimStep(st) {
   const REP = 13000,
     SPRING = 0.02,
     REST = 120,
-    CENTER = 0.0034;
+    CENTER = 0.0034,
+    GRAVITY = 0.009;
 
   for (let i = 0; i < nodes.length; i++) {
     const a = nodes[i];
@@ -254,8 +255,19 @@ function graphSimStep(st) {
       b.vy -= fy;
     }
 
-    a.vx -= a.x * CENTER;
-    a.vy -= a.y * CENTER;
+    // Folder gravity: pull each node toward its subfolder (or folder) anchor so folders
+    // settle into distinct spatial zones. GRAVITY < SPRING, so wikilinks still bend the
+    // clusters and the layout stays organic. Tags + root docs (no anchor) keep the old
+    // weak center pull.
+    const anc = (st.subAnchors && st.subAnchors[a.subKey]) || (st.regionAnchors && st.regionAnchors[a.region]);
+
+    if (anc) {
+      a.vx += (anc.x - a.x) * GRAVITY;
+      a.vy += (anc.y - a.y) * GRAVITY;
+    } else {
+      a.vx -= a.x * CENTER;
+      a.vy -= a.y * CENTER;
+    }
   }
 
   for (const e of edges) {
@@ -283,17 +295,26 @@ function graphSimStep(st) {
   }
 }
 
-function graphDraw(st) {
-  const ctx = graphCanvas.getContext('2d');
-  const w = graphCanvas.clientWidth,
-    h = graphCanvas.clientHeight;
+function roundRect(ctx, x, y, w, h, r) {
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
 
-  ctx.clearRect(0, 0, w, h);
-  const { cam, nodes, edges, hover } = st;
-  const SX = (n) => n.x * cam.scale + cam.ox,
-    SY = (n) => n.y * cam.scale + cam.oy;
-  // Mind regions: translucent blob + label per top-level folder, drawn FIRST
-  // (under the links/nodes) to materialize the brain's "zones".
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Organic mode: a translucent radial blob + label per top-level folder, drawn at the
+// centroid/hull of wherever that family's nodes settled.
+function drawOrganicZones(ctx, st) {
+  const { cam, nodes } = st;
   const regions = {};
 
   for (const n of nodes) {
@@ -322,7 +343,7 @@ function graphDraw(st) {
     // Remote region (mental node from another atlas): teal + dashed ring, to
     // detach it from the personal regions.
     const isRemoteRegion = rn.some((n) => n.remote);
-    const col = isRemoteRegion ? '#59d0cf' : tagColor(name);
+    const col = isRemoteRegion ? '#59d0cf' : hierColor(name, '');
     const grad = ctx.createRadialGradient(scx, scy, sr * 0.2, scx, scy, sr);
 
     grad.addColorStop(0, col + (isRemoteRegion ? '3d' : '2b'));
@@ -348,6 +369,74 @@ function graphDraw(st) {
     ctx.textAlign = 'center';
     ctx.fillText(name, scx, scy - sr + 16);
     ctx.textAlign = 'left';
+  }
+}
+
+// Structured "map" mode: a soft labeled container per family, with a thin ring + label
+// per subfolder cluster. Positions come from layoutStructured (fixed, no physics).
+function drawStructuredScaffold(ctx, st) {
+  const s = st.cam.scale;
+  const SX = (x) => x * s + st.cam.ox;
+  const SY = (y) => y * s + st.cam.oy;
+
+  for (const f of st.families) {
+    const x = SX(f.x),
+      y = SY(f.y),
+      w = f.w * s,
+      h = f.h * s;
+
+    roundRect(ctx, x, y, w, h, 14 * s);
+    const grad = ctx.createLinearGradient(x, y, x, y + h);
+
+    grad.addColorStop(0, f.color + '16');
+    grad.addColorStop(1, f.color + '06');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = f.color + '33';
+    ctx.stroke();
+    ctx.font = '600 ' + Math.max(11, 13 * s) + 'px Manrope, system-ui, sans-serif';
+    ctx.fillStyle = f.color + 'ee';
+    ctx.textBaseline = 'top';
+    ctx.fillText(f.name, x + 12 * s, y + 8 * s);
+  }
+
+  ctx.textBaseline = 'middle';
+
+  for (const c of st.clusters) {
+    if (!c.sub) continue; // family-direct docs have no separate ring
+    const x = SX(c.x),
+      y = SY(c.y),
+      r = c.r * s;
+
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = c.color + '40';
+    ctx.stroke();
+    ctx.font = '500 ' + Math.max(9, 11 * s) + 'px Manrope, system-ui, sans-serif';
+    ctx.fillStyle = c.color + 'cc';
+    ctx.textAlign = 'center';
+    ctx.fillText(c.sub, x, y - r - 9 * s);
+    ctx.textAlign = 'left';
+  }
+}
+
+function graphDraw(st) {
+  const ctx = graphCanvas.getContext('2d');
+  const w = graphCanvas.clientWidth,
+    h = graphCanvas.clientHeight;
+
+  ctx.clearRect(0, 0, w, h);
+  const { cam, nodes, edges, hover } = st;
+  const SX = (n) => n.x * cam.scale + cam.ox,
+    SY = (n) => n.y * cam.scale + cam.oy;
+  // Scaffold UNDER the nodes: structured "map" mode → tidy folder boxes + subfolder
+  // rings; organic mode → translucent zone blobs per top-level folder.
+  if (st.mode === 'structured') {
+    drawStructuredScaffold(ctx, st);
+  } else {
+    drawOrganicZones(ctx, st);
   }
 
   // ── Neural pass: glowing curved synapses + firing pulses + node bloom ──
@@ -482,8 +571,12 @@ function graphDraw(st) {
 
   for (const n of nodes) {
     // Node labels only on hover / neighborhood / zoom: region names (above)
-    // carry the orientation, so labels don't clutter the default view.
-    if (!(n === hover || n._adj || cam.scale > 1.35)) continue;
+    // carry the orientation, so labels don't clutter the default view. EXCEPTION:
+    // when the tag layer is explicitly toggled on, label every tag so turning it on
+    // visibly shows the tags (otherwise they're faint rings lost in the dense zones).
+    const tagAlways = n.kind === 'tag' && st.showTags && st.mode === 'organic';
+
+    if (!(tagAlways || n === hover || n._adj || cam.scale > 1.35)) continue;
     ctx.font = (n.kind === 'tag' ? '600 12px' : '12px') + ' Manrope, system-ui, sans-serif';
     ctx.fillStyle =
       hover && n !== hover && !n._adj
@@ -500,7 +593,9 @@ function graphLoop() {
 
   if (!st) return;
 
-  if (st.ticks < 480) {
+  // Structured "map" mode has fixed positions → no physics, just draw (hover/zoom/pan
+  // and node breathing still animate).
+  if (st.mode !== 'structured' && st.ticks < 480) {
     graphSimStep(st);
     st.ticks++;
   }
@@ -623,6 +718,93 @@ graphCanvas.addEventListener(
 );
 document.getElementById('graph-close').addEventListener('click', closeGraph);
 document.getElementById('graph-btn').addEventListener('click', openGraph);
+
+// ── View-mode toggle: organic brain ⇄ structured folder map (+ tag-layer toggle) ──
+function updateGraphModeUI() {
+  const st = graphState;
+  const orgBtn = document.getElementById('graph-mode-organic');
+
+  if (!st || !orgBtn) return;
+  const strBtn = document.getElementById('graph-mode-structured');
+  const tagBtn = document.getElementById('graph-tags-toggle');
+  const setActive = (btn, on) => {
+    btn.classList.toggle('bg-white/15', on);
+    btn.classList.toggle('text-white', on);
+    btn.classList.toggle('text-ink-400', !on);
+  };
+
+  setActive(orgBtn, st.mode === 'organic');
+  setActive(strBtn, st.mode === 'structured');
+
+  if (tagBtn) {
+    // Tags only matter in organic mode.
+    tagBtn.style.opacity = st.mode === 'organic' ? '1' : '.4';
+    tagBtn.style.pointerEvents = st.mode === 'organic' ? 'auto' : 'none';
+    setActive(tagBtn, st.mode === 'organic' && st.showTags);
+  }
+}
+
+function setGraphMode(mode) {
+  const st = graphState;
+
+  if (!st || st.mode === mode) return;
+  st.mode = mode;
+  applyGraphView(st);
+
+  if (mode === 'structured') {
+    layoutStructured(st);
+  } else {
+    reseedOrganic(st);
+  }
+
+  st.ticks = 0;
+  st.hover = null;
+  fitGraphCamera(st);
+  updateGraphModeUI();
+}
+
+function toggleGraphTags() {
+  const st = graphState;
+
+  if (!st || st.mode !== 'organic') return;
+  st.showTags = !st.showTags;
+  applyGraphView(st);
+
+  // Seed each freshly-shown tag at the centroid of the docs it links, so it appears in
+  // place instead of flying in from a random corner. Docs keep their settled positions
+  // (no full re-seed → the layout doesn't jump), then a short re-settle integrates the tags.
+  if (st.showTags) {
+    for (const n of st.nodes) {
+      if (n.kind !== 'tag') continue;
+      let cx = 0,
+        cy = 0,
+        k = 0;
+
+      for (const e of st.edges) {
+        if (e.kind === 'tag' && e.t === n) {
+          cx += e.s.x;
+          cy += e.s.y;
+          k++;
+        }
+      }
+
+      if (k) {
+        n.x = cx / k + (Math.random() - 0.5) * 30;
+        n.y = cy / k + (Math.random() - 0.5) * 30;
+      }
+
+      n.vx = 0;
+      n.vy = 0;
+    }
+  }
+
+  st.ticks = Math.min(st.ticks, 360); // a gentle re-settle, not a full upheaval
+  updateGraphModeUI();
+}
+
+document.getElementById('graph-mode-organic')?.addEventListener('click', () => setGraphMode('organic'));
+document.getElementById('graph-mode-structured')?.addEventListener('click', () => setGraphMode('structured'));
+document.getElementById('graph-tags-toggle')?.addEventListener('click', toggleGraphTags);
 window.addEventListener('resize', () => {
   if (graphState) resizeGraph();
 });

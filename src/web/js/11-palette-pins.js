@@ -434,6 +434,206 @@ function tagColor(tag) {
   return GRAPH_COLORS[h % GRAPH_COLORS.length];
 }
 
+// Hierarchical folder color: a top-level folder maps to a stable family HUE (golden-angle
+// spread, populated once in openGraph so families never collide), and the immediate
+// subfolder under it varies LIGHTNESS/SATURATION within that hue. So a dominant family
+// (e.g. wizishop) stays one recognizable hue while its subfolders read as distinct tints.
+let _familyHue = {};
+
+// HSL→#rrggbb. MUST return the 6-hex form: every consumer appends an alpha byte
+// (n.color + '30', col + '2b', …), so an hsl() string would corrupt every gradient stop.
+function hslToHex(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (k) => {
+    const x = (k + h / 30) % 12;
+    const c = l - a * Math.max(-1, Math.min(x - 3, 9 - x, 1));
+    return Math.round(255 * c)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return '#' + f(0) + f(8) + f(4);
+}
+
+function hierColor(family, sub) {
+  if (!family) return '#6b7280'; // root-level docs: neutral (matches the old tagColor(''))
+  let fh = 0;
+  for (let i = 0; i < family.length; i++) fh = (fh * 31 + family.charCodeAt(i)) >>> 0;
+  const baseHue = family in _familyHue ? _familyHue[family] : fh % 360;
+  if (!sub) return hslToHex(baseHue, 68, 55); // family anchor color (blobs + sub-less docs)
+  // Spread subfolders on a 3D hue/sat/light grid — a single axis crowds for a family with
+  // ~8 subfolders. The hue jitter stays small (±16°, well within the gap between family
+  // hues) so the family is still recognizable. Mid-band lightness keeps cores legible and
+  // the additive bloom from washing to white.
+  let h = 0;
+  for (let i = 0; i < sub.length; i++) h = (h * 31 + sub.charCodeAt(i)) >>> 0;
+  const hue = (baseHue + ((h % 5) - 2) * 8 + 360) % 360; // ±16° within the family band
+  const light = 46 + (Math.floor(h / 5) % 5) * 5; // 46,51,56,61,66
+  const sat = 60 + (Math.floor(h / 25) % 3) * 9; // 60,69,78
+  return hslToHex(hue, sat, light);
+}
+
+// ── Mind view modes: "organic" (force-directed brain) ⇄ "structured" (folder map) ──
+
+// Which nodes/edges are active for the current mode. Organic shows the folder-zoned
+// force graph with TAGS HIDDEN by default — tags carry ~3× the edges of real wikilinks
+// and drown the structure. The hero (EMBED_MIND) keeps its full tag web for the landing.
+function applyGraphView(st) {
+  const tags = st.mode === 'organic' && (st.showTags || EMBED_MIND);
+
+  st.nodes = tags ? st.allNodes : st.allNodes.filter((n) => n.kind !== 'tag');
+  st.edges = st.allEdges.filter((e) => e.kind === 'link' || (tags && e.kind === 'tag'));
+  st.hover = null;
+}
+
+// Re-seed organic positions near each node's folder anchor (used when switching back
+// from the structured map so the force layout relaxes from an already-zoned start).
+function reseedOrganic(st) {
+  for (const n of st.nodes) {
+    const anc = (st.subAnchors && st.subAnchors[n.subKey]) || (st.regionAnchors && st.regionAnchors[n.region]);
+
+    n.x = anc ? anc.x + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520;
+    n.y = anc ? anc.y + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520;
+    n.vx = 0;
+    n.vy = 0;
+  }
+}
+
+// Fit the camera to the whole layout. Organic fits the anchor ring (nodes spread as the
+// sim relaxes); structured fits the fixed packed bbox. The hero keeps its own framing.
+function fitGraphCamera(st) {
+  st.cam.ox = graphCanvas.clientWidth / 2;
+  st.cam.oy = graphCanvas.clientHeight / 2;
+
+  if (EMBED_MIND) return;
+  let half;
+
+  if (st.mode === 'structured') {
+    half = 60;
+    for (const n of st.nodes) half = Math.max(half, Math.abs(n.x) + n.r, Math.abs(n.y) + n.r);
+    half += 70;
+  } else {
+    half = (st.ring || 360) + 220;
+  }
+
+  st.cam.scale = Math.min(
+    1,
+    (Math.min(graphCanvas.clientWidth, graphCanvas.clientHeight) / (2 * half)) * 0.92,
+  );
+}
+
+// Deterministic "map" layout: docs pack in a phyllotaxis disc per subfolder; subfolder
+// discs pack into a family box; family boxes pack across the canvas. No physics → tidy
+// and stable, the opposite of the organic hairball. Fills st.clusters + st.families for
+// the scaffold drawing, and sets each doc's fixed x/y.
+function layoutStructured(st) {
+  const docs = st.nodes.filter((n) => n.kind === 'doc');
+  const fams = {};
+
+  for (const n of docs) {
+    const fam = n.region || '·root';
+    const ckey = n.subRegion || '';
+    const f = (fams[fam] = fams[fam] || { name: fam, clusters: {} });
+
+    (f.clusters[ckey] = f.clusters[ckey] || { sub: ckey, docs: [] }).docs.push(n);
+  }
+
+  const DOC_SP = 15,
+    CL_GAP = 22,
+    FAM_GAP = 56,
+    FAM_PAD = 28,
+    LABEL_H = 26;
+
+  // Phyllotaxis pack of a cluster's docs around a local (0,0); sets c.r.
+  const packCluster = (c) => {
+    let maxR = 0;
+
+    c.docs.forEach((n, i) => {
+      const a = i * 2.399963;
+      const r = DOC_SP * Math.sqrt(i + 0.6);
+
+      n._lx = Math.cos(a) * r;
+      n._ly = Math.sin(a) * r;
+      maxR = Math.max(maxR, r + (n.r || 6));
+    });
+    c.r = Math.max(18, maxR + 8);
+  };
+
+  // Row-pack square items {w,h} into maxW; sets it.x/it.y, returns the bounding {w,h}.
+  const rowPack = (items, maxW, gap) => {
+    let x = 0,
+      y = 0,
+      rowH = 0,
+      totalW = 0;
+
+    for (const it of items) {
+      if (x > 0 && x + it.w > maxW) {
+        x = 0;
+        y += rowH + gap;
+        rowH = 0;
+      }
+
+      it.x = x;
+      it.y = y;
+      x += it.w + gap;
+      rowH = Math.max(rowH, it.h);
+      totalW = Math.max(totalW, x - gap);
+    }
+
+    return { w: totalW, h: y + rowH };
+  };
+
+  const famList = Object.values(fams);
+
+  for (const f of famList) {
+    const cl = Object.values(f.clusters);
+
+    cl.forEach(packCluster);
+    cl.sort((a, b) => b.r - a.r);
+    f._items = cl.map((c) => ({ c, w: c.r * 2, h: c.r * 2 }));
+    const area = f._items.reduce((s, it) => s + it.w * it.h, 0);
+    const box = rowPack(f._items, Math.max(f._items[0].w, Math.sqrt(area) * 1.25), CL_GAP);
+
+    f._w = box.w;
+    f._h = box.h;
+  }
+
+  famList.sort((a, b) => b._w * b._h - a._w * a._h);
+  const famItems = famList.map((f) => ({ f, w: f._w + FAM_PAD * 2, h: f._h + FAM_PAD * 2 + LABEL_H }));
+  const totalArea = famItems.reduce((s, it) => s + it.w * it.h, 0);
+  const total = rowPack(famItems, Math.max(famItems[0].w, Math.sqrt(totalArea) * 1.3), FAM_GAP);
+
+  const cx = total.w / 2,
+    cy = total.h / 2;
+  const clusters = [],
+    families = [];
+
+  for (const fit of famItems) {
+    const f = fit.f;
+    const fx = fit.x - cx,
+      fy = fit.y - cy;
+
+    families.push({ x: fx, y: fy, w: fit.w, h: fit.h, name: f.name, color: hierColor(f.name, '') });
+
+    for (const it of f._items) {
+      const ccx = fx + FAM_PAD + it.x + it.c.r;
+      const ccy = fy + FAM_PAD + LABEL_H + it.y + it.c.r;
+
+      it.c.docs.forEach((n) => {
+        n.x = ccx + n._lx;
+        n.y = ccy + n._ly;
+        n.vx = 0;
+        n.vy = 0;
+      });
+      clusters.push({ x: ccx, y: ccy, r: it.c.r, sub: it.c.sub, color: hierColor(f.name, it.c.sub) });
+    }
+  }
+
+  st.clusters = clusters;
+  st.families = families;
+}
+
 async function openGraph() {
   const idx = await loadBacklinksIndex();
 
@@ -444,6 +644,47 @@ async function openGraph() {
   // Every previewable doc is a node (not just Markdown), so media docs cluster by region too.
   const GRAPH_EXTS = new Set(['.md', '.html', '.pdf', '.docx']);
 
+  // ── Folder families + subfolders → hierarchical color AND layout anchors ──
+  // Built ONCE before the node loop so each node can be colored and SEEDED near its
+  // folder's zone. Families sit on a ring (even spacing); each family's subfolders orbit
+  // its anchor by sorted index (NOT a hash → no two subfolders re-collide at one spot).
+  const famSet = new Set();
+  const subByFam = {};
+
+  for (const f of Object.values(fileMap)) {
+    if (!GRAPH_EXTS.has(f.ext)) continue;
+    const fp = f.path.split('/');
+    const isRemoteDoc = f.path.startsWith('remotes/');
+    const fam = isRemoteDoc ? '⧫ ' + (fp[1] || 'node') : fp.length > 1 ? fp[0] : '';
+
+    if (!fam) continue; // root-level docs have no family
+    famSet.add(fam);
+
+    if (!isRemoteDoc && fp.length > 2) {
+      (subByFam[fam] = subByFam[fam] || new Set()).add(fp[1]);
+    }
+  }
+
+  const families = [...famSet].sort();
+  const regionAnchors = {};
+  const subAnchors = {};
+  const RING = Math.max(260, 78 * families.length); // ring radius grows with family count
+
+  _familyHue = {};
+  families.forEach((fam, i) => {
+    _familyHue[fam] = (i * 137.5) % 360; // golden-angle hue: maximal family separation
+    const a = (i / families.length) * Math.PI * 2; // even placement on the ring
+    regionAnchors[fam] = { x: Math.cos(a) * RING, y: Math.sin(a) * RING };
+    const subs = subByFam[fam] ? [...subByFam[fam]].sort() : [];
+    subs.forEach((sub, k) => {
+      const a2 = a + (k / subs.length) * Math.PI * 2; // distribute subs around the family
+      subAnchors[fam + '/' + sub] = {
+        x: regionAnchors[fam].x + Math.cos(a2) * 130,
+        y: regionAnchors[fam].y + Math.sin(a2) * 130,
+      };
+    });
+  });
+
   for (const f of Object.values(fileMap)) {
     if (!GRAPH_EXTS.has(f.ext)) continue;
     const parts = f.path.split('/');
@@ -451,6 +692,10 @@ async function openGraph() {
     // avoid colliding with a same-named directory and to signal non-personal content.
     const isRemote = f.path.startsWith('remotes/');
     const region = isRemote ? '⧫ ' + (parts[1] || 'node') : parts.length > 1 ? parts[0] : '';
+    // Immediate subfolder (one level under the family) → color tint + a layout sub-anchor.
+    const subRegion = !isRemote && parts.length > 2 ? parts[1] : '';
+    const subKey = subRegion ? region + '/' + subRegion : '';
+    const anchor = subAnchors[subKey] || regionAnchors[region] || null;
     const n = {
       kind: 'doc',
       path: f.path,
@@ -458,18 +703,21 @@ async function openGraph() {
       doctype: f.ext,
       tags: f.tags || [],
       region,
+      subRegion,
+      subKey,
       remote: isRemote,
       mtime: f.mtime || 0,
       recent: false,
-      x: (Math.random() - 0.5) * 520,
-      y: (Math.random() - 0.5) * 520,
+      // Seed near the folder's zone so the layout settles already-organized.
+      x: anchor ? anchor.x + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520,
+      y: anchor ? anchor.y + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520,
       vx: 0,
       vy: 0,
       deg: 0,
     };
 
-    // Remote nodes get AI teal; otherwise color = region.
-    n.color = isRemote ? '#59d0cf' : tagColor(region);
+    // Remote nodes get AI teal; otherwise color = family hue + subfolder tint.
+    n.color = isRemote ? '#59d0cf' : hierColor(region, subRegion);
     nodes.push(n);
     byPath[f.path] = n;
   }
@@ -535,8 +783,17 @@ async function openGraph() {
   for (const n of nodes) if (n.kind === 'doc') n.recent = n.mtime > RECENT_CUTOFF;
   graphStats.textContent = t('graphStats', docCount, linkCount, Object.keys(tagNodes).length);
   graphState = {
+    allNodes: nodes,
+    allEdges: edges,
     nodes,
     edges,
+    regionAnchors,
+    subAnchors,
+    ring: RING,
+    mode: 'organic',
+    showTags: false, // de-cluttered by default; toggle to bring the tag web back
+    clusters: [],
+    families: [],
     cam: { scale: 1, ox: 0, oy: 0 },
     ticks: 0,
     hover: null,
@@ -544,9 +801,9 @@ async function openGraph() {
     panFrom: null,
     moved: false,
   };
+  applyGraphView(graphState);
   resizeGraph();
-  graphState.cam.ox = graphCanvas.clientWidth / 2;
-  graphState.cam.oy = graphCanvas.clientHeight / 2;
+  fitGraphCamera(graphState);
 
   // Embed hero: pre-settle the layout off-screen so it appears already organized
   // (no nodes flying into place on the landing page).
@@ -557,6 +814,7 @@ async function openGraph() {
 
   cancelAnimationFrame(graphRaf);
   graphLoop();
+  updateGraphModeUI();
 }
 
 function closeGraph() {
