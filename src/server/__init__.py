@@ -101,7 +101,7 @@ from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live task
     _live_tasks_index, _normalize_text, _html_to_text, _HTML_BLOCK_RE,
 )
 from server.pure.acl import (  # noqa: F401  per-document ACL (model B — partage à la Notion)
-    ViewerCtx, viewer_ctx, effective_level, can_read, can_write, LEVELS,
+    ViewerCtx, viewer_ctx, effective_level, can_read, can_write, can_manage, LEVELS,
 )
 from server.pure.hive import (  # noqa: F401  federation node links / mirror / fetch
     encode_node_link, decode_node_link, verify_node_bearer, _validate_node_path,

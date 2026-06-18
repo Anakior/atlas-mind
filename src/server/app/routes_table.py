@@ -12,7 +12,7 @@ from server.app import router
 from server.constants import _SHARE_ID_PATTERN
 from server.routes import (
     system, auth, setup, share, docs, todos, notes, admin,
-    account, hive, apiv1, mcp,
+    account, hive, apiv1, mcp, acl,
 )
 
 _RK = router.RouteKind
@@ -45,10 +45,13 @@ GET_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/tokens", admin.tokens_get, _G.ADMIN),
     router.Route(_RK.EXACT, "/api/admin/nodes", admin.nodes_get, _G.ADMIN),
     router.Route(_RK.EXACT, "/api/admin/remotes", admin.remotes_get, _G.ADMIN),
+    router.Route(_RK.EXACT, "/api/admin/groups", acl.groups_get, _G.ADMIN),
     router.Route(_RK.EXACT, "/api/admin/update-check", admin.update_check, _G.ADMIN),
     router.Route(_RK.EXACT, "/api/todos", todos.list_todos, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.list_notes, _G.AUTH),
     router.Route(_RK.EXACT, "/api/tree", docs.tree, _G.AUTH),
+    router.Route(_RK.EXACT_NOQUERY, "/api/acl", acl.acl_get, _G.AUTH),
+    router.Route(_RK.EXACT, "/api/directory", acl.directory, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/search", docs.search, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/history", docs.history, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/revision", docs.revision, _G.AUTH),
@@ -69,6 +72,7 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/users", admin.users_post, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/users/password", admin.users_password, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/users/hidden", admin.users_hidden, _G.ADMIN_CSRF),
+    router.Route(_RK.EXACT, "/api/admin/groups", acl.groups_post, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/tokens", admin.tokens_post, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/nodes", admin.nodes_post, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/remotes", admin.remotes_post, _G.ADMIN_CSRF),
@@ -79,6 +83,7 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/account/totp/enable", account.totp_enable, _G.CSRF_BASE),
     router.Route(_RK.EXACT, "/api/account/totp/disable", account.totp_disable, _G.CSRF_BASE),
     router.Route(_RK.EXACT, "/api/share", share.create, _G.ADMIN_CSRF),
+    router.Route(_RK.EXACT, "/api/acl", acl.acl_post, _G.CSRF_BASE),
     router.Route(_RK.EXACT, "/api/todos", todos.create, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/notes", notes.create, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/revert", docs.revert, _G.ADMIN_CSRF),
@@ -100,6 +105,7 @@ PATCH_ROUTES = [
 # routes are ordered FIRST, then content routes; share-id regex BEFORE todos.
 DELETE_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/users", admin.users_delete, _G.PUBLIC),
+    router.Route(_RK.EXACT, "/api/admin/groups", acl.groups_delete, _G.PUBLIC),
     router.Route(_RK.EXACT, "/api/admin/nodes", admin.nodes_delete, _G.PUBLIC),
     router.Route(_RK.EXACT, "/api/admin/remotes", admin.remotes_delete, _G.PUBLIC),
     router.Route(_RK.EXACT, "/api/admin/tokens", admin.tokens_delete, _G.PUBLIC),

@@ -119,6 +119,7 @@ async function showMarkdown(file, highlightQuery) {
   btnSave.classList.add('hidden');
   btnCancel.classList.add('hidden');
   document.getElementById('btn-share')?.classList.toggle('hidden', isRemoteDoc);
+  document.getElementById('btn-access')?.classList.toggle('hidden', isRemoteDoc || IS_OFFLINE_BUILD);
   document.getElementById('btn-more-wrap')?.classList.toggle('hidden', isRemoteDoc);
   // Remote node actions: only on a mirror doc, never offline (no server to
   // appropriate/remove against — the buttons would 404).

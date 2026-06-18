@@ -14,6 +14,7 @@
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="tokens" data-i18n="settingsTabTokens">Tokens</button>
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="shares" data-i18n="settingsTabShares">Partages</button>
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="nodes" data-i18n="settingsTabNodes">N&oelig;uds</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="groups" data-i18n="settingsTabGroups">Groupes</button>
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="security" data-i18n="settingsTabSecurity">S&eacute;curit&eacute;</button>
     </div>
     <div class="flex-1 overflow-y-auto scrollbar-thin p-5">
@@ -146,6 +147,27 @@
           </form>
           <ul id="settings-remotes-list" class="space-y-2"></ul>
         </div>
+      </section>
+
+      <!-- ── Groups tab (model B: principals group:<name>) ───────── -->
+      <section id="settings-pane-groups" class="settings-pane hidden">
+        <p class="text-[11px] text-ink-500 mb-3" data-i18n="settingsGroupsHint">Cr&eacute;e des groupes pour partager des documents avec plusieurs personnes d&rsquo;un coup.</p>
+        <form id="settings-group-form" class="mb-5 grid grid-cols-1 gap-2">
+          <div class="min-w-0">
+            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsGroupNameLabel">Nom du groupe</label>
+            <input id="settings-group-name" type="text" autocomplete="off" placeholder="wizishop"
+              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
+          </div>
+          <div class="min-w-0">
+            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsGroupMembersLabel">Membres (emails s&eacute;par&eacute;s par des virgules)</label>
+            <input id="settings-group-members" type="text" autocomplete="off" placeholder="alice@x.fr, bob@x.fr"
+              class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+          </div>
+          <div class="flex justify-end">
+            <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="settingsGroupSave">Enregistrer le groupe</button>
+          </div>
+        </form>
+        <ul id="settings-groups-list" class="space-y-1.5"></ul>
       </section>
 
       <!-- ── Security tab (2FA + sessions, current account) ────────────── -->

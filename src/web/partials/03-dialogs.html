@@ -107,3 +107,38 @@
   </div>
 </div>
 
+<!-- Access & sharing (model B ACL): owner shares a doc with users/groups. -->
+<div id="acl-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
+  <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] max-w-[92vw] max-h-[85vh] overflow-y-auto scrollbar-thin bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 p-5">
+    <h3 class="text-base font-semibold text-ink-100 mb-1" data-i18n="aclModalTitle">Acc&egrave;s &amp; partage</h3>
+    <p id="acl-path" class="text-[11px] text-ink-500 font-mono mb-2 truncate"></p>
+    <div id="acl-status" class="text-xs mb-3"></div>
+    <ul id="acl-grants" class="space-y-1.5 mb-4 max-h-48 overflow-y-auto scrollbar-thin"></ul>
+    <div id="acl-manage" class="hidden">
+      <form id="acl-grant-form" class="grid grid-cols-[auto_1fr_auto_auto] gap-1.5 items-center mb-3">
+        <select id="acl-kind" class="px-2 py-1.5 text-xs bg-navy-900 border subtle-border rounded text-ink-100 focus:outline-none">
+          <option value="user" data-i18n="aclKindUser">Personne</option>
+          <option value="group" data-i18n="aclKindGroup">Groupe</option>
+          <option value="*" data-i18n="aclKindAll">Tout le monde</option>
+        </select>
+        <input id="acl-value" list="acl-value-list" autocomplete="off" placeholder="email ou nom de groupe" data-i18n-placeholder="aclValuePlaceholder"
+          class="min-w-0 px-2 py-1.5 text-xs bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40">
+        <datalist id="acl-value-list"></datalist>
+        <select id="acl-level" class="px-2 py-1.5 text-xs bg-navy-900 border subtle-border rounded text-ink-100 focus:outline-none">
+          <option value="view" data-i18n="aclLevelView">Lecture</option>
+          <option value="edit" data-i18n="aclLevelEdit">&Eacute;dition</option>
+        </select>
+        <button type="submit" class="px-3 py-1.5 text-xs bg-accent hover:brightness-110 text-white rounded font-medium" data-i18n="aclAdd">Ajouter</button>
+      </form>
+      <div id="acl-error" class="text-xs text-rose-400 hidden mb-2"></div>
+      <div class="flex items-center gap-2 pt-3 border-t subtle-border">
+        <button id="acl-make-private" class="px-2.5 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-i18n="aclMakePrivate">Rendre priv&eacute;</button>
+        <button id="acl-make-commons" class="px-2.5 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-i18n="aclMakeCommons">Mettre en commun</button>
+      </div>
+    </div>
+    <div class="flex justify-end mt-4">
+      <button id="acl-close" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium" data-i18n="done">Termin&eacute;</button>
+    </div>
+  </div>
+</div>
+

@@ -32,6 +32,10 @@ if (isServerMode) {
         document.body.classList.add('cloud-authed');
         refreshSecurityState();
       }
+
+      // Render the per-account FILTERED tree (the baked tree is the full
+      // build-time view and is intentionally not shown in server mode).
+      softReload();
     })
     .catch(() => {});
 

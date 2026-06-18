@@ -42,11 +42,19 @@ class TestEffectiveLevel(unittest.TestCase):
     def test_common_is_view_only_for_non_admin(self):
         self.assertFalse(acl.can_write("a/b.md", self.ctx("u@x"), "edit", self.fs))
 
-    # ── admin bypass ──────────────────────────────────────────────────────
-    def test_admin_bypass_sees_private(self):
-        self.fs.set_owner("secret.md", "user:owner@x")
+    # ── admin (curates commons, NOT others' private) + superuser ──────────
+    def test_admin_curates_commons_not_others_private(self):
         admin = acl.viewer_ctx({"email": "boss@x", "role": "admin"}, self.fs)
-        self.assertEqual(self.lvl("secret.md", admin), "owner")
+        self.assertEqual(self.lvl("a/b.md", admin), "owner")        # commons → curate
+        self.fs.set_owner("secret.md", "user:owner@x")
+        self.assertIsNone(self.lvl("secret.md", admin))             # other's private → hidden
+        self.fs.set_owner("mine.md", "user:boss@x")
+        self.assertEqual(self.lvl("mine.md", admin), "owner")       # own doc → owner
+
+    def test_superuser_sees_everything(self):
+        su = acl.ViewerCtx(set(), True, None, superuser=True)
+        self.fs.set_owner("secret.md", "user:owner@x")
+        self.assertEqual(self.lvl("secret.md", su), "owner")        # local bypass
 
     # ── privé / owner ─────────────────────────────────────────────────────
     def test_private_hidden_from_others(self):
