@@ -17,9 +17,13 @@ def handle(handler):
         handler._send_json(404, {"error": "not found"})
         return
     token = parts[1]
-    if not _s._verify_mcp_token(token):
+    identity = _s.resolve_mcp_identity(token)
+    if not identity:
         handler._send_json(401, {"error": "invalid mcp token"})
         return
+    # Per-document ACL context, derived from the TOKEN (never from a tool
+    # argument → no identity spoofing). Threaded into the dispatch below.
+    ctx = _s.viewer_ctx(identity)
     # Rate limit shared with the REST API.
     if not _s.api_rate_limit_ok(_s._hash_api_token(token)):
         handler._send_json(429, {"error": "rate limit exceeded"})
@@ -61,7 +65,7 @@ def handle(handler):
             return
 
         if isinstance(req, list):
-            responses = [r for r in (_s._mcp_jsonrpc(item) for item in req) if r is not None]
+            responses = [r for r in (_s._mcp_jsonrpc(item, ctx) for item in req) if r is not None]
             if not responses:
                 handler.send_response(204)
                 handler.end_headers()
@@ -69,7 +73,7 @@ def handle(handler):
             handler._send_json(200, responses)
             return
 
-        response = _s._mcp_jsonrpc(req)
+        response = _s._mcp_jsonrpc(req, ctx)
         if response is None:
             # Notification → 204 No Content
             handler.send_response(204)

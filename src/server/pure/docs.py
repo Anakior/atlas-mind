@@ -138,18 +138,20 @@ def _path_hidden(rel, hidden):
     return any(rel == f or rel.startswith(f + "/") for f in hidden)
 
 
-def _filter_tree(node, hidden):
-    """Prunes the tree: removes hidden files (by path) and folders that became
-    empty. Returns the node unchanged if there is no hidden folder."""
-    if not hidden:
+def _filter_tree(node, keep):
+    """Prune the tree to entries kept by ``keep(path) -> bool``, dropping folders
+    that become empty. ``keep=None`` → returned unchanged (no filtering). Generic
+    predicate so the same pruner serves the legacy hidden-folder blacklist and the
+    model-B ``can_read`` whitelist (HTTP, MCP, Bearer)."""
+    if keep is None:
         return node
     kids = []
     for child in node.get("children", []):
         if child.get("type") == "file":
-            if not _path_hidden(child.get("path", ""), hidden):
+            if keep(child.get("path", "")):
                 kids.append(child)
         else:
-            filtered = _filter_tree(child, hidden)
+            filtered = _filter_tree(child, keep)
             if filtered.get("children"):
                 kids.append(filtered)
     return {**node, "children": kids}

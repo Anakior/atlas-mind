@@ -279,6 +279,8 @@ class FileStore:
     NODES_FILE = "nodes.json"
     REMOTES_FILE = "remotes.json"
     STATE_FILE = "state.json"
+    ACL_FILE = "acl.json"        # per-document ACL (model B): {path: {owner, grants[]}}
+    GROUPS_FILE = "groups.json"  # principals: {group_name: [emails]}
 
     def __init__(self, base_dir):
         self.base = Path(base_dir)
@@ -288,6 +290,8 @@ class FileStore:
             self.NODES_FILE: threading.Lock(),
             self.REMOTES_FILE: threading.Lock(),
             self.STATE_FILE: threading.Lock(),
+            self.ACL_FILE: threading.Lock(),
+            self.GROUPS_FILE: threading.Lock(),
         }
         self._cache: dict = {}  # name -> (mtime_ns, data)
         self._ensure_gitignore()
@@ -697,6 +701,148 @@ class FileStore:
         return self._repoint_shares(
             lambda p: p.startswith(old_prefix),
             lambda p: new_prefix + p[len(old_prefix):])
+
+    # ── per-document ACL + groups (model B — partage à la Notion) ─────────────
+    # acl.json is a DICT keyed by content-relative path (file OR folder, the
+    # folder without extension). Value = {owner, grants:[{principal, level, at,
+    # expires_at?}]}. Same lock/atomic-write/fail-CLOSED machinery as the rest:
+    # a corrupted acl.json raises (server maps it to 503), never reads as empty.
+
+    def get_acl(self, path: str):
+        """ACL entry {owner?, grants[]} for an exact path key, or None (copy)."""
+        with self._locks[self.ACL_FILE]:
+            entry = self._load(self.ACL_FILE, dict).get(path)
+            return dict(entry) if entry else None
+
+    def set_owner(self, path: str, principal: str) -> None:
+        """Set/replace the owner of `path` (creates the entry, keeps grants)."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = dict(acl.get(path) or {})
+            entry["owner"] = principal
+            entry.setdefault("grants", [])
+            acl[path] = entry
+            self._write(self.ACL_FILE, acl)
+
+    def grant(self, path: str, principal: str, level: str, *,
+              expires_at: int = 0) -> None:
+        """Grant (or upgrade) `principal` to `level` on `path`. One grant per
+        principal: an existing grant for the same principal is replaced."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = dict(acl.get(path) or {})
+            grants = [dict(g) for g in entry.get("grants", [])
+                      if g.get("principal") != principal]
+            record = {"principal": principal, "level": level, "at": int(time.time())}
+            if expires_at:
+                record["expires_at"] = int(expires_at)
+            grants.append(record)
+            entry["grants"] = grants
+            acl[path] = entry
+            self._write(self.ACL_FILE, acl)
+
+    def revoke_grant(self, path: str, principal: str) -> bool:
+        """Remove `principal`'s grant on `path`. False if there was none."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = acl.get(path)
+            if not entry:
+                return False
+            entry = dict(entry)
+            before = entry.get("grants", [])
+            after = [g for g in before if g.get("principal") != principal]
+            if len(after) == len(before):
+                return False
+            entry["grants"] = after
+            acl[path] = entry
+            self._write(self.ACL_FILE, acl)
+            return True
+
+    def list_grants(self, path: str) -> list:
+        """The grants list of `path` ([] if no entry)."""
+        with self._locks[self.ACL_FILE]:
+            entry = self._load(self.ACL_FILE, dict).get(path) or {}
+            return [dict(g) for g in entry.get("grants", [])]
+
+    def delete_acl(self, path: str) -> bool:
+        """Drop the whole ACL entry of `path`. False if there was none."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            if path not in acl:
+                return False
+            del acl[path]
+            self._write(self.ACL_FILE, acl)
+            return True
+
+    def repoint_acl_by_path(self, old_path: str, new_path: str) -> bool:
+        """Move a doc's ACL entry when it is renamed/moved in-app, so its sharing
+        travels with it (mirror of repoint_shares_by_path). False if no entry."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            if old_path not in acl:
+                return False
+            acl[new_path] = acl.pop(old_path)
+            self._write(self.ACL_FILE, acl)
+            return True
+
+    def repoint_acl_under(self, old_dir: str, new_dir: str) -> int:
+        """Move every ACL entry under a renamed folder (the folder key itself +
+        each descendant). Returns the count moved (single atomic write)."""
+        old = old_dir.strip("/")
+        new = new_dir.strip("/")
+        old_prefix = old + "/"
+        new_prefix = new + "/"
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            moved = {}
+            for path in list(acl):
+                if path == old:
+                    moved[new] = acl.pop(path)
+                elif path.startswith(old_prefix):
+                    moved[new_prefix + path[len(old_prefix):]] = acl.pop(path)
+            if moved:
+                acl.update(moved)
+                self._write(self.ACL_FILE, acl)
+            return len(moved)
+
+    # groups.json: {name: [emails]} — a principal `group:<name>` resolves to its
+    # member emails at evaluation time (a user inherits all its groups' grants).
+
+    def groups_for_email(self, email: str) -> list:
+        """Names of the groups `email` belongs to ([] if none)."""
+        if not email:
+            return []
+        with self._locks[self.GROUPS_FILE]:
+            groups = self._load(self.GROUPS_FILE, dict)
+            return [name for name, members in groups.items()
+                    if isinstance(members, list) and email in members]
+
+    def set_group(self, name: str, emails) -> None:
+        """Create/replace a group's membership (deduped, order kept)."""
+        with self._locks[self.GROUPS_FILE]:
+            groups = dict(self._load(self.GROUPS_FILE, dict))
+            groups[name] = list(dict.fromkeys(e for e in emails if e))
+            self._write(self.GROUPS_FILE, groups)
+
+    def get_group(self, name: str):
+        with self._locks[self.GROUPS_FILE]:
+            members = self._load(self.GROUPS_FILE, dict).get(name)
+            return list(members) if isinstance(members, list) else None
+
+    def list_groups(self) -> dict:
+        with self._locks[self.GROUPS_FILE]:
+            return {name: list(members)
+                    for name, members in self._load(self.GROUPS_FILE, dict).items()
+                    if isinstance(members, list)}
+
+    def delete_group(self, name: str) -> bool:
+        with self._locks[self.GROUPS_FILE]:
+            groups = dict(self._load(self.GROUPS_FILE, dict))
+            if name not in groups:
+                return False
+            del groups[name]
+            self._write(self.GROUPS_FILE, groups)
+            return True
 
     # ── Atlas nodes (hive, #10) ─────────────────────────────────────────
     def create_node(self, name: str, path: str, token: str) -> dict:

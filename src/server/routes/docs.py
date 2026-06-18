@@ -40,7 +40,9 @@ def tree(handler):
     """GET /api/tree — the navigable document tree, filtered per-viewer (auth)."""
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
-        tree = _s._filter_tree(tree, handler._hidden_folders())
+        hidden = handler._hidden_folders()
+        keep = (lambda p: not _s._path_hidden(p, hidden)) if hidden else None
+        tree = _s._filter_tree(tree, keep)
         handler._send_json(200, tree)
     except Exception as e:
         handler._send_json(500, {"error": str(e)})
