@@ -211,5 +211,200 @@
         "path"
       ]
     }
+  },
+  {
+    "name": "doc_history",
+    "description": "Git revision history of a document, newest-first, following renames/moves. The entry point of the time axis: each revision's 'sha' is the token doc_at / doc_diff / doc_revert consume. Also returns the doc's 'created' and 'last_modified' commits. Unlike recent_docs (filesystem mtime, unreliable in cloud where the repo is cloned at boot), this is the truthful per-doc history. since/until/grep are git-native FILTERS, NOT revisions.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md/.html (e.g. projets/cdc.md)"
+        },
+        "limit": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 100
+        },
+        "since": {
+          "type": "string",
+          "description": "Optional git date filter, e.g. '2 weeks ago' or '2026-06-01'. A date/text filter, NOT a revision."
+        },
+        "until": {
+          "type": "string",
+          "description": "Optional git date filter (upper bound), same format as since."
+        },
+        "grep": {
+          "type": "string",
+          "description": "Optional: only revisions whose commit subject matches this text."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "doc_at",
+    "description": "Read the FULL content of a document as it was at a past point in time — the time-parameterized twin of read_doc (which only reads the current version). Pass EITHER 'rev' (a SHA from doc_history, or HEAD~N) OR 'at' (a date like '2026-05-01' — resolved to the last revision on or before it). Use it to read prior context a diff alone omits.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md/.html"
+        },
+        "rev": {
+          "type": "string",
+          "description": "A commit SHA (from doc_history) or HEAD~N. Mutually exclusive with 'at'."
+        },
+        "at": {
+          "type": "string",
+          "description": "A date ('2026-05-01', 'last tuesday'): resolves to the doc's last revision on or before it. Use this instead of guessing a SHA."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "doc_diff",
+    "description": "What CHANGED in a document. Pass just 'rev' to see what THAT commit changed in the doc (base defaults to the doc's previous version — a 1-arg call). Pass 'base' too to diff between two arbitrary revisions. Returns a unified diff plus added/removed line counts. Handles renames; large diffs are truncated.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md/.html"
+        },
+        "rev": {
+          "type": "string",
+          "default": "HEAD",
+          "description": "The newer revision: a SHA or HEAD~N. Default HEAD."
+        },
+        "base": {
+          "type": "string",
+          "description": "Optional older revision (SHA or HEAD~N). Omit to diff against the doc's previous version (this commit's change)."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "search_history",
+    "description": "Search ACROSS TIME, not just the current corpus. Finds the commits where a string entered or left the history (git pickaxe) — answers 'when did we decide X', 'which version introduced this fact', 'find text that was since deleted'. search_docs only sees the present; this sees every past state. Returns matching commits (newest-first) with the doc files they changed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The text whose appearance/disappearance you are tracking."
+        },
+        "regex": {
+          "type": "boolean",
+          "default": false,
+          "description": "True: treat query as a regex matching changed lines (-G). False: exact-string occurrence-count change (-S)."
+        },
+        "path_prefix": {
+          "type": "string",
+          "description": "Optional: restrict to a folder or file (e.g. 'projets' or 'projets/cdc.md'). Empty = whole mind."
+        },
+        "limit": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "changelog",
+    "description": "Commit-level activity across the whole mind over a recent window: what documents were added/modified/deleted/renamed and when. The corpus-wide complement to per-doc doc_history, and the truthful 'what changed lately' (recent_docs' mtime ranking is flattened to boot-time in cloud). Optionally scope to a folder or filter by author (handy to skip automated sync commits).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "days": {
+          "type": "integer",
+          "default": 14,
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Window in days."
+        },
+        "author": {
+          "type": "string",
+          "description": "Optional: only commits by this author (substring match), e.g. to exclude bot/sync commits."
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional: restrict to a folder or file prefix. Empty = whole mind."
+        },
+        "limit": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        }
+      }
+    }
+  },
+  {
+    "name": "doc_blame",
+    "description": "Per-line provenance of a document: for each line, which commit/author/date last changed it. Answers 'which commit is responsible for THIS exact fact/line'. Pass 'pattern' to blame only the lines containing a string (no line numbers needed), or start/end for a line range. Whole-file blame is capped.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md/.html (blamed at the current version)."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Optional: only return blamed lines whose text contains this (case-insensitive). The AI-friendly way to target a line without knowing its number."
+        },
+        "start": {
+          "type": "integer",
+          "description": "Optional 1-based start line of a range.",
+          "minimum": 1
+        },
+        "end": {
+          "type": "integer",
+          "description": "Optional end line of the range (omit for start..EOF).",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "doc_revert",
+    "description": "Restore a document to a past revision: writes that revision's content back as the CURRENT version (a forward-moving change — the in-between history is kept, fully reversible by reverting again). Use after inspecting with doc_history/doc_diff/doc_at. Refuses on remote mirrors (remotes/).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path of the .md/.html to restore."
+        },
+        "rev": {
+          "type": "string",
+          "description": "The revision to restore to: a commit SHA (from doc_history) or HEAD~N."
+        }
+      },
+      "required": [
+        "path",
+        "rev"
+      ]
+    }
   }
 ]
