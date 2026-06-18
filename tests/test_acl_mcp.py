@@ -114,5 +114,61 @@ class TestMcpBearerAcl(unittest.TestCase):
         self.assertEqual(resp.status, 401)
 
 
+class TestMcpWriteLadder(unittest.TestCase):
+    """The write ladder over MCP (model B): a commons doc is view-only for a
+    non-owner; a creator owns (and may read) its own new private doc; the
+    owner-bound token may edit its private doc. Fresh server per test (writes)."""
+
+    def setUp(self):
+        self.srv = AtlasServer(mind=dict(MIND), extra_env=CLOUD_ENV)
+        self.srv.start()
+        fs = store.FileStore(self.srv.root / ".atlas")
+        fs.upsert_user(OWNER_EMAIL, {"role": "viewer"})
+        fs.set_owner("secret/private.md", "user:" + OWNER_EMAIL)
+        _, self.bare = fs.create_api_identity("bare-w")
+        meta, self.bound = fs.create_api_identity("owner-w")
+        fs.upsert_user(meta["email"], {"acts_as": OWNER_EMAIL})
+
+    def tearDown(self):
+        self.srv.stop()
+
+    def _call(self, token, name, args):
+        body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": {"name": name, "arguments": args}}
+        r = self.srv.post(f"/mcp/{token}", json_body=body)
+        self.assertEqual(r.status, 200, f"{name} -> HTTP {r.status}")
+        res = r.json()["result"]
+        return bool(res.get("isError")), res["content"][0]["text"]
+
+    def test_bare_cannot_edit_commons(self):
+        err, text = self._call(self.bare, "edit_doc",
+                               {"path": "public/note.md", "content": "hacked"})
+        self.assertTrue(err)
+        self.assertIn("permission", text.lower())
+
+    def test_bare_cannot_delete_commons(self):
+        err, text = self._call(self.bare, "delete_doc", {"path": "public/note.md"})
+        self.assertTrue(err)
+        self.assertIn("permission", text.lower())
+
+    def test_create_is_private_to_creator(self):
+        err, _ = self._call(self.bare, "create_doc",
+                            {"path": "bot/mine.md", "content": "# mine\nsecret-bot-content\n"})
+        self.assertFalse(err)
+        # the creator reads its own new doc back
+        e2, t2 = self._call(self.bare, "read_doc", {"path": "bot/mine.md"})
+        self.assertFalse(e2)
+        self.assertIn("secret-bot-content", t2)
+        # a different principal (owner-bound) does NOT see it (no-oracle)
+        _, t3 = self._call(self.bound, "read_doc", {"path": "bot/mine.md"})
+        self.assertNotIn("secret-bot-content", t3)
+        self.assertIn("not found", t3.lower())
+
+    def test_owner_bound_can_edit_its_private(self):
+        err, text = self._call(self.bound, "edit_doc",
+                               {"path": "secret/private.md", "content": "# Secret\nnouveau\n"})
+        self.assertFalse(err, text)
+
+
 if __name__ == "__main__":
     unittest.main()

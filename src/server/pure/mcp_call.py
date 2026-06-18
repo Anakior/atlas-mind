@@ -427,12 +427,21 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
         if _s._is_readonly_path(rel):
             return text_result("Read-only location (remote node mirror) — choose another path.", is_error=True)
+        if not _visible(rel, ctx):
+            return text_result("Insufficient permission to create at this location.", is_error=True)
         if target.exists():
             return text_result(f"Document already exists: {rel} (cannot overwrite with this token)", is_error=True)
         if not isinstance(content, str):
             return text_result("'content' must be a string", is_error=True)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+        # Ownership-on-create: a non-admin's new doc is private to them (model B);
+        # an admin's stays in the commons (curator role).
+        if ctx is not None and ctx.primary and not ctx.is_admin:
+            try:
+                _s.get_store().set_owner(rel, ctx.primary)
+            except Exception as e:
+                print(f"[create_doc set_owner] {e}", file=sys.stderr)
         _s.trigger_sync()
         return text_result(f"Document created: {rel}")
 
@@ -443,8 +452,10 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
         if _s._is_readonly_path(rel):
             return text_result("Read-only document (remote node mirror). Use \"Appropriate\" to make an editable copy.", is_error=True)
-        if not target.exists():
+        if not target.exists() or not _visible(rel, ctx):
             return text_result(f"Document not found: {rel} (use create_doc to create a new one)", is_error=True)
+        if ctx is not None and not _s.can_write(rel, ctx, "edit"):
+            return text_result("Insufficient permission (need edit on this document).", is_error=True)
         old_string = args.get("old_string")
         new_string = args.get("new_string")
         content = args.get("content")
@@ -478,15 +489,20 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result("'from' and 'to' are required", is_error=True)
         if _s._is_readonly_path(src_rel) or _s._is_readonly_path(dst_rel):
             return text_result("Read-only location (remote node mirror) — \"Appropriate\" it first to get an editable copy.", is_error=True)
+        if ctx is not None and not _visible(src_rel, ctx):
+            return text_result(f"Document not found: {src_rel}", is_error=True)
+        if ctx is not None and not _s.can_write(src_rel, ctx, "owner"):
+            return text_result("Insufficient permission (need owner to move this document).", is_error=True)
         status, payload = _s._move_md_with_relink(src_rel, dst_rel)
         if status != "ok":
             return text_result(payload, is_error=True)
         _s.trigger_sync()
-        # In-app move → keep its share links alive (best-effort).
+        # In-app move → keep its share links AND its ACL alive (best-effort).
         try:
             _s.get_store().repoint_shares_by_path(payload["from"], payload["to"])
+            _s.get_store().repoint_acl_by_path(payload["from"], payload["to"])
         except Exception as e:
-            print(f"[share repoint] {e}", file=sys.stderr)
+            print(f"[move repoint] {e}", file=sys.stderr)
         n, files = payload["links_updated"], len(payload["rewrites"])
         msg = f"Moved: {payload['from']} -> {payload['to']}."
         msg += (f" {n} incoming wikilink(s) rewritten in {files} doc(s)."
@@ -561,9 +577,17 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
         if _s._is_readonly_path(rel):
             return text_result("Read-only location (remote node mirror) — cannot delete.", is_error=True)
-        if not target.exists():
+        if not target.exists() or not _visible(rel, ctx):
             return text_result(f"Document not found: {rel}", is_error=True)
+        if ctx is not None and not _s.can_write(rel, ctx, "owner"):
+            return text_result("Insufficient permission (need owner to delete this document).", is_error=True)
         trashed = _soft_delete(target)
+        # The ACL follows the doc into .trash so the freed path keeps no stale
+        # entry a future doc created there would inherit.
+        try:
+            _s.get_store().repoint_acl_by_path(rel, trashed)
+        except Exception as e:
+            print(f"[delete repoint_acl] {e}", file=sys.stderr)
         _s.trigger_sync()
         return text_result(f"Document moved to trash (reversible): {rel} -> {trashed}")
 
@@ -790,6 +814,10 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result("Invalid revision (a commit SHA or HEAD~N)", is_error=True)
         if _s._is_readonly_path(rel):
             return text_result("Read-only location (remote node mirror) — cannot revert.", is_error=True)
+        if ctx is not None and not _visible(rel, ctx):
+            return text_result(f"Document not found: {rel}", is_error=True)
+        if ctx is not None and not _s.can_write(rel, ctx, "edit"):
+            return text_result("Insufficient permission (need edit on this document).", is_error=True)
         show = _s.git("show", rev + ":" + _s._doc_path_at("content/" + rel, rev))
         if show.returncode != 0:
             return text_result(f"Revision not found: {rev}", is_error=True)
