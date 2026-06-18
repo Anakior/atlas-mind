@@ -1,10 +1,22 @@
 """MCP tool dispatch + graph/tag/trash/search helpers backing the AI-native tools."""
+import datetime
 import json
+import re
 import sys
 import time
 from pathlib import Path
 
 import server as _s
+
+# The well-known empty-tree object: lets doc_diff express "this doc's first
+# appearance" as a normal two-tree diff (empty -> rev) instead of a special case.
+_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+# Output caps: a real .html deck in a mind can be ~2 MB; an uncapped diff/content/
+# blame would blow the model's context. The HTTP endpoints have no cap (a browser
+# doesn't care) — the MCP tools must.
+_MAX_OUTPUT_CHARS = 60000
+_MAX_BLAME_LINES = 600
+_BLAME_HEAD_RE = re.compile(r"^[0-9a-f]{40} \d+ \d+")
 
 
 def _doc_corpus():
@@ -146,6 +158,174 @@ def _api_recent(days: int, limit: int) -> list:
         })
     items.sort(key=lambda h: -h["mtime"])
     return items[:limit]
+
+
+# ─── Git time-travel helpers (back the doc_history/at/diff/blame/changelog/revert
+#     and search_history MCP tools) ────────────────────────────────────────────
+# Every git call goes through _s.git (subprocess arg-list, NO shell). Doc paths are
+# content/-relative on the MCP side; git runs at the repo root, so the pathspec is
+# prefixed with "content/". Revs the AGENT supplies are gated by _s._valid_git_rev
+# (SHA or HEAD~N only) — dates and relative bases are resolved to a SHA server-side
+# (the validator rejects them by design), and filter flags (--since/--grep/--author)
+# are passed as fused argv tokens, never through the rev validator.
+
+
+def _capped(text):
+    """Truncate a payload to protect the model context; returns (text, truncated)."""
+    if not text:
+        return text or "", False
+    if len(text) <= _MAX_OUTPUT_CHARS:
+        return text, False
+    return text[:_MAX_OUTPUT_CHARS], True
+
+
+def _fmt_commit(record: str) -> dict:
+    """Parse a '%H\\x1f%an\\x1f%aI\\x1f%s' record into a revision dict."""
+    f = (record.split("\x1f") + ["", "", "", ""])[:4]
+    return {"sha": f[0], "short_sha": f[0][:7], "author": f[1], "date": f[2], "subject": f[3]}
+
+
+def _git_doc_records(repo_rel: str, *opts):
+    """git log --follow over one doc, returning the raw '\\x1f'-field records
+    (newest-first) or None on failure. --follow keeps pre-rename commits."""
+    r = _s.git("log", "--follow", *opts, "--format=%H\x1f%an\x1f%aI\x1f%s", "-z", "--", repo_rel)
+    if r.returncode != 0:
+        return None
+    return [x for x in r.stdout.split("\x00") if x]
+
+
+def _safe_path_prefix(prefix: str):
+    """Validate a directory/file prefix for the history-search tools (which can't
+    reuse _validate_doc_path — it requires a .md/.html suffix). Returns the cleaned
+    prefix ('' = whole tree) or None if it tries to escape content/."""
+    prefix = (prefix or "").strip()
+    if not prefix:
+        return ""
+    if prefix.startswith("/") or ".." in prefix.split("/"):
+        return None
+    return prefix.strip("/")
+
+
+def _history_path_included(content_rel: str, excluded) -> bool:
+    """Apply the iter_doc_files visibility rules to a HISTORICAL path (a string from
+    git, not a current file): skip dot-folders/.trash, skip skill/tools/__pycache__,
+    skip excluded basenames, keep only .md/.html. iter_doc_files itself can't be used
+    here — its set is current-files-only, so deleted/trashed docs in history are absent."""
+    parts = content_rel.split("/")
+    if any(p == ".git" or p.startswith(".") for p in parts):
+        return False
+    if parts and parts[0] in ("skill", "tools", "__pycache__"):
+        return False
+    if parts[-1] in excluded:
+        return False
+    return content_rel.endswith((".md", ".html"))
+
+
+def _strip_content(p: str):
+    """Strip the 'content/' repo prefix from a git path, or None if not under it."""
+    return p[len("content/"):] if p.startswith("content/") else None
+
+
+def _parse_namestatus_log(stdout: str, excluded) -> list:
+    """Parse `git log --format=%x1e… --name-status -z` into commit dicts with their
+    changed DOC files. The leading \\x1e (record separator) delimits commits so the
+    flat -z stream is unambiguous; R/C statuses carry two paths (old + new). Commits
+    whose changed files are all excluded/non-doc are dropped."""
+    out = []
+    for rec in stdout.split("\x1e"):
+        rec = rec.strip("\n")
+        if not rec:
+            continue
+        head, _, rest = rec.partition("\x00")
+        sha, an, aI, subj = (head.split("\x1f") + ["", "", "", ""])[:4]
+        if not sha:
+            continue
+        # git inserts a '\n' between the format's \x00 terminator and the name-status
+        # block, so the first status token arrives as '\nM' / '\nR100' — strip it.
+        tokens = [t for t in (x.lstrip("\n") for x in rest.split("\x00")) if t]
+        files = []
+        i = 0
+        while i < len(tokens):
+            status = tokens[i]
+            if status[:1] in ("R", "C") and i + 2 < len(tokens):
+                new_rel = _strip_content(tokens[i + 2])
+                if new_rel is not None and _history_path_included(new_rel, excluded):
+                    files.append({"status": status[:1], "path": new_rel,
+                                  "old_path": _strip_content(tokens[i + 1])})
+                i += 3
+            else:
+                path = tokens[i + 1] if i + 1 < len(tokens) else ""
+                rel = _strip_content(path)
+                if rel is not None and _history_path_included(rel, excluded):
+                    files.append({"status": status[:1] or "?", "path": rel})
+                i += 2
+        if files:
+            out.append({"sha": sha, "short_sha": sha[:7], "author": an,
+                        "date": aI, "subject": subj, "files": files})
+    return out
+
+
+def _numstat_first(stdout: str):
+    """(added, removed) from the first `git diff --numstat` line; '-' (binary) -> 0."""
+    for line in stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            added = 0 if parts[0] == "-" else int(parts[0] or 0)
+            removed = 0 if parts[1] == "-" else int(parts[1] or 0)
+            return added, removed
+    return 0, 0
+
+
+def _doc_diff_between(repo_rel: str, base_sha: str, rev_sha: str):
+    """Unified diff + (added, removed) for a doc between two resolved SHAs. Mirrors
+    /api/diff: same-path -> pathspec diff; renamed-between-revs -> blob:blob diff;
+    base == empty tree -> the doc's introduction. Returns (diff_text|None, +, -)."""
+    to_path = _s._doc_path_at(repo_rel, rev_sha)
+    if base_sha == _EMPTY_TREE:
+        diff = _s.git("diff", base_sha, rev_sha, "--", to_path)
+        num = _s.git("diff", "--numstat", base_sha, rev_sha, "--", to_path)
+    else:
+        from_path = _s._doc_path_at(repo_rel, base_sha)
+        if from_path == to_path:
+            diff = _s.git("diff", base_sha, rev_sha, "--", from_path)
+            num = _s.git("diff", "--numstat", base_sha, rev_sha, "--", from_path)
+        else:
+            a, b = base_sha + ":" + from_path, rev_sha + ":" + to_path
+            diff = _s.git("diff", a, b)
+            num = _s.git("diff", "--numstat", a, b)
+    if diff.returncode != 0:
+        return None, 0, 0
+    added, removed = _numstat_first(num.stdout)
+    return diff.stdout, added, removed
+
+
+def _parse_blame(stdout: str) -> list:
+    """Parse `git blame --line-porcelain` into per-line attribution. --line-porcelain
+    repeats every header for every line, so each line carries author/time/summary."""
+    lines = []
+    cur = {}
+    for raw in stdout.split("\n"):
+        if _BLAME_HEAD_RE.match(raw):
+            p = raw.split(" ")
+            cur = {"sha": p[0], "short_sha": p[0][:7], "line_no": int(p[2])}
+        elif raw.startswith("author "):
+            cur["author"] = raw[len("author "):]
+        elif raw.startswith("author-time "):
+            cur["_epoch"] = raw[len("author-time "):]
+        elif raw.startswith("summary "):
+            cur["subject"] = raw[len("summary "):]
+        elif raw.startswith("\t"):
+            try:
+                date = datetime.datetime.fromtimestamp(
+                    int(cur.get("_epoch", "")), datetime.timezone.utc).isoformat()
+            except (ValueError, TypeError):
+                date = ""
+            lines.append({"line_no": cur.get("line_no"), "text": raw[1:],
+                          "sha": cur.get("sha"), "short_sha": cur.get("short_sha"),
+                          "author": cur.get("author", ""), "date": date,
+                          "subject": cur.get("subject", "")})
+            cur = {}
+    return lines
 
 
 def _mcp_call_tool(name: str, args: dict) -> dict:
@@ -356,6 +536,230 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         trashed = _soft_delete(target)
         _s.trigger_sync()
         return text_result(f"Document moved to trash (reversible): {rel} -> {trashed}")
+
+    if name == "doc_history":
+        rel = (args.get("path") or "").strip()
+        if _s._validate_doc_path(rel) is None:
+            return text_result(f"Invalid path (relative .md or .html, no '..'): {rel}", is_error=True)
+        try:
+            limit = min(100, max(1, int(args.get("limit", 30))))
+        except (ValueError, TypeError):
+            limit = 30
+        since = (args.get("since") or "").strip()
+        until = (args.get("until") or "").strip()
+        grep = (args.get("grep") or "").strip()
+        repo_rel = "content/" + rel
+        # since/until/grep are git-native FILTERS (dates/text), never revs — passed as
+        # fused argv tokens, deliberately NOT through _valid_git_rev (which rejects them).
+        opts = ["-n", str(limit)]
+        if since:
+            opts.append("--since=" + since)
+        if until:
+            opts.append("--until=" + until)
+        if grep:
+            opts.append("--grep=" + grep)
+        records = _git_doc_records(repo_rel, *opts)
+        if records is None:
+            return text_result("git log failed", is_error=True)
+        head = _s.git("rev-parse", "HEAD").stdout.strip()
+        revisions = []
+        for record in records:
+            commit = _fmt_commit(record)
+            commit["is_current"] = commit["sha"] == head
+            revisions.append(commit)
+        # Lifecycle header (absorbs the would-be doc_first_seen): --diff-filter=A gives
+        # the true birth even past the -n cap; take the OLDEST add (delete+re-add -> >1).
+        adds = _git_doc_records(repo_rel, "--diff-filter=A")
+        created = _fmt_commit(adds[-1]) if adds else None
+        if since or until or grep:
+            newest = _git_doc_records(repo_rel, "-n", "1")
+            last_modified = _fmt_commit(newest[0]) if newest else None
+        else:
+            last_modified = revisions[0] if revisions else None
+        payload = {"path": rel, "created": created,
+                   "last_modified": last_modified, "revisions": revisions}
+        return text_result(json.dumps(payload, ensure_ascii=False, indent=2))
+
+    if name == "doc_at":
+        rel = (args.get("path") or "").strip()
+        if _s._validate_doc_path(rel) is None:
+            return text_result(f"Invalid path: {rel}", is_error=True)
+        rev = (args.get("rev") or "").strip()
+        at = (args.get("at") or "").strip()
+        repo_rel = "content/" + rel
+        if at and not rev:
+            # Resolve a date to a SHA server-side. --until=<date> is a fused token and a
+            # trailing -- precedes the pathspec, so a leading-dash date can't become a flag.
+            resolved = _s.git("log", "--follow", "-n", "1", "--format=%H",
+                              "--until=" + at, "--", repo_rel).stdout.strip()
+            if not resolved:
+                return text_result(f"No revision of {rel} on or before '{at}'", is_error=True)
+            rev = resolved
+        elif rev:
+            if not _s._valid_git_rev(rev):
+                return text_result("Invalid 'rev' (a commit SHA or HEAD~N; put a date in 'at')", is_error=True)
+        else:
+            rev = "HEAD"
+        rev_sha = _s.git("rev-parse", rev).stdout.strip() or rev
+        show = _s.git("show", rev_sha + ":" + _s._doc_path_at(repo_rel, rev_sha))
+        if show.returncode != 0:
+            return text_result(f"Revision not found: {rev}", is_error=True)
+        date = _s.git("show", "-s", "--format=%aI", rev_sha).stdout.strip()
+        content, truncated = _capped(show.stdout)
+        header = (f"[doc_at] {rel} @ {rev_sha[:8]} ({date})"
+                  + ("  [truncated — see /api/revision for the full blob]" if truncated else ""))
+        return text_result(header + "\n\n" + content)
+
+    if name == "doc_diff":
+        rel = (args.get("path") or "").strip()
+        if _s._validate_doc_path(rel) is None:
+            return text_result(f"Invalid path: {rel}", is_error=True)
+        rev = (args.get("rev") or "HEAD").strip() or "HEAD"
+        base = (args.get("base") or "").strip()
+        if not _s._valid_git_rev(rev):
+            return text_result("Invalid 'rev' (a commit SHA or HEAD~N)", is_error=True)
+        if base and not _s._valid_git_rev(base):
+            return text_result("Invalid 'base' (a commit SHA or HEAD~N)", is_error=True)
+        repo_rel = "content/" + rel
+        rev_sha = _s.git("rev-parse", rev).stdout.strip()
+        if not rev_sha:
+            return text_result(f"Revision not found: {rev}", is_error=True)
+        if base:
+            base_sha = _s.git("rev-parse", base).stdout.strip()
+            if not base_sha:
+                return text_result(f"Revision not found: {base}", is_error=True)
+        else:
+            # Default base = the doc's PREVIOUS touch (not literal rev~1, which may not
+            # have changed this doc). Empty -> rev is the doc's first appearance.
+            prev = _s.git("log", "--follow", "--format=%H", "-n", "1",
+                          rev_sha + "~1", "--", repo_rel)
+            base_sha = prev.stdout.strip() if prev.returncode == 0 else ""
+            if not base_sha:
+                base_sha = _EMPTY_TREE
+        diff_text, added, removed = _doc_diff_between(repo_rel, base_sha, rev_sha)
+        if diff_text is None:
+            return text_result("git diff failed", is_error=True)
+        base_label = "(initial)" if base_sha == _EMPTY_TREE else base_sha[:8]
+        body, truncated = _capped(diff_text)
+        header = (f"[doc_diff] {rel}  {base_label} → {rev_sha[:8]}  (+{added} −{removed})"
+                  + ("  [truncated]" if truncated else ""))
+        if not diff_text.strip():
+            return text_result(header + "\n\n(no changes to this document between these revisions)")
+        return text_result(header + "\n\n" + body)
+
+    if name == "search_history":
+        query = (args.get("query") or "").strip()
+        if not query:
+            return text_result("Error: missing 'query' parameter", is_error=True)
+        regex = bool(args.get("regex"))
+        prefix = _safe_path_prefix(args.get("path_prefix") or "")
+        if prefix is None:
+            return text_result("Invalid 'path_prefix'", is_error=True)
+        try:
+            limit = min(50, max(1, int(args.get("limit", 20))))
+        except (ValueError, TypeError):
+            limit = 20
+        pathspec = "content/" + prefix if prefix else "content"
+        # Pickaxe: -S<str> finds commits where the OCCURRENCE COUNT of the term changed
+        # (it entered or left history); -G<regex> matches added/removed lines. Fused
+        # token so a leading-dash query is read as a value, not a flag.
+        pick = ("-G" if regex else "-S") + query
+        result = _s.git("log", pick, "-n", str(limit),
+                        "--format=%x1e%H\x1f%an\x1f%aI\x1f%s", "--name-status", "-z",
+                        "--", pathspec)
+        if result.returncode != 0:
+            return text_result("git history search failed (check the regex)" if regex
+                               else "git history search failed", is_error=True)
+        commits = _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES)
+        if not commits:
+            return text_result(f"No commit where '{query}' entered or left the history"
+                               + (f" under {prefix}" if prefix else ""))
+        return text_result(json.dumps({"query": query, "regex": regex, "matches": commits},
+                                      ensure_ascii=False, indent=2))
+
+    if name == "changelog":
+        try:
+            days = min(365, max(1, int(args.get("days", 14))))
+        except (ValueError, TypeError):
+            days = 14
+        try:
+            limit = min(200, max(1, int(args.get("limit", 50))))
+        except (ValueError, TypeError):
+            limit = 50
+        author = (args.get("author") or "").strip()
+        prefix = _safe_path_prefix(args.get("path") or "")
+        if prefix is None:
+            return text_result("Invalid 'path'", is_error=True)
+        pathspec = "content/" + prefix if prefix else "content"
+        # -M: detect renames so a moved doc shows as one R record (old+new path)
+        # rather than a delete+add pair; the -z parser pairs the two paths.
+        opts = ["log", "--since=" + str(days) + ".days.ago", "-n", str(limit),
+                "--format=%x1e%H\x1f%an\x1f%aI\x1f%s", "--name-status", "-M", "-z"]
+        if author:
+            opts.append("--author=" + author)
+        opts += ["--", pathspec]
+        result = _s.git(*opts)
+        if result.returncode != 0:
+            return text_result("git log failed", is_error=True)
+        commits = _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES)
+        if not commits:
+            return text_result(f"No document changes in the last {days} days"
+                               + (f" under {prefix}" if prefix else ""))
+        return text_result(json.dumps({"since_days": days, "commits": commits},
+                                      ensure_ascii=False, indent=2))
+
+    if name == "doc_blame":
+        rel = (args.get("path") or "").strip()
+        target = _s._validate_doc_path(rel)
+        if target is None:
+            return text_result(f"Invalid path: {rel}", is_error=True)
+        if not target.exists():
+            return text_result(f"Document not found: {rel}", is_error=True)
+        pattern = (args.get("pattern") or "").strip()
+        try:
+            start = max(0, int(args.get("start", 0)))
+        except (ValueError, TypeError):
+            start = 0
+        try:
+            end = max(0, int(args.get("end", 0)))
+        except (ValueError, TypeError):
+            end = 0
+        blame_args = ["blame", "--line-porcelain"]
+        if start > 0:
+            blame_args += ["-L", f"{start},{end}" if end >= start and end > 0 else f"{start},"]
+        blame_args += ["--", "content/" + rel]
+        result = _s.git(*blame_args)
+        if result.returncode != 0:
+            return text_result("git blame failed", is_error=True)
+        lines = _parse_blame(result.stdout)
+        if pattern:
+            low = pattern.lower()
+            lines = [ln for ln in lines if low in ln["text"].lower()]
+        truncated = False
+        if not pattern and start == 0 and len(lines) > _MAX_BLAME_LINES:
+            lines = lines[:_MAX_BLAME_LINES]
+            truncated = True
+        return text_result(json.dumps({"path": rel, "truncated": truncated, "lines": lines},
+                                      ensure_ascii=False, indent=2))
+
+    if name == "doc_revert":
+        rel = (args.get("path") or "").strip()
+        rev = (args.get("rev") or "").strip()
+        target = _s._validate_doc_path(rel)
+        if target is None:
+            return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
+        if not _s._valid_git_rev(rev):
+            return text_result("Invalid revision (a commit SHA or HEAD~N)", is_error=True)
+        if _s._is_readonly_path(rel):
+            return text_result("Read-only location (remote node mirror) — cannot revert.", is_error=True)
+        show = _s.git("show", rev + ":" + _s._doc_path_at("content/" + rel, rev))
+        if show.returncode != 0:
+            return text_result(f"Revision not found: {rev}", is_error=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(show.stdout, encoding="utf-8")
+        _s.trigger_sync()
+        return text_result(f"Reverted {rel} to revision {rev[:8]} "
+                           "(written as a forward-moving change; the prior version stays in history).")
 
     return text_result(f"Unknown tool: {name}", is_error=True)
 

@@ -209,6 +209,28 @@
   .hive-note b{color:var(--ink)}
   @media(max-width:820px){.hive-steps{grid-template-columns:1fr}}
 
+  /* ── AI superpowers (MCP) ── */
+  .powers{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    background:radial-gradient(70% 100% at 50% 0,var(--teal-soft),transparent 62%)}
+  .powers .kicker{color:var(--teal)}
+  .powers h2 .grad{background:linear-gradient(120deg,#fff,var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .powers-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-top:46px;text-align:left}
+  .power{border:1px solid var(--glass-line);border-radius:16px;padding:28px 26px;
+    background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+    box-shadow:var(--glass-sh);transition:.2s;position:relative;overflow:hidden}
+  .power:hover{border-color:rgba(95,208,196,.32);transform:translateY(-3px);background:var(--glass-2)}
+  .power .ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;margin-bottom:18px;
+    background:var(--teal-soft);border:1px solid rgba(95,208,196,.25);color:var(--teal)}
+  .power .ic svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .power h3{font-size:19px;font-weight:660;letter-spacing:-.2px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .power p{color:var(--muted);font-size:14.5px;margin-top:10px}
+  .power .tools{margin-top:18px;display:flex;flex-wrap:wrap;gap:7px}
+  .power .tools code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--teal);
+    background:var(--teal-soft);border:1px solid rgba(95,208,196,.2);padding:3px 8px;border-radius:6px}
+  .powers-note{margin:30px auto 0;color:var(--muted);font-size:15px;max-width:720px;text-align:center}
+  .powers-note b{color:var(--ink)}
+  @media(max-width:820px){.powers-grid{grid-template-columns:1fr}}
+
   /* ── final CTA ── */
   .final{text-align:center;border-top:1px solid var(--line);
     background:radial-gradient(80% 100% at 50% 0,rgba(251,198,120,.07),transparent 60%)}
@@ -242,6 +264,7 @@
   </a>
   <div class="nav-links">
     <a class="hide-sm" href="#why">Why</a>
+    <a class="hide-sm" href="#superpowers">Superpowers</a>
     <a class="hide-sm" href="#pillars">How it works</a>
     <a class="hide-sm" href="#hive">Hive Mind</a>
     <a class="hide-sm" href="#start">Install</a>
@@ -308,8 +331,8 @@
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
       <h3>AI-native by design</h3>
-      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with seven tools, and <code>atlas init</code> scaffolds the conventions so an AI knows how to use your mind.</p>
-      <div class="tag">MCP · 7 tools · REST API</div>
+      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with nineteen tools — read, write, map and rewind your mind — and <code>atlas init</code> scaffolds the conventions so an AI knows how to use it.</p>
+      <div class="tag"><a href="#superpowers">MCP · 19 tools · REST API →</a></div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M20 4c-7 0-13 4-13 11v3l11-11"/><path d="M7 18c-1.2 1.2-2 2.4-2.5 3.5"/><path d="M16 8.5 9.5 15"/></svg></div>
@@ -318,6 +341,44 @@
       <div class="tag">stdlib · no DB · vendored</div>
     </div>
   </div>
+</div></section>
+
+<section id="superpowers" class="powers center"><div class="wrap">
+  <div class="kicker">AI-native · Model Context Protocol</div>
+  <h2>Give your mind <span class="grad">superpowers</span>.</h2>
+  <p class="sub" style="margin:14px auto 0">Connect Atlas to Claude — or any MCP client — and your knowledge base stops being a passive archive. It becomes an active memory your assistant can <b>read, write, map and rewind</b>, over an open protocol, on your own machine, with nothing shipped to anyone's cloud. <b>Nineteen tools, four superpowers.</b></p>
+  <div class="powers-grid">
+
+    <div class="power">
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></div>
+      <h3>Reads your whole mind</h3>
+      <p>Ask in plain language and your AI searches the full text, opens any document, walks the tree and surfaces what you touched lately — across Markdown, HTML decks, PDFs and Word files alike.</p>
+      <div class="tools"><code>search_docs</code><code>read_doc</code><code>list_tree</code><code>recent_docs</code></div>
+    </div>
+
+    <div class="power">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+      <h3>Writes it back</h3>
+      <p>It doesn't just answer — it files. Capture a decision, rewrite a section surgically, rename or refile a note with every <b>[[backlink]]</b> fixed automatically, archive what's stale (soft-deleted to trash, never erased).</p>
+      <div class="tools"><code>create_doc</code><code>edit_doc</code><code>move_doc</code><code>delete_doc</code></div>
+    </div>
+
+    <div class="power">
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
+      <h3>Sees the connections</h3>
+      <p>Your AI traverses the wikilink graph the way you do: forward links, backlinks, a bird's-eye map of hubs and orphans, every note under a tag. It reasons about your mind's <b>shape</b>, not just its words.</p>
+      <div class="tools"><code>get_links</code><code>get_backlinks</code><code>get_mind_topology</code><code>list_by_tag</code></div>
+    </div>
+
+    <div class="power">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 3v3.5h3.5"/><path d="M12 7.5V12l3 1.8"/></svg></div>
+      <h3>Travels through time</h3>
+      <p>“When did we decide this — and what was it before?” Your AI reads any <b>past version</b> of a note, diffs two points in time, finds a sentence you <b>deleted months ago</b>, traces a line back to the commit that wrote it, follows a moving changelog, and restores a version in one move — powered by the git history your mind already carries.</p>
+      <div class="tools"><code>doc_history</code><code>doc_at</code><code>doc_diff</code><code>search_history</code><code>changelog</code><code>doc_blame</code><code>doc_revert</code></div>
+    </div>
+
+  </div>
+  <p class="powers-note">Every tool runs <b>locally</b> and respects the same boundaries as the viewer — shared mirrors stay read-only, deletes are reversible, and not a byte leaves your disk. Your assistant gets a memory; you keep the keys.</p>
 </div></section>
 
 <section class="quote"><div class="wrap">

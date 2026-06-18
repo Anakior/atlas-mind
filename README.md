@@ -32,9 +32,10 @@ It is built on three ideas:
   HTML in your browser, nothing uploaded anywhere. Your knowledge lives in one
   place whatever its shape.
 - **AI-native.** Atlas Mind is meant to be the memory your AI assistant reads and
-  enriches: it exposes an **MCP** endpoint (seven tools) and `atlas init` scaffolds
-  the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how
-  to use your mind. See [Use it with your AI](#use-it-with-your-ai-mcp).
+  enriches: it exposes an **MCP** endpoint (nineteen tools — read, write, map and
+  rewind your mind) and `atlas init` scaffolds the conventions (`AGENTS.md`,
+  `agents/`, `ai-sessions/`) so an assistant knows how to use your mind. See
+  [Use it with your AI](#use-it-with-your-ai-mcp).
 - **Lightweight & self-contained.** A single Python HTTP server plus a build step,
   written entirely on the standard library — **no database required**, accounts
   and share links live in plain JSON files on disk. Frontend libraries and fonts
@@ -179,12 +180,18 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
 
 ### AI integration
 
-- An **MCP endpoint** exposing twelve tools so an assistant reads, writes and
-  *navigates* your mind directly: `search_docs` (with an optional `tag` filter),
-  `read_doc`, `list_tree`, `recent_docs`, `create_doc`, `edit_doc`, `move_doc`,
-  `delete_doc` (soft-delete to `.trash/`, reversible), plus graph traversal —
-  `get_links`, `get_backlinks`, `list_by_tag`, and `get_mind_topology` (a
-  bird's-eye summary: hubs, orphans, density, top tags).
+- An **MCP endpoint** exposing nineteen tools so an assistant reads, writes,
+  *navigates* and *rewinds* your mind directly, in four groups:
+  - **read** — `search_docs` (with an optional `tag` filter), `read_doc`,
+    `list_tree`, `recent_docs`;
+  - **write** — `create_doc`, `edit_doc`, `move_doc` (fixes incoming
+    `[[backlinks]]`), `delete_doc` (soft-delete to `.trash/`, reversible);
+  - **graph** — `get_links`, `get_backlinks`, `list_by_tag`, `get_mind_topology`
+    (a bird's-eye summary: hubs, orphans, density, top tags);
+  - **time-travel** (your mind is a git repo) — `doc_history`, `doc_at` (a past
+    version by revision or date), `doc_diff`, `search_history` (pickaxe — find
+    when a string entered or left history, even if since deleted), `changelog`,
+    `doc_blame`, `doc_revert`.
 - A **REST API v1** (Bearer tokens, create-only writes) with a published
   **OpenAPI 3.1** spec.
 - `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`). See
@@ -309,17 +316,20 @@ adapt it to your conventions. Two folders come scaffolded: `content/agents/`
 (reusable AI agent definitions) and `content/ai-sessions/` (session saves, with a
 `TEMPLATE.md` template).
 
-The engine exposes an **MCP endpoint** with seven tools — `search_docs`,
-`read_doc`, `list_tree`, `recent_docs`, `create_doc`, `edit_doc`, `move_doc`.
-Mint a token and point your assistant at it:
+The engine exposes an **MCP endpoint** with nineteen tools — your assistant can
+**read** (`search_docs`, `read_doc`, `list_tree`, `recent_docs`), **write**
+(`create_doc`, `edit_doc`, `move_doc`, `delete_doc`), **map the graph**
+(`get_links`, `get_backlinks`, `list_by_tag`, `get_mind_topology`) and
+**travel through time** (`doc_history`, `doc_at`, `doc_diff`, `search_history`,
+`changelog`, `doc_blame`, `doc_revert`). Mint a token and point your assistant at it:
 
 ```bash
 atlas token create ~/my-mind --label claude
 # → prints the MCP URL: https://<your-atlas>/mcp/<token>
 ```
 
-Your AI can then search, read and create documents directly in your mind — the
-**Mind** view is, quite literally, the map it walks.
+Your AI can then search, read, write and rewind documents directly in your mind —
+the **Mind** view is, quite literally, the map it walks.
 
 ## Hive Mind (Atlas nodes)
 
