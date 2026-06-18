@@ -90,12 +90,21 @@ class Handler(SimpleHTTPRequestHandler):
         folders = (user or {}).get("hidden_folders") or []
         return [f.strip("/") for f in folders if isinstance(f, str) and f.strip("/")]
 
+    def _viewer_ctx(self):
+        """Per-request ACL context (model B). Admin / local mode / no-auth → admin
+        bypass (sees everything). A logged-in viewer → subject to the per-document
+        ACL. The 'api' role never reaches here (no cookie session)."""
+        sess = self._session()
+        if not sess or sess.get("role") == "admin":
+            return _s.ViewerCtx(set(), True, None)
+        return _s.viewer_ctx(sess)
+
     def _serve_index_filtered(self, rel):
-        """Serve _backlinks.json / _notes-index.json with docs hidden from the
-        current viewer REMOVED (else the Mind/backlinks leak their names). No
-        hidden folder → fast static gzip path."""
-        hidden = self._hidden_folders()
-        if not hidden:
+        """Serve _backlinks.json / _notes-index.json with docs the current viewer
+        can't read REMOVED (else the Mind/backlinks leak their names). Admin (no
+        restriction) → fast static gzip path."""
+        ctx = self._viewer_ctx()
+        if ctx.is_admin:
             self._serve_static_gzip(rel, "application/json; charset=utf-8")
             return
         try:
@@ -106,14 +115,14 @@ class Handler(SimpleHTTPRequestHandler):
         if isinstance(data, list):  # _tasks-index.json: [{path, line, text, done}]
             self._send_json(200, [
                 it for it in data
-                if not (isinstance(it, dict) and _s._path_hidden(it.get("path", ""), hidden))])
+                if isinstance(it, dict) and _s.can_read(it.get("path", ""), ctx)])
             return
         out = {}
         for path, val in data.items():
-            if _s._path_hidden(path, hidden):
+            if not _s.can_read(path, ctx):
                 continue
             if isinstance(val, dict):  # _backlinks.json: {path: {in:[...], out:[...]}}
-                val = {k: ([x for x in v if not _s._path_hidden(x, hidden)]
+                val = {k: ([x for x in v if _s.can_read(x, ctx)]
                            if isinstance(v, list) else v)
                        for k, v in val.items()}
             out[path] = val
@@ -602,8 +611,11 @@ class Handler(SimpleHTTPRequestHandler):
                 or _decoded.endswith((".py", ".pyc"))):
             self.send_error(404)
             return
-        # Viewer ACL (#14): a doc under a hidden folder is not found.
-        if _s._path_hidden(_decoded, self._hidden_folders()):
+        # Per-document ACL (model B): a doc the viewer can't read is "not found"
+        # (no-existence-oracle). The same posixpath-normalized form is checked, so
+        # %2f / double-slash tricks can't slip a private doc past the gate.
+        _vctx = self._viewer_ctx()
+        if not _vctx.is_admin and not _s.can_read(_decoded, _vctx):
             self.send_error(404)
             return
         # _backlinks.json: served gzip + ETag 304 (static handler doesn't compress).
@@ -619,9 +631,9 @@ class Handler(SimpleHTTPRequestHandler):
         # snapshot) so ticking a checkbox reflects immediately. Filtered per-viewer.
         if rel == "_tasks-index.json":
             tasks = _s._live_tasks_index()
-            hidden = self._hidden_folders()
-            if hidden:
-                tasks = [t for t in tasks if not _s._path_hidden(t.get("path", ""), hidden)]
+            ctx = self._viewer_ctx()
+            if not ctx.is_admin:
+                tasks = [t for t in tasks if _s.can_read(t.get("path", ""), ctx)]
             self._send_json(200, tasks)
             return
         if not rel or rel.endswith("/"):
