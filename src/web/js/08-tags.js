@@ -161,8 +161,13 @@ async function removeCustomTag(file, tag) {
 
 // Tag editing popup anchored below the « + » button.
 let tagEditorEl = null;
+let tagEditorCb = null;
 
 function closeTagEditor() {
+  if (tagEditorCb) {
+    tagEditorCb.destroy();
+    tagEditorCb = null;
+  }
   if (tagEditorEl) {
     tagEditorEl.remove();
     tagEditorEl = null;
@@ -183,10 +188,9 @@ function openTagEditor(file, anchorEl) {
     t('tagEditorTitle') +
     '</div>' +
     '<div id="tag-ed-list" class="flex flex-wrap gap-1.5 mb-2"></div>' +
-    '<input id="tag-ed-input" list="tag-ed-dl" placeholder="' +
+    '<input id="tag-ed-input" placeholder="' +
     escapeHtml(t('tagPlaceholder')) +
-    '" autocomplete="off" class="w-full px-2 py-1.5 text-sm bg-black/30 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40">' +
-    '<datalist id="tag-ed-dl"></datalist>' +
+    '" autocomplete="off" class="w-full px-3 py-2 text-sm bg-black/30 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40">' +
     '<div class="text-[10px] text-ink-500 mt-1.5 font-sans">' +
     t('tagEditorHint') +
     '</div>';
@@ -196,13 +200,6 @@ function openTagEditor(file, anchorEl) {
 
   el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + 'px';
   el.style.top = r.bottom + 6 + 'px';
-  const dl = el.querySelector('#tag-ed-dl');
-  const refreshDl = () => {
-    dl.innerHTML = allTagsList()
-      .map((t) => '<option value="' + escapeHtml(t) + '">')
-      .join('');
-  };
-
   const input = el.querySelector('#tag-ed-input');
   const renderList = () => {
     const cur = (file.tags || []).filter((t) => !folderSet.has(t));
@@ -228,22 +225,24 @@ function openTagEditor(file, anchorEl) {
     );
   };
 
-  refreshDl();
   renderList();
-  input.focus();
-  input.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const v = input.value;
-
+  tagEditorCb = AtlasCombobox(input, {
+    source: allTagsList,
+    creatable: true,
+    onSelect: async (v) => {
       input.value = '';
-
-      if (v.trim()) {
+      if (v && v.trim()) {
         await addCustomTag(file, v);
-        refreshDl();
         renderList();
+        tagEditorCb.refresh();
       }
-    } else if (e.key === 'Escape') {
+    },
+  });
+  input.focus();
+  input.addEventListener('keydown', (e) => {
+    // Enter is handled by the combobox (select/create → onSelect). Escape here
+    // closes the editor (the combobox swallowed it if its dropdown was open).
+    if (e.key === 'Escape') {
       e.preventDefault();
       closeTagEditor();
     }

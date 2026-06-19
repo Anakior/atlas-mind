@@ -281,6 +281,7 @@ class FileStore:
     STATE_FILE = "state.json"
     ACL_FILE = "acl.json"        # per-document ACL (model B): {path: {owner, grants[]}}
     GROUPS_FILE = "groups.json"  # principals: {group_name: [emails]}
+    TODOS_FILE = "todos.json"    # per-member todos (private, not git): {email: [items]}
 
     def __init__(self, base_dir):
         self.base = Path(base_dir)
@@ -292,6 +293,7 @@ class FileStore:
             self.STATE_FILE: threading.Lock(),
             self.ACL_FILE: threading.Lock(),
             self.GROUPS_FILE: threading.Lock(),
+            self.TODOS_FILE: threading.Lock(),
         }
         self._cache: dict = {}  # name -> (mtime_ns, data)
         self._ensure_gitignore()
@@ -774,6 +776,36 @@ class FileStore:
             self._write(self.ACL_FILE, acl)
             return True
 
+    def set_creator(self, path: str, principal: str) -> None:
+        """Stamp who created `path` (distinct from `owner`, set once at creation).
+        A commons doc keeps NO owner but remembers its creator, so on the commons
+        the creator — not the admin — manages its sharing. Idempotent: never
+        overwrites an existing creator (survives edits/moves)."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = dict(acl.get(path) or {})
+            if entry.get("creator"):
+                return
+            entry["creator"] = principal
+            entry.setdefault("grants", [])
+            acl[path] = entry
+            self._write(self.ACL_FILE, acl)
+
+    def make_commons(self, path: str) -> None:
+        """Return `path` to the commons: drop `owner` and all grants, but KEEP the
+        `creator` (so its creator keeps managing it). Drops the entry entirely only
+        when there was no creator to remember."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = acl.get(path)
+            if not entry:
+                return
+            creator = entry.get("creator")
+            acl[path] = {"creator": creator, "grants": []} if creator else None
+            if acl[path] is None:
+                del acl[path]
+            self._write(self.ACL_FILE, acl)
+
     def repoint_acl_by_path(self, old_path: str, new_path: str) -> bool:
         """Move a doc's ACL entry when it is renamed/moved in-app, so its sharing
         travels with it (mirror of repoint_shares_by_path). False if no entry."""
@@ -843,6 +875,24 @@ class FileStore:
             del groups[name]
             self._write(self.GROUPS_FILE, groups)
             return True
+
+    # ── per-member todos (private, not git) ─────────────────────────────
+    # todos.json is a DICT keyed by account email; each value is that member's
+    # list of {text, done, cat}. Same lock/atomic-write/fail-CLOSED machinery.
+
+    def load_user_todos(self, email: str):
+        """The member's todo list (copy), or None if they have no entry yet (lets
+        the caller distinguish "never had todos" from "cleared their list")."""
+        with self._locks[self.TODOS_FILE]:
+            data = self._load(self.TODOS_FILE, dict)
+            return [dict(t) for t in data[email]] if email in data else None
+
+    def save_user_todos(self, email: str, items) -> None:
+        """Replace the member's whole todo list (private to that account)."""
+        with self._locks[self.TODOS_FILE]:
+            data = dict(self._load(self.TODOS_FILE, dict))
+            data[email] = [dict(t) for t in items]
+            self._write(self.TODOS_FILE, data)
 
     # ── Atlas nodes (hive, #10) ─────────────────────────────────────────
     def create_node(self, name: str, path: str, token: str) -> dict:

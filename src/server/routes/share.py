@@ -111,6 +111,16 @@ def create(handler):
     days = _s._safe_int(data.get("expires_days"))
     if _resolve_target(handler, rel) is None:
         return
+    # Owner-or-admin only (CDC §5): the doc's owner may mint a public link. 404
+    # first if it is not even readable (no-existence-oracle), 403 if not manageable.
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser:
+        if not _s.can_read(rel, ctx):
+            handler._send_json(404, {"error": "document not found"})
+            return
+        if not _s.can_manage(rel, ctx):
+            handler._send_json(403, {"error": "only the owner can create a share link for this document"})
+            return
     exp = int(time.time() + days * 86400) if days > 0 else 0
     token = _s.new_share_token()
     sess = handler._session()

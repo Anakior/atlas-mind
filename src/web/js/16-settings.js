@@ -53,6 +53,7 @@ shareExistingList.addEventListener('click', async (e) => {
 btnShare.addEventListener('click', openShareModal);
 shareCancel.addEventListener('click', closeShareModal);
 shareClose.addEventListener('click', closeShareModal);
+document.getElementById('share-close-x')?.addEventListener('click', closeShareModal);
 shareBackdrop.addEventListener('click', (e) => {
   if (e.target === shareBackdrop) closeShareModal();
 });
@@ -307,7 +308,7 @@ async function loadSettingsUsers() {
 
     if (!Array.isArray(users) || users.length === 0) {
       settingsUsersList.innerHTML =
-        '<li class="text-xs text-ink-500">' + t('settingsNoUsers') + '</li>';
+        '<li class="text-sm text-ink-500">' + t('settingsNoUsers') + '</li>';
 
       return;
     }
@@ -321,18 +322,18 @@ async function loadSettingsUsers() {
         const hiddenBlock =
           u.role === 'viewer'
             ? '<div class="mt-2 pt-2 border-t subtle-border">' +
-              '<label class="text-ink-500 text-[10px] block mb-1">' +
+              '<label class="text-ink-500 text-xs block mb-1">' +
               escapeHtml(t('settingsHiddenLabel')) +
               '</label>' +
               '<div class="flex items-center gap-1.5">' +
-              '<input class="settings-user-hidden flex-1 min-w-0 px-2 py-1 text-[11px] bg-black/30 border subtle-border rounded text-ink-200" data-email="' +
+              '<input class="settings-user-hidden flex-1 min-w-0 px-2 py-1 text-xs bg-black/30 border subtle-border rounded text-ink-200" data-email="' +
               emailEsc +
               '" placeholder="' +
               escapeHtml(t('settingsHiddenPlaceholder')) +
               '" value="' +
               escapeHtml((u.hidden_folders || []).join(', ')) +
               '">' +
-              '<button class="settings-user-hidden-save px-2.5 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
+              '<button class="settings-user-hidden-save px-2.5 py-1 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
               emailEsc +
               '">' +
               t('save') +
@@ -342,7 +343,7 @@ async function loadSettingsUsers() {
             : '';
 
         return (
-          '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-xs">' +
+          '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
           '<div class="admin-row">' +
           '<div class="flex-1 min-w-0">' +
           '<div class="text-ink-100 font-medium truncate" title="' +
@@ -352,19 +353,19 @@ async function loadSettingsUsers() {
           '</div>' +
           '<div class="' +
           roleCls +
-          ' text-[10px] uppercase tracking-wider font-semibold mt-0.5">' +
+          ' text-xs uppercase tracking-wider font-semibold mt-0.5">' +
           escapeHtml(roleLabel) +
           '</div>' +
           '</div>' +
           '<div class="admin-row__actions">' +
-          '<button class="settings-user-reset px-3 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
+          '<button class="settings-user-reset px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
           emailEsc +
           '" title="' +
           t('settingsResetPassword') +
           '">' +
           t('settingsResetPasswordShort') +
           '</button>' +
-          '<button class="settings-user-del px-3 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-email="' +
+          '<button class="settings-user-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-email="' +
           emailEsc +
           '" data-role="' +
           escapeHtml(u.role || '') +
@@ -474,7 +475,7 @@ async function loadSettingsTokens() {
 
     if (active.length === 0) {
       settingsTokensList.innerHTML =
-        '<li class="text-xs text-ink-500">' + t('settingsNoTokens') + '</li>';
+        '<li class="text-sm text-ink-500">' + t('settingsNoTokens') + '</li>';
 
       return;
     }
@@ -486,19 +487,19 @@ async function loadSettingsTokens() {
         const labelEsc = escapeHtml(labelText);
 
         return (
-          '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-xs">' +
+          '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
           '<div class="flex-1 min-w-0">' +
           '<div class="text-ink-100 font-medium font-mono truncate" title="' +
           labelEsc +
           '">' +
           labelEsc +
           '</div>' +
-          '<div class="text-ink-500 text-[10px] mt-0.5">' +
+          '<div class="text-ink-500 text-xs mt-0.5">' +
           escapeHtml(created) +
           '</div>' +
           '</div>' +
           '<div class="admin-row__actions">' +
-          '<button class="settings-token-revoke px-3 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
+          '<button class="settings-token-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
           escapeHtml(tk.id || '') +
           '" data-label="' +
           labelEsc +
@@ -633,7 +634,7 @@ async function loadSettingsShares() {
 
     if (!Array.isArray(shares) || shares.length === 0) {
       settingsSharesList.innerHTML =
-        '<li class="text-xs text-ink-500">' + t('settingsNoShares') + '</li>';
+        '<li class="text-sm text-ink-500">' + t('settingsNoShares') + '</li>';
 
       return;
     }
@@ -649,14 +650,14 @@ async function loadSettingsShares() {
         const url = item.token ? location.origin + '/s/' + item.token : '';
         const urlEsc = escapeHtml(url);
         const urlLine = url
-          ? '<div class="text-ink-300 font-mono text-[10px] truncate mt-0.5" title="' +
+          ? '<div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' +
             urlEsc +
             '">' +
             urlEsc +
             '</div>'
           : '';
         const copyBtn = url
-          ? '<button class="settings-share-copy px-3 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-url="' +
+          ? '<button class="settings-share-copy px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-url="' +
             urlEsc +
             '" title="' +
             escapeHtml(t('copy')) +
@@ -666,18 +667,18 @@ async function loadSettingsShares() {
           : '';
 
         return (
-          '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-xs">' +
+          '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
           '<div class="flex-1 min-w-0">' +
           '<div class="text-ink-100 font-medium truncate" title="' +
           pathEsc +
           '">' +
           pathEsc +
           (broken
-            ? ' <span class="text-rose-300 text-[10px] font-normal">' + t('shareBroken') + '</span>'
+            ? ' <span class="text-rose-300 text-xs font-normal">' + t('shareBroken') + '</span>'
             : '') +
           '</div>' +
           urlLine +
-          '<div class="text-ink-500 text-[10px] mt-0.5">' +
+          '<div class="text-ink-500 text-xs mt-0.5">' +
           escapeHtml(created) +
           ' &middot; ' +
           escapeHtml(exp) +
@@ -686,7 +687,7 @@ async function loadSettingsShares() {
           '<div class="admin-row__actions">' +
           copyBtn +
           (broken
-            ? '<button class="settings-share-reactivate px-3 py-1 text-[11px] bg-navy-700 hover:bg-emerald-500/30 hover:text-emerald-300 text-ink-200 rounded" data-id="' +
+            ? '<button class="settings-share-reactivate px-3 py-1.5 text-sm bg-navy-700 hover:bg-emerald-500/30 hover:text-emerald-300 text-ink-200 rounded" data-id="' +
               escapeHtml(item.id || '') +
               '" data-path="' +
               pathEsc +
@@ -696,7 +697,7 @@ async function loadSettingsShares() {
               t('shareReactivate') +
               '</button>'
             : '') +
-          '<button class="settings-share-revoke px-3 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
+          '<button class="settings-share-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
           escapeHtml(item.id || '') +
           '">' +
           t('revoke') +
@@ -781,7 +782,7 @@ async function loadSettingsNodes() {
 
     if (active.length === 0) {
       settingsNodesList.innerHTML =
-        '<li class="text-xs text-ink-500">' + t('settingsNoNodes') + '</li>';
+        '<li class="text-sm text-ink-500">' + t('settingsNoNodes') + '</li>';
 
       return;
     }
@@ -793,24 +794,24 @@ async function loadSettingsNodes() {
         const pathEsc = escapeHtml(n.path || '');
 
         return (
-          '<li class="admin-row bg-navy-900 border subtle-border rounded p-3 text-xs">' +
+          '<li class="admin-row bg-navy-900 border subtle-border rounded p-3 text-sm">' +
           '<div class="flex-1 min-w-0">' +
           '<div class="text-ink-100 font-medium font-mono truncate" title="' +
           nameEsc +
           '">' +
           nameEsc +
           '</div>' +
-          '<div class="text-ink-300 font-mono text-[10px] truncate mt-0.5" title="' +
+          '<div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' +
           pathEsc +
           '">' +
           pathEsc +
           '</div>' +
-          '<div class="text-ink-500 text-[10px] mt-0.5">' +
+          '<div class="text-ink-500 text-xs mt-0.5">' +
           escapeHtml(created) +
           '</div>' +
           '</div>' +
           '<div class="admin-row__actions">' +
-          '<button class="settings-node-relink px-3 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
+          '<button class="settings-node-relink px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
           nameEsc +
           '" data-path="' +
           pathEsc +
@@ -819,7 +820,7 @@ async function loadSettingsNodes() {
           '">' +
           t('settingsNodeRelink') +
           '</button>' +
-          '<button class="settings-node-revoke px-3 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
+          '<button class="settings-node-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
           nameEsc +
           '">' +
           t('revoke') +
@@ -937,7 +938,7 @@ async function loadSettingsRemotes() {
 
     if (!Array.isArray(remotes) || remotes.length === 0) {
       settingsRemotesList.innerHTML =
-        '<li class="text-xs text-ink-500">' + t('settingsNoRemotes') + '</li>';
+        '<li class="text-sm text-ink-500">' + t('settingsNoRemotes') + '</li>';
 
       return;
     }
@@ -951,14 +952,14 @@ async function loadSettingsRemotes() {
           : t('settingsRemoteNeverSynced');
         const originHost = (r.url || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
         const originLine = originHost
-          ? '<div class="text-[10px] text-sky-300/70 mt-0.5 truncate" title="' +
+          ? '<div class="text-xs text-sky-300/70 mt-0.5 truncate" title="' +
             escapeHtml(r.url || '') +
             '">' +
             escapeHtml(t('settingsRemoteFrom', originHost)) +
             '</div>'
           : '';
         const errLine = r.last_error
-          ? '<div class="text-rose-400 text-[10px] mt-0.5 truncate" title="' +
+          ? '<div class="text-rose-400 text-xs mt-0.5 truncate" title="' +
             escapeHtml(r.last_error) +
             '">' +
             escapeHtml(t('settingsRemoteError', r.last_error)) +
@@ -966,38 +967,38 @@ async function loadSettingsRemotes() {
           : '';
 
         return (
-          '<li class="admin-row bg-navy-900 border subtle-border rounded p-3 text-xs">' +
+          '<li class="admin-row bg-navy-900 border subtle-border rounded p-3 text-sm">' +
           '<div class="flex-1 min-w-0">' +
           '<div class="text-ink-100 font-medium font-mono truncate" title="' +
           nameEsc +
           '">' +
           nameEsc +
           '</div>' +
-          '<div class="text-ink-300 font-mono text-[10px] truncate mt-0.5" title="' +
+          '<div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' +
           pathEsc +
           '">' +
           pathEsc +
           '</div>' +
           originLine +
-          '<div class="text-ink-500 text-[10px] mt-0.5">' +
+          '<div class="text-ink-500 text-xs mt-0.5">' +
           escapeHtml(synced) +
           '</div>' +
           errLine +
           '</div>' +
           '<div class="admin-row__actions">' +
-          '<button class="settings-remote-sync px-3 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
+          '<button class="settings-remote-sync px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
           nameEsc +
           '">' +
           t('settingsRemoteSync') +
           '</button>' +
-          '<button class="settings-remote-appropriate px-3 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
+          '<button class="settings-remote-appropriate px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
           nameEsc +
           '" title="' +
           escapeHtml(t('settingsRemoteAppropriateTitle')) +
           '">' +
           t('settingsRemoteAppropriate') +
           '</button>' +
-          '<button class="settings-remote-del px-3 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
+          '<button class="settings-remote-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
           nameEsc +
           '">' +
           t('settingsRemoteRemove') +
@@ -1127,7 +1128,7 @@ async function loadSettingsGroups() {
     const names = Object.keys(groups || {}).sort();
 
     if (!names.length) {
-      list.innerHTML = '<li class="text-xs text-ink-500">' + t('settingsNoGroups') + '</li>';
+      list.innerHTML = '<li class="text-sm text-ink-500">' + t('settingsNoGroups') + '</li>';
 
       return;
     }
@@ -1139,13 +1140,13 @@ async function loadSettingsGroups() {
         const membersEsc = escapeHtml(members.join(', '));
 
         return (
-          '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-xs">' +
+          '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
           '<div class="admin-row">' +
           '<div class="flex-1 min-w-0">' +
           '<div class="text-ink-100 font-medium font-mono truncate">' +
           nameEsc +
           '</div>' +
-          '<div class="text-ink-400 text-[11px] mt-0.5 truncate" title="' +
+          '<div class="text-ink-400 text-xs mt-0.5 truncate" title="' +
           membersEsc +
           '">' +
           (members.length
@@ -1154,14 +1155,14 @@ async function loadSettingsGroups() {
           '</div>' +
           '</div>' +
           '<div class="admin-row__actions">' +
-          '<button class="settings-group-edit px-3 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
+          '<button class="settings-group-edit px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
           nameEsc +
           '" data-members="' +
           membersEsc +
           '">' +
           t('settingsGroupEdit') +
           '</button>' +
-          '<button class="settings-group-del px-3 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
+          '<button class="settings-group-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
           nameEsc +
           '">' +
           t('settingsGroupDelete') +
@@ -1180,15 +1181,27 @@ async function loadSettingsGroups() {
 const settingsGroupForm = document.getElementById('settings-group-form');
 
 if (settingsGroupForm) {
+  // Members = a creatable multi/chips combobox (pick known accounts via /api/directory
+  // or type a new email), replacing the bare comma-separated input.
+  const groupMembersCb = AtlasCombobox(document.getElementById('settings-group-members'), {
+    source: async () => {
+      try {
+        const r = await fetch('/api/directory');
+        return r.ok ? (await r.json()).users || [] : [];
+      } catch (_) {
+        return [];
+      }
+    },
+    creatable: true,
+    multi: true,
+    separator: ',',
+  });
+
   settingsGroupForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearSettingsError();
     const name = document.getElementById('settings-group-name').value.trim();
-    const members = document
-      .getElementById('settings-group-members')
-      .value.split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const members = groupMembersCb.getValue();
 
     try {
       await settingsFetch('/api/admin/groups', {
@@ -1196,6 +1209,7 @@ if (settingsGroupForm) {
         body: JSON.stringify({ name, members }),
       });
       settingsGroupForm.reset();
+      groupMembersCb.clear();
       loadSettingsGroups();
     } catch (err) {
       showSettingsError(err.message);
@@ -1207,7 +1221,7 @@ if (settingsGroupForm) {
 
     if (editBtn) {
       document.getElementById('settings-group-name').value = editBtn.dataset.name;
-      document.getElementById('settings-group-members').value = editBtn.dataset.members;
+      groupMembersCb.setValue(editBtn.dataset.members);
       document.getElementById('settings-group-name').focus();
 
       return;

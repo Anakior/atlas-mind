@@ -8,10 +8,11 @@ if the guard passes, its function is called with the live Handler. ORDER IS
 SEMANTIC: the table reproduces the legacy if/elif fall-through (first match wins).
 
 Route functions live in `server/routes/*.py` and DO NOT self-guard — the `Guard`
-declared in the table is the single auth point. The verbs whose every route shares
-one guard (PATCH/PUT/DELETE: admin + CSRF) keep that guard at the verb level in
-do_<VERB> (so an unknown path still yields 403-before-404), and declare their
-routes `PUBLIC`.
+declared in the table is the single auth point. Only PATCH keeps a verb-level
+blanket guard (admin + CSRF) in do_PATCH, with its routes declared `PUBLIC`; POST,
+PUT and DELETE are per-route guarded (do_<VERB> just dispatches), so a mutating or
+admin route MUST carry an explicit non-PUBLIC Guard — a `PUBLIC` PUT/DELETE/POST
+content route would be reachable with no auth and no CSRF.
 """
 import enum
 import re
