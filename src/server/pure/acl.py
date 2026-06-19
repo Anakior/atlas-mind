@@ -20,6 +20,7 @@ Model B:
 Principals are opaque strings typed by prefix: ``user:<email>``, ``group:<name>``,
 ``anon:<token_sha256>`` (a share-link), and ``*`` = any authenticated human.
 """
+import posixpath
 import time
 
 import server as _s
@@ -122,6 +123,12 @@ def effective_level(rel, ctx, store=None):
     """
     if ctx.superuser:
         return "owner"  # local single-operator → full bypass
+    # Normalize the key BEFORE any ACL lookup so `a//b`, `a/./b`, or a trailing
+    # slash can't dodge the registry key — a private doc must never read as commons
+    # because its path was spelled differently than its acl.json key.
+    rel = posixpath.normpath((rel or "").strip("/"))
+    if rel == ".":
+        rel = ""
     store = store or _s.get_store()
     now = int(time.time())
 
@@ -161,9 +168,15 @@ def effective_level(rel, ctx, store=None):
             return "owner"
         return best  # a grant level, or None (hidden — including from the admin)
 
-    # Not governed by an owner → commons. The admin CURATES it (owner-level); any
-    # other authenticated account gets at least view, raised by a matching grant.
-    if ctx.is_admin:
+    # Not governed by an owner → commons. The CREATOR curates their own doc
+    # (owner-level: "on the commons only the creator can make it private"); the
+    # admin curates only creator-less (legacy / out-of-app) docs. Everyone else
+    # gets at least view, raised by a matching grant.
+    self_entry = store.get_acl(rel)
+    creator = self_entry.get("creator") if self_entry else None
+    if creator is not None and creator in ctx.principals:
+        return "owner"
+    if ctx.is_admin and creator is None:
         return "owner"
     if best is not None:
         return best
@@ -186,3 +199,31 @@ def can_manage(rel, ctx, store=None):
     ``owner``: it owns the doc, OR it is the admin/superuser on a commons (no
     owner) doc. The admin does NOT manage another user's private doc."""
     return effective_level(rel, ctx, store) == "owner"
+
+
+def in_private_space(rel, store=None):
+    """True if some ancestor of ``rel`` declares an owner — ``rel`` sits inside a
+    private space, so a doc created there is private by inheritance (you cannot make
+    it commons inside a private folder)."""
+    store = store or _s.get_store()
+    rel = posixpath.normpath((rel or "").strip("/"))
+    for path in _ancestors(rel):
+        entry = store.get_acl(path)
+        if entry and entry.get("owner"):
+            return True
+    return False
+
+
+def can_create(rel, ctx, store=None):
+    """True if ``ctx`` may create a NEW doc at ``rel``. The commons is writable by
+    any authenticated account; a private space requires ``edit`` (a view-only share
+    does not allow creating). No access at all → False."""
+    if ctx.superuser:
+        return True
+    store = store or _s.get_store()
+    level = effective_level(rel, ctx, store)
+    if level is None:
+        return False
+    if in_private_space(rel, store):
+        return LEVELS[level] >= LEVELS["edit"]
+    return True

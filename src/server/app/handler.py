@@ -98,11 +98,14 @@ class Handler(SimpleHTTPRequestHandler):
         doc. The 'api' role never reaches here (no cookie session)."""
         sess = self._session()
         # Local mode (auth disabled) = single operator on their own machine →
-        # superuser, regardless of the simulated admin session. (Cloud always has
-        # a real session behind the AUTH guard; no-session is treated the same,
-        # defensively.)
-        if not _s.CONFIG.auth_enabled or not sess:
+        # superuser, regardless of the simulated admin session.
+        if not _s.CONFIG.auth_enabled:
             return _s.ViewerCtx(set(), True, None, superuser=True)
+        # Cloud + no session → anonymous, NOT superuser (fail closed). Content
+        # routes are AUTH-guarded so this is defensive, but it must never grant a
+        # full bypass to an unauthenticated caller.
+        if not sess:
+            return _s.viewer_ctx(None)
         return _s.viewer_ctx(sess)
 
     def _serve_index_filtered(self, rel):
@@ -580,6 +583,12 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ── verbs ────────────────────────────────────────────────────────────────
 
+    def do_HEAD(self):
+        # No HEAD pipeline: the parent's default serves file metadata straight from
+        # disk, bypassing the route tables, the session guard and the per-document
+        # ACL (an existence oracle on private docs). The viewer never uses HEAD.
+        self.send_error(405)
+
     def do_GET(self):
         if router.dispatch(self, routes_table.GET_ROUTES):
             return
@@ -670,36 +679,25 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_PATCH(self):
-        # Verb-level guard: admin + CSRF for every PATCH (non-admin → 403 before
-        # the route match).
-        if not self._require_admin_or_403():
-            return
-        if not self._check_csrf_or_403():
-            return
+        # Per-route guards (like do_POST): notes + share repoint keep ADMIN_CSRF,
+        # todos is CSRF_BASE (a member patches its OWN list). No blanket admin.
         if router.dispatch(self, routes_table.PATCH_ROUTES):
             return
         self.send_response(404)
         self.end_headers()
 
     def do_DELETE(self):
-        # Verb-level guard: admin + CSRF for every DELETE (non-admin → 403 before
-        # the route match; routes no longer self-guard).
-        if not self._require_admin_or_403():
-            return
-        if not self._check_csrf_or_403():
-            return
+        # Per-route guards (like do_POST): admin routes carry ADMIN_CSRF, content
+        # routes their own Guard (/api/file is CSRF_BASE → authorized per-document
+        # in docs.delete). No blanket admin, so a member can delete a doc they own.
         if router.dispatch(self, routes_table.DELETE_ROUTES):
             return
         self.send_response(404)
         self.end_headers()
 
     def do_PUT(self):
-        # Verb-level guard: admin + CSRF for every PUT (non-admin → 403 before
-        # the route match).
-        if not self._require_admin_or_403():
-            return
-        if not self._check_csrf_or_403():
-            return
+        # Per-route guards (like do_POST): /api/file is CSRF_BASE → authorized
+        # per-document in docs.file_put (create/edit ladder). No blanket admin.
         if router.dispatch(self, routes_table.PUT_ROUTES):
             return
         self.send_response(404)

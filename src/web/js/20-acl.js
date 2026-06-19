@@ -19,6 +19,13 @@
   let cur = null; // { path, owner, grants, can_manage }
   let dir = null; // { users:[emails], groups:[names] } — cached for autocompletion
 
+  // The value field is a creatable combobox: pick a known user/group OR type a new
+  // one. Its source flips with the kind select (users vs groups) → refresh() on change.
+  const aclCb = AtlasCombobox(valueInp, {
+    source: () => (kindSel.value === 'group' ? (dir && dir.groups) || [] : (dir && dir.users) || []),
+    creatable: true,
+  });
+
   async function loadDir() {
     if (!dir) {
       try {
@@ -31,12 +38,7 @@
     return dir || { users: [], groups: [] };
   }
 
-  function fillDatalist() {
-    const dl = document.getElementById('acl-value-list');
-    if (!dl || !dir) return;
-    const items = kindSel.value === 'group' ? dir.groups || [] : dir.users || [];
-    dl.innerHTML = items.map((v) => '<option value="' + escapeHtml(v) + '"></option>').join('');
-  }
+  // (native datalist removed — AtlasCombobox above handles the suggestions.)
 
   function myPrincipal() {
     return meState && meState.email ? 'user:' + meState.email : null;
@@ -72,6 +74,15 @@
     } else {
       statusEl.innerHTML =
         '<span class="text-emerald-300 font-medium">' + escapeHtml(t('aclCommons')) + '</span>';
+    }
+
+    if (cur.creator) {
+      const mine = myPrincipal();
+      const who = mine && cur.creator === mine
+        ? t('aclYou')
+        : cur.creator.startsWith('user:') ? cur.creator.slice(5) : cur.creator;
+      statusEl.innerHTML +=
+        ' <span class="text-ink-500">· ' + escapeHtml(t('aclCreatedBy')) + ' ' + escapeHtml(who) + '</span>';
     }
 
     const grants = cur.grants || [];
@@ -120,11 +131,11 @@
       if (!res.ok) return; // not readable → nothing to show
       cur = await res.json();
       kindSel.value = 'user';
-      valueInp.classList.remove('hidden');
-      valueInp.value = '';
+      document.getElementById('acl-value-wrap').classList.remove('hidden');
+      aclCb.clear();
       render();
       backdrop.classList.remove('hidden');
-      loadDir().then(fillDatalist);
+      loadDir().then(() => aclCb.refresh());
     } catch (_) {
       /* best-effort */
     }
@@ -163,13 +174,14 @@
     if (currentFile) openAccessFor(currentFile.path);
   });
   document.getElementById('acl-close').addEventListener('click', close);
+  document.getElementById('acl-close-x')?.addEventListener('click', close);
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) close();
   });
 
   kindSel.addEventListener('change', () => {
-    valueInp.classList.toggle('hidden', kindSel.value === '*');
-    fillDatalist();
+    document.getElementById('acl-value-wrap').classList.toggle('hidden', kindSel.value === '*');
+    aclCb.refresh();
   });
 
   form.addEventListener('submit', async (e) => {
@@ -179,30 +191,45 @@
     if (kindSel.value === '*') {
       principal = '*';
     } else {
-      const v = valueInp.value.trim();
+      const v = aclCb.getValue();
 
       if (!v) return;
       principal = kindSel.value + ':' + (kindSel.value === 'user' ? v.toLowerCase() : v);
     }
 
     if (await post({ path: cur.path, action: 'grant', principal, level: levelSel.value })) {
-      valueInp.value = '';
+      aclCb.clear();
+      setStatus(t('aclSharedToast'), 'ok');
     }
   });
 
   grantsEl.addEventListener('click', async (e) => {
     const btn = e.target.closest('.acl-revoke');
 
-    if (btn) await post({ path: cur.path, action: 'revoke', principal: btn.dataset.principal });
+    if (btn && (await post({ path: cur.path, action: 'revoke', principal: btn.dataset.principal }))) {
+      setStatus(t('aclRevokedToast'), 'ok');
+    }
   });
 
   document.getElementById('acl-make-private').addEventListener('click', async () => {
     const mine = myPrincipal();
 
-    if (mine) await post({ path: cur.path, action: 'set_owner', principal: mine });
+    if (mine && (await post({ path: cur.path, action: 'set_owner', principal: mine }))) {
+      setStatus(t('aclNowPrivateToast'), 'ok');
+    }
   });
 
   document.getElementById('acl-make-commons').addEventListener('click', async () => {
-    await post({ path: cur.path, action: 'make_commons' });
+    // Destructive: removes the owner AND every grant of this doc → confirm first.
+    const ok = await confirmDialog({
+      title: t('aclMakeCommons'),
+      message: t('aclMakeCommonsConfirm'),
+      confirmLabel: t('aclMakeCommons'),
+      destructive: true,
+    });
+
+    if (ok && (await post({ path: cur.path, action: 'make_commons' }))) {
+      setStatus(t('aclNowCommonsToast'), 'ok');
+    }
   });
 })();

@@ -17,8 +17,14 @@ if (isServerMode) {
       }
 
       if (data.authenticated && data.role && data.role !== 'admin') {
+        // Member (non-admin): may write its OWN docs — the server enforces per
+        // document (M5). We KEEP the `viewer-mode` class (CSS now hides only the
+        // still-global Todos widget) but do NOT set the __viewerMode flag, so the
+        // write affordances (create/edit/delete/move/share/rename) are available;
+        // disallowed actions fail with a clean 403/404 from the backend. Notes
+        // (comment level) stay admin-only via the class check.
         document.body.classList.add('viewer-mode');
-        window.__viewerMode = true;
+        window.__isMember = true;
       }
 
       // Settings gear: cloud admins only — account/token management is moot
@@ -115,7 +121,9 @@ if (isServerMode) {
         const newFile = fileMap[currentFile.path];
 
         if (!newFile) {
-          showWelcome();
+          // The open doc is no longer in the viewer's filtered tree → no access /
+          // gone. Show the clean not-found page, not a silent bounce to home.
+          showNotFound(currentFile.path);
         } else if (newFile.mtime !== currentFile.mtime) {
           contentCache.delete(newFile.path);
           newFile.content = null;
@@ -127,7 +135,10 @@ if (isServerMode) {
           currentFile = newFile;
         }
       } else {
-        showWelcome();
+        // No doc open: (re-)route from the URL hash now that fileMap reflects the
+        // viewer's accessible docs — so a link to a doc they can't see lands on the
+        // clean not-found page instead of silently bouncing home.
+        routeFromHash();
       }
     } catch (e) {
       console.warn('softReload failed, fallback to location.reload', e);

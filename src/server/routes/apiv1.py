@@ -1,4 +1,6 @@
 """Public REST API v1 (bearer-token) routes: search, file read/create, tree, recent."""
+import posixpath
+
 import server as _s
 
 
@@ -71,7 +73,8 @@ def post(handler):
     if not target:
         handler._send_json(400, {"error": "invalid path (must be a .md or .html inside root, no '..')"})
         return
-    if not _s.can_read(rel, ctx):  # create where you can see; the new doc is owned by you
+    rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level)
+    if not _s.can_create(rel, ctx):  # commons is member-writable; a private space needs edit
         handler._send_json(403, {"error": "insufficient permission to create at this location"})
         return
     if target.exists():
@@ -82,9 +85,11 @@ def post(handler):
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
-    if ctx.primary and not ctx.is_admin:  # ownership-on-create (model B)
+    if ctx.primary:  # stamp creator (all roles); non-admin → private by default
         try:
-            _s.get_store().set_owner(rel, ctx.primary)
+            _s.get_store().set_creator(rel, ctx.primary)
+            if not ctx.is_admin and not _s.in_private_space(rel):
+                _s.get_store().set_owner(rel, ctx.primary)
         except Exception:
             pass
     _s.trigger_sync()

@@ -2,9 +2,6 @@ function openRenameModal(mode) {
   if (!currentFile || window.__viewerMode) return;
   renameMode = mode;
   renameError.classList.add('hidden');
-  renameDirs.innerHTML = getAllDirs()
-    .map((d) => '<option value="' + escapeHtml(d) + '">')
-    .join('');
   const parts = currentFile.path.split('/');
   const currentName = parts.pop().replace(/\.(md|html)$/i, '');
   const currentDir = parts.join('/');
@@ -72,6 +69,7 @@ btnMoreMenu.addEventListener('click', async (e) => {
 });
 
 renameCancel.addEventListener('click', closeRenameModal);
+document.getElementById('rename-close')?.addEventListener('click', closeRenameModal);
 renameBackdrop.addEventListener('click', (e) => {
   if (e.target === renameBackdrop) closeRenameModal();
 });

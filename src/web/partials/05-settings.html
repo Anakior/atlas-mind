@@ -3,8 +3,8 @@
      goes through fetch() on the /api/admin/* and /api/share/* endpoints. -->
 <div id="settings-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
   <div id="settings-panel" class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[46rem] max-w-[90vw] max-h-[82vh] rounded-xl flex flex-col overflow-hidden">
-    <div class="px-5 py-4 border-b subtle-border flex items-center justify-between gap-3 flex-shrink-0">
-      <h3 class="text-lg font-semibold text-accent" data-i18n="settingsTitle">Param&egrave;tres</h3>
+    <div class="px-5 py-4 flex items-center justify-between gap-3 flex-shrink-0">
+      <h3 class="text-lg font-semibold text-ink-100" data-i18n="settingsTitle">Param&egrave;tres</h3>
       <button id="settings-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
@@ -26,22 +26,22 @@
       <section id="settings-pane-users" class="settings-pane">
         <form id="settings-user-form" class="mb-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
           <div class="min-w-0">
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsEmailLabel">Email</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsEmailLabel">Email</label>
             <input id="settings-user-email" type="email" autocomplete="off" placeholder="user@example.com" data-i18n-placeholder="settingsEmailPlaceholder"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
           </div>
           <div>
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsRoleLabel">R&ocirc;le</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsRoleLabel">R&ocirc;le</label>
             <div class="relative">
               <select id="settings-user-role" class="w-full appearance-none px-3 pr-9 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
-                <option value="viewer" data-i18n="settingsRoleViewer">Lecteur</option>
+                <option value="viewer" data-i18n="settingsRoleViewer">Membre</option>
                 <option value="admin" data-i18n="settingsRoleAdmin">Admin</option>
               </select>
               <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
             </div>
           </div>
           <div>
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsPasswordLabel">Mot de passe</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsPasswordLabel">Mot de passe</label>
             <input id="settings-user-password" type="password" autocomplete="new-password" placeholder="8 car. min." data-i18n-placeholder="settingsPasswordPlaceholder"
               class="w-full sm:w-32 px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
           </div>
@@ -56,7 +56,7 @@
       <section id="settings-pane-tokens" class="settings-pane hidden">
         <form id="settings-token-form" class="mb-5 flex flex-col sm:flex-row gap-2 sm:items-end">
           <div class="flex-1 min-w-0">
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenLabel">Libell&eacute;</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenLabel">Libell&eacute;</label>
             <input id="settings-token-label" type="text" autocomplete="off" placeholder="claude, mcp-perso&hellip;" data-i18n-placeholder="settingsTokenLabelPlaceholder"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
@@ -68,20 +68,20 @@
         <div id="settings-token-result" class="hidden mb-5 rounded-lg overflow-hidden">
           <div class="token-warning-bar flex items-start gap-2.5 px-3 py-2.5">
             <svg class="token-warning-icon w-4 h-4 mt-px flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            <p class="token-warning-text flex-1 text-[11px] leading-snug font-semibold" data-i18n="settingsTokenOnce">Copiez-le maintenant : il ne sera plus jamais affich&eacute;</p>
+            <p class="token-warning-text flex-1 text-xs leading-snug font-semibold" data-i18n="settingsTokenOnce">Copiez-le maintenant : il ne sera plus jamais affich&eacute;</p>
             <button type="button" id="settings-token-close" class="token-warning-icon -mt-0.5 p-0.5 rounded hover:bg-white/10 flex-shrink-0" title="Fermer" data-i18n-title="close">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
           <div class="p-3">
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenPlain">Token</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenPlain">Token</label>
             <div class="flex gap-2 mb-3">
-              <input id="settings-token-plain" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-xs font-mono focus:outline-none">
+              <input id="settings-token-plain" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-sm font-mono focus:outline-none">
               <button id="settings-token-copy" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0 inline-flex items-center gap-1.5" data-i18n="copy">Copier</button>
             </div>
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsMcpUrl">URL connecteur MCP</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsMcpUrl">URL connecteur MCP</label>
             <div class="flex gap-2">
-              <input id="settings-token-mcp" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-xs font-mono focus:outline-none">
+              <input id="settings-token-mcp" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-sm font-mono focus:outline-none">
               <button id="settings-token-mcp-copy" class="px-3 py-2 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded flex-shrink-0" data-i18n="copy">Copier</button>
             </div>
           </div>
@@ -91,21 +91,21 @@
 
       <!-- ── Shares tab ─────────────────────────────────────────────── -->
       <section id="settings-pane-shares" class="settings-pane hidden">
-        <p class="text-[11px] text-ink-500 mb-3" data-i18n="settingsSharesHint">Liens publics actifs vers des documents.</p>
+        <p class="text-xs text-ink-500 mb-3" data-i18n="settingsSharesHint">Liens publics actifs vers des documents.</p>
         <ul id="settings-shares-list" class="space-y-1.5"></ul>
       </section>
 
       <!-- ── Nodes tab (hive: publish a folder/file) ───────── -->
       <section id="settings-pane-nodes" class="settings-pane hidden">
-        <p class="text-[11px] text-ink-500 mb-3" data-i18n="settingsNodesHint">Publie un dossier ou un document en n&oelig;ud : un autre atlas pourra s&rsquo;y abonner en lecture seule via le lien.</p>
+        <p class="text-xs text-ink-500 mb-3" data-i18n="settingsNodesHint">Publie un dossier ou un document en n&oelig;ud : un autre atlas pourra s&rsquo;y abonner en lecture seule via le lien.</p>
         <form id="settings-node-form" class="mb-5 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
           <div class="min-w-0">
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodeName">Nom du n&oelig;ud</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodeName">Nom du n&oelig;ud</label>
             <input id="settings-node-name" type="text" autocomplete="off" placeholder="guide-equipe" data-i18n-placeholder="settingsNodeNamePlaceholder"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
           <div class="min-w-0">
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodePath">Chemin (dossier ou .md/.html)</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodePath">Chemin (dossier ou .md/.html)</label>
             <input id="settings-node-path" type="text" autocomplete="off" placeholder="equipe/onboarding" data-i18n-placeholder="settingsNodePathPlaceholder"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
@@ -115,15 +115,15 @@
         <div id="settings-node-result" class="hidden mb-5 rounded-lg overflow-hidden">
           <div class="token-warning-bar flex items-start gap-2.5 px-3 py-2.5">
             <svg class="token-warning-icon w-4 h-4 mt-px flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            <p class="token-warning-text flex-1 text-[11px] leading-snug font-semibold" data-i18n="settingsNodeOnce">Copiez ce lien maintenant : il ne sera plus jamais affich&eacute;</p>
+            <p class="token-warning-text flex-1 text-xs leading-snug font-semibold" data-i18n="settingsNodeOnce">Copiez ce lien maintenant : il ne sera plus jamais affich&eacute;</p>
             <button type="button" id="settings-node-close" class="token-warning-icon -mt-0.5 p-0.5 rounded hover:bg-white/10 flex-shrink-0" title="Fermer" data-i18n-title="close">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
           <div class="p-3">
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodeLink">Lien du n&oelig;ud</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsNodeLink">Lien du n&oelig;ud</label>
             <div class="flex gap-2">
-              <input id="settings-node-link" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-xs font-mono focus:outline-none">
+              <input id="settings-node-link" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-sm font-mono focus:outline-none">
               <button id="settings-node-copy" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0 inline-flex items-center gap-1.5" data-i18n="copy">Copier</button>
             </div>
           </div>
@@ -136,10 +136,10 @@
         <!-- ── Subscriptions: remote nodes followed in read-only ──────── -->
         <div class="mt-8 pt-6 border-t subtle-border">
           <h4 class="text-sm font-semibold text-ink-100 mb-3" data-i18n="settingsRemotesHeader">Abonnements</h4>
-          <p class="text-[11px] text-ink-500 mb-3" data-i18n="settingsRemotesHint">Colle le lien d&rsquo;un n&oelig;ud partag&eacute; pour le suivre en lecture seule sous <code class="text-ink-300">remotes/</code>.</p>
+          <p class="text-xs text-ink-500 mb-3" data-i18n="settingsRemotesHint">Colle le lien d&rsquo;un n&oelig;ud partag&eacute; pour le suivre en lecture seule sous <code class="text-ink-300">remotes/</code>.</p>
           <form id="settings-remote-form" class="mb-5 flex flex-col sm:flex-row gap-2 sm:items-end">
             <div class="flex-1 min-w-0">
-              <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsRemoteLink">Lien du n&oelig;ud</label>
+              <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsRemoteLink">Lien du n&oelig;ud</label>
               <input id="settings-remote-link" type="text" autocomplete="off" placeholder="atlas-node:&hellip;" data-i18n-placeholder="settingsRemoteLinkPlaceholder"
                 class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
             </div>
@@ -151,15 +151,15 @@
 
       <!-- ── Groups tab (model B: principals group:<name>) ───────── -->
       <section id="settings-pane-groups" class="settings-pane hidden">
-        <p class="text-[11px] text-ink-500 mb-3" data-i18n="settingsGroupsHint">Cr&eacute;e des groupes pour partager des documents avec plusieurs personnes d&rsquo;un coup.</p>
+        <p class="text-xs text-ink-500 mb-3" data-i18n="settingsGroupsHint">Cr&eacute;e des groupes pour partager des documents avec plusieurs personnes d&rsquo;un coup.</p>
         <form id="settings-group-form" class="mb-5 grid grid-cols-1 gap-2">
           <div class="min-w-0">
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsGroupNameLabel">Nom du groupe</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsGroupNameLabel">Nom du groupe</label>
             <input id="settings-group-name" type="text" autocomplete="off" placeholder="wizishop"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
           <div class="min-w-0">
-            <label class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsGroupMembersLabel">Membres (emails s&eacute;par&eacute;s par des virgules)</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsGroupMembersLabel">Membres (emails s&eacute;par&eacute;s par des virgules)</label>
             <input id="settings-group-members" type="text" autocomplete="off" placeholder="alice@x.fr, bob@x.fr"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
           </div>
@@ -177,7 +177,7 @@
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div class="min-w-0">
               <h4 class="text-sm font-semibold text-ink-100" data-i18n="securityTotpTitle">Authentification &agrave; deux facteurs</h4>
-              <p class="text-[11px] text-ink-500 mt-1 leading-snug" data-i18n="securityTotpHint">Ajoute un code &agrave; usage unique depuis ton application d&rsquo;authentification.</p>
+              <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="securityTotpHint">Ajoute un code &agrave; usage unique depuis ton application d&rsquo;authentification.</p>
             </div>
             <span id="security-totp-status" class="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-full bg-ink-500/15 text-ink-400 flex-shrink-0" data-i18n="securityTotpStatusOff">Inactif</span>
           </div>
@@ -189,7 +189,7 @@
         <!-- Sessions -->
         <div class="bg-navy-900 border subtle-border rounded-lg p-4 mt-4">
           <h4 class="text-sm font-semibold text-ink-100" data-i18n="securitySessionsTitle">Sessions</h4>
-          <p class="text-[11px] text-ink-500 mt-1 leading-snug" data-i18n="securitySessionsHint">D&eacute;connecte tous les appareils o&ugrave; ce compte est connect&eacute;, y compris celui-ci.</p>
+          <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="securitySessionsHint">D&eacute;connecte tous les appareils o&ugrave; ce compte est connect&eacute;, y compris celui-ci.</p>
           <button id="security-logout-all" class="mt-3 px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded font-medium" data-i18n="securityLogoutAll">D&eacute;connecter toutes mes sessions</button>
         </div>
       </section>

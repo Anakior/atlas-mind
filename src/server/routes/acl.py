@@ -36,6 +36,7 @@ def acl_get(handler):
     handler._send_json(200, {
         "path": rel,
         "owner": entry.get("owner"),
+        "creator": entry.get("creator"),
         "grants": entry.get("grants", []),
         "can_manage": _s.can_manage(rel, ctx),
     })
@@ -81,7 +82,7 @@ def acl_post(handler):
                 return
             store.set_owner(rel, principal)
         elif action == "make_commons":
-            store.delete_acl(rel)
+            store.make_commons(rel)  # drop owner + grants but KEEP the creator
         else:
             handler._send_json(400, {"error": "unknown action"})
             return

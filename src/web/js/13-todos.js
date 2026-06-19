@@ -255,7 +255,7 @@ const renameTitle = document.getElementById('rename-title');
 const renameDir = document.getElementById('rename-dir');
 const renameDirWrap = document.getElementById('rename-dir-wrap');
 const renameName = document.getElementById('rename-name');
-const renameDirs = document.getElementById('rename-dirs');
+const renameDirCb = AtlasCombobox(renameDir, { source: getAllDirs, creatable: true });
 const renameError = document.getElementById('rename-error');
 const renameCancel = document.getElementById('rename-cancel');
 

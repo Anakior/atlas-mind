@@ -105,7 +105,9 @@ async function renderBacklinksFor(file) {
 // anchoring (exact + prefix/suffix + approx. pos), W3C Web Annotation style:
 // resilient to text shifts; if the passage disappears the note becomes orphaned.
 const CTX_LEN = 60; // captured prefix/suffix context length
-const notesCanEdit = () => !IS_OFFLINE_BUILD && !window.__viewerMode;
+// Notes are the (deferred) comment level — admin-only for now. A member has the
+// `viewer-mode` body class (but writes its own docs), so gate notes on the class.
+const notesCanEdit = () => !IS_OFFLINE_BUILD && !document.body.classList.contains('viewer-mode');
 let notesForDoc = []; // notes of the current doc (anchors resolved on the fly)
 // notesIndex ({path: count}, tree badges) is declared at the top of the script so
 // it's visible from the top-level decorateTreeBadges().

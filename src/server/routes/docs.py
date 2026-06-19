@@ -4,6 +4,7 @@ read-only git history / revision / diff endpoints, plus tree + search.
 All mutating routes are guarded ADMIN_CSRF (PUT/DELETE keep the guard at the verb
 level, so the functions here are pure bodies); the read endpoints are AUTH.
 """
+import posixpath
 import sys
 
 import server as _s
@@ -18,6 +19,7 @@ def file_put(handler):
     if not rel or ".." in rel.split("/"):
         handler._send_json(400, {"error": "invalid path"})
         return
+    rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level): kills //, ./, trailing /
     if _s._is_readonly_path(rel):
         handler._send_json(403, {"error": "remote mirror is read-only"})
         return
@@ -30,19 +32,63 @@ def file_put(handler):
     if target.suffix.lower() not in (".md", ".html"):
         handler._send_json(400, {"error": "only .md or .html"})
         return
+    ctx = handler._viewer_ctx()
+    existed = target.exists()
+    # Authorization (model B). Edit an existing doc → need `edit` (404 first if it is
+    # not even readable: no-existence-oracle). Create a new one → must be allowed to
+    # create here (commons is member-writable; a private space needs edit).
+    if not ctx.superuser:
+        if existed:
+            if not _s.can_read(rel, ctx):
+                handler._send_json(404, {"error": "not found"})
+                return
+            if not _s.can_write(rel, ctx, "edit"):
+                handler._send_json(403, {"error": "insufficient permission (need edit on this document)"})
+                return
+        elif not _s.can_create(rel, ctx):
+            handler._send_json(403, {"error": "insufficient permission to create at this location"})
+            return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
+    if not existed and ctx.primary:  # new doc → stamp creator + default visibility
+        try:
+            _s.get_store().set_creator(rel, ctx.primary)
+            # Default: a member's new doc is private (Notion); an admin's stays
+            # commons (curator). The `private` flag (New-Document toggle) overrides.
+            # A doc created inside a private folder is private by inheritance and
+            # never gets its own owner (which would cut that inheritance).
+            private = bool(data.get("private", not ctx.is_admin))
+            if private and not _s.in_private_space(rel):
+                _s.get_store().set_owner(rel, ctx.primary)
+        except Exception as e:
+            print(f"[file_put creator] {e}", file=sys.stderr)
     _s.trigger_sync()
     handler._send_json(200, {"ok": True, "mtime": int(target.stat().st_mtime)})
 
 
+def _annotate_vis(node, store):
+    """Tag each FILE node with its sharing state for the tree badge (U3): `private`
+    (owned, no grant), `shared` (owned + grants), or nothing (commons). Based on the
+    doc's own ACL entry — enough for the at-a-glance indicator; the access dialog
+    shows the precise state."""
+    for child in node.get("children", []):
+        if child.get("type") == "file":
+            entry = store.get_acl(child.get("path", ""))
+            if entry and entry.get("owner"):
+                child["vis"] = "shared" if entry.get("grants") else "private"
+        else:
+            _annotate_vis(child, store)
+
+
 def tree(handler):
-    """GET /api/tree — the navigable document tree, filtered per-viewer (auth)."""
+    """GET /api/tree — the navigable document tree, filtered per-viewer (auth),
+    each file tagged with its sharing state (private/shared/commons)."""
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
         ctx = handler._viewer_ctx()
         keep = None if ctx.superuser else (lambda p: _s.can_read(p, ctx))
         tree = _s._filter_tree(tree, keep)
+        _annotate_vis(tree, _s.get_store())
         handler._send_json(200, tree)
     except Exception as e:
         handler._send_json(500, {"error": str(e)})
@@ -77,6 +123,10 @@ def history(handler):
     if _s._validate_doc_path(rel) is None:
         handler._send_json(400, {"error": "invalid path"})
         return
+    ctx = handler._viewer_ctx()  # ACL gate: an unreadable doc is "not found" (no-existence-oracle)
+    if not ctx.superuser and not _s.can_read(rel, ctx):
+        handler._send_json(404, {"error": "not found"})
+        return
     repo_rel = "content/" + rel
     # --follow tracks renames/moves so pre-move commits still load (revision/diff/
     # revert resolve the path-at-revision via _doc_path_at). -z + \x1f keep
@@ -109,6 +159,10 @@ def revision(handler):
     if _s._validate_doc_path(rel) is None:
         handler._send_json(400, {"error": "invalid path"})
         return
+    ctx = handler._viewer_ctx()  # ACL gate (no-existence-oracle)
+    if not ctx.superuser and not _s.can_read(rel, ctx):
+        handler._send_json(404, {"error": "not found"})
+        return
     if not _s._valid_git_rev(rev):
         handler._send_json(400, {"error": "invalid rev"})
         return
@@ -129,6 +183,10 @@ def diff(handler):
     rev_to = (query.get("to", [""])[0] or "").strip()
     if _s._validate_doc_path(rel) is None:
         handler._send_json(400, {"error": "invalid path"})
+        return
+    ctx = handler._viewer_ctx()  # ACL gate (no-existence-oracle)
+    if not ctx.superuser and not _s.can_read(rel, ctx):
+        handler._send_json(404, {"error": "not found"})
         return
     if not _s._valid_git_rev(rev_from) or not _s._valid_git_rev(rev_to):
         handler._send_json(400, {"error": "invalid rev"})
@@ -165,6 +223,14 @@ def revert(handler):
     if _s._is_readonly_path(rel):
         handler._send_json(403, {"error": "remote mirror is read-only"})
         return
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser:
+        if not _s.can_read(rel, ctx):
+            handler._send_json(404, {"error": "not found"})
+            return
+        if not _s.can_write(rel, ctx, "edit"):
+            handler._send_json(403, {"error": "insufficient permission (need edit on this document)"})
+            return
     show = _s.git("show", rev + ":" + _s._doc_path_at("content/" + rel, rev))
     if show.returncode != 0:
         handler._send_json(404, {"error": "revision not found"})
@@ -179,11 +245,23 @@ def move(handler):
     """POST /api/file/move — move a doc AND rewrite the incoming wikilinks
     (shared with the MCP move_doc tool)."""
     data = handler._read_json()
-    if _s._is_readonly_path(data.get("from") or "") or _s._is_readonly_path(data.get("to") or ""):
+    src_rel = (data.get("from") or "").strip()
+    dst_rel = (data.get("to") or "").strip()
+    if _s._is_readonly_path(src_rel) or _s._is_readonly_path(dst_rel):
         handler._send_json(403, {"error": "remote mirror is read-only"})
         return
-    status, payload = _s._move_md_with_relink(
-        (data.get("from") or "").strip(), (data.get("to") or "").strip())
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser:
+        if not _s.can_read(src_rel, ctx):
+            handler._send_json(404, {"error": "not found"})
+            return
+        if not _s.can_write(src_rel, ctx, "owner"):
+            handler._send_json(403, {"error": "insufficient permission (need owner to move this document)"})
+            return
+        if not _s.can_create(dst_rel, ctx):
+            handler._send_json(403, {"error": "insufficient permission for the destination"})
+            return
+    status, payload = _s._move_md_with_relink(src_rel, dst_rel)
     if status != "ok":
         code = {"invalid": 400, "not_found": 404, "exists": 409}.get(status, 500)
         handler._send_json(code, {"error": payload})
@@ -193,8 +271,9 @@ def move(handler):
     # must not fail the move.
     try:
         _s.get_store().repoint_shares_by_path(payload["from"], payload["to"])
+        _s.get_store().repoint_acl_by_path(payload["from"], payload["to"])  # privacy travels with the doc
     except Exception as e:
-        print(f"[share repoint] {e}", file=sys.stderr)
+        print(f"[move repoint] {e}", file=sys.stderr)
     handler._send_json(200, {"ok": True, **payload})
 
 
@@ -235,14 +314,27 @@ def dir_rename(handler):
         return
     except ValueError:
         pass
+    # Owner-or-admin of the folder may rename it (members rename folders they own).
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser:
+        if not _s.can_read(src_rel, ctx):
+            handler._send_json(404, {"error": "source dir not found"})
+            return
+        if not _s.can_manage(src_rel, ctx):
+            handler._send_json(403, {"error": "insufficient permission (need owner to rename this folder)"})
+            return
+        if not _s.can_create(dst_rel, ctx):
+            handler._send_json(403, {"error": "insufficient permission for the destination"})
+            return
     dst.parent.mkdir(parents=True, exist_ok=True)
     src.rename(dst)
     _s.trigger_sync()
     # Re-point share links of every doc under the renamed folder (best-effort).
     try:
         _s.get_store().repoint_shares_under(src_rel, dst_rel)
+        _s.get_store().repoint_acl_under(src_rel, dst_rel)  # private docs stay private after a folder rename
     except Exception as e:
-        print(f"[share repoint] {e}", file=sys.stderr)
+        print(f"[dir rename repoint] {e}", file=sys.stderr)
     handler._send_json(200, {"ok": True, "from": src_rel, "to": dst_rel})
 
 
@@ -266,6 +358,20 @@ def delete(handler):
     if not target.exists() or target.suffix.lower() not in (".md", ".html"):
         handler._send_json(404, {"error": "document not found"})
         return
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser:
+        if not _s.can_read(rel, ctx):
+            handler._send_json(404, {"error": "document not found"})
+            return
+        if not _s.can_write(rel, ctx, "owner"):
+            handler._send_json(403, {"error": "insufficient permission (need owner to delete this document)"})
+            return
     target.unlink()
+    # Drop the freed path's ACL entry so a future doc created there can't inherit a
+    # stale owner/grants (best-effort: a registry hiccup must not fail the delete).
+    try:
+        _s.get_store().delete_acl(rel)
+    except Exception as e:
+        print(f"[delete acl] {e}", file=sys.stderr)
     _s.trigger_sync()
     handler._send_json(200, {"ok": True})

@@ -106,7 +106,7 @@ function renderTree(node, depth = 0, prefix = '') {
         ? ''
         : `<span class="dir-access-btn tree-action-btn" title="${t('aclBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/></svg></span>`;
 
-      btn.innerHTML = `<span class="caret text-xs text-ink-400">&#9656;</span>${isRemoteRoot ? REMOTE_FOLDER_ICON : FOLDER_ICON}<span class="truncate min-w-0 flex-1" data-name="${child.name.replace(/"/g, '&quot;')}">${dirLabel}</span>${dirAccessBtn}<span class="dir-rename-btn tree-action-btn" title="${t('renameFolder')}">${PENCIL_ICON}</span>${dirShareBtn}`;
+      btn.innerHTML = `<span class="caret text-xs text-ink-400">&#9656;</span>${isRemoteRoot ? REMOTE_FOLDER_ICON : FOLDER_ICON}<span class="truncate min-w-0 flex-1" data-name="${escapeHtml(child.name)}">${escapeHtml(dirLabel)}</span>${dirAccessBtn}<span class="dir-rename-btn tree-action-btn" title="${t('renameFolder')}">${PENCIL_ICON}</span>${dirShareBtn}`;
       const sub = renderTree(child, depth + 1, childPath);
 
       sub.classList.add('hidden');
@@ -151,7 +151,14 @@ function renderTree(node, depth = 0, prefix = '') {
         'tree-item group w-full px-2 py-1.5 rounded flex items-start gap-2 cursor-pointer text-ink-200' +
         (isRemoteFile ? ' tree-remote' : '');
       a.dataset.path = child.path;
-      const nameHtml = `<span class="truncate min-w-0 flex-1 leading-snug" data-name="${child.name.replace(/"/g, '&quot;')}">${child.name}</span>`;
+      const nameHtml = `<span class="truncate min-w-0 flex-1 leading-snug" data-name="${escapeHtml(child.name)}">${escapeHtml(child.name)}</span>`;
+      // Sharing-state dot (U3): private = amber, shared = sky, commons = none.
+      const visBadge =
+        child.vis === 'private'
+          ? `<span class="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style="background-color:rgba(251,191,36,.85)" title="${t('visPrivate')}"></span>`
+          : child.vis === 'shared'
+            ? `<span class="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style="background-color:rgba(56,189,248,.85)" title="${t('visShared')}"></span>`
+            : '';
       // Buttons on hover over your own document (.md/.html): rename + share.
       const fileActionable = !isRemoteFile && (child.ext === '.md' || child.ext === '.html');
       const fileRenameBtn = fileActionable
@@ -160,8 +167,12 @@ function renderTree(node, depth = 0, prefix = '') {
       const fileShareBtn = fileActionable
         ? `<span class="file-share-btn tree-action-btn tree-action-btn--share" title="${t('shareAsNode')}">${LINK_ICON}</span>`
         : '';
+      // Manage the file's ACL (model B) — mirror of the folder's access button.
+      const fileAccessBtn = fileActionable
+        ? `<span class="file-access-btn tree-action-btn" title="${t('aclBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/></svg></span>`
+        : '';
 
-      a.innerHTML = `${iconFor(child.ext)}${nameHtml}${fileRenameBtn}${fileShareBtn}`;
+      a.innerHTML = `${iconFor(child.ext)}${nameHtml}${visBadge}${fileAccessBtn}${fileRenameBtn}${fileShareBtn}`;
 
       if (
         child.ext === '.md' ||
@@ -171,6 +182,14 @@ function renderTree(node, depth = 0, prefix = '') {
       ) {
         // showMarkdown dispatches: .md → marked, .html → iframe, .pdf → native, .docx → mammoth.
         a.addEventListener('click', (e) => {
+          if (e.target.closest('.file-access-btn')) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.openAccessFor) window.openAccessFor(child.path);
+
+            return;
+          }
+
           if (e.target.closest('.file-share-btn')) {
             e.preventDefault();
             e.stopPropagation();

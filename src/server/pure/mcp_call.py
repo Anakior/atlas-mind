@@ -1,6 +1,7 @@
 """MCP tool dispatch + graph/tag/trash/search helpers backing the AI-native tools."""
 import datetime
 import json
+import posixpath
 import re
 import sys
 import time
@@ -425,9 +426,10 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
         target = _s._validate_doc_path(rel)
         if not target:
             return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
+        rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level)
         if _s._is_readonly_path(rel):
             return text_result("Read-only location (remote node mirror) — choose another path.", is_error=True)
-        if not _visible(rel, ctx):
+        if ctx is not None and not _s.can_create(rel, ctx):
             return text_result("Insufficient permission to create at this location.", is_error=True)
         if target.exists():
             return text_result(f"Document already exists: {rel} (cannot overwrite with this token)", is_error=True)
@@ -435,13 +437,15 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result("'content' must be a string", is_error=True)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        # Ownership-on-create: a non-admin's new doc is private to them (model B);
-        # an admin's stays in the commons (curator role).
-        if ctx is not None and ctx.primary and not ctx.is_admin:
+        # On create: stamp the CREATOR (all roles → "créé par X"). A non-admin's
+        # new doc is also private to them by default; an admin's stays commons.
+        if ctx is not None and ctx.primary:
             try:
-                _s.get_store().set_owner(rel, ctx.primary)
+                _s.get_store().set_creator(rel, ctx.primary)
+                if not ctx.is_admin and not _s.in_private_space(rel):
+                    _s.get_store().set_owner(rel, ctx.primary)
             except Exception as e:
-                print(f"[create_doc set_owner] {e}", file=sys.stderr)
+                print(f"[create_doc owner] {e}", file=sys.stderr)
         _s.trigger_sync()
         return text_result(f"Document created: {rel}")
 
@@ -493,6 +497,10 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result(f"Document not found: {src_rel}", is_error=True)
         if ctx is not None and not _s.can_write(src_rel, ctx, "owner"):
             return text_result("Insufficient permission (need owner to move this document).", is_error=True)
+        # Gate the DESTINATION too: you can't plant a doc into a space you can't
+        # see (e.g. another user's private folder). Mirrors create_doc's check.
+        if ctx is not None and not _s.can_create(dst_rel, ctx):
+            return text_result("Insufficient permission to move to this destination.", is_error=True)
         status, payload = _s._move_md_with_relink(src_rel, dst_rel)
         if status != "ok":
             return text_result(payload, is_error=True)
