@@ -63,7 +63,7 @@ def file_put(handler):
             # commons (curator). The `private` flag (New-Document toggle) overrides.
             # A doc created inside a private folder is private by inheritance and
             # never gets its own owner (which would cut that inheritance).
-            private = bool(data.get("private", not ctx.is_admin))
+            private = bool(data.get("private", not ctx.is_admin and not ctx.api))
             if private and not _s.in_private_space(rel):
                 store.set_owner(rel, ctx.primary)
         except Exception as e:

@@ -42,6 +42,35 @@ class TestEffectiveLevel(unittest.TestCase):
     def test_common_is_view_only_for_non_admin(self):
         self.assertFalse(acl.can_write("a/b.md", self.ctx("u@x"), "edit", self.fs))
 
+    # ── API/MCP token: full write on the commons, private needs acts_as ───
+    def api_ctx(self, acts_as=None):
+        ident = {"email": "claude@api.local", "role": "api"}
+        if acts_as:
+            ident["acts_as"] = acts_as
+        return acl.viewer_ctx(ident, self.fs)
+
+    def test_api_token_owns_the_commons(self):
+        # An unbound API token writes the commons out of the box (owner-level →
+        # read/edit/move/delete all work).
+        ctx = self.api_ctx()
+        self.assertEqual(self.lvl("notes/c.md", ctx), "owner")
+        self.assertTrue(acl.can_write("notes/c.md", ctx, "edit", self.fs))
+        self.assertTrue(acl.can_write("notes/c.md", ctx, "owner", self.fs))
+
+    def test_unbound_api_token_cannot_touch_private(self):
+        self.fs.set_owner("priv/s.md", "user:alice@x")
+        ctx = self.api_ctx()
+        self.assertIsNone(self.lvl("priv/s.md", ctx))  # no access at all
+
+    def test_api_token_bound_reaches_that_humans_private(self):
+        self.fs.upsert_user("alice@x", {"role": "viewer", "password_hash": "x"})
+        self.fs.set_owner("priv/alice.md", "user:alice@x")
+        self.fs.set_owner("priv/bob.md", "user:bob@x")
+        ctx = self.api_ctx(acts_as="alice@x")
+        self.assertEqual(self.lvl("priv/alice.md", ctx), "owner")  # her private space
+        self.assertEqual(self.lvl("notes/c.md", ctx), "owner")     # + commons write
+        self.assertIsNone(self.lvl("priv/bob.md", ctx))            # not someone else's
+
     # ── admin (curates commons, NOT others' private) + superuser ──────────
     def test_admin_curates_commons_not_others_private(self):
         admin = acl.viewer_ctx({"email": "boss@x", "role": "admin"}, self.fs)
@@ -120,12 +149,12 @@ class TestEffectiveLevel(unittest.TestCase):
             {"email": "tok@api.local", "role": "api", "acts_as": "human@x"}, self.fs)
         self.assertEqual(self.lvl("doc.md", c), "owner")
 
-    def test_bare_api_token_sees_commons_not_private(self):
+    def test_bare_api_token_writes_commons_not_private(self):
         c = acl.viewer_ctx({"email": "tok@api.local", "role": "api"}, self.fs)
-        self.assertEqual(self.lvl("a/b.md", c), "view")   # commons visible
+        self.assertEqual(self.lvl("a/b.md", c), "owner")  # commons: full write
         self.fs.set_owner("secret.md", "user:o@x")
         self.assertIsNone(self.lvl("secret.md", c))       # private stays hidden
-        # an explicit grant on its own principal elevates a specific doc
+        # an explicit grant on its own principal elevates a specific private doc
         self.fs.set_owner("doc.md", "user:o@x")
         self.fs.grant("doc.md", "user:tok@api.local", "view")
         self.assertEqual(self.lvl("doc.md", c), "view")

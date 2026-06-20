@@ -88,7 +88,9 @@ def post(handler):
     if ctx.primary:  # stamp creator (all roles); non-admin → private by default
         try:
             _s.get_store().set_creator(rel, ctx.primary)
-            if not ctx.is_admin and not _s.in_private_space(rel):
+            # admin OR API token → stays in the commons; only a human member's new
+            # doc is private by default.
+            if not ctx.is_admin and not ctx.api and not _s.in_private_space(rel):
                 _s.get_store().set_owner(rel, ctx.primary)
         except Exception:
             pass

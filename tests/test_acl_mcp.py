@@ -173,29 +173,30 @@ class TestMcpWriteLadder(unittest.TestCase):
         res = r.json()["result"]
         return bool(res.get("isError")), res["content"][0]["text"]
 
-    def test_bare_cannot_edit_commons(self):
+    def test_bare_can_edit_commons(self):
+        # An API/MCP token writes the COMMONS out of the box (the AI manages the
+        # shared mind). Private spaces still require acts_as (tests below).
         err, text = self._call(self.bare, "edit_doc",
-                               {"path": "public/note.md", "content": "hacked"})
-        self.assertTrue(err)
-        self.assertIn("permission", text.lower())
+                               {"path": "public/note.md", "content": "edited by the AI"})
+        self.assertFalse(err, text)
 
-    def test_bare_cannot_delete_commons(self):
+    def test_bare_can_delete_commons(self):
         err, text = self._call(self.bare, "delete_doc", {"path": "public/note.md"})
-        self.assertTrue(err)
-        self.assertIn("permission", text.lower())
+        self.assertFalse(err, text)
 
-    def test_create_is_private_to_creator(self):
+    def test_create_lands_in_commons(self):
+        # An API token's new doc is COMMONS (shared), not private to the token — so a
+        # human (here the owner-bound token) sees it too.
         err, _ = self._call(self.bare, "create_doc",
-                            {"path": "bot/mine.md", "content": "# mine\nsecret-bot-content\n"})
+                            {"path": "bot/mine.md", "content": "# mine\nbot-content\n"})
         self.assertFalse(err)
-        # the creator reads its own new doc back
         e2, t2 = self._call(self.bare, "read_doc", {"path": "bot/mine.md"})
         self.assertFalse(e2)
-        self.assertIn("secret-bot-content", t2)
-        # a different principal (owner-bound) does NOT see it (no-oracle)
-        _, t3 = self._call(self.bound, "read_doc", {"path": "bot/mine.md"})
-        self.assertNotIn("secret-bot-content", t3)
-        self.assertIn("not found", t3.lower())
+        self.assertIn("bot-content", t2)
+        # commons → the owner-bound token reads it too (shared, not hidden)
+        e3, t3 = self._call(self.bound, "read_doc", {"path": "bot/mine.md"})
+        self.assertFalse(e3)
+        self.assertIn("bot-content", t3)
 
     def test_owner_bound_can_edit_its_private(self):
         err, text = self._call(self.bound, "edit_doc",

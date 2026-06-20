@@ -1385,6 +1385,17 @@ def cmd_token_create(args) -> int:
     # server's admin endpoints.
     token, fields = store.new_api_token_fields(
         args.label, set_unusable_password=existing is None)
+    # Optional: bind the token to a HUMAN account (acts_as). The AI then also sees
+    # that person's PRIVATE space, not just the commons (an unbound token writes the
+    # commons but never a private doc). Validated against a real admin/viewer.
+    acts_as = getattr(args, "acts_as", None)
+    if acts_as:
+        acts_as = _normalize_email(acts_as)
+        human = file_store.get_user_by_email(acts_as)
+        if human is None or human.get("role") not in ("admin", "viewer"):
+            raise CliError(
+                f"--acts-as {acts_as}: no human (admin/viewer) account with that email.")
+        fields["acts_as"] = acts_as
     file_store.upsert_user(email, fields)
 
     action = "regenerated (the old one is revoked)" if existing else "created"
@@ -1396,6 +1407,8 @@ def cmd_token_create(args) -> int:
     print(f"  {token}")
     print()
     print("This token will never be shown again. Copy it now.")
+    if fields.get("acts_as"):
+        print(f"Bound to {fields['acts_as']} — the AI also sees that account's private space.")
     print()
     print("Usage:")
     print("  REST : header  Authorization: Bearer <token>  on /api/v1/*")
@@ -1679,6 +1692,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_token_create.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
     p_token_create.add_argument("--label", default=DEFAULT_TOKEN_LABEL,
                                 help=f"Identifies the token (default: {DEFAULT_TOKEN_LABEL}).")
+    p_token_create.add_argument("--acts-as", dest="acts_as", default=None,
+                                help="Bind the token to a human account (email): the "
+                                     "AI then also sees that person's PRIVATE space, "
+                                     "not just the commons.")
     p_token_create.set_defaults(func=cmd_token_create)
     p_token_list = token_sub.add_parser("list", help="List the tokens.")
     p_token_list.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")

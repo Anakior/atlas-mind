@@ -38,9 +38,9 @@ class ViewerCtx:
     - ``is_admin``: bypasses the ACL entirely (sees/owns everything).
     - ``primary``: the principal stamped as ``owner`` on create (or None).
     """
-    __slots__ = ("principals", "is_admin", "primary", "superuser")
+    __slots__ = ("principals", "is_admin", "primary", "superuser", "api")
 
-    def __init__(self, principals, is_admin, primary, superuser=False):
+    def __init__(self, principals, is_admin, primary, superuser=False, api=False):
         self.principals = frozenset(principals)
         # is_admin: curates the COMMONS (owner-level on ownerless paths) but is
         # NOT special inside another user's private space.
@@ -49,6 +49,10 @@ class ViewerCtx:
         # superuser: full bypass (sees everything), reserved for LOCAL mode — the
         # single operator on their own machine. Never set from a cloud identity.
         self.superuser = superuser
+        # api: an API/MCP service token — full write on the COMMONS (the AI manages
+        # the shared mind out of the box). Private spaces still require the bound
+        # human (acts_as); distinct from is_admin (no Settings / admin routes).
+        self.api = api
 
 
 # Anonymous caller (no session, no token): no principals → only share-links and
@@ -90,16 +94,20 @@ def viewer_ctx(identity, store=None):
         if acts_as:
             human = store.get_user_by_email(acts_as)
             if human:
-                return _ctx_for_human(human, store)
-        # Unbound token: member of the commons (sees shared content) but NEVER
-        # admin and NEVER in a private space — owned/private docs stay hidden
-        # until explicitly granted, or until the token is bound via `acts_as` to
-        # a human (decision §11.2). Mono-user reality (§11.3): the owner binds his
-        # token to himself/admin and sees everything.
+                # Bound: the AI acts AS the human — their private space + grants —
+                # PLUS the API commons-write capability (api=True).
+                h = _ctx_for_human(human, store)
+                return ViewerCtx(h.principals, h.is_admin, h.primary, api=True)
+        # Unbound token: full write on the COMMONS (api=True, the AI's service
+        # identity) but NEVER admin and NEVER in a private space — owned/private
+        # docs stay hidden until the token is bound via `acts_as` to a human
+        # (decision §11.2). Mono-user reality (§11.3): the owner binds his token to
+        # himself/admin and sees everything.
         principals = {"*"}
         if email:
             principals.add("user:" + email)
-        return ViewerCtx(principals, False, ("user:" + email) if email else None)
+        return ViewerCtx(principals, False, ("user:" + email) if email else None,
+                         api=True)
     return _ctx_for_human(identity, store)
 
 
@@ -190,10 +198,14 @@ def effective_level(rel, ctx, store=None):
             return "owner"
         return best  # a grant level, or None (hidden — including from the admin)
 
-    # Not governed by an owner → commons. The CREATOR curates their own doc
-    # (owner-level: "on the commons only the creator can make it private"); the
-    # admin curates only creator-less (legacy / out-of-app) docs. Everyone else
-    # gets at least view, raised by a matching grant.
+    # Not governed by an owner → commons. An API/MCP token (the AI's service
+    # identity) gets full write on the shared commons out of the box; the private
+    # spaces it must NOT touch were already handled by the owner branch above.
+    if ctx.api:
+        return "owner"
+    # The CREATOR curates their own doc (owner-level: "on the commons only the
+    # creator can make it private"); the admin curates only creator-less (legacy /
+    # out-of-app) docs. Everyone else gets at least view, raised by a matching grant.
     self_entry = store.get_acl(rel)
     creator = self_entry.get("creator") if self_entry else None
     if creator is not None and creator in ctx.principals:
