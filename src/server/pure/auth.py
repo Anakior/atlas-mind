@@ -107,12 +107,16 @@ def authenticate_user(email: str, password: str):
         # store carries a dummy matching the cost of its real scheme.
         _s.get_store().dummy_verify(password)
         return None
-    if user.get("role") == _s.API_ROLE:
-        # Same timing equalization before refusing (don't distinguish 'api' accounts).
+    if user.get("role") == _s.API_ROLE or user.get("invite_token_hash"):
+        # 'api' accounts authenticate via Bearer, not a cookie; a PENDING invite
+        # has no usable password yet (it is set only when the invitee accepts).
+        # Same timing equalization before refusing — and we never reach
+        # verify_password, so a pending account (no password_hash) cannot KeyError
+        # nor route an UNUSABLE "$2…" sentinel into bcrypt.
         _s.get_store().dummy_verify(password)
-        return None  # API users authenticate via /api/v1 + Bearer token, not by cookie
+        return None
     # verify_password handles native scrypt AND the legacy bcrypt fallback ("$2…").
-    if not store.verify_password(password, user["password_hash"]):
+    if not store.verify_password(password, user.get("password_hash")):
         return None
     return user
 

@@ -24,7 +24,7 @@
 
       <!-- ── Users tab ─────────────────────────────────────────── -->
       <section id="settings-pane-users" class="settings-pane">
-        <form id="settings-user-form" class="mb-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
+        <form id="settings-user-form" class="mb-3 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
           <div class="min-w-0">
             <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsEmailLabel">Email</label>
             <input id="settings-user-email" type="email" autocomplete="off" placeholder="user@example.com" data-i18n-placeholder="settingsEmailPlaceholder"
@@ -40,15 +40,28 @@
               <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
             </div>
           </div>
-          <div>
-            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsPasswordLabel">Mot de passe</label>
-            <input id="settings-user-password" type="password" autocomplete="new-password" placeholder="8 car. min." data-i18n-placeholder="settingsPasswordPlaceholder"
-              class="w-full sm:w-32 px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
-          </div>
-          <div class="sm:col-span-3 flex justify-end">
-            <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="settingsAddUser">Ajouter</button>
+          <div class="sm:col-span-2 flex justify-end">
+            <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="settingsAddUser">Inviter</button>
           </div>
         </form>
+        <p class="text-xs text-ink-500 mb-3" data-i18n="settingsInviteHint">L'invit&eacute; re&ccedil;oit un lien et choisit lui-m&ecirc;me son mot de passe.</p>
+        <!-- One-time display of the invite link: it is shown ONCE, never again. -->
+        <div id="settings-invite-result" class="hidden mb-5 rounded-lg overflow-hidden">
+          <div class="token-warning-bar flex items-start gap-2.5 px-3 py-2.5">
+            <svg class="token-warning-icon w-4 h-4 mt-px flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <p class="token-warning-text flex-1 text-xs leading-snug font-semibold" data-i18n="settingsInviteOnce">Copiez le lien maintenant : il ne sera plus jamais affich&eacute;</p>
+            <button type="button" id="settings-invite-close" class="token-warning-icon -mt-0.5 p-0.5 rounded hover:bg-white/10 flex-shrink-0" title="Fermer" data-i18n-title="close">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="p-3">
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsInviteLink">Lien d'invitation</label>
+            <div class="flex gap-2">
+              <input id="settings-invite-link" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-sm font-mono focus:outline-none">
+              <button id="settings-invite-copy" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0 inline-flex items-center gap-1.5" data-i18n="copy">Copier</button>
+            </div>
+          </div>
+        </div>
         <ul id="settings-users-list" class="space-y-1.5"></ul>
       </section>
 

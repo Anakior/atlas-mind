@@ -231,15 +231,27 @@ class TestAdminUsers(unittest.TestCase):
         resp = self.srv.get("/api/admin/users")
         self.assertEqual(resp.status, 401)
 
-    def test_create_user_then_login(self):
+    def test_invite_user_then_accept_then_login(self):
+        # Admin invites (no password) → gets a one-time invite link; the pending
+        # account cannot log in until the invitee accepts and sets a password.
         resp = self.srv.post("/api/admin/users", headers=self._admin(),
                              json_body={"email": "new@test.local",
-                                        "password": "new-user-password",
                                         "role": "viewer"})
         self.assertEqual(resp.status, 201)
-        self.assertEqual(resp.json()["role"], "viewer")
-        # The new account can log in.
-        cookie = session_cookie(self.srv, "new@test.local", "new-user-password")
+        body = resp.json()
+        self.assertEqual(body["role"], "viewer")
+        self.assertIn("/invite/", body["invite_url"])
+        token = body["invite_url"].rsplit("/invite/", 1)[1]
+        # Pending account: login refused (no usable password yet).
+        self.assertEqual(login(self.srv, "new@test.local", "anything-at-all").status, 401)
+        # Accept: the invitee sets their OWN password and is logged in.
+        accept = self.srv.post("/api/invite",
+                               json_body={"token": token,
+                                          "password": "invitee-chosen-pw"})
+        self.assertEqual(accept.status, 200)
+        self.assertEqual(accept.json()["email"], "new@test.local")
+        # The account now logs in normally with that password.
+        cookie = session_cookie(self.srv, "new@test.local", "invitee-chosen-pw")
         me = self.srv.get("/api/me", headers={"Cookie": cookie}).json()
         self.assertEqual(me["email"], "new@test.local")
 
@@ -257,17 +269,24 @@ class TestAdminUsers(unittest.TestCase):
                                         "role": "superuser"})
         self.assertEqual(resp.status, 400)
 
-    def test_create_short_password_400(self):
+    def test_create_user_needs_no_password(self):
+        # The admin no longer sets a password: creation mints an invite link and
+        # the account is PENDING (no usable password) until the invitee accepts.
         resp = self.srv.post("/api/admin/users", headers=self._admin(),
-                             json_body={"email": "tiny@test.local",
-                                        "password": "short", "role": "viewer"})
-        self.assertEqual(resp.status, 400)
+                             json_body={"email": "nopw@test.local", "role": "viewer"})
+        self.assertEqual(resp.status, 201)
+        self.assertIn("/invite/", resp.json()["invite_url"])
+        user = self.fs.get_user_by_email("nopw@test.local")
+        self.assertNotIn("password_hash", user)
+        self.assertIn("invite_token_hash", user)
 
     def test_reset_password(self):
-        self.srv.post("/api/admin/users", headers=self._admin(),
-                      json_body={"email": "reset@test.local",
-                                 "password": "first-password-x",
-                                 "role": "viewer"})
+        # An ACTIVE account (seeded directly with a real password) — a pending
+        # invite has no password to reset (covered in TestInviteFlow).
+        self.fs.upsert_user("reset@test.local", {
+            "password_hash": store.hash_password("first-password-x"),
+            "role": "viewer",
+        })
         resp = self.srv.post("/api/admin/users/password", headers=self._admin(),
                              json_body={"email": "reset@test.local",
                                         "password": "second-password-y"})
@@ -362,6 +381,109 @@ class TestAdminUsers(unittest.TestCase):
             "role": "admin",
         })
         self.assertTrue(self.fs.delete_user("cli-admin@test.local"))
+
+
+class TestInviteFlow(unittest.TestCase):
+    """C1 — the admin mints a SINGLE-USE invite link (no password); the invitee
+    opens /invite/<token> and sets their OWN password, which activates + logs in
+    the account. Covers: the accept page, password rule, single-use, expiry, the
+    pending state (no admin reset, listed as pending), and re-invite."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer(extra_env=cloud_env())
+        cls.srv.start()
+        cls.fs = file_store_of(cls.srv)
+        seed_admin_and_viewer(cls.fs)
+        cls.admin_cookie = session_cookie(cls.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+        cls.admin_csrf = csrf_token_for(cls.srv, cls.admin_cookie)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def _admin(self):
+        return {"Cookie": self.admin_cookie, "X-CSRF-Token": self.admin_csrf}
+
+    def _mint(self, email: str, role: str = "viewer") -> str:
+        """Admin mints an invite for `email`; returns the opaque token from the URL."""
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": email, "role": role})
+        self.assertEqual(resp.status, 201, resp.text)
+        return resp.json()["invite_url"].rsplit("/invite/", 1)[1]
+
+    def test_invite_page_live_then_404_for_unknown(self):
+        token = self._mint("page@test.local")
+        page = self.srv.get(f"/invite/{token}")
+        self.assertEqual(page.status, 200)
+        self.assertIn("/api/invite", page.text)
+        self.assertIn("page@test.local", page.text)
+        # Unknown token → 404, same as an absent invite (no existence oracle).
+        self.assertEqual(self.srv.get("/invite/not-a-real-token-xyz").status, 404)
+
+    def test_accept_short_password_400(self):
+        token = self._mint("short@test.local")
+        resp = self.srv.post("/api/invite",
+                             json_body={"token": token, "password": "short"})
+        self.assertEqual(resp.status, 400)
+
+    def test_accept_unknown_token_409(self):
+        resp = self.srv.post("/api/invite",
+                             json_body={"token": "nope-nope-nope",
+                                        "password": "long-enough-pw"})
+        self.assertEqual(resp.status, 409)
+
+    def test_accept_is_single_use(self):
+        token = self._mint("once@test.local")
+        first = self.srv.post("/api/invite",
+                              json_body={"token": token, "password": "first-pw-strong"})
+        self.assertEqual(first.status, 200)
+        # The same token cannot be redeemed twice.
+        second = self.srv.post("/api/invite",
+                               json_body={"token": token, "password": "second-pw-strong"})
+        self.assertEqual(second.status, 409)
+        # The account logs in with the FIRST password only.
+        self.assertEqual(login(self.srv, "once@test.local", "second-pw-strong").status, 401)
+        self.assertTrue(session_cookie(self.srv, "once@test.local", "first-pw-strong"))
+
+    def test_pending_account_password_reset_404(self):
+        self._mint("pending@test.local")
+        # An admin cannot set a pending account's password — that's the invite's job.
+        resp = self.srv.post("/api/admin/users/password", headers=self._admin(),
+                             json_body={"email": "pending@test.local",
+                                        "password": "admin-set-this-pw"})
+        self.assertEqual(resp.status, 404)
+
+    def test_expired_invite_refused(self):
+        token = self._mint("expired@test.local")
+        # Force the invite into the past.
+        self.fs.upsert_user("expired@test.local", {"invite_expires_at": 1})
+        self.assertEqual(self.srv.get(f"/invite/{token}").status, 404)
+        resp = self.srv.post("/api/invite",
+                             json_body={"token": token, "password": "long-enough-pw"})
+        self.assertEqual(resp.status, 409)
+
+    def test_resend_invalidates_old_link(self):
+        first = self._mint("resend@test.local")
+        second = self._mint("resend@test.local")  # re-invite a pending account
+        self.assertNotEqual(first, second)
+        # The OLD link no longer works; the NEW one does.
+        self.assertEqual(self.srv.get(f"/invite/{first}").status, 404)
+        self.assertEqual(self.srv.get(f"/invite/{second}").status, 200)
+
+    def test_active_account_cannot_be_re_invited_409(self):
+        # ADMIN_EMAIL is active (real password): re-inviting it is refused.
+        resp = self.srv.post("/api/admin/users", headers=self._admin(),
+                             json_body={"email": ADMIN_EMAIL, "role": "admin"})
+        self.assertEqual(resp.status, 409)
+
+    def test_list_marks_pending(self):
+        self._mint("listed@test.local")
+        users = self.srv.get("/api/admin/users", headers=self._admin()).json()
+        entry = next(u for u in users if u["email"] == "listed@test.local")
+        self.assertTrue(entry["pending"])
 
 
 class TestAdminTokens(unittest.TestCase):
@@ -531,6 +653,18 @@ class TestAdminUiPanel(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.srv.stop()
+
+    def test_baked_tree_not_indexed_in_server_mode(self):
+        # ACL: the baked FULL tree is indexed into fileMap ONLY in offline
+        # (file://) mode. In server mode that boot-time index would leak private
+        # doc names + the total count through every fileMap consumer (Recent,
+        # search, the Mind, stats) BEFORE the per-account filtered softReload().
+        # The gate mirrors the tree-render gate in 02-content-tree.js.
+        self.assertIn(
+            "if (!location.protocol.startsWith('http')) {\n  index(TREE);",
+            self.index)
+        # softReload still rebuilds fileMap from the FILTERED /api/tree.
+        self.assertIn("const res = await fetch('/api/tree');", self.index)
 
     def test_settings_panel_markup_present(self):
         # Panel container + its three tabs + the gear entry point.

@@ -277,7 +277,12 @@ const STRINGS = {
     settingsPasswordLabel: 'Mot de passe',
     settingsPasswordPlaceholder: '8 car. min.',
     settingsEmailPlaceholder: 'utilisateur@exemple.com',
-    settingsAddUser: 'Ajouter',
+    settingsAddUser: 'Inviter',
+    settingsInviteHint: 'L\'invité reçoit un lien et choisit lui-même son mot de passe.',
+    settingsInviteOnce: 'Copiez le lien maintenant : il ne sera plus jamais affiché',
+    settingsInviteLink: 'Lien d\'invitation',
+    settingsInvitePending: 'En attente',
+    settingsResendInvite: 'Renvoyer le lien',
     settingsResetPassword: 'Réinitialiser le mot de passe',
     settingsResetPasswordShort: 'Réinitialiser',
     settingsResetPasswordTitle: 'Réinitialiser le mot de passe',
@@ -759,7 +764,12 @@ const STRINGS = {
     settingsPasswordLabel: 'Password',
     settingsPasswordPlaceholder: '8 chars min.',
     settingsEmailPlaceholder: 'user@example.com',
-    settingsAddUser: 'Add',
+    settingsAddUser: 'Invite',
+    settingsInviteHint: 'The invitee gets a link and sets their own password.',
+    settingsInviteOnce: 'Copy the link now — it will never be shown again',
+    settingsInviteLink: 'Invitation link',
+    settingsInvitePending: 'Pending',
+    settingsResendInvite: 'Resend link',
     settingsResetPassword: 'Reset password',
     settingsResetPasswordShort: 'Reset',
     settingsResetPasswordTitle: 'Reset password',
@@ -1067,7 +1077,14 @@ function index(node) {
   }
 }
 
-index(TREE);
+// Offline/file:// only: index the baked FULL tree into fileMap. In SERVER mode
+// that baked tree is the owner's complete build-time view, so indexing it here
+// would leak private doc names + the total count through every fileMap consumer
+// (Recent, search, the Mind, stats) BEFORE softReload() swaps in the per-account
+// filtered /api/tree. Mirrors the tree-render gate in 02-content-tree.js.
+if (!location.protocol.startsWith('http')) {
+  index(TREE);
+}
 statsEl.textContent = t('statsLine', mdCount, otherCount);
 
 // ─── Content loader (lazy fetch in online mode, embed in offline mode) ────────

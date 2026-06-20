@@ -11,7 +11,7 @@ import server as _s
 from server.app import router
 from server.constants import _SHARE_ID_PATTERN
 from server.routes import (
-    system, auth, setup, share, docs, todos, notes, admin,
+    system, auth, setup, invite, share, docs, todos, notes, admin,
     account, hive, apiv1, mcp, acl,
 )
 
@@ -36,6 +36,7 @@ GET_ROUTES = [
     router.Route(_RK.PREFIX_NOQUERY, "/vendor/", system.static_get, _G.PUBLIC),
     router.Route(_RK.EXACT, "/sw.js", system.sw, _G.PUBLIC),
     router.Route(_RK.EXACT_NOQUERY, "/setup", setup.page, _G.PUBLIC, when=_when_cloud),
+    router.Route(_RK.PREFIX, "/invite/", invite.page, _G.PUBLIC, when=_when_cloud),
     router.Route(_RK.PREFIX, "/s/", share.page, _G.PUBLIC),
     router.Route(_RK.EXACT, "/api/node/manifest", hive.manifest, _G.BEARER),
     router.Route(_RK.EXACT_NOQUERY, "/api/node/file", hive.file, _G.BEARER),
@@ -68,6 +69,7 @@ GET_ROUTES = [
 POST_ROUTES = [
     router.Route(_RK.EXACT, "/login", auth.login, _G.PUBLIC, when=_when_cloud),
     router.Route(_RK.EXACT, "/api/setup", setup.submit, _G.PUBLIC, when=_when_cloud),
+    router.Route(_RK.EXACT, "/api/invite", invite.submit, _G.PUBLIC, when=_when_cloud),
     router.Route(_RK.EXACT, "/webhook/github", system.webhook, _G.PUBLIC),
     router.Route(_RK.EXACT, "/api/admin/users", admin.users_post, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/users/password", admin.users_password, _G.ADMIN_CSRF),

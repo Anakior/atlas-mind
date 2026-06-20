@@ -257,9 +257,14 @@ class TestCliDeploy(CliMindTest):
         self.assertIn("app = 'my-cool-atlas'", toml)
         self.assertIn("fly apps create my-cool-atlas", result.stdout)
 
+    @unittest.skipIf(os.name == "nt",
+                     "isatty(NUL) is True on Windows, so DEVNULL cannot simulate a "
+                     "non-interactive stdin — the --wizard TTY guard can't be "
+                     "exercised here (it works on POSIX, where /dev/null reports "
+                     "isatty()==False; the guard itself is correct).")
     def test_deploy_fly_wizard_refuses_non_interactive(self):
-        # run_cli pipes stdin (DEVNULL) → no TTY → the wizard must refuse cleanly
-        # rather than block on a prompt.
+        # run_cli pipes stdin (DEVNULL) → no TTY (on POSIX) → the wizard must
+        # refuse cleanly rather than block on a prompt.
         self.init_mind()
         result = run_cli("deploy", self.mind, "--target", "fly", "--wizard")
         self.assertEqual(result.returncode, 1)
