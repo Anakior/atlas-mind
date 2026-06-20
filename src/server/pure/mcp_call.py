@@ -501,16 +501,20 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
         # see (e.g. another user's private folder). Mirrors create_doc's check.
         if ctx is not None and not _s.can_create(dst_rel, ctx):
             return text_result("Insufficient permission to move to this destination.", is_error=True)
+        src_rel = _s._canonical_rel(src_rel)  # match the on-disk ACL key
         status, payload = _s._move_md_with_relink(src_rel, dst_rel)
         if status != "ok":
             return text_result(payload, is_error=True)
-        _s.trigger_sync()
-        # In-app move → keep its share links AND its ACL alive (best-effort).
+        # Repoint the ACL + shares BEFORE the git sync, to minimize the window where
+        # the moved doc lands at its new path with no ACL (which would read as
+        # commons). Mirrors the /api/file/move ordering. Best-effort.
         try:
-            _s.get_store().repoint_shares_by_path(payload["from"], payload["to"])
-            _s.get_store().repoint_acl_by_path(payload["from"], payload["to"])
+            _store = _s.get_store()
+            _store.repoint_acl_by_path(payload["from"], payload["to"])  # privacy first
+            _store.repoint_shares_by_path(payload["from"], payload["to"])
         except Exception as e:
             print(f"[move repoint] {e}", file=sys.stderr)
+        _s.trigger_sync()
         n, files = payload["links_updated"], len(payload["rewrites"])
         msg = f"Moved: {payload['from']} -> {payload['to']}."
         msg += (f" {n} incoming wikilink(s) rewritten in {files} doc(s)."
@@ -591,11 +595,14 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result("Insufficient permission (need owner to delete this document).", is_error=True)
         trashed = _soft_delete(target)
         # The ACL follows the doc into .trash so the freed path keeps no stale
-        # entry a future doc created there would inherit.
+        # entry a future doc created there would inherit; its share links are
+        # revoked (a trashed doc must stop serving public links).
         try:
-            _s.get_store().repoint_acl_by_path(rel, trashed)
+            _store = _s.get_store()
+            _store.repoint_acl_by_path(rel, trashed)
+            _store.delete_shares_for_path(rel)
         except Exception as e:
-            print(f"[delete repoint_acl] {e}", file=sys.stderr)
+            print(f"[delete cleanup] {e}", file=sys.stderr)
         _s.trigger_sync()
         return text_result(f"Document moved to trash (reversible): {rel} -> {trashed}")
 

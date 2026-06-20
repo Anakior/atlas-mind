@@ -12,6 +12,11 @@ def manifest(handler):
     if not node:
         handler._send_json(401, {"error": "invalid node token"})
         return
+    # Rate-limit per node (manifest hashes the whole subtree per call): parity with
+    # the apiv1/MCP Bearer channels, which are throttled — this one was not (DoS).
+    if not _s.api_rate_limit_ok("node:" + node["name"]):
+        handler._send_json(429, {"error": "rate limit exceeded (120/min)"})
+        return
     files = []
     for rel, path in _s._iter_node_files(node["path"]):
         try:
@@ -35,6 +40,9 @@ def file(handler):
     node = _s.verify_node_bearer(handler.headers.get("Authorization", ""))
     if not node:
         handler._send_json(401, {"error": "invalid node token"})
+        return
+    if not _s.api_rate_limit_ok("node:" + node["name"]):
+        handler._send_json(429, {"error": "rate limit exceeded (120/min)"})
         return
     from urllib.parse import urlparse, parse_qs as _pqs
     rel = (_pqs(urlparse(handler.path).query).get("path", [""])[0] or "").strip()

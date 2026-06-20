@@ -35,6 +35,13 @@ def create(handler):
         "note": note_text[:5000],
         "created": int(time.time()),
     }
+    # Notes are SHARED (git-tracked, visible to every member) — record who wrote it,
+    # so with several admins you can tell annotations apart. Only in cloud mode:
+    # local mode is single-operator (the synthetic "local" admin) — no real author.
+    if _s.CONFIG.auth_enabled:
+        author = (handler._session() or {}).get("email")
+        if author:
+            note["author"] = author
     notes = _s.load_notes(rel)
     notes.append(note)
     _s.save_notes(rel, notes)

@@ -31,6 +31,7 @@ const STRINGS = {
     newDocTitle: 'Nouveau document (N)',
     pinnedHeader: 'Épinglés',
     recentHeader: 'Récents',
+    sharedHeader: 'Partagés avec vous',
     signedInAs: 'Connecté en tant que',
     logoutTitle: 'Se déconnecter',
     logoutLabel: 'Déco',
@@ -45,15 +46,17 @@ const STRINGS = {
     pin: 'Épingler',
     unpin: 'Désépingler',
     downloadTitle: 'Télécharger le fichier',
+    downloadBtn: 'Télécharger',
     moreActions: "Plus d'actions",
     menuRename: 'Renommer',
     menuMove: 'Déplacer…',
     shareTitle: 'Générer un lien public partagé',
     shareBtn: 'Partager',
-    editBtn: '✎ Éditer',
+    editBtn: 'Éditer',
     saveBtn: 'Sauvegarder',
     saving: 'Sauvegarde…',
     modifiedAgo: (d) => 'modifié ' + d,
+    sharedByLabel: (n) => '· partagé par ' + n,
     readingTime: (min, words) => `${min} min · ${words} mots`,
     // Contenu / rendu
     loadingDoc: 'Chargement du document',
@@ -415,6 +418,7 @@ const STRINGS = {
     aclVisibilityHelp: 'Privé = vous seul (+ les accès ci-dessus). Commun = visible par toute l\'équipe.',
     visPrivate: 'Privé',
     visShared: 'Partagé',
+    visGranted: 'Partagé avec vous',
     notFoundTitle: 'Document introuvable ou accès non autorisé',
     notFoundBody: 'Ce document n\'existe pas, ou vous n\'y avez pas accès.',
     notFoundHome: 'Retour à l\'accueil',
@@ -518,6 +522,7 @@ const STRINGS = {
     newDocTitle: 'New document (N)',
     pinnedHeader: 'Pinned',
     recentHeader: 'Recent',
+    sharedHeader: 'Shared with you',
     signedInAs: 'Signed in as',
     logoutTitle: 'Log out',
     logoutLabel: 'Logout',
@@ -532,15 +537,17 @@ const STRINGS = {
     pin: 'Pin',
     unpin: 'Unpin',
     downloadTitle: 'Download the file',
+    downloadBtn: 'Download',
     moreActions: 'More actions',
     menuRename: 'Rename',
     menuMove: 'Move…',
     shareTitle: 'Generate a public share link',
     shareBtn: 'Share',
-    editBtn: '✎ Edit',
+    editBtn: 'Edit',
     saveBtn: 'Save',
     saving: 'Saving…',
     modifiedAgo: (d) => 'modified ' + d,
+    sharedByLabel: (n) => '· shared by ' + n,
     readingTime: (min, words) => `${min} min · ${words} words`,
     // Content / rendering
     loadingDoc: 'Loading document',
@@ -898,6 +905,7 @@ const STRINGS = {
     aclVisibilityHelp: 'Private = only you (+ the access above). Common = visible to the whole team.',
     visPrivate: 'Private',
     visShared: 'Shared',
+    visGranted: 'Shared with you',
     notFoundTitle: 'Document not found or access denied',
     notFoundBody: 'This document doesn\'t exist, or you don\'t have access to it.',
     notFoundHome: 'Back home',
@@ -1009,6 +1017,8 @@ const searchEl = document.getElementById('search');
 const searchResultsEl = document.getElementById('search-results');
 const recentSection = document.getElementById('recent-section');
 const recentList = document.getElementById('recent-list');
+const sharedSection = document.getElementById('shared-section');
+const sharedList = document.getElementById('shared-list');
 const statsEl = document.getElementById('stats');
 const tocPanel = document.getElementById('toc-panel');
 const tocList = document.getElementById('toc-list');

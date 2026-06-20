@@ -31,6 +31,48 @@ function renderRecent() {
 
 renderRecent();
 
+// "Shared with me" (D1): docs another member shared WITH the viewer, discovered
+// via /api/shared-with-me. Cloud-only and fully defensive — any failure (offline
+// build, local mode, empty list, network error) just leaves the section hidden, so
+// it can never break the home view.
+async function renderSharedWithMe() {
+  if (!sharedSection || !location.protocol.startsWith('http')) return;
+  let docs;
+  try {
+    const r = await fetch('/api/shared-with-me');
+    if (!r.ok) return;
+    docs = await r.json();
+  } catch (e) {
+    return;
+  }
+  if (!Array.isArray(docs) || docs.length === 0) return;
+  sharedSection.classList.remove('hidden');
+  sharedList.innerHTML = docs
+    .slice(0, 8)
+    .map((d) => {
+      const name = String(d.path).split('/').pop();
+      const by = d.granted_by ? String(d.granted_by).replace(/^user:/, '') : '';
+      return `
+    <li class="overflow-hidden"><a class="tree-item w-full flex flex-col px-2 py-1 rounded cursor-pointer" data-path="${escapeHtml(d.path)}">
+      <span class="block text-xs text-ink-200 truncate w-full" data-name="${escapeHtml(name)}">${escapeHtml(name)}</span>
+      ${by ? `<span class="text-[10px] text-ink-500">${escapeHtml(by)}</span>` : ''}
+    </a></li>`;
+    })
+    .join('');
+  sharedList.querySelectorAll('a').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const f = fileMap[a.dataset.path];
+      if (f) {
+        showMarkdown(f);
+        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+      }
+    });
+  });
+}
+
+renderSharedWithMe();
+
 // Custom tooltip for truncated filenames
 const tooltipEl = document.createElement('div');
 

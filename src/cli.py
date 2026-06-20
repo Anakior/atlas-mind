@@ -1476,6 +1476,82 @@ def cmd_share_revoke(args) -> int:
     return 0
 
 
+# ─── doctor ────────────────────────────────────────────────────────────────────
+
+
+def cmd_doctor(args) -> int:
+    """Audit the per-document ACL + share registry for orphans (and optionally
+    repair the safe ones): entries left behind by user/group deletions, document
+    deletions, or out-of-band (git/filesystem) moves."""
+    cfg = _load_config(_require_mind(args.dir))
+    file_store = _file_store(cfg)
+    report = file_store.audit_registry(cfg.content_root)
+    if sum(len(v) for v in report.values()) == 0:
+        print("Registry clean: no orphaned ACL entries, grants or share links.")
+        return 0
+
+    def _show(key, label):
+        items = report.get(key, [])
+        if items:
+            print(f"\n{label} ({len(items)}):")
+            for it in items:
+                print(f"  - {it}")
+
+    _show("acl_no_file", "ACL entries whose document no longer exists")
+    _show("share_no_file", "Active share links whose document no longer exists")
+    _show("bad_grant", "Grants to a deleted user/group")
+    _show("bad_owner", "Owner is a deleted account — reassign manually")
+    _show("bad_creator", "Creator is a deleted account")
+
+    if not getattr(args, "fix", False):
+        print("\nRun `atlas doctor --fix` to clean the SAFE issues (orphan ACL "
+              "entries, dead shares, dead grants). Stale owners/creators are left "
+              "for manual reassignment — auto-clearing would expose a private doc.")
+        return 0
+
+    fixed = file_store.repair_registry(report)
+    print(f"\nFixed: {fixed['acl_dropped']} orphan ACL entr(ies), "
+          f"{fixed['shares_revoked']} dead share(s), {fixed['grants_purged']} dead "
+          f"grant(s). {len(report['bad_owner'])} stale owner(s) need manual "
+          "reassignment.")
+    return 0
+
+
+# ─── backup / restore ───────────────────────────────────────────────────────────
+
+
+def cmd_backup(args) -> int:
+    """Snapshot the .atlas registry (accounts, tokens, 2FA, share links, per-document
+    ACLs, groups) to a zip. The content lives in git; this registry does NOT — a lost
+    volume loses every account and share unless it was backed up."""
+    cfg = _load_config(_require_mind(args.dir))
+    src = Path(cfg.store_dir)
+    if not src.is_dir():
+        raise CliError(f"no registry to back up at {src}")
+    out = Path(args.out) if args.out else Path.cwd() / "atlas-registry-backup.zip"
+    archive = shutil.make_archive(
+        str(out.with_suffix("")), "zip", root_dir=str(src))  # make_archive adds .zip
+    print(f"Registry backed up: {archive}")
+    return 0
+
+
+def cmd_restore(args) -> int:
+    """Restore a .atlas registry from a backup zip. Refuses to overwrite a non-empty
+    registry unless --force (the existing accounts/shares would be replaced)."""
+    cfg = _load_config(_require_mind(args.dir))
+    dst = Path(cfg.store_dir)
+    src = Path(args.source)
+    if not src.is_file():
+        raise CliError(f"backup not found: {src}")
+    if dst.is_dir() and any(dst.iterdir()) and not args.force:
+        raise CliError(
+            f"a registry already exists at {dst} — pass --force to overwrite it")
+    dst.mkdir(parents=True, exist_ok=True)
+    shutil.unpack_archive(str(src), str(dst), "zip")
+    print(f"Registry restored into {dst}")
+    return 0
+
+
 # ─── argparse ──────────────────────────────────────────────────────────────────
 
 
@@ -1625,6 +1701,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_share_revoke.add_argument("--id", required=True, dest="id",
                                 help="Link id (see `atlas share list`).")
     p_share_revoke.set_defaults(func=cmd_share_revoke)
+
+    p_doctor = subparsers.add_parser(
+        "doctor",
+        help="Audit the ACL/share registry for orphans (--fix to repair safe ones).")
+    p_doctor.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
+    p_doctor.add_argument("--fix", action="store_true",
+                          help="Apply the safe repairs (drop orphan ACL/shares/grants).")
+    p_doctor.set_defaults(func=cmd_doctor)
+
+    p_backup = subparsers.add_parser(
+        "backup", help="Snapshot the .atlas registry (accounts/shares/ACLs/groups) to a zip.")
+    p_backup.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
+    p_backup.add_argument("--out", default=None,
+                          help="Output zip path (default: ./atlas-registry-backup.zip).")
+    p_backup.set_defaults(func=cmd_backup)
+
+    p_restore = subparsers.add_parser(
+        "restore", help="Restore the .atlas registry from a backup zip.")
+    p_restore.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
+    p_restore.add_argument("--from", dest="source", required=True, help="Backup zip to restore.")
+    p_restore.add_argument("--force", action="store_true", help="Overwrite an existing registry.")
+    p_restore.set_defaults(func=cmd_restore)
 
     return parser
 

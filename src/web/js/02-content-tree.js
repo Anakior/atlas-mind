@@ -152,13 +152,16 @@ function renderTree(node, depth = 0, prefix = '') {
         (isRemoteFile ? ' tree-remote' : '');
       a.dataset.path = child.path;
       const nameHtml = `<span class="truncate min-w-0 flex-1 leading-snug" data-name="${escapeHtml(child.name)}">${escapeHtml(child.name)}</span>`;
-      // Sharing-state dot (U3): private = amber, shared = sky, commons = none.
+      // Sharing-state dot (U3/D2): private = amber, shared-by-me = sky,
+      // shared-with-me (granted) = emerald, commons = none.
       const visBadge =
         child.vis === 'private'
           ? `<span class="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style="background-color:rgba(251,191,36,.85)" title="${t('visPrivate')}"></span>`
           : child.vis === 'shared'
             ? `<span class="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style="background-color:rgba(56,189,248,.85)" title="${t('visShared')}"></span>`
-            : '';
+            : child.vis === 'granted'
+              ? `<span class="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style="background-color:rgba(52,211,153,.9)" title="${t('visGranted')}"></span>`
+              : '';
       // Buttons on hover over your own document (.md/.html): rename + share.
       const fileActionable = !isRemoteFile && (child.ext === '.md' || child.ext === '.html');
       const fileRenameBtn = fileActionable

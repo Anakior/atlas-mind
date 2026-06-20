@@ -101,9 +101,72 @@ from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live task
     _live_tasks_index, _normalize_text, _html_to_text, _HTML_BLOCK_RE,
 )
 from server.pure.acl import (  # noqa: F401  per-document ACL (model B — partage à la Notion)
-    ViewerCtx, viewer_ctx, share_ctx, effective_level, can_read, can_write,
-    can_manage, LEVELS, can_create, in_private_space,
+    ViewerCtx, viewer_ctx, share_ctx, effective_level, LEVELS,
+    can_read as _acl_can_read, can_write as _acl_can_write,
+    can_manage as _acl_can_manage, can_create as _acl_can_create,
+    in_private_space as _acl_in_private_space,
 )
+
+# ── cross-platform ACL-key integrity (canonical path) ─────────────────────────
+# On a case-insensitive filesystem (Windows, macOS) a doc can be requested under a
+# non-canonical spelling — different letter case, a trailing dot — that opens the
+# SAME file but a DIFFERENT (or missing) acl.json key, slipping a private doc past
+# the gate as "commons". Every ACL check goes through these façade wrappers, which
+# canonicalize the path to its EXACT on-disk spelling first, so the ACL is always
+# keyed by the real path. No-op on a case-sensitive FS (Linux, incl. the SaaS),
+# where the variant is simply a different, non-existent path (→ natural 404) — so
+# zero overhead in production. The pure acl.* functions stay FS-agnostic (unit-test
+# friendly); only the server façade is filesystem-aware.
+_fs_case_insensitive = None
+
+
+def _is_fs_case_insensitive() -> bool:
+    global _fs_case_insensitive
+    if _fs_case_insensitive is None:
+        try:
+            root = str(CONFIG.content_root)
+            swapped = root.swapcase()
+            _fs_case_insensitive = bool(
+                root != swapped and os.path.exists(swapped)
+                and os.path.samefile(root, swapped))
+        except Exception:
+            _fs_case_insensitive = (os.name == "nt")
+    return _fs_case_insensitive
+
+
+def _canonical_rel(rel):
+    """The EXACT on-disk spelling of doc `rel` on a case-insensitive FS, else `rel`
+    unchanged (no on-disk file, a case-sensitive FS, or a not-yet-created path)."""
+    if not rel or not _is_fs_case_insensitive():
+        return rel
+    try:
+        root = CONFIG.content_root
+        target = (root / rel).resolve()
+        if target.exists():  # an existing file OR folder → its real on-disk key
+            return target.relative_to(root).as_posix()
+    except (ValueError, OSError):
+        pass
+    return rel
+
+
+def can_read(rel, ctx, store=None):
+    return _acl_can_read(_canonical_rel(rel), ctx, store)
+
+
+def can_write(rel, ctx, need="edit", store=None):
+    return _acl_can_write(_canonical_rel(rel), ctx, need, store)
+
+
+def can_manage(rel, ctx, store=None):
+    return _acl_can_manage(_canonical_rel(rel), ctx, store)
+
+
+def can_create(rel, ctx, store=None):
+    return _acl_can_create(_canonical_rel(rel), ctx, store)
+
+
+def in_private_space(rel, store=None):
+    return _acl_in_private_space(_canonical_rel(rel), store)
 from server.pure.hive import (  # noqa: F401  federation node links / mirror / fetch
     encode_node_link, decode_node_link, verify_node_bearer, _validate_node_path,
     _iter_node_files, _remote_mirror_root, _is_readonly_path, _is_safe_node_name,
