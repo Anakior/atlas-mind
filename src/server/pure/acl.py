@@ -103,6 +103,16 @@ def viewer_ctx(identity, store=None):
     return _ctx_for_human(identity, store)
 
 
+def share_ctx(token):
+    """ViewerCtx for a /s/<token> visitor: the single ``anon:<sha256(token)>``
+    principal (the verified capability). effective_level grants ``view`` on docs
+    that carry an active share for this token (R3 — share-links unified into the
+    ACL path). NOT a member of ``*`` (a share is not an authenticated account)."""
+    import hashlib
+    sha = hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+    return ViewerCtx(frozenset({"anon:" + sha}), False, None)
+
+
 def _ancestors(rel):
     """``[rel, parent-dir, …, top-dir]`` most-specific first. Folder keys carry
     no extension (mirrors how a directory is keyed in ``acl.json``)."""
@@ -137,6 +147,18 @@ def effective_level(rel, ctx, store=None):
         entry = store.get_acl(path)
         if entry:
             present.append((idx, entry))
+
+    # R3: a /s/<token> visitor carries an anon:<token_sha256> principal. Expose the
+    # active share-links on THIS doc as matching anon: view-grants, so the share is
+    # evaluated by the SAME path as everything else (no second authorization system).
+    # Guarded on an anon: principal → zero cost for normal (non-share) access, and
+    # a share only ever grants the holder of its token, never `*` or a member.
+    if any(p.startswith("anon:") for p in ctx.principals):
+        share_grants = [{"principal": "anon:" + s["token_sha256"], "level": "view",
+                         "expires_at": s["expires_at"]}
+                        for s in store.list_shares_for_path(rel)]
+        if share_grants:
+            present.insert(0, (0, {"grants": share_grants}))
 
     # Most-specific entry that declares an owner = the privacy boundary.
     owner_idx, owner = None, None

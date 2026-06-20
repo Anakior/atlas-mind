@@ -16,6 +16,7 @@
   body:not(.admin-cloud) .settings-tab[data-tab="users"],
   body:not(.admin-cloud) .settings-tab[data-tab="tokens"],
   body:not(.admin-cloud) .settings-tab[data-tab="nodes"],
+  body:not(.admin-cloud) .settings-tab[data-tab="groups"],
   body:not(.admin-cloud) .settings-tab[data-tab="shares"] { display: none; }
   /* Security tab: visible only for a cloud-authenticated account. */
   body:not(.cloud-authed) .settings-tab[data-tab="security"] { display: none; }

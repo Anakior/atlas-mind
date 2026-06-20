@@ -94,34 +94,6 @@ def users_password(handler):
     handler._send_json(200, {"ok": True, "email": email})
 
 
-def users_hidden(handler):
-    """Viewer ACL (#14): sets the list of hidden folders for an account
-    (prefixes relative to content/). Admin only. Empty list = sees
-    everything."""
-    data = handler._read_json()
-    email = (data.get("email") or "").strip().lower()
-    folders = data.get("folders")
-    if not email:
-        handler._send_json(400, {"error": "email required"})
-        return
-    if not isinstance(folders, list):
-        handler._send_json(400, {"error": "folders must be a list"})
-        return
-    clean = [f.strip().strip("/") for f in folders
-             if isinstance(f, str) and f.strip().strip("/")]
-    try:
-        user = _s.get_store().get_user_by_email(email)
-        if user is None or user.get("role") == _s.API_ROLE:
-            handler._send_json(404, {"error": "user not found"})
-            return
-        _s.get_store().upsert_user(email, {"hidden_folders": clean})
-    except Exception as e:
-        print(f"[admin] set hidden folders: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
-        return
-    handler._send_json(200, {"ok": True, "email": email, "hidden_folders": clean})
-
-
 def users_delete(handler):
     data = handler._read_json()
     email = (data.get("email") or "").strip().lower()

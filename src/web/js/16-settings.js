@@ -342,30 +342,6 @@ async function loadSettingsUsers() {
             '">' +
             escapeHtml(t('settingsResetPasswordShort')) +
             '</button>';
-        // Viewer only: "hidden folders" field (ACL). Empty = sees everything.
-        const hiddenBlock =
-          u.role === 'viewer'
-            ? '<div class="mt-2 pt-2 border-t subtle-border">' +
-              '<label class="text-ink-500 text-xs block mb-1">' +
-              escapeHtml(t('settingsHiddenLabel')) +
-              '</label>' +
-              '<div class="flex items-center gap-1.5">' +
-              '<input class="settings-user-hidden flex-1 min-w-0 px-2 py-1 text-xs bg-black/30 border subtle-border rounded text-ink-200" data-email="' +
-              emailEsc +
-              '" placeholder="' +
-              escapeHtml(t('settingsHiddenPlaceholder')) +
-              '" value="' +
-              escapeHtml((u.hidden_folders || []).join(', ')) +
-              '">' +
-              '<button class="settings-user-hidden-save px-2.5 py-1 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
-              emailEsc +
-              '">' +
-              t('save') +
-              '</button>' +
-              '</div>' +
-              '</div>'
-            : '';
-
         return (
           '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
           '<div class="admin-row">' +
@@ -393,7 +369,6 @@ async function loadSettingsUsers() {
           '</button>' +
           '</div>' +
           '</div>' +
-          hiddenBlock +
           '</li>'
         );
       })
@@ -424,35 +399,6 @@ settingsUserForm.addEventListener('submit', async (e) => {
 });
 
 settingsUsersList.addEventListener('click', async (e) => {
-  const hiddenBtn = e.target.closest('.settings-user-hidden-save');
-
-  if (hiddenBtn) {
-    const input = hiddenBtn.parentElement.querySelector('.settings-user-hidden');
-    const folders = (input ? input.value : '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    hiddenBtn.disabled = true;
-
-    try {
-      await settingsFetch('/api/admin/users/hidden', {
-        method: 'POST',
-        body: JSON.stringify({ email: hiddenBtn.dataset.email, folders }),
-      });
-      hiddenBtn.textContent = '✓';
-      setTimeout(() => {
-        hiddenBtn.textContent = t('save');
-      }, 1200);
-    } catch (err) {
-      showSettingsError(err.message);
-    } finally {
-      hiddenBtn.disabled = false;
-    }
-
-    return;
-  }
-
   const resendBtn = e.target.closest('.settings-user-resend');
 
   if (resendBtn) {

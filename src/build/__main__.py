@@ -70,11 +70,47 @@ def _load_config():
         sys.exit(f"FATAL: {e}")
 
 
+def _offline_keep(cfg, as_email):
+    """Predicate deciding which content-relative doc paths are embedded in the
+    offline monolith — privacy of a STATIC, access-control-free artifact (R1).
+
+    Default (as_email None): the COMMON SOCLE only — docs with NO owner anywhere
+    on their ancestor chain. EVERY account's PRIVATE docs are excluded. With
+    --as <email>: that account's full visible set (socle + shared + owned), via
+    the SAME ACL evaluation the server uses (no second code path). Reuses
+    server.pure.acl with an explicit FileStore, so it needs no running server.
+
+    Returns None (no filtering) for a mind with no acl.json and no --as: with no
+    ACL registry nothing is private, so the socle IS everything — the legacy
+    'embed all' behaviour is preserved and the server import is skipped."""
+    if as_email is None and not (cfg.store_dir / "acl.json").is_file():
+        return None
+    if str(SRC_DIR) not in sys.path:
+        sys.path.insert(0, str(SRC_DIR))
+    import store as _store
+    from server.pure import acl
+    fs = _store.FileStore(cfg.store_dir)
+    if as_email:
+        user = fs.get_user_by_email(as_email)
+        if user is None:
+            sys.exit(f"FATAL: --as {as_email}: no such account in this mind.")
+        ctx = acl.viewer_ctx(
+            {"email": as_email, "role": user.get("role", "viewer")}, fs)
+        return lambda rel: acl.can_read(rel, ctx, fs)
+    return lambda rel: not acl.in_private_space(rel, fs)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--offline", action="store_true",
                         help="Generate the monolithic index-offline.html (file://-ready).")
+    parser.add_argument("--as", dest="as_email", default=None, metavar="EMAIL",
+                        help="Offline only: export ONE account's visible view "
+                             "(socle + shared + owned). Default offline build = "
+                             "the common socle only (no account's private docs).")
     args = parser.parse_args()
+    if args.as_email and not args.offline:
+        sys.exit("FATAL: --as <email> only applies to an --offline build.")
 
     cfg = _load_config()
     content_root, dist_dir, notes_dir = cfg.content_root, cfg.dist_dir, cfg.notes_dir
@@ -106,16 +142,24 @@ def main() -> int:
         encoding="utf-8")
 
     if args.offline:
+        # R1: filter the offline export to the common socle (or --as <email>'s
+        # view). One predicate threaded through walk() filters the tree AND
+        # md_files at the source, so embed_content / backlinks / tasks / the
+        # MiniSearch index all inherit it; notes (loaded separately) match it.
+        keep = _offline_keep(cfg, args.as_email)
         accum = {"md_files": []}
         tree = walk(content_root, embed_content=True, _accum=accum,
-                    excluded_names=excluded_names)
+                    excluded_names=excluded_names, keep=keep)
         embed_content = {f["path"]: f["content"] for f in accum["md_files"]}
         backlinks = build_links_index(accum["md_files"])
+        notes = load_all_notes(notes_dir)
+        if keep is not None:
+            notes = {rel: ns for rel, ns in notes.items() if keep(rel)}
         html = render_template(
             tree=tree,
             embed_content=embed_content,
             embed_backlinks=backlinks,
-            embed_notes=load_all_notes(notes_dir),
+            embed_notes=notes,
             embed_tasks=build_tasks_index(accum["md_files"]),
             build_ts=build_ts,
             template_path=template_path,
@@ -131,7 +175,10 @@ def main() -> int:
         html = inline_vendor_assets(html, web_dir)
         out_offline.write_text(html, encoding="utf-8")
         size = out_offline.stat().st_size
-        print(f"Generated {out_offline.name} ({size:,} bytes, {len(accum['md_files'])} .md inline)")
+        scope = (f"view of {args.as_email}" if args.as_email
+                 else "common socle" if keep is not None else "all content")
+        print(f"Generated {out_offline.name} ({size:,} bytes, "
+              f"{len(accum['md_files'])} .md inline — {scope})")
         return 0
 
     # Online mode (default)

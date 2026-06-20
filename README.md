@@ -201,6 +201,10 @@ CSRF defence. See the [Security model](#security-model) for the honest details.
 
 - **Offline build** — a single self-contained `index-offline.html` that works from
   `file://`, plus a **service worker** for an installable, offline-capable PWA.
+  The file carries **no runtime access control**, so the build embeds **only the
+  common socle** (documents nobody made private); pass `--as <email>` to export
+  one account's full view instead. Either way it is a **static snapshot** —
+  sharing the file shares exactly what was baked in, with no login.
 - **Live reload** over server-sent events; in cloud mode, content syncs via a
   periodic `git pull` and an optional GitHub webhook (see [Updating](#updating)).
 

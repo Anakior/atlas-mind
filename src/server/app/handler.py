@@ -79,17 +79,6 @@ class Handler(SimpleHTTPRequestHandler):
                 return _s.verify_token(part[len(_s.COOKIE_NAME) + 1:])
         return None
 
-    def _hidden_folders(self):
-        """Folders (prefixes relative to content/) forbidden for the current
-        viewer. Admin / local mode / no-auth → []. The 'api' role doesn't use
-        cookie sessions, so it never reaches here."""
-        sess = self._session()
-        if not sess or sess.get("role") == "admin":
-            return []
-        user = _s.get_store().get_user_by_email(sess["email"])
-        folders = (user or {}).get("hidden_folders") or []
-        return [f.strip("/") for f in folders if isinstance(f, str) and f.strip("/")]
-
     def _viewer_ctx(self):
         """Per-request ACL context (model B). No session (local mode / no-auth) →
         superuser bypass (single operator on their own machine). A logged-in
@@ -446,6 +435,14 @@ class Handler(SimpleHTTPRequestHandler):
         if error:
             self._send_share_error(error)
             return
+        # R3: authorize through the unified ACL path — the verified token is an
+        # anon:<token_sha256> principal that effective_level grants `view` via the
+        # share adapter (store.list_shares_for_path). verify_share_token already
+        # gated revoked/expired/unknown above; this is fail-closed belt-and-braces
+        # on the SAME eval used everywhere else (no separate share-auth system).
+        if not _s.can_read(path, _s.share_ctx(token)):
+            self._send_share_error("invalid")
+            return
         target = (_s.CONFIG.content_root / path).resolve()
         try:
             target.relative_to(_s.CONFIG.content_root)
@@ -596,6 +593,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return True
             if role == "auth" and not self._require_auth_or_401():
                 return True
+            # CSRF (T4): a mutating POST extension route that requires a session
+            # must carry the same synchronizer-token defense as the core POST
+            # routes (CSRF_BASE / ADMIN_CSRF) — otherwise a third-party page could
+            # drive it with the visitor's cookie. A `public` route self-protects.
+            if (self.command == "POST" and role in ("auth", "admin")
+                    and not self._check_csrf_or_403()):
+                return True
             try:
                 handler(self, match)
             except Exception as e:
@@ -637,7 +641,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _serve_navigable(self):
         """Static / navigable tail of do_GET (after the explicit routes,
         extension dispatch, setup redirect and session guard): dotfile/source
-        ACL, hidden-folder ACL, gzip dist indices, .html intercept, then the
+        ACL, per-document ACL, gzip dist indices, .html intercept, then the
         stdlib static handler."""
         rel = self.path.split("?", 1)[0].lstrip("/")
         # Security: the static handler serves any file under ROOT, dotfiles

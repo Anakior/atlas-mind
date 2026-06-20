@@ -73,7 +73,6 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/webhook/github", system.webhook, _G.PUBLIC),
     router.Route(_RK.EXACT, "/api/admin/users", admin.users_post, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/users/password", admin.users_password, _G.ADMIN_CSRF),
-    router.Route(_RK.EXACT, "/api/admin/users/hidden", admin.users_hidden, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/groups", acl.groups_post, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/tokens", admin.tokens_post, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/nodes", admin.nodes_post, _G.ADMIN_CSRF),

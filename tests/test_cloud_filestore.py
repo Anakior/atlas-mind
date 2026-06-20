@@ -496,6 +496,34 @@ class TestAclWriteSecurity(unittest.TestCase):
             "/api/file", json_body={"path": path}, headers=vh).status, 404)
         self.assertEqual(self.srv.path(path).read_text(encoding="utf-8"), "# a\n")
 
+    # ── S3: an in-app move carries the ACL — a private doc stays private ──
+    def test_move_keeps_a_private_doc_private(self):
+        self.srv.put(
+            "/api/file",
+            json_body={"path": "team/to-move.md", "content": "# s\nSECRETMOVE\n"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.fs.set_owner("team/to-move.md", "user:" + ADMIN_EMAIL)
+        moved = self.srv.post(
+            "/api/file/move",
+            json_body={"from": "team/to-move.md", "to": "archive/moved.md"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(moved.status, 200)
+        # The ACL followed: still private at the NEW path, invisible to a viewer…
+        self.assertEqual(
+            (self.fs.get_acl("archive/moved.md") or {}).get("owner"),
+            "user:" + ADMIN_EMAIL)
+        self.assertEqual(self.srv.get("/api/acl?path=archive/moved.md",
+                                      headers={"Cookie": self.viewer_cookie}).status, 404)
+        # …and no phantom owner entry is left behind at the OLD path.
+        self.assertIsNone((self.fs.get_acl("team/to-move.md") or {}).get("owner"))
+
+    # ── Groups: membership resolves regardless of the email's case ──
+    def test_group_membership_is_case_insensitive(self):
+        self.fs.set_group("squad", ["Alice@Example.COM", "bob@x.fr"])
+        self.assertIn("squad", self.fs.groups_for_email("alice@example.com"))
+        self.assertIn("squad", self.fs.groups_for_email("ALICE@EXAMPLE.COM"))
+        self.assertNotIn("squad", self.fs.groups_for_email("carol@x.fr"))
+
 
 class TestPerMemberTodos(unittest.TestCase):
     """Cloud: each account keeps its OWN private todo list (.atlas/todos.json), and
@@ -561,6 +589,38 @@ class TestCloudFileStoreShares(unittest.TestCase):
     def _shares_on_disk(self) -> list:
         return json.loads(
             (self.srv.root / ".atlas" / "shares.json").read_text(encoding="utf-8"))
+
+    def test_share_on_private_doc_serves_publicly_no_api_leak(self):
+        # R3: a PRIVATE doc (owned by the admin) shared by link. The /s/<token>
+        # link serves it publicly — evaluated through the UNIFIED ACL path (the
+        # share is an anon:<token_sha256> view-grant) — but the share grants NO
+        # access to a logged-in viewer who has no grant of their own.
+        from server.pure import acl
+        doc = self.srv.root / "content" / "r3-secret.md"
+        doc.write_text("# Secret\nR3PRIVATEMARK only via the link.\n", encoding="utf-8")
+        self.fs.set_owner("r3-secret.md", "user:" + ADMIN_EMAIL)
+        token = self._create_share("r3-secret.md")["token"]
+        public = self.srv.get(f"/s/{token}")
+        self.assertEqual(public.status, 200)
+        self.assertIn("R3PRIVATEMARK", public.text)
+        # No leak: a logged-in viewer (no grant) resolves to None — the anon: share
+        # grant only matches the token's principal, never a member's ctx.
+        viewer = acl.viewer_ctx({"email": VIEWER_EMAIL, "role": "viewer"}, self.fs)
+        self.assertIsNone(acl.effective_level("r3-secret.md", viewer, self.fs))
+
+    def test_share_is_an_anon_grant_in_effective_level(self):
+        # R3: the unified eval — a share resolves as an anon:<token_sha256> view-grant.
+        from server.pure import acl
+        doc = self.srv.root / "content" / "r3-unit.md"
+        doc.write_text("# U\nx\n", encoding="utf-8")
+        self.fs.set_owner("r3-unit.md", "user:" + ADMIN_EMAIL)
+        token = self._create_share("r3-unit.md")["token"]
+        self.assertEqual(
+            acl.effective_level("r3-unit.md", acl.share_ctx(token), self.fs), "view")
+        # A different token grants nothing; an anonymous visitor sees nothing.
+        self.assertIsNone(
+            acl.effective_level("r3-unit.md", acl.share_ctx("not-the-token"), self.fs))
+        self.assertIsNone(acl.effective_level("r3-unit.md", acl.ANON, self.fs))
 
     def test_share_lifecycle_create_list_revoke(self):
         created = self._create_share("accueil.md")

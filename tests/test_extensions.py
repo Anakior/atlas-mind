@@ -29,7 +29,7 @@ from pathlib import Path
 from harness import AtlasServer
 from test_cloud_filestore import (
     ADMIN_EMAIL, ADMIN_PASSWORD, VIEWER_EMAIL, VIEWER_PASSWORD,
-    cloud_env, file_store_of, seed_default_users, session_cookie,
+    cloud_env, file_store_of, seed_default_users, session_cookie, auth_headers,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -349,13 +349,21 @@ class TestCloudExtensionRoles(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         self.assertTrue(resp.json()["pong"])
 
-    def test_post_default_role_requires_admin(self):
+    def test_post_default_role_requires_admin_and_csrf(self):
+        # No session → 401.
         self.assertEqual(self.srv.post("/api/ext/echo", json_body={"msg": "x"}).status, 401)
+        # A non-admin is refused even with a valid CSRF token.
         denied = self.srv.post("/api/ext/echo", json_body={"msg": "x"},
-                               headers={"Cookie": self.viewer_cookie})
+                               headers=auth_headers(self.srv, self.viewer_cookie))
         self.assertEqual(denied.status, 403)
-        granted = self.srv.post("/api/ext/echo", json_body={"msg": "x"},
+        # T4: an admin WITHOUT the synchronizer CSRF token is refused — a mutating
+        # extension route carries the same CSRF defense as the core POST routes.
+        no_csrf = self.srv.post("/api/ext/echo", json_body={"msg": "x"},
                                 headers={"Cookie": self.admin_cookie})
+        self.assertEqual(no_csrf.status, 403)
+        # Admin WITH the CSRF token → served.
+        granted = self.srv.post("/api/ext/echo", json_body={"msg": "x"},
+                                headers=auth_headers(self.srv, self.admin_cookie))
         self.assertEqual(granted.status, 200)
         self.assertEqual(granted.json(), {"echo": "x"})
 

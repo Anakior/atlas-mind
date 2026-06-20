@@ -83,7 +83,7 @@ def _file_store(config: AtlasConfig) -> store.FileStore:
     return store.FileStore(config.store_dir)
 
 
-def _run_build(mind: Path, *, offline: bool = False) -> int:
+def _run_build(mind: Path, *, offline: bool = False, as_email: str = None) -> int:
     """Build the mind's viewer via `python -m build` (inherited output). Always the
     ENGINE's build: PYTHONPATH puts the engine src first, so a mind never builds
     with its own (now-forbidden) shipped build."""
@@ -93,6 +93,8 @@ def _run_build(mind: Path, *, offline: bool = False) -> int:
     command = [sys.executable, "-m", "build"]
     if offline:
         command.append("--offline")
+    if as_email:
+        command += ["--as", as_email]
     completed = subprocess.run(command, cwd=str(mind), env=env)
     return completed.returncode
 
@@ -668,7 +670,7 @@ def cmd_build(args) -> int:
     if not (mind / "content").is_dir():
         raise CliError(f"{mind} has no content/ directory — nothing to build.")
     _load_config(mind)  # human error if atlas.toml is broken
-    return _run_build(mind, offline=args.offline)
+    return _run_build(mind, offline=args.offline, as_email=args.as_email)
 
 
 # ─── dev sandbox ─────────────────────────────────────────────────────────────
@@ -1531,6 +1533,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_build.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
     p_build.add_argument("--offline", action="store_true",
                          help="Self-contained monolith index-offline.html (file://).")
+    p_build.add_argument("--as", dest="as_email", default=None, metavar="EMAIL",
+                         help="With --offline: embed only the docs visible to this "
+                              "account (default: the common socle only — no private "
+                              "docs of any account).")
     p_build.set_defaults(func=cmd_build)
 
     p_deploy = subparsers.add_parser(

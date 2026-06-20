@@ -133,16 +133,10 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build):
 # ─── Tree ACL · git-history path resolution · live tasks · search text ──────────
 
 
-def _path_hidden(rel, hidden):
-    """True if the doc `rel` (relative to content/) falls under a hidden folder."""
-    return any(rel == f or rel.startswith(f + "/") for f in hidden)
-
-
 def _filter_tree(node, keep):
     """Prune the tree to entries kept by ``keep(path) -> bool``, dropping folders
-    that become empty. ``keep=None`` → returned unchanged (no filtering). Generic
-    predicate so the same pruner serves the legacy hidden-folder blacklist and the
-    model-B ``can_read`` whitelist (HTTP, MCP, Bearer)."""
+    that become empty. ``keep=None`` → returned unchanged (no filtering). The
+    model-B ``can_read`` whitelist feeds it (HTTP, MCP, Bearer)."""
     if keep is None:
         return node
     kids = []
