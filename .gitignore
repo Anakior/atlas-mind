@@ -10,6 +10,8 @@ dist/
 content/
 .notes/
 .atlas/
+# Throwaway mind served by `atlas dev` / docker-compose.dev.yml (accounts + edits).
+.dev-mind/
 
 # Exception: the bundled demo mind IS versioned (source of the public GitHub
 # Pages demo built into docs/). Re-include its content/ despite the rule above.

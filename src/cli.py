@@ -6,6 +6,7 @@ Usage:
 
     python3 src/cli.py init <dir> [--force] [--lang en|fr] [--prefix P] [--tagline T] [--yes]
     python3 src/cli.py serve <dir> [--port N]
+    python3 src/cli.py dev [<dir>] [--port N] [--fresh] [--reset]
     python3 src/cli.py build <dir> [--offline]
     python3 src/cli.py deploy <dir> [--target compose|systemd|fly] [--app NAME] [--wizard] [--force]
     python3 src/cli.py user add <dir> --email a@b.c [--role admin|viewer] [--password ...]
@@ -34,6 +35,7 @@ import re
 import secrets
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -45,7 +47,7 @@ if str(ENGINE_SRC) not in sys.path:
     sys.path.insert(0, str(ENGINE_SRC))
 
 import store  # noqa: E402
-from config import AtlasConfig, AtlasConfigError  # noqa: E402
+from config import AtlasConfig, AtlasConfigError, DEFAULT_PORT  # noqa: E402
 
 MIN_PASSWORD_LENGTH = 8
 DEFAULT_TOKEN_LABEL = "claude"
@@ -642,8 +644,20 @@ def cmd_serve(args) -> int:
     env["PYTHONPATH"] = str(ENGINE_SRC) + os.pathsep + env.get("PYTHONPATH", "")
     if args.port is not None:
         env["PORT"] = str(args.port)
-    # exec: the process BECOMES the server (direct Ctrl+C and signals). PYTHONPATH
-    # puts the engine src first so `-m server` resolves the engine's server.
+    # PYTHONPATH puts the engine src first so `-m server` resolves the engine's server.
+    if os.name == "nt":
+        # Windows has NO true execve: os.execve spawns a new pid and exits this
+        # one, which breaks pid-based supervision (and segfaults under MSYS2 on
+        # recent CPython). Run the server as a child instead — stable pid, clean
+        # Ctrl+C (SIGINT reaches the child via the console group; the server
+        # handles KeyboardInterrupt). The graceful-SIGTERM cloud path (systemd /
+        # Fly) is Linux-only, so it keeps the POSIX overlay below.
+        try:
+            return subprocess.run([sys.executable, "-m", "server"], env=env).returncode
+        except KeyboardInterrupt:
+            return 0
+    # POSIX: exec so the process BECOMES the server — it must BE the pid that
+    # receives SIGTERM for the cloud graceful flush (systemd/Fly send it there).
     os.execve(sys.executable,
               [sys.executable, "-m", "server"], env)
     return 0  # unreachable
@@ -655,6 +669,120 @@ def cmd_build(args) -> int:
         raise CliError(f"{mind} has no content/ directory — nothing to build.")
     _load_config(mind)  # human error if atlas.toml is broken
     return _run_build(mind, offline=args.offline)
+
+
+# ─── dev sandbox ─────────────────────────────────────────────────────────────
+# `atlas dev` is the turnkey LOCAL test environment: the CLOUD features (login,
+# /setup onboarding, share links, 2FA, admin) WITHOUT ever touching git — no
+# commit, no push, no pull, no remote — against a throwaway copy of the demo
+# mind, with a ready-made admin (dev@local / dev) so /login works immediately.
+# It is the fastest way to exercise cloud behaviour locally and is safe to throw
+# away: it never points at your real mind and never writes to a remote. Under
+# the hood it just sets ATLAS_DEV=1 (see config.py / server.run).
+
+# Bundled demo mind — present in a source checkout, absent from a pip wheel
+# (which ships no examples/). When missing, the dev mind is scaffolded instead.
+_DEMO_MIND = ENGINE_SRC.parent / "examples" / "demo-mind"
+# Default throwaway location: a gitignored .dev-mind next to the engine. State
+# (accounts, edits) persists across runs there; --reset wipes it.
+_DEFAULT_DEV_MIND = ENGINE_SRC.parent / ".dev-mind"
+
+
+def _rmtree_robust(path: Path) -> None:
+    """rmtree that survives Windows: the error handler clears the read-only bit
+    Windows leaves on some copied/git files (which makes os.unlink/rmdir raise
+    WinError 5) and retries; a short outer retry covers a transient handle from
+    an indexer/antivirus. Without this, `atlas dev --reset` dies mid-wipe."""
+    def _onexc(func, target, _exc):
+        try:
+            os.chmod(target, stat.S_IWRITE)
+        except OSError:
+            pass
+        func(target)
+
+    for attempt in range(3):
+        try:
+            if sys.version_info >= (3, 12):
+                shutil.rmtree(path, onexc=_onexc)
+            else:  # onexc replaced onerror in 3.12; 3.11 still needs onerror.
+                shutil.rmtree(path, onerror=lambda f, p, _info: _onexc(f, p, None))
+            return
+        except OSError:
+            if attempt == 2:
+                raise
+            time.sleep(0.2)
+
+
+def _seed_dev_mind(scratch: Path, *, reset: bool) -> str:
+    """Make `scratch` a ready-to-serve mind. Copies the bundled demo mind into it
+    (or scaffolds a minimal one if the demo is absent, e.g. a pip install). An
+    existing mind is reused as-is so edits/accounts persist between runs; --reset
+    wipes it first. Returns a one-line human status."""
+    if reset and scratch.exists():
+        _rmtree_robust(scratch)
+    if (scratch / "content").is_dir():
+        return f"reused existing dev mind ({scratch})"
+    scratch.mkdir(parents=True, exist_ok=True)
+    if _DEMO_MIND.is_dir():
+        # dirs_exist_ok: scratch was just created (and may hold a leftover .atlas).
+        shutil.copytree(_DEMO_MIND, scratch, dirs_exist_ok=True)
+        return f"seeded from the demo mind ({scratch})"
+    # No bundled demo (pip install): scaffold a minimal English mind.
+    created: list = []
+    kept: list = []
+    _scaffold_file(scratch / "atlas.toml",
+                   _render_atlas_toml("", DEFAULT_TAGLINE_EN, "en"), created, kept)
+    for rel, content in _scaffold_docs("en"):
+        _scaffold_file(scratch / rel, content, created, kept)
+    return f"scaffolded a fresh dev mind ({scratch})"
+
+
+def _dev_serve_env(scratch: Path, *, port, fresh: bool) -> dict:
+    """Environment for the dev-sandbox server subprocess. ATLAS_DEV turns on the
+    sandbox; ATLAS_MIND pins it to the throwaway mind; PYTHONPATH puts the engine
+    first. The cloud/clone knobs are PURGED so an ambient KB_AUTH_ENABLED in the
+    shell cannot flip the sandbox into real cloud mode (which would try to clone
+    and push to a remote)."""
+    env = os.environ.copy()
+    for var in ("KB_AUTH_ENABLED", "KB_REPO_PATH", "GITHUB_REPO_URL",
+                "ATLAS_STORE", "ATLAS_STORE_DIR"):
+        env.pop(var, None)
+    env["ATLAS_DEV"] = "1"
+    env["ATLAS_MIND"] = str(scratch)
+    env["PYTHONPATH"] = str(ENGINE_SRC) + os.pathsep + env.get("PYTHONPATH", "")
+    if fresh:
+        # Skip the seeded admin to exercise the first-boot /setup token flow.
+        env["ATLAS_DEV_FRESH"] = "1"
+    if port is not None:
+        env["PORT"] = str(port)
+    return env
+
+
+def cmd_dev(args) -> int:
+    """Run the local cloud sandbox (see the section comment above)."""
+    scratch = (Path(args.dir).expanduser().resolve() if args.dir
+               else _DEFAULT_DEV_MIND)
+    status = _seed_dev_mind(scratch, reset=args.reset)
+    env = _dev_serve_env(scratch, port=args.port, fresh=args.fresh)
+
+    port = args.port or DEFAULT_PORT
+    print("Atlas dev sandbox — cloud features ON, git OFF (no commit/push/pull).")
+    print(f"  mind   : {status}")
+    if args.fresh:
+        print("  login  : first-boot /setup flow (admin NOT seeded — token printed below)")
+    else:
+        print("  login  : dev@local / dev  (seeded admin)")
+    print(f"  url    : http://127.0.0.1:{port}/")
+    reset_target = f" {args.dir}" if args.dir else ""
+    print(f"  reset  : atlas dev{reset_target} --reset   (wipe accounts + edits)")
+    print("  stop   : Ctrl+C")
+    print()
+    # subprocess, NOT os.execve like `serve`: execve segfaults under MSYS2/git-bash
+    # on recent CPython, and a child process keeps Ctrl+C working on every platform.
+    try:
+        return subprocess.run([sys.executable, "-m", "server"], env=env).returncode
+    except KeyboardInterrupt:
+        return 0
 
 
 # ─── deploy ──────────────────────────────────────────────────────────────────
@@ -1381,6 +1509,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--port", type=int, default=None,
                          help="Listening port (default: atlas.toml or 8765).")
     p_serve.set_defaults(func=cmd_serve)
+
+    p_dev = subparsers.add_parser(
+        "dev", help="Local CLOUD sandbox: login/share/2FA/admin with NO git "
+                    "push/commit, a seeded dev@local/dev admin, on a throwaway "
+                    "copy of the demo mind.")
+    p_dev.add_argument("dir", nargs="?", default=None,
+                       help="Throwaway mind location (default: a gitignored "
+                            ".dev-mind next to the engine).")
+    p_dev.add_argument("--port", type=int, default=None,
+                       help="Listening port (default: 8765).")
+    p_dev.add_argument("--fresh", action="store_true",
+                       help="Do NOT seed the admin — exercise the first-boot "
+                            "/setup token flow instead.")
+    p_dev.add_argument("--reset", action="store_true",
+                       help="Wipe the dev mind (accounts + edits) and re-seed it.")
+    p_dev.set_defaults(func=cmd_dev)
 
     p_build = subparsers.add_parser(
         "build", help="Generate this mind's viewer (dist/).")
