@@ -586,7 +586,7 @@ class TestCliHelpAndErrors(CliMindTest):
     def test_help_lists_all_commands(self):
         result = run_cli("--help")
         self.assertEqual(result.returncode, 0)
-        for command in ("init", "serve", "build", "user", "token", "share"):
+        for command in ("init", "serve", "dev", "build", "user", "token", "share"):
             self.assertIn(command, result.stdout)
         sub_help = run_cli("user", "--help")
         self.assertEqual(sub_help.returncode, 0)
@@ -600,6 +600,52 @@ class TestCliHelpAndErrors(CliMindTest):
         self.assertEqual(result.returncode, 1)
         self.assertIn("atlas.toml", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+
+
+class DevSandboxTest(unittest.TestCase):
+    """`atlas dev` prepares a throwaway mind and a sandbox env, then launches the
+    server in a subprocess. We test the two pure helpers that do the real work
+    (preparing the mind, building the env) without booting a server."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="atlas-dev-test-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def test_seed_copies_demo_mind(self):
+        scratch = self.tmp / "mind"
+        status = cli._seed_dev_mind(scratch, reset=False)
+        self.assertTrue((scratch / "content").is_dir())
+        # The bundled demo (or the init fallback) always provides a welcome doc.
+        self.assertTrue((scratch / "content" / "welcome.md").is_file())
+        self.assertIn(str(scratch), status)
+
+    def test_existing_mind_is_reused_then_reset_wipes(self):
+        scratch = self.tmp / "mind"
+        cli._seed_dev_mind(scratch, reset=False)
+        marker = scratch / "content" / "marker.md"
+        marker.write_text("keep me", encoding="utf-8")
+        # A second run reuses the mind as-is (the marker survives).
+        reused = cli._seed_dev_mind(scratch, reset=False)
+        self.assertIn("reused", reused)
+        self.assertTrue(marker.exists())
+        # --reset wipes everything and re-seeds (the marker is gone).
+        cli._seed_dev_mind(scratch, reset=True)
+        self.assertFalse(marker.exists())
+        self.assertTrue((scratch / "content" / "welcome.md").is_file())
+
+    def test_dev_env_is_a_pure_local_sandbox(self):
+        scratch = self.tmp / "mind"
+        # Even with a polluted shell env, the sandbox must not flip into real
+        # cloud mode (which would try to clone/push a remote).
+        os.environ["KB_AUTH_ENABLED"] = "1"
+        self.addCleanup(os.environ.pop, "KB_AUTH_ENABLED", None)
+        env = cli._dev_serve_env(scratch, port=9123, fresh=True)
+        self.assertEqual(env["ATLAS_DEV"], "1")
+        self.assertEqual(env["ATLAS_MIND"], str(scratch))
+        self.assertEqual(env["ATLAS_DEV_FRESH"], "1")
+        self.assertEqual(env["PORT"], "9123")
+        self.assertNotIn("KB_AUTH_ENABLED", env)
+        self.assertTrue(env["PYTHONPATH"].startswith(str(cli.ENGINE_SRC)))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,38 @@
+# Atlas Mind — LOCAL DEV/TEST sandbox in Docker. The CLOUD features (login,
+# /setup onboarding, share links, 2FA, admin) with NO git push/commit/pull and
+# NO remote, a seeded dev@local / dev admin, against a throwaway copy of the
+# bundled demo mind. Runs the engine from your LOCAL source (mounted live), so
+# you can test your changes on ANY platform without a local Python toolchain.
+#
+#   docker compose -f deploy/docker-compose.dev.yml up       # -> http://127.0.0.1:8765
+#   docker compose -f deploy/docker-compose.dev.yml down -v   # wipe the dev mind
+#
+# Login: dev@local / dev. NOT for production (trivial credentials, fixed secret).
+services:
+  atlas-dev:
+    image: python:3.12-slim
+    working_dir: /engine
+    environment:
+      ATLAS_DEV: "1"          # sandbox: cloud features on, git off, seed dev admin
+      ATLAS_BIND: "0.0.0.0"   # bind all interfaces INSIDE the container so the
+                              # host port map below can reach it (the map pins the
+                              # HOST side to 127.0.0.1, so it stays loopback-only)
+      ATLAS_MIND: /mind
+      PYTHONPATH: /engine/src
+      PORT: "8765"
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"   # /engine is mounted read-only
+    volumes:
+      - ..:/engine:ro                # the engine source, live + read-only
+      - atlas_dev_mind:/mind         # throwaway mind (accounts + edits), isolated
+    ports:
+      - "127.0.0.1:8765:8765"        # host loopback only — never exposed on your LAN
+    # Seed the throwaway mind from the bundled demo on first run, then serve.
+    # `exec` so python becomes PID 1 and receives Ctrl+C / `docker stop` cleanly.
+    command:
+      - sh
+      - -c
+      - 'test -d /mind/content || cp -r /engine/examples/demo-mind/. /mind/; exec python -m server'
+
+volumes:
+  atlas_dev_mind:

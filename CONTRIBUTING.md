@@ -39,6 +39,46 @@ python3 src/cli.py serve /tmp/scratch-mind
 This scaffolds a throwaway mind and serves it locally (no auth, `127.0.0.1:8765`),
 which is the quickest way to see a change end to end.
 
+## Testing cloud mode locally (dev sandbox)
+
+`atlas serve` runs in **local mode** (no accounts). To exercise the **cloud**
+features — login, the `/setup` onboarding, share links, 2FA, the admin panel —
+without ever touching git (no commit, no push, no pull) and without a remote,
+use the dev sandbox:
+
+```bash
+python3 src/cli.py dev
+```
+
+It copies the bundled demo mind into a gitignored `.dev-mind/`, serves it on
+`127.0.0.1:8765` with cloud features on, and seeds a ready-made admin so you can
+log in immediately:
+
+- **login:** `dev@local` / `dev`
+- `--fresh` skips the seeded admin to exercise the first-boot `/setup` token flow
+- `--reset` wipes the dev mind (accounts + edits) and re-seeds it from the demo
+- `--port N` changes the port; `atlas dev <dir>` serves a mind elsewhere
+
+Edits are written to `.dev-mind/` and the viewer rebuilds, but **git is never
+touched**. Under the hood `dev` sets `ATLAS_DEV=1`; the server then forces auth
+on, disables every git operation, binds loopback, and seeds the admin.
+
+> Prefer `atlas dev` (or `python -m server`) over `atlas serve` from a
+> **Git-Bash / MSYS2** shell: `serve` hands off with `os.execve`, which crashes
+> under MSYS2 on recent CPython. `atlas dev` uses a subprocess, so it is safe in
+> any shell on any platform.
+
+### In Docker (any platform, no local Python)
+
+```bash
+docker compose -f deploy/docker-compose.dev.yml up       # -> http://127.0.0.1:8765
+docker compose -f deploy/docker-compose.dev.yml down -v   # wipe the dev mind
+```
+
+Same sandbox, isolated in a container, running the engine from your local source
+(mounted live). The host port is pinned to `127.0.0.1`, so it never leaves your
+machine.
+
 ## Front-end CSS (Tailwind)
 
 The viewer's styles ship as a **precompiled** stylesheet, `src/web/vendor/tailwind.css`,
