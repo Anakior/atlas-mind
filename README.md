@@ -58,7 +58,7 @@ marketplace. It is a focused engine for one mind per instance.
 [How it works](#how-it-works) · [Features](#features) · [Requirements](#requirements) ·
 [Install](#install) · [Quick start](#quick-start) ·
 [Use it with your AI](#use-it-with-your-ai-mcp) ·
-[Atlas nodes](#hive-atlas-nodes) · [Configuration](#configuration) ·
+[Atlas nodes](#hive-atlas-nodes) · [Collaboration](#collaboration-one-mind-many-people) · [Configuration](#configuration) ·
 [Updating](#updating) · [Deployment](#deployment) ·
 [Building from source](#building-from-source) · [Extensions](#extensions) ·
 [Security model](#security-model) · [Licence](#licence)
@@ -153,8 +153,12 @@ Everything below ships in the box.
 - **Copy all notes** of a document as Markdown (quote + note) in one click — handy
   for sharing your annotations, including on a read-only remote node.
 
-### Sharing
+### Sharing & collaboration
 
+- **Per-document access (cloud mode)** — share any document with specific people or
+  **groups** at a level (view / comment / edit, optionally time-limited), *à la
+  Notion*: documents are private by default, opened to chosen people, or made common
+  to the whole team. See [Collaboration](#collaboration-one-mind-many-people).
 - **Public share links** — an HMAC-signed token that serves a single document
   with no login, with optional expiry and one-click revocation. Useful to hand a
   page to someone outside your instance.
@@ -164,13 +168,19 @@ Everything below ships in the box.
 Share a folder or document with **another Atlas Mind instance**, read-only, kept
 in sync. See the dedicated section: [Atlas nodes](#hive-atlas-nodes).
 
-### Multi-user & permissions (cloud mode)
+### Multi-user & collaboration (cloud mode)
 
 - **Cloud mode** turns on accounts and login. Two roles: **admin** (full access +
-  the Settings panel: users, tokens, shares, nodes) and **viewer** (read-only).
-- **Per-viewer document permissions** — an admin can hide chosen folders from a
-  given viewer; hidden paths are filtered server-side everywhere (tree, search,
-  direct URL, backlinks), never just visually masked.
+  the Settings panel: users, tokens, shares, nodes, groups) and **member** (the
+  `viewer` role — read access to the common space plus their **own private space**,
+  and whatever others share with them).
+- **Per-document access control** — every document is **private**, **shared** with
+  chosen people or groups (view / comment / edit, optionally time-limited), or
+  **common** to the whole team. The owner controls a document's sharing; an admin
+  curates the common space but never sees a member's private notes, and a document
+  you can't read returns a clean 404 (no existence oracle). New members join by a
+  **one-time invite link** and set their own password. See
+  [Collaboration](#collaboration-one-mind-many-people).
 
 ### Security & authentication
 
@@ -366,6 +376,46 @@ the share-as-node button on any folder/file in the tree):
 
 Nodes are managed by admins; tokens are scoped to the published path and can be
 revoked at any time (which removes the subscriber's access at the next sync).
+
+## Collaboration (one mind, many people)
+
+Atlas Mind has **two distinct kinds of sharing**, and they solve different problems:
+
+- The **[Hive](#hive-atlas-nodes)** links *your* mind to *another instance* — a
+  read-only mirror, peer-to-peer. Minds that follow minds.
+- **Collaboration** (this section) is the other direction: **several people inside
+  one instance**, each document with its own access. *Notion-style* sharing, on
+  files you own — access lives in a plain `acl.json` next to your accounts and
+  share links, **no database**.
+
+Turn it on with **cloud mode** (`KB_AUTH_ENABLED`), add accounts, and every
+document carries one of three states:
+
+- **Private** — only its owner; a member's new document starts here.
+- **Shared** — the owner has granted specific **people or groups** access, at a
+  level (**view**, **comment** or **edit**), optionally set to **expire**.
+- **Common** — no owner: visible to the whole team, the shared socle.
+
+The viewer keeps it legible without a dialog: a coloured dot in the tree
+(private / shared / shared-with-you), a **“Shared with you”** sidebar section, a
+**“shared by …”** line under a shared document, and **margin notes that carry
+their author**. The model is deliberate:
+
+- The **owner** controls a document's sharing — *not* the admin. An admin curates
+  the common space and manages accounts, but **never sees another member's private
+  notes**.
+- **No existence oracle** — a document you can't read is a clean **404**, never a
+  “forbidden” that would confirm it exists.
+- **Members join by invitation** — an admin issues a **one-time link**; the person
+  opens it and **sets their own password** (the admin never sees it). Or create an
+  account directly with `atlas user add <mind> --email … --role viewer`.
+- **Groups** (`group:<name>`) grant a whole team at once, managed by admins in
+  Settings.
+
+It is still **not a real-time collaborative editor**: underneath it is a git
+repository, not a live co-editing surface. And it composes with the Hive — run
+[one mind per person](#hive-atlas-nodes) *and* let a few people share an instance,
+whatever fits the group.
 
 ## Configuration
 
