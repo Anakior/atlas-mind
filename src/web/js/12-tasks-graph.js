@@ -944,6 +944,13 @@ function renderTodoFilterTabs() {
 // visitor still sees it, but it doesn't nag while browsing.
 (function () {
   if (!IS_OFFLINE_BUILD || window.__viewerMode) return;
+  // Don't nag inside an embed: the landing page iframes the demo (./demo/#mind) as
+  // a live hero, where the banner would be noise. Any iframe → skip it.
+  try {
+    if (window.self !== window.top) return;
+  } catch (e) {
+    return; // cross-origin embed (can't read window.top) → definitely embedded
+  }
   const banner = document.getElementById('demo-banner');
   if (!banner) return;
   try {
