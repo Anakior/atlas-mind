@@ -383,6 +383,33 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_invite_page(self, email, token, error=None, status=200):
+        """The invite-accept page (C1): the invitee sets their OWN password. The
+        email is display-only (bound to the invite) and the opaque token rides in a
+        hidden field (already in the invitee's URL)."""
+        error_html = f'<p class="err">{html.escape(error)}</p>' if error else ""
+        body = _s.render_page("invite",
+            error_html=error_html,
+            site_name=html.escape(_s.CONFIG.site_name, quote=True),
+            site_prefix=html.escape(_s.CONFIG.prefix, quote=True),
+            lang=html.escape(_s.CONFIG.lang, quote=True),
+            invite_token=html.escape(token, quote=True),
+            invite_email=html.escape(email, quote=True),
+            invite_subtitle=_s._t("invite_subtitle"),
+            invite_intro=_s._t("invite_intro"),
+            email_label=html.escape(_s._t("invite_email_label")),
+            password_label=html.escape(_s._t("invite_password_label")),
+            password_placeholder=html.escape(_s._t("invite_password_placeholder"), quote=True),
+            submit_label=_s._t("invite_submit"),
+        ).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Robots-Tag", "noindex, nofollow")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _send_json_after_cookie(self, payload):
         """Sends a JSON body when the caller has already started the response
         (send_response + Set-Cookie set): we do NOT call send_response again,

@@ -218,6 +218,33 @@ def new_api_token_fields(label: str, *, set_unusable_password: bool) -> tuple:
     return token, fields
 
 
+# Invite link TTL: 7 days. An admin creates a PENDING account (email + role, no
+# password); the invitee opens /invite/<token> and sets their OWN password. Only
+# the token's SHA256 is stored on the account (invite_token_hash) — never the
+# cleartext, which is returned to the admin once at creation.
+INVITE_TTL_SECONDS = 7 * 86400
+
+
+def new_invite_fields(role: str) -> tuple:
+    """Generate an invite token + the fields for a PENDING user account.
+
+    The account carries NO usable password (no password_hash) until the invitee
+    accepts; login rejects it on invite_token_hash (see authenticate_user), so it
+    never reaches verify_password. Returns (plaintext_token, fields) — the
+    cleartext is exposed only here, once."""
+    import secrets  # local: the boot does not need it
+    token = secrets.token_urlsafe(32)
+    now = int(time.time())
+    fields = {
+        "role": role,
+        "created_at": now,
+        "invite_token_hash": hash_api_token(token),
+        "invite_created_at": now,
+        "invite_expires_at": now + INVITE_TTL_SECONDS,
+    }
+    return token, fields
+
+
 def _public_api_identity(user: dict) -> dict:
     """Exposable view of an 'api' account: NEVER the token nor its hash.
 
@@ -418,6 +445,20 @@ class FileStore:
                     return dict(user)
         return None
 
+    def find_user_by_invite_token(self, token_sha256: str):
+        """Find a PENDING account by its invite-token SHA256 (constant-time).
+        Returns the user dict or None. Liveness (expiry / single-use) is
+        re-checked atomically by accept_invite — this is a read-only lookup just
+        to render the accept page."""
+        if not token_sha256:
+            return None
+        with self._locks[self.USERS_FILE]:
+            for user in self._load(self.USERS_FILE):
+                stored = user.get("invite_token_hash") or ""
+                if stored and hmac.compare_digest(stored, token_sha256):
+                    return dict(user)
+        return None
+
     def touch_last_used(self, identity: dict) -> None:
         """last_used_at in state.json ONLY (never in users.json): this file is
         volatile, the durable files don't churn on every Bearer request."""
@@ -467,6 +508,33 @@ class FileStore:
             else:
                 users.append({"email": email, **dict(fields)})
             self._write(self.USERS_FILE, users)
+
+    def accept_invite(self, token_sha256: str, password_hash: str):
+        """ATOMICALLY redeem an invite: under the USERS_FILE lock, match the
+        PENDING account by invite-token hash, refuse if it has expired, set the
+        real password + bump the session epoch, and CLEAR the invite fields
+        (single-use). Returns {email, role} on success, None otherwise (unknown /
+        expired / already redeemed — the SAME None, no oracle). A concurrent
+        redeem of the same token loses: the second pass finds no invite_token_hash."""
+        if not token_sha256 or not password_hash:
+            return None
+        now = int(time.time())
+        with self._locks[self.USERS_FILE]:
+            users = [dict(u) for u in self._load(self.USERS_FILE)]
+            for user in users:
+                stored = user.get("invite_token_hash") or ""
+                if not stored or not hmac.compare_digest(stored, token_sha256):
+                    continue
+                if int(user.get("invite_expires_at") or 0) < now:
+                    return None  # expired (left in place; admin re-invites or deletes)
+                user["password_hash"] = password_hash
+                user["session_epoch"] = int(user.get("session_epoch") or 0) + 1
+                for key in ("invite_token_hash", "invite_created_at",
+                            "invite_expires_at"):
+                    user.pop(key, None)
+                self._write(self.USERS_FILE, users)
+                return {"email": user.get("email"), "role": user.get("role")}
+        return None
 
     def consume_recovery_hash(self, email: str, target_hash: str) -> bool:
         """ATOMICALLY remove a single-use recovery-code hash.
@@ -534,11 +602,15 @@ class FileStore:
                        if u.get("role") == "admin")
 
     def list_admin_facing_users(self) -> list:
-        """{email, role} of human accounts (admin/viewer), NEVER a hash.
-        'api' accounts are listed separately by list_api_identities."""
+        """{email, role, hidden_folders, pending, invite_expires_at} of human
+        accounts (admin/viewer), NEVER a hash. `pending` = invited but hasn't set
+        a password yet. 'api' accounts are listed separately by
+        list_api_identities."""
         with self._locks[self.USERS_FILE]:
             return [{"email": u.get("email"), "role": u.get("role"),
-                     "hidden_folders": u.get("hidden_folders") or []}
+                     "hidden_folders": u.get("hidden_folders") or [],
+                     "pending": bool(u.get("invite_token_hash")),
+                     "invite_expires_at": u.get("invite_expires_at")}
                     for u in self._load(self.USERS_FILE)
                     if u.get("role") != API_ROLE]
 

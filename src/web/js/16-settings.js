@@ -126,6 +126,7 @@ const settingsSharesList = document.getElementById('settings-shares-list');
 const settingsUserForm = document.getElementById('settings-user-form');
 const settingsTokenForm = document.getElementById('settings-token-form');
 const settingsTokenResult = document.getElementById('settings-token-result');
+const settingsInviteResult = document.getElementById('settings-invite-result');
 const settingsNodesList = document.getElementById('settings-nodes-list');
 const settingsNodeForm = document.getElementById('settings-node-form');
 const settingsNodeResult = document.getElementById('settings-node-result');
@@ -318,6 +319,29 @@ async function loadSettingsUsers() {
         const roleLabel = u.role === 'admin' ? t('settingsRoleAdmin') : t('settingsRoleViewer');
         const roleCls = u.role === 'admin' ? 'text-accent' : 'text-ink-400';
         const emailEsc = escapeHtml(u.email);
+        // A pending account was invited but hasn't set a password yet: show a
+        // badge, and offer "resend invite" instead of "reset password" (which 404s
+        // on a pending account — the password is set via the invite link).
+        const pendingBadge = u.pending
+          ? ' <span class="ml-1.5 normal-case tracking-normal text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5">' +
+            escapeHtml(t('settingsInvitePending')) +
+            '</span>'
+          : '';
+        const actionBtn = u.pending
+          ? '<button class="settings-user-resend px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
+            emailEsc +
+            '" data-role="' +
+            escapeHtml(u.role || '') +
+            '">' +
+            escapeHtml(t('settingsResendInvite')) +
+            '</button>'
+          : '<button class="settings-user-reset px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
+            emailEsc +
+            '" title="' +
+            escapeHtml(t('settingsResetPassword')) +
+            '">' +
+            escapeHtml(t('settingsResetPasswordShort')) +
+            '</button>';
         // Viewer only: "hidden folders" field (ACL). Empty = sees everything.
         const hiddenBlock =
           u.role === 'viewer'
@@ -355,16 +379,11 @@ async function loadSettingsUsers() {
           roleCls +
           ' text-xs uppercase tracking-wider font-semibold mt-0.5">' +
           escapeHtml(roleLabel) +
+          pendingBadge +
           '</div>' +
           '</div>' +
           '<div class="admin-row__actions">' +
-          '<button class="settings-user-reset px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
-          emailEsc +
-          '" title="' +
-          t('settingsResetPassword') +
-          '">' +
-          t('settingsResetPasswordShort') +
-          '</button>' +
+          actionBtn +
           '<button class="settings-user-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-email="' +
           emailEsc +
           '" data-role="' +
@@ -389,13 +408,14 @@ settingsUserForm.addEventListener('submit', async (e) => {
   clearSettingsError();
   const email = document.getElementById('settings-user-email').value.trim();
   const role = document.getElementById('settings-user-role').value;
-  const password = document.getElementById('settings-user-password').value;
 
   try {
-    await settingsFetch('/api/admin/users', {
+    const data = await settingsFetch('/api/admin/users', {
       method: 'POST',
-      body: JSON.stringify({ email, password, role }),
+      body: JSON.stringify({ email, role }),
     });
+    // One-time display: the invite link is returned once and never again.
+    showInviteResult(data.invite_url);
     settingsUserForm.reset();
     loadSettingsUsers();
   } catch (err) {
@@ -428,6 +448,23 @@ settingsUsersList.addEventListener('click', async (e) => {
       showSettingsError(err.message);
     } finally {
       hiddenBtn.disabled = false;
+    }
+
+    return;
+  }
+
+  const resendBtn = e.target.closest('.settings-user-resend');
+
+  if (resendBtn) {
+    try {
+      const data = await settingsFetch('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({ email: resendBtn.dataset.email, role: resendBtn.dataset.role }),
+      });
+      showInviteResult(data.invite_url);
+      loadSettingsUsers();
+    } catch (err) {
+      showSettingsError(err.message);
     }
 
     return;
@@ -595,6 +632,33 @@ function hideTokenResult() {
 }
 
 document.getElementById('settings-token-close').addEventListener('click', hideTokenResult);
+
+// ── Invite link one-time display (mirror of the token result) ──
+function showInviteResult(url) {
+  if (!url) return;
+  document.getElementById('settings-invite-link').value = url;
+  settingsInviteResult.classList.remove('hidden');
+}
+
+function hideInviteResult() {
+  settingsInviteResult.classList.add('hidden');
+  document.getElementById('settings-invite-link').value = '';
+}
+
+document.getElementById('settings-invite-copy').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const input = document.getElementById('settings-invite-link');
+  const ok = await copyToClipboard(input.value);
+
+  if (!ok) {
+    input.select();
+    document.execCommand('copy');
+  }
+
+  flashCopied(btn);
+});
+
+document.getElementById('settings-invite-close').addEventListener('click', hideInviteResult);
 
 settingsTokensList.addEventListener('click', async (e) => {
   const revokeBtn = e.target.closest('.settings-token-revoke');

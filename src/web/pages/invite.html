@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="__LANG__"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0e0d12">
+<meta name="robots" content="noindex, nofollow">
+<title>__SITE_NAME__ — Invitation</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/vendor/fonts.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:radial-gradient(ellipse 80% 60% at 70% 30%, rgba(29,155,209,0.12), transparent),radial-gradient(ellipse 60% 40% at 20% 80%, rgba(251,198,120,0.08), transparent),#0e0d12;
+  color:#d1d2d3;font-family:Manrope,system-ui,sans-serif;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.card{
+  width:100%;max-width:420px;padding:36px 32px 32px;
+  background:rgba(35,34,42,0.55);
+  backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.1);border-radius:16px;
+  box-shadow:0 18px 48px -12px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.logo-wrap{display:flex;justify-content:center;margin-bottom:18px}
+.logo-wrap svg{width:64px;height:64px;border-radius:12px;box-shadow:0 6px 24px -2px rgba(251,198,120,0.35)}
+h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-0.015em;color:#fff;text-align:center;line-height:1.2}
+h1 .atlas{font-family:'Lora',Georgia,serif;font-style:italic;font-weight:600;font-size:1.4em;color:#e8941c;text-shadow:0 1px 2px rgba(0,0,0,0.6),0 0 1px rgba(0,0,0,0.85);letter-spacing:0}
+h1 .wordmark{display:inline-flex;align-items:center;gap:.35em;margin-left:.18em;line-height:1}
+h1 .mind{position:relative;isolation:isolate;overflow:hidden;display:inline-block;font-family:'Manrope',system-ui,sans-serif;font-weight:700;font-size:0.42em;letter-spacing:0.16em;text-transform:uppercase;color:#eaf6fb;text-shadow:0 0 6px rgba(255,255,255,0.4);padding:0.28em 0.62em;border-radius:999px;border:1px solid rgba(124,200,235,0.38);box-shadow:inset 0 0 10px rgba(99,102,241,0.5),0 0 12px rgba(29,155,209,0.4);background:#080a14}
+h1 .mind::before{content:"";position:absolute;inset:-100%;z-index:-2;background:radial-gradient(40% 62% at 25% 30%,rgba(139,148,255,0.92),transparent 60%),radial-gradient(46% 66% at 80% 70%,rgba(45,220,250,0.78),transparent 62%),radial-gradient(54% 74% at 60% 22%,rgba(40,170,225,0.68),transparent 66%);background-repeat:no-repeat;animation:nebulaA 10s linear infinite}
+h1 .mind::after{content:"";position:absolute;inset:-100%;z-index:-1;background:radial-gradient(32% 52% at 72% 32%,rgba(120,225,255,0.7),transparent 60%),radial-gradient(36% 58% at 28% 76%,rgba(139,148,255,0.62),transparent 62%);background-repeat:no-repeat;mix-blend-mode:screen;animation:nebulaB 6.5s linear infinite}
+@keyframes nebulaA{0%{transform:translate(-18%,-12%) scale(1.3)}25%{transform:translate(16%,-15%) scale(1.42)}50%{transform:translate(19%,14%) scale(1.3)}75%{transform:translate(-14%,17%) scale(1.44)}100%{transform:translate(-18%,-12%) scale(1.3)}}
+@keyframes nebulaB{0%{transform:translate(16%,11%) scale(1.4);opacity:.45}33%{transform:translate(-14%,15%) scale(1.55);opacity:1}66%{transform:translate(-17%,-13%) scale(1.45);opacity:.8}100%{transform:translate(16%,11%) scale(1.4);opacity:.45}}
+@media (prefers-reduced-motion:reduce){h1 .mind::before{animation:none}h1 .mind::after{animation:nebulaBreathe 6s ease-in-out infinite}@keyframes nebulaBreathe{0%,100%{opacity:.55}50%{opacity:1}}}
+h1 .brand{font-family:'Corinthia',cursive;font-weight:700;font-size:1.7em;line-height:1;color:#eef0f2}
+.subtitle{font-size:11px;color:#868a90;text-align:center;margin:6px 0 12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+.intro{font-size:13px;color:#b0b1b5;text-align:center;margin:0 0 22px;line-height:1.5}
+form{display:flex;flex-direction:column;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field > label{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#868a90}
+input{
+  padding:12px 14px;border:1px solid #2a2a32;background:rgba(0,0,0,0.3);
+  color:#fff;border-radius:8px;font:inherit;font-size:14px;outline:none;
+  transition:border-color 0.15s,box-shadow 0.15s,background 0.15s;
+}
+input:focus{border-color:#1d9bd1;box-shadow:0 0 0 3px rgba(29,155,209,0.18);background:rgba(0,0,0,0.45)}
+input::placeholder{color:#5e6066}
+input:read-only{color:#9a9ca1;background:rgba(0,0,0,0.18);border-color:#23232b;cursor:default}
+button{
+  padding:12px 14px;margin-top:4px;background:#1d9bd1;color:white;border:0;border-radius:8px;
+  font:inherit;font-size:14px;font-weight:600;cursor:pointer;
+  transition:filter 0.12s,transform 0.06s;
+}
+button:hover{filter:brightness(1.1)}
+button:active{transform:scale(0.98)}
+.err{color:#fca5a5;font-size:13px;margin:0 0 14px;text-align:center;background:rgba(248,113,113,0.08);padding:9px 12px;border-radius:7px;border:1px solid rgba(248,113,113,0.22)}
+</style></head><body>
+<div class="card">
+  <div class="logo-wrap">
+    <svg viewBox="0 0 32 32"><defs><radialGradient id="sky-invite" cx="50%" cy="40%" r="65%"><stop offset="0%" stop-color="#1f1d2a"/><stop offset="100%" stop-color="#0a0a12"/></radialGradient><radialGradient id="glow-invite" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbc678" stop-opacity="0.75"/><stop offset="100%" stop-color="#fbc678" stop-opacity="0"/></radialGradient></defs><rect width="32" height="32" rx="7" fill="url(#sky-invite)"/><circle cx="16" cy="16" r="9" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.4"/><circle cx="16" cy="16" r="1.2" fill="#fff" opacity="0.85"/><g><animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 16 16" to="360 16 16" dur="5s" repeatCount="indefinite"/><circle cx="22.36" cy="9.64" r="4" fill="url(#glow-invite)"/><circle cx="22.36" cy="9.64" r="1.9" fill="#fbc678"/></g></svg>
+  </div>
+  <h1><span class="brand">__SITE_PREFIX__</span> <span class="wordmark"><span class="atlas">Atlas</span><span class="mind">Mind</span></span></h1>
+  <p class="subtitle">__INVITE_SUBTITLE__</p>
+  <p class="intro">__INVITE_INTRO__</p>
+  <form id="invite-form">
+    __ERROR_HTML__
+    <input type="hidden" name="token" value="__INVITE_TOKEN__">
+    <div class="field">
+      <label for="invite-email">__EMAIL_LABEL__</label>
+      <input id="invite-email" type="email" value="__INVITE_EMAIL__" autocomplete="username" readonly>
+    </div>
+    <div class="field">
+      <label for="invite-password">__PASSWORD_LABEL__</label>
+      <input id="invite-password" name="password" type="password" placeholder="__PASSWORD_PLACEHOLDER__" autocomplete="new-password" minlength="8" required autofocus>
+    </div>
+    <button type="submit">__SUBMIT_LABEL__</button>
+  </form>
+</div>
+<script>
+// Same-origin JSON POST (the endpoint expects application/json + same origin).
+document.getElementById('invite-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const form = e.target;
+  const payload = { token: form.token.value, password: form.password.value };
+  const resp = await fetch('/api/invite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (resp.ok) { window.location = '/'; return; }
+  let message = 'Error';
+  try { message = (await resp.json()).error || message; } catch (_) {}
+  let box = form.querySelector('.err');
+  if (!box) { box = document.createElement('p'); box.className = 'err'; form.insertBefore(box, form.firstChild); }
+  box.textContent = message;
+});
+</script>
+</body></html>
