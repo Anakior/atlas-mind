@@ -65,7 +65,7 @@ const STRINGS = {
     brokenLink: (tgt) => 'Doc introuvable : ' + tgt,
     htmlDocBanner: 'Document HTML · rendu isolé (clique dans le cadre pour naviguer au clavier)',
     demoBannerTitle: 'Démo en lecture seule',
-    demoBannerText: '— l’édition, le partage et les comptes nécessitent ta propre instance.',
+    demoBannerText: '— l’édition, les comptes, le partage & la collaboration, l’historique des versions, ton IA (MCP/API) et la synchro Hive nécessitent ta propre instance.',
     demoBannerCta: 'Installer la tienne ↗',
     pdfDocBanner: 'Document PDF · aperçu',
     pdfOfflineHint: 'Aperçu PDF indisponible en mode hors-ligne —',
@@ -557,7 +557,7 @@ const STRINGS = {
     htmlDocBanner:
       'HTML document · isolated rendering (click inside the frame for keyboard navigation)',
     demoBannerTitle: 'Read-only demo',
-    demoBannerText: '— editing, sharing and accounts need your own instance.',
+    demoBannerText: '— editing, accounts, sharing & collaboration, version history, your AI (MCP/API) and Hive sync all need your own instance.',
     demoBannerCta: 'Get your own ↗',
     pdfDocBanner: 'PDF document · preview',
     pdfOfflineHint: 'PDF preview unavailable offline —',
