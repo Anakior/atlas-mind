@@ -6,6 +6,7 @@ level, so the functions here are pure bodies); the read endpoints are AUTH.
 """
 import posixpath
 import sys
+import time
 
 import server as _s
 
@@ -52,32 +53,44 @@ def file_put(handler):
     target.write_text(content, encoding="utf-8")
     if not existed and ctx.primary:  # new doc → stamp creator + default visibility
         try:
-            _s.get_store().set_creator(rel, ctx.primary)
+            store = _s.get_store()
+            # Brand-new doc → start from a clean ACL slate, so a path recycled after
+            # a delete can't inherit a stale owner/grants (defends against any
+            # orphaned entry, whatever its cause).
+            store.delete_acl(rel)
+            store.set_creator(rel, ctx.primary)
             # Default: a member's new doc is private (Notion); an admin's stays
             # commons (curator). The `private` flag (New-Document toggle) overrides.
             # A doc created inside a private folder is private by inheritance and
             # never gets its own owner (which would cut that inheritance).
             private = bool(data.get("private", not ctx.is_admin))
             if private and not _s.in_private_space(rel):
-                _s.get_store().set_owner(rel, ctx.primary)
+                store.set_owner(rel, ctx.primary)
         except Exception as e:
             print(f"[file_put creator] {e}", file=sys.stderr)
     _s.trigger_sync()
     handler._send_json(200, {"ok": True, "mtime": int(target.stat().st_mtime)})
 
 
-def _annotate_vis(node, store):
-    """Tag each FILE node with its sharing state for the tree badge (U3): `private`
-    (owned, no grant), `shared` (owned + grants), or nothing (commons). Based on the
-    doc's own ACL entry — enough for the at-a-glance indicator; the access dialog
-    shows the precise state."""
+def _annotate_vis(node, store, principals=None):
+    """Tag each FILE node with its sharing state for the tree badge (U3/D2),
+    relative to the VIEWER: `private` (you own it, no grant), `shared` (you own it
+    AND shared it out), `granted` (someone else owns it and shared it WITH you);
+    commons → nothing. `principals` None (superuser/local) keeps the legacy
+    owner-centric view. The access dialog shows the precise state."""
+    now = int(time.time())
     for child in node.get("children", []):
         if child.get("type") == "file":
             entry = store.get_acl(child.get("path", ""))
             if entry and entry.get("owner"):
-                child["vis"] = "shared" if entry.get("grants") else "private"
+                if principals is None or entry["owner"] in principals:
+                    child["vis"] = "shared" if entry.get("grants") else "private"
+                elif any(g.get("principal") in principals
+                         and not ((g.get("expires_at") or 0) and now > g["expires_at"])
+                         for g in entry.get("grants", [])):
+                    child["vis"] = "granted"   # shared WITH me by its owner (live grant)
         else:
-            _annotate_vis(child, store)
+            _annotate_vis(child, store, principals)
 
 
 def tree(handler):
@@ -88,7 +101,8 @@ def tree(handler):
         ctx = handler._viewer_ctx()
         keep = None if ctx.superuser else (lambda p: _s.can_read(p, ctx))
         tree = _s._filter_tree(tree, keep)
-        _annotate_vis(tree, _s.get_store())
+        _annotate_vis(tree, _s.get_store(),
+                      None if ctx.superuser else ctx.principals)
         handler._send_json(200, tree)
     except Exception as e:
         handler._send_json(500, {"error": str(e)})
@@ -261,19 +275,25 @@ def move(handler):
         if not _s.can_create(dst_rel, ctx):
             handler._send_json(403, {"error": "insufficient permission for the destination"})
             return
+    # Canonicalize the source to its on-disk spelling so the ACL/share repoint below
+    # keys by the same path the entry was stored under (case-insensitive FS).
+    src_rel = _s._canonical_rel(src_rel)
     status, payload = _s._move_md_with_relink(src_rel, dst_rel)
     if status != "ok":
         code = {"invalid": 400, "not_found": 404, "exists": 409}.get(status, 500)
         handler._send_json(code, {"error": payload})
         return
-    _s.trigger_sync()
-    # Keep share links of the moved doc alive. Best-effort: a registry hiccup
-    # must not fail the move.
+    # Keep the doc's privacy + share links with it. Repoint the ACL FIRST and
+    # BEFORE the git sync, to minimize the window where the moved file exists at its
+    # new path with no ACL (which would read as commons). Best-effort: a registry
+    # hiccup must not fail the move (the registry doctor reconciles any orphan).
     try:
-        _s.get_store().repoint_shares_by_path(payload["from"], payload["to"])
-        _s.get_store().repoint_acl_by_path(payload["from"], payload["to"])  # privacy travels with the doc
+        store = _s.get_store()
+        store.repoint_acl_by_path(payload["from"], payload["to"])  # privacy travels first
+        store.repoint_shares_by_path(payload["from"], payload["to"])
     except Exception as e:
         print(f"[move repoint] {e}", file=sys.stderr)
+    _s.trigger_sync()
     handler._send_json(200, {"ok": True, **payload})
 
 
@@ -327,14 +347,33 @@ def dir_rename(handler):
             handler._send_json(403, {"error": "insufficient permission for the destination"})
             return
     dst.parent.mkdir(parents=True, exist_ok=True)
-    src.rename(dst)
-    _s.trigger_sync()
-    # Re-point share links of every doc under the renamed folder (best-effort).
+    store = _s.get_store()
+    # Canonicalize the source folder to its on-disk spelling so the ACL/share keys
+    # (stored under that spelling) are found on a case-insensitive FS.
+    csrc = src.relative_to(_s.CONFIG.content_root).as_posix()
+    # Place the destination ACL BEFORE moving the folder on disk, so no doc is ever
+    # reachable at its new path without its ACL (which would read as commons — a
+    # transient privacy leak on a threaded server, the window the old order left
+    # open across the rename + git sync). Source keys dropped AFTER, then shares,
+    # then git last of all.
     try:
-        _s.get_store().repoint_shares_under(src_rel, dst_rel)
-        _s.get_store().repoint_acl_under(src_rel, dst_rel)  # private docs stay private after a folder rename
+        store.copy_acl_under(csrc, dst_rel)
+    except Exception as e:
+        print(f"[dir rename copy_acl] {e}", file=sys.stderr)
+    try:
+        src.rename(dst)
+    except Exception:
+        try:
+            store.drop_acl_under(dst_rel)  # roll back the speculative ACL copy
+        except Exception:
+            pass
+        raise
+    try:
+        store.drop_acl_under(csrc)  # private docs stay private after a folder rename
+        store.repoint_shares_under(csrc, dst_rel)
     except Exception as e:
         print(f"[dir rename repoint] {e}", file=sys.stderr)
+    _s.trigger_sync()
     handler._send_json(200, {"ok": True, "from": src_rel, "to": dst_rel})
 
 
@@ -367,11 +406,16 @@ def delete(handler):
             handler._send_json(403, {"error": "insufficient permission (need owner to delete this document)"})
             return
     target.unlink()
-    # Drop the freed path's ACL entry so a future doc created there can't inherit a
-    # stale owner/grants (best-effort: a registry hiccup must not fail the delete).
+    # Drop the freed path's ACL entry AND revoke its share links, so a future doc
+    # created there can't inherit a stale owner/grants or anonymous access
+    # (best-effort: a registry hiccup must not fail the delete). The resolved target
+    # gives the on-disk spelling, so the keys match on a case-insensitive FS.
+    crel = target.relative_to(_s.CONFIG.content_root).as_posix()
     try:
-        _s.get_store().delete_acl(rel)
+        store = _s.get_store()
+        store.delete_acl(crel)
+        store.delete_shares_for_path(crel)
     except Exception as e:
-        print(f"[delete acl] {e}", file=sys.stderr)
+        print(f"[delete cleanup] {e}", file=sys.stderr)
     _s.trigger_sync()
     handler._send_json(200, {"ok": True})

@@ -52,6 +52,7 @@ GET_ROUTES = [
     router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.list_notes, _G.AUTH),
     router.Route(_RK.EXACT, "/api/tree", docs.tree, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/acl", acl.acl_get, _G.AUTH),
+    router.Route(_RK.EXACT, "/api/shared-with-me", acl.shared_with_me, _G.AUTH),
     router.Route(_RK.EXACT, "/api/directory", acl.directory, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/search", docs.search, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/history", docs.history, _G.AUTH),
