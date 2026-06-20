@@ -4,13 +4,9 @@
   }
   .logo-mark:hover { box-shadow: 0 4px 22px -2px rgba(251, 198, 120, 0.55); }
   .logo-mark svg { width: 100%; height: 100%; display: block; border-radius: 7px; overflow: hidden; }
-  body.viewer-mode #btn-edit,
-  body.viewer-mode #btn-share,
-  body.viewer-mode #btn-more-wrap,
-  body.viewer-mode #todo-widget,
-  body.viewer-mode #new-file-btn,
-  body.viewer-mode #quick-capture-btn,
-  body.viewer-mode .dir-rename-btn { display: none !important; }
+  /* A member (non-admin) writes its OWN docs and keeps its OWN per-account Todos —
+     all write affordances are visible; the server enforces every action per
+     document / per account. (No viewer-mode hiding rule needed anymore.) */
   /* Settings gear: visible for ANY authenticated account in cloud mode.
      An admin finds account/token/share management AND their Security there;
      a reader finds only the Security tab (2FA + sessions of THEIR
@@ -20,6 +16,7 @@
   body:not(.admin-cloud) .settings-tab[data-tab="users"],
   body:not(.admin-cloud) .settings-tab[data-tab="tokens"],
   body:not(.admin-cloud) .settings-tab[data-tab="nodes"],
+  body:not(.admin-cloud) .settings-tab[data-tab="groups"],
   body:not(.admin-cloud) .settings-tab[data-tab="shares"] { display: none; }
   /* Security tab: visible only for a cloud-authenticated account. */
   body:not(.cloud-authed) .settings-tab[data-tab="security"] { display: none; }

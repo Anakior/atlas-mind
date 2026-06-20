@@ -23,13 +23,14 @@ import hashlib
 import hmac
 import json
 import secrets
+import subprocess
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 
-from harness import AtlasServer
+from harness import AtlasServer, TODO_REL
 
 # The src/store.py module is imported directly to seed the test mind's users
 # (same code as the one copied into the server's tmpdir).
@@ -340,27 +341,396 @@ class TestCloudFileStoreAuth(unittest.TestCase):
             self.srv.path("inbox/cloud-admin.md").read_text(encoding="utf-8"),
             "# Cloud\n")
 
-    def test_viewer_can_read_but_not_write(self):
+    def test_viewer_writes_in_commons_but_not_others(self):
+        # Model B: a member (viewer) reads the commons, and MAY create there (its
+        # new doc is private to it by default). It may NOT delete a commons doc it
+        # does not own, nor reach admin-only routes.
         headers = {"Cookie": self.viewer_cookie}
         self.assertEqual(self.srv.get("/api/tree", headers=headers).status, 200)
         self.assertEqual(self.srv.get("/accueil.md", headers=headers).status, 200)
 
+        # A bare write (no CSRF token) is refused by the CSRF guard.
+        nocsrf = self.srv.put(
+            "/api/file",
+            json_body={"path": "inbox/no-csrf.md", "content": "# x\n"},
+            headers=headers)
+        self.assertEqual(nocsrf.status, 403)
+        self.assertFalse(self.srv.path("inbox/no-csrf.md").exists())
+
+        # With CSRF: the member CREATES in the commons (now allowed — model B).
         put = self.srv.put(
             "/api/file",
-            json_body={"path": "inbox/cloud-viewer.md", "content": "# Nope\n"},
-            headers=headers)
-        self.assertEqual(put.status, 403)
-        self.assertEqual(put.json(), {"error": "forbidden"})
-        self.assertFalse(self.srv.path("inbox/cloud-viewer.md").exists())
+            json_body={"path": "inbox/cloud-viewer.md", "content": "# Mine\n"},
+            headers=auth_headers(self.srv, self.viewer_cookie))
+        self.assertEqual(put.status, 200)
+        self.assertTrue(self.srv.path("inbox/cloud-viewer.md").exists())
 
-        todo = self.srv.post(
-            "/api/todos", json_body={"text": "forbidden"}, headers=headers)
-        self.assertEqual(todo.status, 403)
-
+        # But it cannot DELETE a commons doc it does not own (needs owner).
         delete = self.srv.delete(
-            "/api/file", json_body={"path": "accueil.md"}, headers=headers)
+            "/api/file", json_body={"path": "accueil.md"},
+            headers=auth_headers(self.srv, self.viewer_cookie))
         self.assertEqual(delete.status, 403)
         self.assertTrue(self.srv.path("accueil.md").exists())
+
+        # Todos are now PER-MEMBER (not admin-only): a member writes its OWN list.
+        todo = self.srv.post(
+            "/api/todos", json_body={"text": "ma tâche"},
+            headers=auth_headers(self.srv, self.viewer_cookie))
+        self.assertEqual(todo.status, 200)
+        # But the genuinely admin-only routes stay closed.
+        admin_del = self.srv.delete(
+            "/api/admin/users", json_body={"email": "x@y.z"},
+            headers=auth_headers(self.srv, self.viewer_cookie))
+        self.assertEqual(admin_del.status, 403)
+
+
+class TestAclWriteSecurity(unittest.TestCase):
+    """Regression tests for the model-B write/security model: the P0 leaks
+    (history/revision/diff, double-slash), the M1/M2 creator semantics, the M5
+    member write ladder, and the adversarial-review HIGH fixes (canonical ACL key
+    on create). Each asserts a property a real exploit would have broken."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer(extra_env=cloud_env())
+        cls.srv.start()
+        cls.fs = file_store_of(cls.srv)
+        seed_default_users(cls.fs)
+        cls.admin_cookie = session_cookie(cls.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+        cls.viewer_cookie = session_cookie(cls.srv, VIEWER_EMAIL, VIEWER_PASSWORD)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def _git_commit_content(self):
+        """Force-commit content/ so /api/revision|history|diff have a HEAD to read
+        (the server also commits via trigger_sync, but async — make it deterministic)."""
+        root = str(self.srv.root)
+        subprocess.run(["git", "-C", root, "add", "-A"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", root, "-c", "user.email=t@t", "-c", "user.name=t",
+             "commit", "-m", "test", "--allow-empty"], check=True, capture_output=True)
+
+    # ── S1 + S2 (read side): private doc never leaks via history/revision/diff ──
+    def test_history_revision_diff_gated_for_private_doc(self):
+        path = "team/secret.md"
+        put = self.srv.put(
+            "/api/file", json_body={"path": path, "content": "# Secret\nconfidential\n"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(put.status, 200)
+        self._git_commit_content()
+        self.fs.set_owner(path, "user:" + ADMIN_EMAIL)  # private to admin
+
+        vh = {"Cookie": self.viewer_cookie}
+        rev = self.srv.get(f"/api/revision?path={path}&rev=HEAD", headers=vh)
+        self.assertEqual(rev.status, 404)
+        self.assertNotIn("confidential", rev.text)
+        self.assertEqual(self.srv.get(f"/api/history?path={path}", headers=vh).status, 404)
+        self.assertEqual(
+            self.srv.get(f"/api/diff?path={path}&from=HEAD&to=HEAD", headers=vh).status, 404)
+        # double-slash must not dodge the ACL key (S2 on the web read path)
+        self.assertEqual(
+            self.srv.get(f"/api/revision?path=team//secret.md&rev=HEAD", headers=vh).status, 404)
+        # the owner still reads it (proves the 404s are the ACL gate, not git absence)
+        self.assertEqual(
+            self.srv.get(f"/api/revision?path={path}&rev=HEAD",
+                         headers={"Cookie": self.admin_cookie}).status, 200)
+
+    # ── M1/M2: a member's new doc is private to them and invisible to the admin ──
+    def test_member_create_is_private_and_invisible_to_admin(self):
+        path = "inbox/member-private.md"
+        put = self.srv.put(
+            "/api/file", json_body={"path": path, "content": "# mine\n"},
+            headers=auth_headers(self.srv, self.viewer_cookie))
+        self.assertEqual(put.status, 200)
+        acl = self.srv.get(f"/api/acl?path={path}",
+                           headers={"Cookie": self.viewer_cookie}).json()
+        self.assertEqual(acl["owner"], "user:" + VIEWER_EMAIL)
+        self.assertEqual(acl["creator"], "user:" + VIEWER_EMAIL)
+        self.assertTrue(acl["can_manage"])
+        # admin does NOT see another user's private doc (404, no-existence-oracle)
+        self.assertEqual(self.srv.get(f"/api/acl?path={path}",
+                                      headers={"Cookie": self.admin_cookie}).status, 404)
+
+    # ── M2: a member's COMMONS doc is managed by its creator, NOT the admin ──
+    def test_commons_doc_managed_by_creator_not_admin(self):
+        path = "inbox/member-commons.md"
+        self.srv.put("/api/file", json_body={"path": path, "content": "# c\n"},
+                     headers=auth_headers(self.srv, self.viewer_cookie))
+        mk = self.srv.post("/api/acl", json_body={"path": path, "action": "make_commons"},
+                           headers=auth_headers(self.srv, self.viewer_cookie))
+        self.assertEqual(mk.status, 200)
+        admin_view = self.srv.get(f"/api/acl?path={path}",
+                                  headers={"Cookie": self.admin_cookie}).json()
+        self.assertIsNone(admin_view["owner"])                  # commons (visible)
+        self.assertEqual(admin_view["creator"], "user:" + VIEWER_EMAIL)
+        self.assertFalse(admin_view["can_manage"])              # admin does NOT manage it
+        member_view = self.srv.get(f"/api/acl?path={path}",
+                                   headers={"Cookie": self.viewer_cookie}).json()
+        self.assertTrue(member_view["can_manage"])              # its creator does
+
+    # ── Review HIGH: create via a non-canonical path keys the ACL canonically ──
+    def test_create_double_slash_keys_canonically_and_stays_private(self):
+        self.srv.put("/api/file", json_body={"path": "inbox//ds.md", "content": "# x\n"},
+                     headers=auth_headers(self.srv, self.viewer_cookie))
+        entry = self.fs.get_acl("inbox/ds.md")  # canonical key, not "inbox//ds.md"
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.get("owner"), "user:" + VIEWER_EMAIL)
+        # admin (non-owner) cannot read it → it is private, NOT leaked as commons
+        self.assertEqual(self.srv.get("/api/acl?path=inbox/ds.md",
+                                      headers={"Cookie": self.admin_cookie}).status, 404)
+
+    # ── M5: a member may not edit/delete another user's private doc ──
+    def test_member_cannot_edit_or_delete_admins_private_doc(self):
+        path = "admin-only.md"
+        self.srv.put("/api/file", json_body={"path": path, "content": "# a\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        self.fs.set_owner(path, "user:" + ADMIN_EMAIL)  # private to admin
+        vh = auth_headers(self.srv, self.viewer_cookie)
+        self.assertEqual(self.srv.put(
+            "/api/file", json_body={"path": path, "content": "# hack\n"}, headers=vh).status, 404)
+        self.assertEqual(self.srv.delete(
+            "/api/file", json_body={"path": path}, headers=vh).status, 404)
+        self.assertEqual(self.srv.path(path).read_text(encoding="utf-8"), "# a\n")
+
+    # ── S3: an in-app move carries the ACL — a private doc stays private ──
+    def test_move_keeps_a_private_doc_private(self):
+        self.srv.put(
+            "/api/file",
+            json_body={"path": "team/to-move.md", "content": "# s\nSECRETMOVE\n"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.fs.set_owner("team/to-move.md", "user:" + ADMIN_EMAIL)
+        moved = self.srv.post(
+            "/api/file/move",
+            json_body={"from": "team/to-move.md", "to": "archive/moved.md"},
+            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(moved.status, 200)
+        # The ACL followed: still private at the NEW path, invisible to a viewer…
+        self.assertEqual(
+            (self.fs.get_acl("archive/moved.md") or {}).get("owner"),
+            "user:" + ADMIN_EMAIL)
+        self.assertEqual(self.srv.get("/api/acl?path=archive/moved.md",
+                                      headers={"Cookie": self.viewer_cookie}).status, 404)
+        # …and no phantom owner entry is left behind at the OLD path.
+        self.assertIsNone((self.fs.get_acl("team/to-move.md") or {}).get("owner"))
+
+    # ── Groups: membership resolves regardless of the email's case ──
+    def test_group_membership_is_case_insensitive(self):
+        self.fs.set_group("squad", ["Alice@Example.COM", "bob@x.fr"])
+        self.assertIn("squad", self.fs.groups_for_email("alice@example.com"))
+        self.assertIn("squad", self.fs.groups_for_email("ALICE@EXAMPLE.COM"))
+        self.assertNotIn("squad", self.fs.groups_for_email("carol@x.fr"))
+
+    # ── Cross-platform: a case/trailing-dot path variant must not bypass the ACL ──
+    def test_case_and_dot_variants_do_not_bypass_acl(self):
+        # A private doc must 404 under ANY spelling — different case, trailing dot —
+        # not only its canonical path. On a case-insensitive FS (Windows/macOS) the
+        # variant opens the SAME file (the ACL is canonicalized to the real key); on
+        # a case-sensitive FS (Linux) the variant simply does not exist. Either way
+        # it is never served as commons, and the content never leaks.
+        self.srv.put("/api/file",
+                     json_body={"path": "team/cased.md", "content": "# c\nCASEDSECRET\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        self.fs.set_owner("team/cased.md", "user:" + ADMIN_EMAIL)  # private to admin
+        vh = {"Cookie": self.viewer_cookie}
+        for spelling in ("team/cased.md", "team/CASED.md", "team/cased.md."):
+            r = self.srv.get("/" + spelling, headers=vh)
+            self.assertEqual(r.status, 404, f"{spelling} should 404, got {r.status}")
+            self.assertNotIn("CASEDSECRET", r.text)
+
+    # ── D4/D6: a grant carries who issued it + an optional expiry ──
+    def test_grant_records_author_and_expiry(self):
+        self.srv.put("/api/file", json_body={"path": "team/shareme.md", "content": "# s\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        self.fs.set_owner("team/shareme.md", "user:" + ADMIN_EMAIL)
+        r = self.srv.post("/api/acl",
+                          json_body={"path": "team/shareme.md", "action": "grant",
+                                     "principal": "user:" + VIEWER_EMAIL,
+                                     "level": "view", "expires_days": 7},
+                          headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(r.status, 200)
+        g = next(x for x in self.fs.list_grants("team/shareme.md")
+                 if x["principal"] == "user:" + VIEWER_EMAIL)
+        self.assertEqual(g["granted_by"], "user:" + ADMIN_EMAIL)
+        self.assertGreater(g["expires_at"], int(time.time()))
+
+    # ── D1: a member discovers docs shared WITH them (not their own / commons) ──
+    def test_shared_with_me_lists_received_grants(self):
+        self.srv.put("/api/file", json_body={"path": "team/forviewer.md", "content": "# v\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        self.fs.set_owner("team/forviewer.md", "user:" + ADMIN_EMAIL)
+        self.fs.grant("team/forviewer.md", "user:" + VIEWER_EMAIL, "view",
+                      by="user:" + ADMIN_EMAIL)
+        seen = self.srv.get("/api/shared-with-me",
+                            headers={"Cookie": self.viewer_cookie}).json()
+        self.assertIn("team/forviewer.md", [d["path"] for d in seen])
+        # The owner does NOT see their own doc as "shared with me".
+        admin_seen = self.srv.get("/api/shared-with-me",
+                                  headers={"Cookie": self.admin_cookie}).json()
+        self.assertNotIn("team/forviewer.md", [d["path"] for d in admin_seen])
+
+
+class TestAclLifecycleCleanup(unittest.TestCase):
+    """Audit Lot 1: deleting a user/group/doc must not leave orphaned ACL/share
+    state that a re-created principal or a recycled path could silently inherit."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer(extra_env=cloud_env())
+        cls.srv.start()
+        cls.fs = file_store_of(cls.srv)
+        seed_default_users(cls.fs)
+        cls.admin_cookie = session_cookie(cls.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+        cls.viewer_cookie = session_cookie(cls.srv, VIEWER_EMAIL, VIEWER_PASSWORD)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_dir_rename_keeps_private_docs_private(self):
+        # A private doc stays private at its new path after the folder is renamed:
+        # the ACL is copied to the destination BEFORE the disk move and dropped from
+        # the source AFTER (no commons-leak window), and the old key is gone.
+        self.srv.put("/api/file",
+                     json_body={"path": "lcfold/secret.md", "content": "# s\nLCFOLD\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        self.fs.set_owner("lcfold/secret.md", "user:" + ADMIN_EMAIL)
+        r = self.srv.post("/api/dir/rename",
+                          json_body={"from": "lcfold", "to": "lcfold-renamed"},
+                          headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(r.status, 200)
+        self.assertEqual((self.fs.get_acl("lcfold-renamed/secret.md") or {}).get("owner"),
+                         "user:" + ADMIN_EMAIL)
+        self.assertIsNone(self.fs.get_acl("lcfold/secret.md"))  # no stale source key
+        self.assertEqual(self.srv.get("/api/acl?path=lcfold-renamed/secret.md",
+                                      headers={"Cookie": self.viewer_cookie}).status, 404)
+
+    def test_delete_user_reassigns_owned_to_admin_and_purges_grants(self):
+        self.fs.upsert_user("mem1@x.fr", {"password_hash": "x", "role": "viewer"})
+        self.fs.set_owner("lc/owned.md", "user:mem1@x.fr")
+        self.fs.grant("lc/other.md", "user:mem1@x.fr", "view")
+        self.assertTrue(self.fs.delete_user("mem1@x.fr"))
+        # Owned doc transferred to a surviving admin — still private, NOT commons.
+        self.assertEqual(self.fs.get_acl("lc/owned.md").get("owner"), "user:" + ADMIN_EMAIL)
+        # The grant elsewhere is purged.
+        self.assertEqual(self.fs.list_grants("lc/other.md"), [])
+
+    def test_no_privilege_resurrection_on_reinvite(self):
+        self.fs.upsert_user("mem2@x.fr", {"password_hash": "x", "role": "viewer"})
+        self.fs.grant("lc/secret.md", "user:mem2@x.fr", "edit")
+        self.fs.delete_user("mem2@x.fr")
+        self.fs.upsert_user("mem2@x.fr", {"password_hash": "x", "role": "viewer"})  # same email
+        principals = [g["principal"] for g in self.fs.list_grants("lc/secret.md")]
+        self.assertNotIn("user:mem2@x.fr", principals)
+
+    def test_delete_group_purges_group_grants(self):
+        self.fs.set_group("lcteam", ["a@x.fr"])
+        self.fs.grant("lc/gdoc.md", "group:lcteam", "view")
+        self.assertTrue(self.fs.delete_group("lcteam"))
+        principals = [g["principal"] for g in self.fs.list_grants("lc/gdoc.md")]
+        self.assertNotIn("group:lcteam", principals)
+
+    def test_delete_doc_revokes_its_shares(self):
+        self.srv.put("/api/file", json_body={"path": "lc/share-me.md", "content": "# s\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        token = self.srv.post("/api/share", json_body={"path": "lc/share-me.md"},
+                              headers=auth_headers(self.srv, self.admin_cookie)).json()["token"]
+        self.assertEqual(self.srv.get(f"/s/{token}").status, 200)
+        self.srv.delete("/api/file", json_body={"path": "lc/share-me.md"},
+                        headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(self.srv.get(f"/s/{token}").status, 410)  # revoked → gone
+
+    def test_recycled_path_starts_with_clean_acl(self):
+        # A stale ACL entry (e.g. left by a failed delete) with grants but no owner
+        # (commons) must NOT be inherited by a new doc created at the same path.
+        self.fs.grant("lc/recycle.md", "user:ghost@x.fr", "edit")
+        self.srv.put("/api/file", json_body={"path": "lc/recycle.md", "content": "# new\n"},
+                     headers=auth_headers(self.srv, self.admin_cookie))
+        entry = self.fs.get_acl("lc/recycle.md") or {}
+        self.assertFalse([g for g in entry.get("grants", []) if g["principal"] == "user:ghost@x.fr"])
+
+    def test_registry_doctor_detects_and_repairs_orphans(self):
+        # A grant on a path with no file → orphan ACL entry + dead grant (the
+        # principal is not a real account). The doctor reports both and --fix cleans.
+        self.fs.grant("lc/doctor-ghost.md", "user:nobody@x.fr", "view")
+        root = self.srv.root / "content"
+        report = self.fs.audit_registry(root)
+        self.assertIn("lc/doctor-ghost.md", report["acl_no_file"])
+        self.assertTrue(any(b["principal"] == "user:nobody@x.fr" for b in report["bad_grant"]))
+        fixed = self.fs.repair_registry(report)
+        self.assertGreaterEqual(fixed["acl_dropped"], 1)
+        self.assertIsNone(self.fs.get_acl("lc/doctor-ghost.md"))  # orphan cleaned
+
+    def test_doctor_preserves_owned_orphan_entry(self):
+        # repair_registry must NOT drop an ACL entry that still names an owner: the
+        # file may come back (git restore) and the privacy info would be lost. Only
+        # pure-grant/empty orphans are auto-dropped.
+        self.fs.set_owner("lc/owned-orphan.md", "user:" + ADMIN_EMAIL)  # owner, no file
+        report = self.fs.audit_registry(self.srv.root / "content")
+        self.assertIn("lc/owned-orphan.md", report["acl_no_file"])
+        self.fs.repair_registry(report)
+        self.assertEqual((self.fs.get_acl("lc/owned-orphan.md") or {}).get("owner"),
+                         "user:" + ADMIN_EMAIL)  # preserved, not deleted
+
+    def test_group_post_rejects_invalid_email(self):
+        # C6: a non-email member is refused (would be a dead grant matching no login).
+        bad = self.srv.post("/api/admin/groups",
+                            json_body={"name": "lcg", "members": ["notanemail"]},
+                            headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(bad.status, 400)
+        ok = self.srv.post("/api/admin/groups",
+                           json_body={"name": "lcg", "members": ["real@x.fr"]},
+                           headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(ok.status, 200)
+
+    def test_note_records_author_in_cloud(self):
+        # In cloud mode a shared annotation records its admin author (so several
+        # admins' notes are distinguishable).
+        r = self.srv.post("/api/notes",
+                          json_body={"path": "accueil.md", "exact": "hi", "note": "n1", "pos": 0},
+                          headers=auth_headers(self.srv, self.admin_cookie))
+        self.assertEqual(r.status, 200)
+        self.assertEqual(r.json().get("author"), ADMIN_EMAIL)
+
+
+class TestPerMemberTodos(unittest.TestCase):
+    """Cloud: each account keeps its OWN private todo list (.atlas/todos.json), and
+    the legacy global markdown is migrated to the first admin (non-destructively)."""
+
+    def setUp(self):
+        self.srv = AtlasServer(extra_env=cloud_env())
+        self.srv.start()
+        self.fs = file_store_of(self.srv)
+        seed_default_users(self.fs)
+        self.admin = session_cookie(self.srv, ADMIN_EMAIL, ADMIN_PASSWORD)
+        self.viewer = session_cookie(self.srv, VIEWER_EMAIL, VIEWER_PASSWORD)
+
+    def tearDown(self):
+        self.srv.stop()
+
+    def test_each_member_has_its_own_list(self):
+        r = self.srv.post("/api/todos", json_body={"text": "Tâche de Fabien"},
+                          headers=auth_headers(self.srv, self.viewer))
+        self.assertEqual(r.status, 200)
+        viewer_list = self.srv.get("/api/todos", headers={"Cookie": self.viewer}).json()
+        self.assertTrue(any(t["text"] == "Tâche de Fabien" for t in viewer_list))
+        # The admin's list is SEPARATE — it never sees the member's todo.
+        admin_list = self.srv.get("/api/todos", headers={"Cookie": self.admin}).json()
+        self.assertFalse(any(t["text"] == "Tâche de Fabien" for t in admin_list))
+
+    def test_legacy_global_migrates_to_admin_not_to_member(self):
+        # The default mind ships a legacy quick.md. First admin load → migrated to
+        # the admin's private list; the legacy file is KEPT; a member inherits none.
+        admin_list = self.srv.get("/api/todos", headers={"Cookie": self.admin}).json()
+        self.assertTrue(any(t["text"] == "Préparer le bilan mensuel" for t in admin_list))
+        self.assertTrue(self.srv.path(TODO_REL).exists())  # non-destructive
+        viewer_list = self.srv.get("/api/todos", headers={"Cookie": self.viewer}).json()
+        self.assertFalse(any(t["text"] == "Préparer le bilan mensuel" for t in viewer_list))
 
 
 class TestCloudFileStoreShares(unittest.TestCase):
@@ -392,6 +762,38 @@ class TestCloudFileStoreShares(unittest.TestCase):
     def _shares_on_disk(self) -> list:
         return json.loads(
             (self.srv.root / ".atlas" / "shares.json").read_text(encoding="utf-8"))
+
+    def test_share_on_private_doc_serves_publicly_no_api_leak(self):
+        # R3: a PRIVATE doc (owned by the admin) shared by link. The /s/<token>
+        # link serves it publicly — evaluated through the UNIFIED ACL path (the
+        # share is an anon:<token_sha256> view-grant) — but the share grants NO
+        # access to a logged-in viewer who has no grant of their own.
+        from server.pure import acl
+        doc = self.srv.root / "content" / "r3-secret.md"
+        doc.write_text("# Secret\nR3PRIVATEMARK only via the link.\n", encoding="utf-8")
+        self.fs.set_owner("r3-secret.md", "user:" + ADMIN_EMAIL)
+        token = self._create_share("r3-secret.md")["token"]
+        public = self.srv.get(f"/s/{token}")
+        self.assertEqual(public.status, 200)
+        self.assertIn("R3PRIVATEMARK", public.text)
+        # No leak: a logged-in viewer (no grant) resolves to None — the anon: share
+        # grant only matches the token's principal, never a member's ctx.
+        viewer = acl.viewer_ctx({"email": VIEWER_EMAIL, "role": "viewer"}, self.fs)
+        self.assertIsNone(acl.effective_level("r3-secret.md", viewer, self.fs))
+
+    def test_share_is_an_anon_grant_in_effective_level(self):
+        # R3: the unified eval — a share resolves as an anon:<token_sha256> view-grant.
+        from server.pure import acl
+        doc = self.srv.root / "content" / "r3-unit.md"
+        doc.write_text("# U\nx\n", encoding="utf-8")
+        self.fs.set_owner("r3-unit.md", "user:" + ADMIN_EMAIL)
+        token = self._create_share("r3-unit.md")["token"]
+        self.assertEqual(
+            acl.effective_level("r3-unit.md", acl.share_ctx(token), self.fs), "view")
+        # A different token grants nothing; an anonymous visitor sees nothing.
+        self.assertIsNone(
+            acl.effective_level("r3-unit.md", acl.share_ctx("not-the-token"), self.fs))
+        self.assertIsNone(acl.effective_level("r3-unit.md", acl.ANON, self.fs))
 
     def test_share_lifecycle_create_list_revoke(self):
         created = self._create_share("accueil.md")
@@ -592,6 +994,7 @@ class TestCloudFileStoreShares(unittest.TestCase):
             "role": "api",
             "api_token_hash": hashlib.sha256(api_token.encode()).hexdigest(),
             "password_hash": "$2b$12$" + "x" * 53,
+            "acts_as": ADMIN_EMAIL,  # bound to admin → may move (owner-level write)
         })
         self.srv.put(
             "/api/file",

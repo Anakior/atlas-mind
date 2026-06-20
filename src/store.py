@@ -218,6 +218,33 @@ def new_api_token_fields(label: str, *, set_unusable_password: bool) -> tuple:
     return token, fields
 
 
+# Invite link TTL: 7 days. An admin creates a PENDING account (email + role, no
+# password); the invitee opens /invite/<token> and sets their OWN password. Only
+# the token's SHA256 is stored on the account (invite_token_hash) — never the
+# cleartext, which is returned to the admin once at creation.
+INVITE_TTL_SECONDS = 7 * 86400
+
+
+def new_invite_fields(role: str) -> tuple:
+    """Generate an invite token + the fields for a PENDING user account.
+
+    The account carries NO usable password (no password_hash) until the invitee
+    accepts; login rejects it on invite_token_hash (see authenticate_user), so it
+    never reaches verify_password. Returns (plaintext_token, fields) — the
+    cleartext is exposed only here, once."""
+    import secrets  # local: the boot does not need it
+    token = secrets.token_urlsafe(32)
+    now = int(time.time())
+    fields = {
+        "role": role,
+        "created_at": now,
+        "invite_token_hash": hash_api_token(token),
+        "invite_created_at": now,
+        "invite_expires_at": now + INVITE_TTL_SECONDS,
+    }
+    return token, fields
+
+
 def _public_api_identity(user: dict) -> dict:
     """Exposable view of an 'api' account: NEVER the token nor its hash.
 
@@ -279,6 +306,9 @@ class FileStore:
     NODES_FILE = "nodes.json"
     REMOTES_FILE = "remotes.json"
     STATE_FILE = "state.json"
+    ACL_FILE = "acl.json"        # per-document ACL (model B): {path: {owner, grants[]}}
+    GROUPS_FILE = "groups.json"  # principals: {group_name: [emails]}
+    TODOS_FILE = "todos.json"    # per-member todos (private, not git): {email: [items]}
 
     def __init__(self, base_dir):
         self.base = Path(base_dir)
@@ -288,6 +318,9 @@ class FileStore:
             self.NODES_FILE: threading.Lock(),
             self.REMOTES_FILE: threading.Lock(),
             self.STATE_FILE: threading.Lock(),
+            self.ACL_FILE: threading.Lock(),
+            self.GROUPS_FILE: threading.Lock(),
+            self.TODOS_FILE: threading.Lock(),
         }
         self._cache: dict = {}  # name -> (mtime_ns, data)
         self._ensure_gitignore()
@@ -412,6 +445,20 @@ class FileStore:
                     return dict(user)
         return None
 
+    def find_user_by_invite_token(self, token_sha256: str):
+        """Find a PENDING account by its invite-token SHA256 (constant-time).
+        Returns the user dict or None. Liveness (expiry / single-use) is
+        re-checked atomically by accept_invite — this is a read-only lookup just
+        to render the accept page."""
+        if not token_sha256:
+            return None
+        with self._locks[self.USERS_FILE]:
+            for user in self._load(self.USERS_FILE):
+                stored = user.get("invite_token_hash") or ""
+                if stored and hmac.compare_digest(stored, token_sha256):
+                    return dict(user)
+        return None
+
     def touch_last_used(self, identity: dict) -> None:
         """last_used_at in state.json ONLY (never in users.json): this file is
         volatile, the durable files don't churn on every Bearer request."""
@@ -461,6 +508,33 @@ class FileStore:
             else:
                 users.append({"email": email, **dict(fields)})
             self._write(self.USERS_FILE, users)
+
+    def accept_invite(self, token_sha256: str, password_hash: str):
+        """ATOMICALLY redeem an invite: under the USERS_FILE lock, match the
+        PENDING account by invite-token hash, refuse if it has expired, set the
+        real password + bump the session epoch, and CLEAR the invite fields
+        (single-use). Returns {email, role} on success, None otherwise (unknown /
+        expired / already redeemed — the SAME None, no oracle). A concurrent
+        redeem of the same token loses: the second pass finds no invite_token_hash."""
+        if not token_sha256 or not password_hash:
+            return None
+        now = int(time.time())
+        with self._locks[self.USERS_FILE]:
+            users = [dict(u) for u in self._load(self.USERS_FILE)]
+            for user in users:
+                stored = user.get("invite_token_hash") or ""
+                if not stored or not hmac.compare_digest(stored, token_sha256):
+                    continue
+                if int(user.get("invite_expires_at") or 0) < now:
+                    return None  # expired (left in place; admin re-invites or deletes)
+                user["password_hash"] = password_hash
+                user["session_epoch"] = int(user.get("session_epoch") or 0) + 1
+                for key in ("invite_token_hash", "invite_created_at",
+                            "invite_expires_at"):
+                    user.pop(key, None)
+                self._write(self.USERS_FILE, users)
+                return {"email": user.get("email"), "role": user.get("role")}
+        return None
 
     def consume_recovery_hash(self, email: str, target_hash: str) -> bool:
         """ATOMICALLY remove a single-use recovery-code hash.
@@ -513,7 +587,17 @@ class FileStore:
                     raise LastAdminError("cannot delete the last admin")
             kept = [u for u in users if u.get("email") != email]
             self._write(self.USERS_FILE, kept)
-            return True
+            successor = next((u.get("email") for u in kept
+                              if u.get("role") == "admin"), None)
+        # ACL/share cleanup AFTER releasing the users lock (no nested locks): the
+        # deleted account's owned/created docs go to a surviving admin (never to the
+        # commons, which would expose a private doc), and its grants are purged so a
+        # re-created same email can't silently inherit them.
+        principal = "user:" + email
+        if successor:
+            self.reassign_principal(principal, "user:" + successor)
+        self.purge_grants_for_principal(principal)
+        return True
 
     # ── administration (cloud mode) ───────────────────────────────────────────
 
@@ -528,11 +612,13 @@ class FileStore:
                        if u.get("role") == "admin")
 
     def list_admin_facing_users(self) -> list:
-        """{email, role} of human accounts (admin/viewer), NEVER a hash.
-        'api' accounts are listed separately by list_api_identities."""
+        """{email, role, pending, invite_expires_at} of human accounts
+        (admin/viewer), NEVER a hash. `pending` = invited but hasn't set a
+        password yet. 'api' accounts are listed separately by list_api_identities."""
         with self._locks[self.USERS_FILE]:
             return [{"email": u.get("email"), "role": u.get("role"),
-                     "hidden_folders": u.get("hidden_folders") or []}
+                     "pending": bool(u.get("invite_token_hash")),
+                     "invite_expires_at": u.get("invite_expires_at")}
                     for u in self._load(self.USERS_FILE)
                     if u.get("role") != API_ROLE]
 
@@ -636,6 +722,39 @@ class FileStore:
         # The cleartext token is returned so the admin UI shows a copyable link.
         return [_normalize_share(s) for s in shares[:limit]]
 
+    def list_shares_for_path(self, path: str) -> list:
+        """Active (non-revoked) shares targeting EXACTLY `path`. The R3 adapter
+        exposes each as a virtual `anon:<token_sha256>` view-grant in
+        effective_level, so a /s/<token> visitor is evaluated by the SAME ACL path
+        as everyone else. Returns [{token_sha256, expires_at}] — NEVER the cleartext
+        token; expiry is left to effective_level's grant check (single source)."""
+        with self._locks[self.SHARES_FILE]:
+            shares = self._load(self.SHARES_FILE)
+        return [{"token_sha256": s.get("token_sha256"),
+                 "expires_at": s.get("expires_at") or 0}
+                for s in shares
+                if s.get("path") == path and not s.get("revoked")
+                and s.get("token_sha256")]
+
+    def delete_shares_for_path(self, path: str) -> int:
+        """Revoke every active share targeting EXACTLY `path` — called when the doc
+        is deleted so an orphaned token can't keep serving, and a doc later created
+        at the same path doesn't inherit anonymous read. Revokes (keeps the record,
+        like revoke_share) rather than dropping, preserving the 410-gone signal.
+        Returns the number revoked."""
+        now = int(time.time())
+        with self._locks[self.SHARES_FILE]:
+            shares = [dict(s) for s in self._load(self.SHARES_FILE)]
+            n = 0
+            for s in shares:
+                if s.get("path") == path and not s.get("revoked"):
+                    s["revoked"] = True
+                    s["revoked_at"] = now
+                    n += 1
+            if n:
+                self._write(self.SHARES_FILE, shares)
+            return n
+
     def revoke_share(self, share_id: str) -> bool:
         # Plain equality on the id field: accepts native uuid4s as well as the
         # legacy 24-hex ids.
@@ -697,6 +816,392 @@ class FileStore:
         return self._repoint_shares(
             lambda p: p.startswith(old_prefix),
             lambda p: new_prefix + p[len(old_prefix):])
+
+    # ── per-document ACL + groups (model B — partage à la Notion) ─────────────
+    # acl.json is a DICT keyed by content-relative path (file OR folder, the
+    # folder without extension). Value = {owner, grants:[{principal, level, at,
+    # expires_at?}]}. Same lock/atomic-write/fail-CLOSED machinery as the rest:
+    # a corrupted acl.json raises (server maps it to 503), never reads as empty.
+
+    def get_acl(self, path: str):
+        """ACL entry {owner?, grants[]} for an exact path key, or None (copy)."""
+        with self._locks[self.ACL_FILE]:
+            entry = self._load(self.ACL_FILE, dict).get(path)
+            return dict(entry) if entry else None
+
+    def set_owner(self, path: str, principal: str) -> None:
+        """Set/replace the owner of `path` (creates the entry, keeps grants)."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = dict(acl.get(path) or {})
+            entry["owner"] = principal
+            entry.setdefault("grants", [])
+            acl[path] = entry
+            self._write(self.ACL_FILE, acl)
+
+    def grant(self, path: str, principal: str, level: str, *,
+              expires_at: int = 0, by: str = None) -> None:
+        """Grant (or upgrade) `principal` to `level` on `path`. One grant per
+        principal: an existing grant for the same principal is replaced. `expires_at`
+        (epoch) time-limits it; `by` records who granted it (audit + "shared by")."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = dict(acl.get(path) or {})
+            grants = [dict(g) for g in entry.get("grants", [])
+                      if g.get("principal") != principal]
+            record = {"principal": principal, "level": level, "at": int(time.time())}
+            if expires_at:
+                record["expires_at"] = int(expires_at)
+            if by:
+                record["granted_by"] = by
+            grants.append(record)
+            entry["grants"] = grants
+            acl[path] = entry
+            self._write(self.ACL_FILE, acl)
+
+    def revoke_grant(self, path: str, principal: str) -> bool:
+        """Remove `principal`'s grant on `path`. False if there was none."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = acl.get(path)
+            if not entry:
+                return False
+            entry = dict(entry)
+            before = entry.get("grants", [])
+            after = [g for g in before if g.get("principal") != principal]
+            if len(after) == len(before):
+                return False
+            entry["grants"] = after
+            acl[path] = entry
+            self._write(self.ACL_FILE, acl)
+            return True
+
+    def list_grants(self, path: str) -> list:
+        """The grants list of `path` ([] if no entry)."""
+        with self._locks[self.ACL_FILE]:
+            entry = self._load(self.ACL_FILE, dict).get(path) or {}
+            return [dict(g) for g in entry.get("grants", [])]
+
+    def list_docs_shared_with(self, principals) -> list:
+        """Docs where one of `principals` (a viewer's user:/group: set) holds a live
+        GRANT — the "shared with me" view, so a member can discover what was shared
+        with them. Excludes docs the viewer OWNS and expired grants. Returns
+        [{path, level, granted_by, expires_at}] (best grant per doc), path-sorted."""
+        rank = {"view": 1, "comment": 2, "edit": 3, "owner": 4}
+        principals = set(principals or ())
+        now = int(time.time())
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+        out = []
+        for path, entry in acl.items():
+            if entry.get("owner") in principals:
+                continue  # the viewer owns it — not "shared WITH" them
+            best = None
+            for g in entry.get("grants", []):
+                if g.get("principal") not in principals:
+                    continue
+                exp = g.get("expires_at") or 0
+                if exp and now > exp:
+                    continue
+                lvl = g.get("level", "view")
+                if best is None or rank.get(lvl, 0) > rank.get(best["level"], 0):
+                    best = {"path": path, "level": lvl,
+                            "granted_by": g.get("granted_by"),
+                            "expires_at": exp or None}
+            if best:
+                out.append(best)
+        out.sort(key=lambda d: d["path"])
+        return out
+
+    def delete_acl(self, path: str) -> bool:
+        """Drop the whole ACL entry of `path`. False if there was none."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            if path not in acl:
+                return False
+            del acl[path]
+            self._write(self.ACL_FILE, acl)
+            return True
+
+    def set_creator(self, path: str, principal: str) -> None:
+        """Stamp who created `path` (distinct from `owner`, set once at creation).
+        A commons doc keeps NO owner but remembers its creator, so on the commons
+        the creator — not the admin — manages its sharing. Idempotent: never
+        overwrites an existing creator (survives edits/moves)."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = dict(acl.get(path) or {})
+            if entry.get("creator"):
+                return
+            entry["creator"] = principal
+            entry.setdefault("grants", [])
+            acl[path] = entry
+            self._write(self.ACL_FILE, acl)
+
+    def make_commons(self, path: str) -> None:
+        """Return `path` to the commons: drop `owner` and all grants, but KEEP the
+        `creator` (so its creator keeps managing it). Drops the entry entirely only
+        when there was no creator to remember."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            entry = acl.get(path)
+            if not entry:
+                return
+            creator = entry.get("creator")
+            acl[path] = {"creator": creator, "grants": []} if creator else None
+            if acl[path] is None:
+                del acl[path]
+            self._write(self.ACL_FILE, acl)
+
+    def repoint_acl_by_path(self, old_path: str, new_path: str) -> bool:
+        """Move a doc's ACL entry when it is renamed/moved in-app, so its sharing
+        travels with it (mirror of repoint_shares_by_path). False if no entry."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            if old_path not in acl:
+                return False
+            acl[new_path] = acl.pop(old_path)
+            self._write(self.ACL_FILE, acl)
+            return True
+
+    def repoint_acl_under(self, old_dir: str, new_dir: str) -> int:
+        """Move every ACL entry under a renamed folder (the folder key itself +
+        each descendant). Returns the count moved (single atomic write)."""
+        old = old_dir.strip("/")
+        new = new_dir.strip("/")
+        old_prefix = old + "/"
+        new_prefix = new + "/"
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            moved = {}
+            for path in list(acl):
+                if path == old:
+                    moved[new] = acl.pop(path)
+                elif path.startswith(old_prefix):
+                    moved[new_prefix + path[len(old_prefix):]] = acl.pop(path)
+            if moved:
+                acl.update(moved)
+                self._write(self.ACL_FILE, acl)
+            return len(moved)
+
+    def copy_acl_under(self, old_dir: str, new_dir: str) -> int:
+        """Copy (NOT move) every ACL entry under `old_dir` to the matching key under
+        `new_dir`, keeping the originals. Used to place the destination ACL BEFORE a
+        folder is renamed on disk, so no doc is ever reachable at its new path
+        without its ACL (which would read as commons — a transient leak). Pair with
+        drop_acl_under AFTER the rename. Overwrites any dest key. Returns count."""
+        old = old_dir.strip("/")
+        new = new_dir.strip("/")
+        old_prefix = old + "/"
+        new_prefix = new + "/"
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            added = {}
+            for path, entry in acl.items():
+                if path == old:
+                    added[new] = dict(entry)
+                elif path.startswith(old_prefix):
+                    added[new_prefix + path[len(old_prefix):]] = dict(entry)
+            if added:
+                acl.update(added)
+                self._write(self.ACL_FILE, acl)
+            return len(added)
+
+    def drop_acl_under(self, old_dir: str) -> int:
+        """Remove every ACL entry under `old_dir` (the folder key + descendants) —
+        the now-stale source keys left in place by copy_acl_under after a folder
+        rename. Returns the number removed."""
+        old = old_dir.strip("/")
+        old_prefix = old + "/"
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            stale = [p for p in acl if p == old or p.startswith(old_prefix)]
+            for p in stale:
+                del acl[p]
+            if stale:
+                self._write(self.ACL_FILE, acl)
+            return len(stale)
+
+    def reassign_principal(self, old_principal: str, new_principal: str) -> int:
+        """Transfer every ``owner`` AND ``creator`` reference from ``old_principal``
+        to ``new_principal`` across all ACL entries. Used when a user is deleted:
+        their owned/created docs go to a surviving admin instead of either falling
+        to the commons (which would EXPOSE a private doc) or stranding under a ghost
+        owner that no one — not even an admin — can manage. Returns entries changed."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            changed = 0
+            for path, entry in list(acl.items()):
+                e = dict(entry)
+                touched = False
+                if e.get("owner") == old_principal:
+                    e["owner"] = new_principal
+                    touched = True
+                if e.get("creator") == old_principal:
+                    e["creator"] = new_principal
+                    touched = True
+                if touched:
+                    acl[path] = e
+                    changed += 1
+            if changed:
+                self._write(self.ACL_FILE, acl)
+            return changed
+
+    def purge_grants_for_principal(self, principal: str) -> int:
+        """Remove every grant to ``principal`` across all ACL entries, dropping any
+        entry left with no owner, creator or grant. Used when a user or group is
+        deleted so re-creating the same email / group name can't silently inherit
+        the old grants (privilege resurrection). Returns entries changed."""
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+            changed = 0
+            for path, entry in list(acl.items()):
+                grants = entry.get("grants", [])
+                kept = [g for g in grants if g.get("principal") != principal]
+                if len(kept) == len(grants):
+                    continue
+                e = dict(entry)
+                e["grants"] = kept
+                if not e.get("owner") and not e.get("creator") and not kept:
+                    del acl[path]
+                else:
+                    acl[path] = e
+                changed += 1
+            if changed:
+                self._write(self.ACL_FILE, acl)
+            return changed
+
+    def audit_registry(self, content_root) -> dict:
+        """Scan the ACL + share registries for orphaned/stale entries — the admin
+        'doctor' (`atlas doctor`). Pure detection; feed the result to
+        repair_registry for the safe fixes. ``content_root`` is passed in (the store
+        owns only .atlas, not content). Detects: an ACL key or active share whose
+        target no longer exists on disk, and owner/creator/grant principals that
+        reference a deleted user or group."""
+        from pathlib import Path
+        root = Path(content_root)
+        user_principals = {"user:" + (u.get("email") or "")
+                           for u in self.list_users() if u.get("email")}
+        group_principals = {"group:" + g for g in self.list_groups()}
+        known = user_principals | group_principals | {"*"}
+        issues = {"acl_no_file": [], "bad_owner": [], "bad_creator": [],
+                  "bad_grant": [], "share_no_file": []}
+        with self._locks[self.ACL_FILE]:
+            acl = dict(self._load(self.ACL_FILE, dict))
+        for path, entry in acl.items():
+            if not (root / path).exists():
+                issues["acl_no_file"].append(path)
+            owner = entry.get("owner")
+            if owner and owner not in user_principals:
+                issues["bad_owner"].append({"path": path, "owner": owner})
+            creator = entry.get("creator")
+            if creator and creator not in user_principals:
+                issues["bad_creator"].append({"path": path, "creator": creator})
+            for g in entry.get("grants", []):
+                pr = g.get("principal") or ""
+                if pr and not pr.startswith("anon:") and pr not in known:
+                    issues["bad_grant"].append({"path": path, "principal": pr})
+        with self._locks[self.SHARES_FILE]:
+            shares = [dict(s) for s in self._load(self.SHARES_FILE)]
+        for s in shares:
+            if not s.get("revoked") and s.get("path") \
+                    and not (root / s["path"]).exists():
+                issues["share_no_file"].append(s["path"])
+        return issues
+
+    def repair_registry(self, report: dict) -> dict:
+        """Apply the SAFE repairs from an audit_registry report: drop ACL entries
+        whose file is gone, revoke shares whose file is gone, purge grants to a
+        deleted principal. Stale owner/creator references are deliberately NOT
+        touched — auto-clearing an owner drops the doc to the commons (an exposure);
+        they are reported for an admin to reassign. Returns the counts applied."""
+        acl_dropped = grants_purged = shares_revoked = 0
+        for path in report.get("acl_no_file", []):
+            # Never auto-delete an entry that still names an owner/creator: the file
+            # may come back (git restore, out-of-band move) and we'd have lost the
+            # privacy info irreversibly. Drop only pure-grant/empty orphans; owned
+            # ones are reported for an admin to reassign or delete deliberately.
+            entry = self.get_acl(path) or {}
+            if entry.get("owner") or entry.get("creator"):
+                continue
+            if self.delete_acl(path):
+                acl_dropped += 1
+        for path in set(report.get("share_no_file", [])):
+            shares_revoked += self.delete_shares_for_path(path)
+        for item in report.get("bad_grant", []):
+            if self.revoke_grant(item["path"], item["principal"]):
+                grants_purged += 1
+        return {"acl_dropped": acl_dropped, "shares_revoked": shares_revoked,
+                "grants_purged": grants_purged}
+
+    # groups.json: {name: [emails]} — a principal `group:<name>` resolves to its
+    # member emails at evaluation time (a user inherits all its groups' grants).
+
+    def groups_for_email(self, email: str) -> list:
+        """Names of the groups `email` belongs to ([] if none). CASE-INSENSITIVE:
+        both the query and the stored memberships are compared lowercased, so a
+        group grant resolves whatever case a member typed at login (user emails are
+        lowercased the same way) — and legacy mixed-case memberships still match."""
+        if not email:
+            return []
+        email = email.strip().lower()
+        with self._locks[self.GROUPS_FILE]:
+            groups = self._load(self.GROUPS_FILE, dict)
+            return [name for name, members in groups.items()
+                    if isinstance(members, list)
+                    and email in [m.strip().lower() for m in members
+                                  if isinstance(m, str)]]
+
+    def set_group(self, name: str, emails) -> None:
+        """Create/replace a group's membership (lowercased + deduped, order kept).
+        Emails are normalized to lowercase so a grant resolves regardless of the
+        case typed — mirrors the user-email normalization at account creation."""
+        with self._locks[self.GROUPS_FILE]:
+            groups = dict(self._load(self.GROUPS_FILE, dict))
+            groups[name] = list(dict.fromkeys(
+                e.strip().lower() for e in emails if e and e.strip()))
+            self._write(self.GROUPS_FILE, groups)
+
+    def get_group(self, name: str):
+        with self._locks[self.GROUPS_FILE]:
+            members = self._load(self.GROUPS_FILE, dict).get(name)
+            return list(members) if isinstance(members, list) else None
+
+    def list_groups(self) -> dict:
+        with self._locks[self.GROUPS_FILE]:
+            return {name: list(members)
+                    for name, members in self._load(self.GROUPS_FILE, dict).items()
+                    if isinstance(members, list)}
+
+    def delete_group(self, name: str) -> bool:
+        with self._locks[self.GROUPS_FILE]:
+            groups = dict(self._load(self.GROUPS_FILE, dict))
+            if name not in groups:
+                return False
+            del groups[name]
+            self._write(self.GROUPS_FILE, groups)
+        # Purge dangling group:<name> grants so a recreated same-name group can't
+        # inherit them (silent re-activation).
+        self.purge_grants_for_principal("group:" + name)
+        return True
+
+    # ── per-member todos (private, not git) ─────────────────────────────
+    # todos.json is a DICT keyed by account email; each value is that member's
+    # list of {text, done, cat}. Same lock/atomic-write/fail-CLOSED machinery.
+
+    def load_user_todos(self, email: str):
+        """The member's todo list (copy), or None if they have no entry yet (lets
+        the caller distinguish "never had todos" from "cleared their list")."""
+        with self._locks[self.TODOS_FILE]:
+            data = self._load(self.TODOS_FILE, dict)
+            return [dict(t) for t in data[email]] if email in data else None
+
+    def save_user_todos(self, email: str, items) -> None:
+        """Replace the member's whole todo list (private to that account)."""
+        with self._locks[self.TODOS_FILE]:
+            data = dict(self._load(self.TODOS_FILE, dict))
+            data[email] = [dict(t) for t in items]
+            self._write(self.TODOS_FILE, data)
 
     # ── Atlas nodes (hive, #10) ─────────────────────────────────────────
     def create_node(self, name: str, path: str, token: str) -> dict:

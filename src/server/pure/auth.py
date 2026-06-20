@@ -107,12 +107,16 @@ def authenticate_user(email: str, password: str):
         # store carries a dummy matching the cost of its real scheme.
         _s.get_store().dummy_verify(password)
         return None
-    if user.get("role") == _s.API_ROLE:
-        # Same timing equalization before refusing (don't distinguish 'api' accounts).
+    if user.get("role") == _s.API_ROLE or user.get("invite_token_hash"):
+        # 'api' accounts authenticate via Bearer, not a cookie; a PENDING invite
+        # has no usable password yet (it is set only when the invitee accepts).
+        # Same timing equalization before refusing — and we never reach
+        # verify_password, so a pending account (no password_hash) cannot KeyError
+        # nor route an UNUSABLE "$2…" sentinel into bcrypt.
         _s.get_store().dummy_verify(password)
-        return None  # API users authenticate via /api/v1 + Bearer token, not by cookie
+        return None
     # verify_password handles native scrypt AND the legacy bcrypt fallback ("$2…").
-    if not store.verify_password(password, user["password_hash"]):
+    if not store.verify_password(password, user.get("password_hash")):
         return None
     return user
 
@@ -225,7 +229,8 @@ def verify_api_bearer(authorization_header: str):
             _s.get_store().touch_last_used(user)
         except Exception:
             pass
-        return {"email": user.get("email", "claude@api.local"), "role": _s.API_ROLE}
+        return {"email": user.get("email", "claude@api.local"), "role": _s.API_ROLE,
+                "acts_as": user.get("acts_as")}
     except Exception as e:
         print(f"[verify_api_bearer] registry lookup failed: {e}", file=sys.stderr)
         return None
@@ -249,3 +254,24 @@ def _verify_mcp_token(token: str) -> bool:
     except Exception as e:
         print(f"[verify_mcp_token] registry lookup failed: {e}", file=sys.stderr)
         return False
+
+
+def resolve_mcp_identity(token: str):
+    """Identity {email, role, acts_as?} behind an MCP token (/mcp/<token>), or
+    None. Unlike _verify_mcp_token (a bool), it KEEPS the identity so the dispatch
+    can enforce per-document ACL. Touches last_used best-effort."""
+    if not token:
+        return None
+    try:
+        user = _s.get_store().find_api_identity(_hash_api_token(token))
+        if not user:
+            return None
+        try:
+            _s.get_store().touch_last_used(user)
+        except Exception:
+            pass
+        return {"email": user.get("email", "claude@api.local"),
+                "role": _s.API_ROLE, "acts_as": user.get("acts_as")}
+    except Exception as e:
+        print(f"[resolve_mcp_identity] registry lookup failed: {e}", file=sys.stderr)
+        return None

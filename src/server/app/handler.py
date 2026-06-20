@@ -79,23 +79,30 @@ class Handler(SimpleHTTPRequestHandler):
                 return _s.verify_token(part[len(_s.COOKIE_NAME) + 1:])
         return None
 
-    def _hidden_folders(self):
-        """Folders (prefixes relative to content/) forbidden for the current
-        viewer. Admin / local mode / no-auth → []. The 'api' role doesn't use
-        cookie sessions, so it never reaches here."""
+    def _viewer_ctx(self):
+        """Per-request ACL context (model B). No session (local mode / no-auth) →
+        superuser bypass (single operator on their own machine). A logged-in
+        account (admin or viewer) → subject to the per-document ACL; the admin
+        additionally curates the commons but does NOT see another user's private
+        doc. The 'api' role never reaches here (no cookie session)."""
         sess = self._session()
-        if not sess or sess.get("role") == "admin":
-            return []
-        user = _s.get_store().get_user_by_email(sess["email"])
-        folders = (user or {}).get("hidden_folders") or []
-        return [f.strip("/") for f in folders if isinstance(f, str) and f.strip("/")]
+        # Local mode (auth disabled) = single operator on their own machine →
+        # superuser, regardless of the simulated admin session.
+        if not _s.CONFIG.auth_enabled:
+            return _s.ViewerCtx(set(), True, None, superuser=True)
+        # Cloud + no session → anonymous, NOT superuser (fail closed). Content
+        # routes are AUTH-guarded so this is defensive, but it must never grant a
+        # full bypass to an unauthenticated caller.
+        if not sess:
+            return _s.viewer_ctx(None)
+        return _s.viewer_ctx(sess)
 
     def _serve_index_filtered(self, rel):
-        """Serve _backlinks.json / _notes-index.json with docs hidden from the
-        current viewer REMOVED (else the Mind/backlinks leak their names). No
-        hidden folder → fast static gzip path."""
-        hidden = self._hidden_folders()
-        if not hidden:
+        """Serve _backlinks.json / _notes-index.json with docs the current viewer
+        can't read REMOVED (else the Mind/backlinks leak their names). Admin (no
+        restriction) → fast static gzip path."""
+        ctx = self._viewer_ctx()
+        if ctx.superuser:
             self._serve_static_gzip(rel, "application/json; charset=utf-8")
             return
         try:
@@ -106,14 +113,14 @@ class Handler(SimpleHTTPRequestHandler):
         if isinstance(data, list):  # _tasks-index.json: [{path, line, text, done}]
             self._send_json(200, [
                 it for it in data
-                if not (isinstance(it, dict) and _s._path_hidden(it.get("path", ""), hidden))])
+                if isinstance(it, dict) and _s.can_read(it.get("path", ""), ctx)])
             return
         out = {}
         for path, val in data.items():
-            if _s._path_hidden(path, hidden):
+            if not _s.can_read(path, ctx):
                 continue
             if isinstance(val, dict):  # _backlinks.json: {path: {in:[...], out:[...]}}
-                val = {k: ([x for x in v if not _s._path_hidden(x, hidden)]
+                val = {k: ([x for x in v if _s.can_read(x, ctx)]
                            if isinstance(v, list) else v)
                        for k, v in val.items()}
             out[path] = val
@@ -365,6 +372,33 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_invite_page(self, email, token, error=None, status=200):
+        """The invite-accept page (C1): the invitee sets their OWN password. The
+        email is display-only (bound to the invite) and the opaque token rides in a
+        hidden field (already in the invitee's URL)."""
+        error_html = f'<p class="err">{html.escape(error)}</p>' if error else ""
+        body = _s.render_page("invite",
+            error_html=error_html,
+            site_name=html.escape(_s.CONFIG.site_name, quote=True),
+            site_prefix=html.escape(_s.CONFIG.prefix, quote=True),
+            lang=html.escape(_s.CONFIG.lang, quote=True),
+            invite_token=html.escape(token, quote=True),
+            invite_email=html.escape(email, quote=True),
+            invite_subtitle=_s._t("invite_subtitle"),
+            invite_intro=_s._t("invite_intro"),
+            email_label=html.escape(_s._t("invite_email_label")),
+            password_label=html.escape(_s._t("invite_password_label")),
+            password_placeholder=html.escape(_s._t("invite_password_placeholder"), quote=True),
+            submit_label=_s._t("invite_submit"),
+        ).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Robots-Tag", "noindex, nofollow")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _send_json_after_cookie(self, payload):
         """Sends a JSON body when the caller has already started the response
         (send_response + Set-Cookie set): we do NOT call send_response again,
@@ -400,6 +434,14 @@ class Handler(SimpleHTTPRequestHandler):
         path, error = _s.verify_share_token(token)
         if error:
             self._send_share_error(error)
+            return
+        # R3: authorize through the unified ACL path — the verified token is an
+        # anon:<token_sha256> principal that effective_level grants `view` via the
+        # share adapter (store.list_shares_for_path). verify_share_token already
+        # gated revoked/expired/unknown above; this is fail-closed belt-and-braces
+        # on the SAME eval used everywhere else (no separate share-auth system).
+        if not _s.can_read(path, _s.share_ctx(token)):
+            self._send_share_error("invalid")
             return
         target = (_s.CONFIG.content_root / path).resolve()
         try:
@@ -551,6 +593,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return True
             if role == "auth" and not self._require_auth_or_401():
                 return True
+            # CSRF (T4): a mutating POST extension route that requires a session
+            # must carry the same synchronizer-token defense as the core POST
+            # routes (CSRF_BASE / ADMIN_CSRF) — otherwise a third-party page could
+            # drive it with the visitor's cookie. A `public` route self-protects.
+            if (self.command == "POST" and role in ("auth", "admin")
+                    and not self._check_csrf_or_403()):
+                return True
             try:
                 handler(self, match)
             except Exception as e:
@@ -564,6 +613,12 @@ class Handler(SimpleHTTPRequestHandler):
         return False
 
     # ── verbs ────────────────────────────────────────────────────────────────
+
+    def do_HEAD(self):
+        # No HEAD pipeline: the parent's default serves file metadata straight from
+        # disk, bypassing the route tables, the session guard and the per-document
+        # ACL (an existence oracle on private docs). The viewer never uses HEAD.
+        self.send_error(405)
 
     def do_GET(self):
         if router.dispatch(self, routes_table.GET_ROUTES):
@@ -586,7 +641,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _serve_navigable(self):
         """Static / navigable tail of do_GET (after the explicit routes,
         extension dispatch, setup redirect and session guard): dotfile/source
-        ACL, hidden-folder ACL, gzip dist indices, .html intercept, then the
+        ACL, per-document ACL, gzip dist indices, .html intercept, then the
         stdlib static handler."""
         rel = self.path.split("?", 1)[0].lstrip("/")
         # Security: the static handler serves any file under ROOT, dotfiles
@@ -602,8 +657,11 @@ class Handler(SimpleHTTPRequestHandler):
                 or _decoded.endswith((".py", ".pyc"))):
             self.send_error(404)
             return
-        # Viewer ACL (#14): a doc under a hidden folder is not found.
-        if _s._path_hidden(_decoded, self._hidden_folders()):
+        # Per-document ACL (model B): a doc the viewer can't read is "not found"
+        # (no-existence-oracle). The same posixpath-normalized form is checked, so
+        # %2f / double-slash tricks can't slip a private doc past the gate.
+        _vctx = self._viewer_ctx()
+        if not _vctx.superuser and not _s.can_read(_decoded, _vctx):
             self.send_error(404)
             return
         # _backlinks.json: served gzip + ETag 304 (static handler doesn't compress).
@@ -619,9 +677,9 @@ class Handler(SimpleHTTPRequestHandler):
         # snapshot) so ticking a checkbox reflects immediately. Filtered per-viewer.
         if rel == "_tasks-index.json":
             tasks = _s._live_tasks_index()
-            hidden = self._hidden_folders()
-            if hidden:
-                tasks = [t for t in tasks if not _s._path_hidden(t.get("path", ""), hidden)]
+            ctx = self._viewer_ctx()
+            if not ctx.superuser:
+                tasks = [t for t in tasks if _s.can_read(t.get("path", ""), ctx)]
             self._send_json(200, tasks)
             return
         if not rel or rel.endswith("/"):
@@ -652,36 +710,25 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_PATCH(self):
-        # Verb-level guard: admin + CSRF for every PATCH (non-admin → 403 before
-        # the route match).
-        if not self._require_admin_or_403():
-            return
-        if not self._check_csrf_or_403():
-            return
+        # Per-route guards (like do_POST): notes + share repoint keep ADMIN_CSRF,
+        # todos is CSRF_BASE (a member patches its OWN list). No blanket admin.
         if router.dispatch(self, routes_table.PATCH_ROUTES):
             return
         self.send_response(404)
         self.end_headers()
 
     def do_DELETE(self):
-        # Verb-level guard: admin + CSRF for every DELETE (non-admin → 403 before
-        # the route match; routes no longer self-guard).
-        if not self._require_admin_or_403():
-            return
-        if not self._check_csrf_or_403():
-            return
+        # Per-route guards (like do_POST): admin routes carry ADMIN_CSRF, content
+        # routes their own Guard (/api/file is CSRF_BASE → authorized per-document
+        # in docs.delete). No blanket admin, so a member can delete a doc they own.
         if router.dispatch(self, routes_table.DELETE_ROUTES):
             return
         self.send_response(404)
         self.end_headers()
 
     def do_PUT(self):
-        # Verb-level guard: admin + CSRF for every PUT (non-admin → 403 before
-        # the route match).
-        if not self._require_admin_or_403():
-            return
-        if not self._check_csrf_or_403():
-            return
+        # Per-route guards (like do_POST): /api/file is CSRF_BASE → authorized
+        # per-document in docs.file_put (create/edit ladder). No blanket admin.
         if router.dispatch(self, routes_table.PUT_ROUTES):
             return
         self.send_response(404)

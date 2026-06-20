@@ -105,7 +105,9 @@ async function renderBacklinksFor(file) {
 // anchoring (exact + prefix/suffix + approx. pos), W3C Web Annotation style:
 // resilient to text shifts; if the passage disappears the note becomes orphaned.
 const CTX_LEN = 60; // captured prefix/suffix context length
-const notesCanEdit = () => !IS_OFFLINE_BUILD && !window.__viewerMode;
+// Notes are the (deferred) comment level — admin-only for now. A member has the
+// `viewer-mode` body class (but writes its own docs), so gate notes on the class.
+const notesCanEdit = () => !IS_OFFLINE_BUILD && !document.body.classList.contains('viewer-mode');
 let notesForDoc = []; // notes of the current doc (anchors resolved on the fly)
 // notesIndex ({path: count}, tree badges) is declared at the top of the script so
 // it's visible from the top-level decorateTreeBadges().
@@ -306,23 +308,32 @@ function renderNotesPanel(file) {
     return;
   }
 
-  const row = (note) =>
-    '<button class="kb-note-row' +
-    (note._orphan ? ' kb-orphan' : '') +
-    '" data-note-id="' +
-    escapeHtml(note.id) +
-    '">' +
-    '<span class="kb-note-snip">' +
-    escapeHtml(note.note.length > 90 ? note.note.slice(0, 90) + '…' : note.note) +
-    '</span>' +
-    '<span class="kb-note-meta">' +
-    (note._orphan
-      ? t('orphanShort')
-      : '“' +
-        escapeHtml(note.exact.length > 40 ? note.exact.slice(0, 40) + '…' : note.exact) +
-        '”') +
-    '</span>' +
-    '</button>';
+  const row = (note) => {
+    const by = note.author ? '✍ ' + escapeHtml(String(note.author).split('@')[0]) : '';
+    const when = note.created ? relativeDate(note.created) : '';
+    const byline = [by, when].filter(Boolean).join(' · ');
+    return (
+      '<button class="kb-note-row' +
+      (note._orphan ? ' kb-orphan' : '') +
+      '" data-note-id="' +
+      escapeHtml(note.id) +
+      '">' +
+      '<span class="kb-note-snip">' +
+      escapeHtml(note.note.length > 90 ? note.note.slice(0, 90) + '…' : note.note) +
+      '</span>' +
+      '<span class="kb-note-meta">' +
+      (note._orphan
+        ? t('orphanShort')
+        : '“' +
+          escapeHtml(note.exact.length > 40 ? note.exact.slice(0, 40) + '…' : note.exact) +
+          '”') +
+      '</span>' +
+      (byline
+        ? '<span class="kb-note-meta" style="opacity:.65">' + byline + '</span>'
+        : '') +
+      '</button>'
+    );
+  };
 
   tocNotes.classList.add('border-t', 'panel-divider');
   // Header with counter + « copy all notes » button (share annotations, incl.
@@ -371,7 +382,12 @@ async function copyAllNotes(btn) {
   if (title) lines.push('# Notes — ' + title, '');
   notesForDoc.forEach((n) => {
     if (n.exact && !n._orphan) lines.push('> ' + n.exact);
-    lines.push(n.note, '');
+    lines.push(n.note);
+    const meta = [];
+    if (n.author) meta.push(String(n.author));
+    if (n.created) meta.push(new Date(n.created * 1000).toLocaleString(LANG));
+    if (meta.length) lines.push('— ' + meta.join(' · '));
+    lines.push('');
   });
   await copyToClipboard(lines.join('\n').trim() + '\n');
 
@@ -444,7 +460,9 @@ function openNotePopForExisting(note, anchorEl) {
     .querySelectorAll('mark.kb-annot[data-note-id="' + CSS.escape(note.id) + '"]')
     .forEach((m) => m.classList.add('kb-annot-active'));
   const canEdit = notesCanEdit();
-  const meta = note.created ? relativeDate(note.created) : '';
+  const created = note.created ? relativeDate(note.created) : '';
+  const by = note.author ? '✍ ' + escapeHtml(String(note.author).split('@')[0]) : '';
+  const meta = [by, created].filter(Boolean).join(' · ');
 
   notePop.innerHTML =
     (note._orphan

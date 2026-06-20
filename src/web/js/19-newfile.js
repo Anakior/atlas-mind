@@ -13,6 +13,7 @@ function closeQuickCapture() {
 
 qcBtn.addEventListener('click', openQuickCapture);
 qcCancel.addEventListener('click', closeQuickCapture);
+document.getElementById('quick-capture-close')?.addEventListener('click', closeQuickCapture);
 qcBackdrop.addEventListener('click', (e) => {
   if (e.target === qcBackdrop) closeQuickCapture();
 });
@@ -68,8 +69,9 @@ const newFileBackdrop = document.getElementById('new-file-backdrop');
 const newFileForm = document.getElementById('new-file-form');
 const newFileDir = document.getElementById('new-file-dir');
 const newFileName = document.getElementById('new-file-name');
-const newFileDirs = document.getElementById('new-file-dirs');
+const newFileDirCb = AtlasCombobox(newFileDir, { source: getAllDirs, creatable: true });
 const newFileTemplate = document.getElementById('new-file-template');
+const newFileVisibility = document.getElementById('new-file-visibility');
 const newFileError = document.getElementById('new-file-error');
 const newFileCancel = document.getElementById('new-file-cancel');
 const newFileExtArea = document.getElementById('new-file-ext-area');
@@ -208,12 +210,15 @@ function getAllDirs() {
 function openNewFileModal(presetDir) {
   if (window.__viewerMode) return;
   newFileError.classList.add('hidden');
-  newFileDirs.innerHTML = getAllDirs()
-    .map((d) => `<option value="${escapeHtml(d)}">`)
-    .join('');
   newFileDir.value = presetDir || '';
   newFileName.value = '';
   newFileTemplate.value = 'blank';
+  if (newFileVisibility) {
+    // Default: PRIVATE (Notion sense), pre-selected to the user's last choice. A
+    // doc created inside a private folder is private regardless (server enforces).
+    newFileVisibility.value =
+      localStorage.getItem('atlas:newdoc-visibility') === 'commons' ? 'commons' : 'private';
+  }
 
   for (const value in templateProviders) {
     const provider = templateProviders[value];
@@ -238,6 +243,7 @@ function closeNewFileModal() {
 
 newFileBtn.addEventListener('click', () => openNewFileModal());
 newFileCancel.addEventListener('click', closeNewFileModal);
+document.getElementById('new-file-close')?.addEventListener('click', closeNewFileModal);
 newFileBackdrop.addEventListener('click', (e) => {
   if (e.target === newFileBackdrop) closeNewFileModal();
 });
@@ -288,11 +294,14 @@ newFileForm.addEventListener('submit', async (e) => {
     content = buildTemplateContent(newFileTemplate.value, title);
   }
 
+  const visibility = newFileVisibility ? newFileVisibility.value : 'private';
+  try { localStorage.setItem('atlas:newdoc-visibility', visibility); } catch (_) { /* ignore */ }
+
   try {
     const res = await fetch('/api/file', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, content }),
+      body: JSON.stringify({ path, content, private: visibility === 'private' }),
     });
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -336,6 +345,7 @@ function closeDirRenameModal() {
 }
 
 dirRenameCancel.addEventListener('click', closeDirRenameModal);
+document.getElementById('dir-rename-close')?.addEventListener('click', closeDirRenameModal);
 dirRenameBackdrop.addEventListener('click', (e) => {
   if (e.target === dirRenameBackdrop) closeDirRenameModal();
 });

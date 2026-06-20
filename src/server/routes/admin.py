@@ -22,9 +22,13 @@ def users_get(handler):
 
 
 def users_post(handler):
+    """POST /api/admin/users {email, role} — create a PENDING account and mint a
+    single-use invite link. The admin no longer sets a password: the invitee opens
+    the returned invite_url and chooses their OWN password (see routes/invite.py).
+    The cleartext invite token is returned only HERE, once. Re-inviting a still
+    pending account is allowed (a fresh link; the previous token is invalidated)."""
     data = handler._read_json()
     email = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
     role = (data.get("role") or "viewer").strip().lower()
     if not _s.is_valid_email(email):
         handler._send_json(400, {"error": "invalid email"})
@@ -32,23 +36,29 @@ def users_post(handler):
     if role not in ("admin", "viewer"):
         handler._send_json(400, {"error": "role must be 'admin' or 'viewer'"})
         return
-    if len(password) < 8:
-        handler._send_json(400, {"error": "password too short (8 chars minimum)"})
-        return
     try:
-        if _s.get_store().get_user_by_email(email) is not None:
+        existing = _s.get_store().get_user_by_email(email)
+        # An ACTIVE account (real password) cannot be re-invited; a still-PENDING
+        # one is re-invited (the upsert overwrites invite_token_hash → old link dies).
+        if existing is not None and not existing.get("invite_token_hash"):
             handler._send_json(409, {"error": "email already taken"})
             return
-        _s.get_store().upsert_user(email, {
-            "password_hash": store.hash_password(password),
-            "role": role,
-            "created_at": int(time.time()),
-        })
+        token, fields = store.new_invite_fields(role)
+        _s.get_store().upsert_user(email, fields)
     except Exception as e:
-        print(f"[admin] create user: {e}", file=sys.stderr)
+        print(f"[admin] invite user: {e}", file=sys.stderr)
         handler._send_json(503, {"error": "registry unavailable"})
         return
-    handler._send_json(201, {"email": email, "role": role})
+    # Invite URL derived from the request host (the instance may run behind any
+    # domain): https in cloud, http otherwise — mirrors tokens_post / nodes_post.
+    host = handler.headers.get("Host", "")
+    # https only in REAL cloud; the dev sandbox + local both serve plain http on
+    # loopback (an https URL there hits the http server with a TLS handshake → 400).
+    scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
+    invite_url = (f"{scheme}://{host}/invite/{token}" if host
+                  else f"/invite/{token}")
+    handler._send_json(201, {"email": email, "role": role,
+                             "invite_url": invite_url})
 
 
 def users_password(handler):
@@ -63,8 +73,10 @@ def users_password(handler):
         return
     try:
         user = _s.get_store().get_user_by_email(email)
-        if user is None or user.get("role") == _s.API_ROLE:
-            # An 'api' account has no usable password: no reset.
+        if (user is None or user.get("role") == _s.API_ROLE
+                or user.get("invite_token_hash")):
+            # An 'api' account has no usable password; a PENDING invite sets its
+            # password via the invite link, not an admin reset. Same 404 (no oracle).
             handler._send_json(404, {"error": "user not found"})
             return
         # Bump the epoch together with the new hash: a password reset invalidates
@@ -80,34 +92,6 @@ def users_password(handler):
         handler._send_json(503, {"error": "registry unavailable"})
         return
     handler._send_json(200, {"ok": True, "email": email})
-
-
-def users_hidden(handler):
-    """Viewer ACL (#14): sets the list of hidden folders for an account
-    (prefixes relative to content/). Admin only. Empty list = sees
-    everything."""
-    data = handler._read_json()
-    email = (data.get("email") or "").strip().lower()
-    folders = data.get("folders")
-    if not email:
-        handler._send_json(400, {"error": "email required"})
-        return
-    if not isinstance(folders, list):
-        handler._send_json(400, {"error": "folders must be a list"})
-        return
-    clean = [f.strip().strip("/") for f in folders
-             if isinstance(f, str) and f.strip().strip("/")]
-    try:
-        user = _s.get_store().get_user_by_email(email)
-        if user is None or user.get("role") == _s.API_ROLE:
-            handler._send_json(404, {"error": "user not found"})
-            return
-        _s.get_store().upsert_user(email, {"hidden_folders": clean})
-    except Exception as e:
-        print(f"[admin] set hidden folders: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
-        return
-    handler._send_json(200, {"ok": True, "email": email, "hidden_folders": clean})
 
 
 def users_delete(handler):
@@ -177,7 +161,9 @@ def tokens_post(handler):
     # mcp_url derived from the request host (the client may run behind any
     # domain): https scheme in the cloud, http otherwise.
     host = handler.headers.get("Host", "")
-    scheme = "https" if _s.CONFIG.auth_enabled else "http"
+    # https only in REAL cloud; the dev sandbox + local both serve plain http on
+    # loopback (an https URL there hits the http server with a TLS handshake → 400).
+    scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
     mcp_url = f"{scheme}://{host}/mcp/{token}" if host else f"/mcp/{token}"
     # The PLAINTEXT token is returned only HERE, a single time.
     handler._send_json(201, {
@@ -252,7 +238,9 @@ def nodes_post(handler):
         handler._send_json(503, {"error": "registry unavailable"})
         return
     host = handler.headers.get("Host", "")
-    scheme = "https" if _s.CONFIG.auth_enabled else "http"
+    # https only in REAL cloud; the dev sandbox + local both serve plain http on
+    # loopback (an https URL there hits the http server with a TLS handshake → 400).
+    scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
     origin = f"{scheme}://{host}" if host else ""
     # The PLAINTEXT token is returned only HERE, wrapped in the copyable link.
     handler._send_json(201, {

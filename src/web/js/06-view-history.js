@@ -119,7 +119,28 @@ async function showMarkdown(file, highlightQuery) {
   btnSave.classList.add('hidden');
   btnCancel.classList.add('hidden');
   document.getElementById('btn-share')?.classList.toggle('hidden', isRemoteDoc);
+  document.getElementById('btn-access')?.classList.toggle('hidden', isRemoteDoc || IS_OFFLINE_BUILD);
   document.getElementById('btn-more-wrap')?.classList.toggle('hidden', isRemoteDoc);
+  // "Shared by" badge: if this doc is owned by someone else (shared WITH you),
+  // surface who shared it inline — no need to open the access dialog. Fire-and-
+  // forget; cloud-only; guarded against a stale response after navigating away.
+  const sharedByEl = document.getElementById('breadcrumb-sharedby');
+  if (sharedByEl) {
+    sharedByEl.textContent = '';
+    sharedByEl.title = '';
+    if (location.protocol.startsWith('http') && !isRemoteDoc && !IS_OFFLINE_BUILD) {
+      fetch('/api/acl?path=' + encodeURIComponent(file.path))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((a) => {
+          if (a && a.owner && !a.can_manage && currentFile && currentFile.path === file.path) {
+            const who = String(a.owner).replace(/^user:/, '');
+            sharedByEl.textContent = ' ' + t('sharedByLabel', who.split('@')[0]);
+            sharedByEl.title = t('sharedByLabel', who);
+          }
+        })
+        .catch(() => {});
+    }
+  }
   // Remote node actions: only on a mirror doc, never offline (no server to
   // appropriate/remove against — the buttons would 404).
   const showNodeActions = isRemoteDoc && !IS_OFFLINE_BUILD;

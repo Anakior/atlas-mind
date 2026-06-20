@@ -8,7 +8,8 @@
       "prefix": "your knowledge is ",
       "suffix": " repository. No proprietary",
       "pos": 320,
-      "created": 1781322236
+      "created": 1781322236,
+      "author": "sam@example.com"
     },
     {
       "id": "note-own-2",
@@ -17,7 +18,8 @@
       "prefix": "standard library. ",
       "suffix": " Accounts, tokens",
       "pos": 700,
-      "created": 1781253836
+      "created": 1781253836,
+      "author": "mira@example.com"
     }
   ]
 }

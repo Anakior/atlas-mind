@@ -1,9 +1,12 @@
-"""Per-user visibility permissions (#14, viewer ACL).
+"""Per-document ACL (model B) over the BROWSER (cookie session).
 
-A viewer can have `hidden_folders` (prefixes relative to content/) that they must
-NEITHER see in the tree, NOR find in search, NOR open directly, NOR see leak via
-the backlinks index (the Mind). The admin sees everything. The filtering is
-ALWAYS server-side (never a mere client-side masking).
+The browser honors the central acl.json: a viewer sees the commons + what it is
+granted, but NEVER a private (owned) doc — across the tree, the file serve (404,
+no-existence-oracle), search, and the Mind/backlinks index. The admin bypasses
+everything. Filtering is ALWAYS server-side (never a client-side mask).
+
+Replaces the previous `hidden_folders` blacklist suite (that mechanism is retired
+in favor of model B — see atlas-mind/cdc-commons-repo-partage.md §8).
 """
 import sys
 import unittest
@@ -22,7 +25,7 @@ VIEWER_EMAIL, VIEWER_PW = "viewer@acl.local", "viewer-pw-0123456789"
 
 MIND = {
     "public/note.md": "# Public\n\nterme-public visible. Voir [[secret/private]].\n",
-    "secret/private.md": "# Secret\n\nterme-secret-prive caché. Voir [[public/note]].\n",
+    "secret/private.md": "# Secret\n\nterme-secret-prive cache. Voir [[public/note]].\n",
     TODO_REL: DEFAULT_QUICK_MD,
 }
 
@@ -41,7 +44,7 @@ def _cookie(srv, email, pw):
     return resp.headers.get("Set-Cookie", "").split(";", 1)[0]
 
 
-class TestViewerACL(unittest.TestCase):
+class TestViewerAcl(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.srv = AtlasServer(mind=MIND, extra_env=CLOUD_ENV)
@@ -50,8 +53,11 @@ class TestViewerACL(unittest.TestCase):
         fs.upsert_user(ADMIN_EMAIL, {
             "password_hash": store.hash_password(ADMIN_PW), "role": "admin"})
         fs.upsert_user(VIEWER_EMAIL, {
-            "password_hash": store.hash_password(VIEWER_PW), "role": "viewer",
-            "hidden_folders": ["secret"]})
+            "password_hash": store.hash_password(VIEWER_PW), "role": "viewer"})
+        cls.fs = fs
+        # The whole 'secret' folder is private to the admin (model B: an owned
+        # path is private) → hidden from the viewer, inherited by its children.
+        fs.set_owner("secret", "user:" + ADMIN_EMAIL)
         cls.admin = _cookie(cls.srv, ADMIN_EMAIL, ADMIN_PW)
         cls.viewer = _cookie(cls.srv, VIEWER_EMAIL, VIEWER_PW)
 
@@ -72,13 +78,13 @@ class TestViewerACL(unittest.TestCase):
         walk(tree)
         return out
 
-    def test_tree_hides_secret_from_viewer_only(self):
+    def test_tree_hides_private_from_viewer_only(self):
         admin_paths = self._tree_paths(self.admin)
         viewer_paths = self._tree_paths(self.viewer)
         self.assertIn("secret/private.md", admin_paths)
         self.assertIn("public/note.md", admin_paths)
-        self.assertNotIn("secret/private.md", viewer_paths)   # hidden from the viewer
-        self.assertIn("public/note.md", viewer_paths)         # the public one stays
+        self.assertNotIn("secret/private.md", viewer_paths)   # private → hidden
+        self.assertIn("public/note.md", viewer_paths)         # the commons stays
 
     def test_file_serve_404_for_viewer(self):
         self.assertEqual(self.srv.get("/secret/private.md",
@@ -89,10 +95,9 @@ class TestViewerACL(unittest.TestCase):
                          headers={"Cookie": self.viewer}).status, 200)
 
     def test_acl_bypass_via_path_normalization(self):
-        # Regression: a non-normalized request path must not slip a hidden doc
-        # past the ACL. The static handler normalizes via posixpath.normpath,
-        # so the dotfile/ACL checks now run on that same canonical form. Each of
-        # these vectors resolves to the hidden secret/private.md.
+        # Regression: a non-normalized path must not slip a private doc past the
+        # ACL. The static handler normalizes via posixpath.normpath, so the ACL
+        # check runs on that canonical form. Each vector resolves to secret/private.md.
         for vector in (
             "/%2fsecret/private.md",   # leading %2f → //secret/... after decode
             "/secret//private.md",     # embedded double slash
@@ -101,7 +106,6 @@ class TestViewerACL(unittest.TestCase):
             resp = self.srv.get(vector, headers={"Cookie": self.viewer})
             self.assertEqual(resp.status, 404,
                              f"{vector} leaked to viewer ({resp.status})")
-        # Sanity: the admin (no hidden folders) still reads the canonical doc.
         self.assertEqual(self.srv.get("/secret/private.md",
                          headers={"Cookie": self.admin}).status, 200)
 
@@ -113,33 +117,25 @@ class TestViewerACL(unittest.TestCase):
         self.assertTrue(any(r.get("path") == "secret/private.md" for r in admin))
         self.assertFalse(any(r.get("path") == "secret/private.md" for r in viewer))
 
-    def test_admin_endpoint_sets_hidden_and_list_reflects(self):
-        csrf = self.srv.get("/api/me", headers={"Cookie": self.admin}).json().get("csrf_token", "")
-        hdr = {"Cookie": self.admin, "X-CSRF-Token": csrf}
-        # The admin changes the viewer's hidden folders via the API.
-        r = self.srv.post("/api/admin/users/hidden",
-                          json_body={"email": VIEWER_EMAIL, "folders": ["public"]},
-                          headers=hdr)
-        self.assertEqual(r.status, 200)
-        # The admin list reflects the change (hidden_folders exposed).
-        users = self.srv.get("/api/admin/users", headers={"Cookie": self.admin}).json()
-        viewer = next(u for u in users if u["email"] == VIEWER_EMAIL)
-        self.assertEqual(viewer["hidden_folders"], ["public"])
-        # Enforcement follows live: the viewer now hides 'public'.
-        self.assertNotIn("public/note.md", self._tree_paths(self.viewer))
-        # Restore the state for the independence of the other tests.
-        self.srv.post("/api/admin/users/hidden",
-                      json_body={"email": VIEWER_EMAIL, "folders": ["secret"]},
-                      headers=hdr)
-
     def test_backlinks_index_filtered_for_viewer(self):
-        # The Mind/the backlinks must not leak the name of the hidden doc.
+        # The Mind/backlinks must not leak the name of the private doc.
         admin = self.srv.get("/_backlinks.json",
                              headers={"Cookie": self.admin}).json()
         viewer = self.srv.get("/_backlinks.json",
                               headers={"Cookie": self.viewer}).json()
         self.assertIn("secret/private.md", admin)
         self.assertNotIn("secret/private.md", viewer)
+
+    def test_grant_reveals_specific_private_to_viewer(self):
+        # A 'view' grant on the exact doc reveals it live, even under an owned
+        # folder (the grant is at/below the owner boundary, so it applies).
+        self.fs.grant("secret/private.md", "user:" + VIEWER_EMAIL, "view")
+        try:
+            self.assertIn("secret/private.md", self._tree_paths(self.viewer))
+            self.assertEqual(self.srv.get("/secret/private.md",
+                             headers={"Cookie": self.viewer}).status, 200)
+        finally:
+            self.fs.revoke_grant("secret/private.md", "user:" + VIEWER_EMAIL)
 
 
 if __name__ == "__main__":

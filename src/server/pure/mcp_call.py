@@ -1,6 +1,7 @@
 """MCP tool dispatch + graph/tag/trash/search helpers backing the AI-native tools."""
 import datetime
 import json
+import posixpath
 import re
 import sys
 import time
@@ -19,11 +20,20 @@ _MAX_BLAME_LINES = 600
 _BLAME_HEAD_RE = re.compile(r"^[0-9a-f]{40} \d+ \d+")
 
 
-def _doc_corpus():
-    """[(rel, name, text)] for every viewer-tracked doc, each file read once.
-    Same source set as _iter_doc_files; utf-8-sig tolerates a BOM."""
+def _visible(rel, ctx):
+    """Whether `ctx` may read `rel`. ctx=None → unfiltered (internal/local use,
+    e.g. direct calls in tests)."""
+    return ctx is None or _s.can_read(rel, ctx)
+
+
+def _doc_corpus(ctx=None):
+    """[(rel, name, text)] for every doc readable by `ctx`, each file read once.
+    THE choke-point: search/topology/tags/links all iterate here, so filtering
+    once propagates to every derived aggregate. utf-8-sig tolerates a BOM."""
     out = []
     for rel, path in _s._iter_doc_files():
+        if not _visible(rel, ctx):
+            continue
         try:
             out.append((rel, path.name, path.read_text(encoding="utf-8-sig")))
         except (OSError, UnicodeDecodeError):
@@ -31,12 +41,25 @@ def _doc_corpus():
     return out
 
 
-def _links_graph():
-    """Wikilink graph {path: {"out": [...], "in": [...]}} over the whole mind.
-    Shared with build/viewer: build_links_index only keeps docs with at least one
-    edge, so an isolated doc is simply absent."""
+def _links_graph(ctx=None):
+    """Wikilink graph {path: {"out": [...], "in": [...]}} over the docs readable by
+    `ctx`. Built on the filtered corpus so the graph never exposes a private doc as
+    a node; callers still scrub `out` edges that point at a private target."""
     return _s._import_build().build_links_index(
-        [{"path": rel, "name": name, "body": text} for rel, name, text in _doc_corpus()])
+        [{"path": rel, "name": name, "body": text} for rel, name, text in _doc_corpus(ctx)])
+
+
+def _scrub_commits(commits, ctx):
+    """Drop, from each commit, the changed files `ctx` can't read; drop commits
+    left with no visible file. Keeps history tools from leaking private doc paths."""
+    if ctx is None:
+        return commits
+    out = []
+    for c in commits:
+        files = [f for f in c.get("files", []) if _visible(f.get("path", ""), ctx)]
+        if files:
+            out.append({**c, "files": files})
+    return out
 
 
 def _tags_for(build, rel: str, text: str) -> list:
@@ -70,7 +93,7 @@ def _soft_delete(target: Path) -> str:
     return ".trash/" + rel.as_posix()
 
 
-def _api_search(q: str, limit: int) -> list:
+def _api_search(q: str, limit: int, ctx=None) -> list:
     """Scoring: weighted occurrences (name x3, content x1), with typo tolerance
     (a token that can't be found is corrected to the closest word in the
     vocabulary). Content read via the _doc_entry in-memory cache."""
@@ -80,6 +103,8 @@ def _api_search(q: str, limit: int) -> list:
         return []
     entries = []
     for rel, path in _s._iter_doc_files():
+        if not _visible(rel, ctx):
+            continue
         e = _s._doc_entry(rel, path)
         if e is not None:
             entries.append((rel, path, e))
@@ -134,11 +159,13 @@ def _api_search(q: str, limit: int) -> list:
     return hits[:limit]
 
 
-def _api_recent(days: int, limit: int) -> list:
+def _api_recent(days: int, limit: int, ctx=None) -> list:
     """Documents modified within the window, from most recent to oldest."""
     cutoff = time.time() - days * 86400
     items = []
     for rel, path in _s._iter_doc_files():
+        if not _visible(rel, ctx):
+            continue
         st = path.stat()
         if st.st_mtime < cutoff:
             continue
@@ -328,7 +355,7 @@ def _parse_blame(stdout: str) -> list:
     return lines
 
 
-def _mcp_call_tool(name: str, args: dict) -> dict:
+def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
     """Dispatch an MCP tool to the _api_* helpers. Returns MCP CallToolResult."""
     def text_result(s: str, is_error: bool = False) -> dict:
         out = {"content": [{"type": "text", "text": s}]}
@@ -346,7 +373,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             limit = 10
         tag = (args.get("tag") or "").strip().lower()
         # Tag filter is additive: over-fetch then keep only hits that carry the tag.
-        hits = _api_search(q, 50 if tag else limit)
+        hits = _api_search(q, 50 if tag else limit, ctx)
         if tag:
             build = _s._import_build()
             kept = []
@@ -367,7 +394,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
     if name == "read_doc":
         rel = (args.get("path") or "").strip()
         target = _s._validate_doc_path(rel)
-        if not target or not target.exists():
+        if not target or not target.exists() or not _visible(rel, ctx):
             return text_result(f"Document not found: {rel}", is_error=True)
         text = target.read_text(encoding="utf-8")
         return text_result(text)
@@ -375,6 +402,8 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
     if name == "list_tree":
         try:
             tree = _s._import_build().walk(_s.CONFIG.content_root)
+            if ctx is not None:
+                tree = _s._filter_tree(tree, lambda p: _s.can_read(p, ctx))
             return text_result(json.dumps(tree, ensure_ascii=False, indent=2))
         except Exception as e:
             print(f"[mcp] list_tree failed: {e}", file=sys.stderr)
@@ -386,7 +415,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             limit = min(100, max(1, int(args.get("limit", 20))))
         except (ValueError, TypeError):
             days, limit = 7, 20
-        hits = _api_recent(days, limit)
+        hits = _api_recent(days, limit, ctx)
         if not hits:
             return text_result(f"No document modified in the last {days} days")
         return text_result(json.dumps(hits, ensure_ascii=False, indent=2))
@@ -397,14 +426,26 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         target = _s._validate_doc_path(rel)
         if not target:
             return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
+        rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level)
         if _s._is_readonly_path(rel):
             return text_result("Read-only location (remote node mirror) — choose another path.", is_error=True)
+        if ctx is not None and not _s.can_create(rel, ctx):
+            return text_result("Insufficient permission to create at this location.", is_error=True)
         if target.exists():
             return text_result(f"Document already exists: {rel} (cannot overwrite with this token)", is_error=True)
         if not isinstance(content, str):
             return text_result("'content' must be a string", is_error=True)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+        # On create: stamp the CREATOR (all roles → "créé par X"). A non-admin's
+        # new doc is also private to them by default; an admin's stays commons.
+        if ctx is not None and ctx.primary:
+            try:
+                _s.get_store().set_creator(rel, ctx.primary)
+                if not ctx.is_admin and not _s.in_private_space(rel):
+                    _s.get_store().set_owner(rel, ctx.primary)
+            except Exception as e:
+                print(f"[create_doc owner] {e}", file=sys.stderr)
         _s.trigger_sync()
         return text_result(f"Document created: {rel}")
 
@@ -415,8 +456,10 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
         if _s._is_readonly_path(rel):
             return text_result("Read-only document (remote node mirror). Use \"Appropriate\" to make an editable copy.", is_error=True)
-        if not target.exists():
+        if not target.exists() or not _visible(rel, ctx):
             return text_result(f"Document not found: {rel} (use create_doc to create a new one)", is_error=True)
+        if ctx is not None and not _s.can_write(rel, ctx, "edit"):
+            return text_result("Insufficient permission (need edit on this document).", is_error=True)
         old_string = args.get("old_string")
         new_string = args.get("new_string")
         content = args.get("content")
@@ -450,15 +493,28 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             return text_result("'from' and 'to' are required", is_error=True)
         if _s._is_readonly_path(src_rel) or _s._is_readonly_path(dst_rel):
             return text_result("Read-only location (remote node mirror) — \"Appropriate\" it first to get an editable copy.", is_error=True)
+        if ctx is not None and not _visible(src_rel, ctx):
+            return text_result(f"Document not found: {src_rel}", is_error=True)
+        if ctx is not None and not _s.can_write(src_rel, ctx, "owner"):
+            return text_result("Insufficient permission (need owner to move this document).", is_error=True)
+        # Gate the DESTINATION too: you can't plant a doc into a space you can't
+        # see (e.g. another user's private folder). Mirrors create_doc's check.
+        if ctx is not None and not _s.can_create(dst_rel, ctx):
+            return text_result("Insufficient permission to move to this destination.", is_error=True)
+        src_rel = _s._canonical_rel(src_rel)  # match the on-disk ACL key
         status, payload = _s._move_md_with_relink(src_rel, dst_rel)
         if status != "ok":
             return text_result(payload, is_error=True)
-        _s.trigger_sync()
-        # In-app move → keep its share links alive (best-effort).
+        # Repoint the ACL + shares BEFORE the git sync, to minimize the window where
+        # the moved doc lands at its new path with no ACL (which would read as
+        # commons). Mirrors the /api/file/move ordering. Best-effort.
         try:
-            _s.get_store().repoint_shares_by_path(payload["from"], payload["to"])
+            _store = _s.get_store()
+            _store.repoint_acl_by_path(payload["from"], payload["to"])  # privacy first
+            _store.repoint_shares_by_path(payload["from"], payload["to"])
         except Exception as e:
-            print(f"[share repoint] {e}", file=sys.stderr)
+            print(f"[move repoint] {e}", file=sys.stderr)
+        _s.trigger_sync()
         n, files = payload["links_updated"], len(payload["rewrites"])
         msg = f"Moved: {payload['from']} -> {payload['to']}."
         msg += (f" {n} incoming wikilink(s) rewritten in {files} doc(s)."
@@ -468,24 +524,26 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
     if name == "get_links":
         rel = (args.get("path") or "").strip()
         target = _s._validate_doc_path(rel)
-        if not target or not target.exists():
+        if not target or not target.exists() or not _visible(rel, ctx):
             return text_result(f"Document not found: {rel}", is_error=True)
-        entry = _links_graph().get(rel) or {"out": [], "in": []}
-        return text_result(json.dumps({"path": rel, "links": entry["out"]},
+        entry = _links_graph(ctx).get(rel) or {"out": [], "in": []}
+        out = [p for p in entry["out"] if _visible(p, ctx)]
+        return text_result(json.dumps({"path": rel, "links": out},
                                       ensure_ascii=False, indent=2))
 
     if name == "get_backlinks":
         rel = (args.get("path") or "").strip()
         target = _s._validate_doc_path(rel)
-        if not target or not target.exists():
+        if not target or not target.exists() or not _visible(rel, ctx):
             return text_result(f"Document not found: {rel}", is_error=True)
-        entry = _links_graph().get(rel) or {"out": [], "in": []}
-        return text_result(json.dumps({"path": rel, "backlinks": entry["in"]},
+        entry = _links_graph(ctx).get(rel) or {"out": [], "in": []}
+        ins = [p for p in entry["in"] if _visible(p, ctx)]
+        return text_result(json.dumps({"path": rel, "backlinks": ins},
                                       ensure_ascii=False, indent=2))
 
     if name == "get_mind_topology":
         build = _s._import_build()
-        corpus = _doc_corpus()
+        corpus = _doc_corpus(ctx)
         graph = build.build_links_index(
             [{"path": rel, "name": name_, "body": text} for rel, name_, text in corpus])
         all_paths = [rel for rel, _, _ in corpus]
@@ -517,7 +575,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         if not tag:
             return text_result("Error: missing 'tag' parameter", is_error=True)
         build = _s._import_build()
-        matches = sorted(rel for rel, _, text in _doc_corpus()
+        matches = sorted(rel for rel, _, text in _doc_corpus(ctx)
                          if tag in _tags_for(build, rel, text))
         if not matches:
             return text_result(f"No document tagged: {tag}")
@@ -531,9 +589,20 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
         if _s._is_readonly_path(rel):
             return text_result("Read-only location (remote node mirror) — cannot delete.", is_error=True)
-        if not target.exists():
+        if not target.exists() or not _visible(rel, ctx):
             return text_result(f"Document not found: {rel}", is_error=True)
+        if ctx is not None and not _s.can_write(rel, ctx, "owner"):
+            return text_result("Insufficient permission (need owner to delete this document).", is_error=True)
         trashed = _soft_delete(target)
+        # The ACL follows the doc into .trash so the freed path keeps no stale
+        # entry a future doc created there would inherit; its share links are
+        # revoked (a trashed doc must stop serving public links).
+        try:
+            _store = _s.get_store()
+            _store.repoint_acl_by_path(rel, trashed)
+            _store.delete_shares_for_path(rel)
+        except Exception as e:
+            print(f"[delete cleanup] {e}", file=sys.stderr)
         _s.trigger_sync()
         return text_result(f"Document moved to trash (reversible): {rel} -> {trashed}")
 
@@ -541,6 +610,8 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         rel = (args.get("path") or "").strip()
         if _s._validate_doc_path(rel) is None:
             return text_result(f"Invalid path (relative .md or .html, no '..'): {rel}", is_error=True)
+        if not _visible(rel, ctx):
+            return text_result(f"Document not found: {rel}", is_error=True)
         try:
             limit = min(100, max(1, int(args.get("limit", 30))))
         except (ValueError, TypeError):
@@ -584,6 +655,8 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         rel = (args.get("path") or "").strip()
         if _s._validate_doc_path(rel) is None:
             return text_result(f"Invalid path: {rel}", is_error=True)
+        if not _visible(rel, ctx):
+            return text_result(f"Document not found: {rel}", is_error=True)
         rev = (args.get("rev") or "").strip()
         at = (args.get("at") or "").strip()
         repo_rel = "content/" + rel
@@ -614,6 +687,8 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         rel = (args.get("path") or "").strip()
         if _s._validate_doc_path(rel) is None:
             return text_result(f"Invalid path: {rel}", is_error=True)
+        if not _visible(rel, ctx):
+            return text_result(f"Document not found: {rel}", is_error=True)
         rev = (args.get("rev") or "HEAD").strip() or "HEAD"
         base = (args.get("base") or "").strip()
         if not _s._valid_git_rev(rev):
@@ -670,7 +745,8 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         if result.returncode != 0:
             return text_result("git history search failed (check the regex)" if regex
                                else "git history search failed", is_error=True)
-        commits = _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES)
+        commits = _scrub_commits(
+            _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES), ctx)
         if not commits:
             return text_result(f"No commit where '{query}' entered or left the history"
                                + (f" under {prefix}" if prefix else ""))
@@ -701,7 +777,8 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         result = _s.git(*opts)
         if result.returncode != 0:
             return text_result("git log failed", is_error=True)
-        commits = _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES)
+        commits = _scrub_commits(
+            _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES), ctx)
         if not commits:
             return text_result(f"No document changes in the last {days} days"
                                + (f" under {prefix}" if prefix else ""))
@@ -713,7 +790,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
         target = _s._validate_doc_path(rel)
         if target is None:
             return text_result(f"Invalid path: {rel}", is_error=True)
-        if not target.exists():
+        if not target.exists() or not _visible(rel, ctx):
             return text_result(f"Document not found: {rel}", is_error=True)
         pattern = (args.get("pattern") or "").strip()
         try:
@@ -752,6 +829,10 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
             return text_result("Invalid revision (a commit SHA or HEAD~N)", is_error=True)
         if _s._is_readonly_path(rel):
             return text_result("Read-only location (remote node mirror) — cannot revert.", is_error=True)
+        if ctx is not None and not _visible(rel, ctx):
+            return text_result(f"Document not found: {rel}", is_error=True)
+        if ctx is not None and not _s.can_write(rel, ctx, "edit"):
+            return text_result("Insufficient permission (need edit on this document).", is_error=True)
         show = _s.git("show", rev + ":" + _s._doc_path_at("content/" + rel, rev))
         if show.returncode != 0:
             return text_result(f"Revision not found: {rev}", is_error=True)
@@ -764,7 +845,7 @@ def _mcp_call_tool(name: str, args: dict) -> dict:
     return text_result(f"Unknown tool: {name}", is_error=True)
 
 
-def _mcp_jsonrpc(req: dict):
+def _mcp_jsonrpc(req: dict, ctx=None):
     """Process an MCP JSON-RPC message. Returns response dict, or None for notifications."""
     method = req.get("method")
     params = req.get("params") or {}
@@ -798,7 +879,7 @@ def _mcp_jsonrpc(req: dict):
             arguments = params.get("arguments") or {}
             sys.stderr.write(f"[mcp] tools/call name={tool_name}\n")
             sys.stderr.flush()
-            return ok(_mcp_call_tool(tool_name, arguments))
+            return ok(_mcp_call_tool(tool_name, arguments, ctx))
         return err(-32601, f"method not found: {method}")
     except Exception as e:
         # Detail (may carry server paths) to stderr only; client gets a generic message.

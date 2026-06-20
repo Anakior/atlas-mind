@@ -28,6 +28,13 @@ class ExtensionContext:
       (any logged-in session) or "admin" (admin session). Default: "auth" for
       GET, "admin" for POST. In local mode (auth disabled), the simulated session
       is admin: everything passes.
+
+      CSRF (T4): a mutating POST route with role "auth"/"admin" is CSRF-checked in
+      cloud mode, exactly like the core POST routes — the client must send the
+      X-CSRF-Token header. The viewer's global fetch wrapper injects it
+      automatically, so an extension using `fetch()` needs no special handling; a
+      raw XHR must add it (read the readable kb_csrf cookie). A "public" route is
+      not CSRF-checked (it self-protects, e.g. a webhook verifying a signature).
     """
 
     def __init__(self, config, routes):

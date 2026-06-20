@@ -31,6 +31,48 @@ function renderRecent() {
 
 renderRecent();
 
+// "Shared with me" (D1): docs another member shared WITH the viewer, discovered
+// via /api/shared-with-me. Cloud-only and fully defensive — any failure (offline
+// build, local mode, empty list, network error) just leaves the section hidden, so
+// it can never break the home view.
+async function renderSharedWithMe() {
+  if (!sharedSection || !location.protocol.startsWith('http')) return;
+  let docs;
+  try {
+    const r = await fetch('/api/shared-with-me');
+    if (!r.ok) return;
+    docs = await r.json();
+  } catch (e) {
+    return;
+  }
+  if (!Array.isArray(docs) || docs.length === 0) return;
+  sharedSection.classList.remove('hidden');
+  sharedList.innerHTML = docs
+    .slice(0, 8)
+    .map((d) => {
+      const name = String(d.path).split('/').pop();
+      const by = d.granted_by ? String(d.granted_by).replace(/^user:/, '') : '';
+      return `
+    <li class="overflow-hidden"><a class="tree-item w-full flex flex-col px-2 py-1 rounded cursor-pointer" data-path="${escapeHtml(d.path)}">
+      <span class="block text-xs text-ink-200 truncate w-full" data-name="${escapeHtml(name)}">${escapeHtml(name)}</span>
+      ${by ? `<span class="text-[10px] text-ink-500">${escapeHtml(by)}</span>` : ''}
+    </a></li>`;
+    })
+    .join('');
+  sharedList.querySelectorAll('a').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const f = fileMap[a.dataset.path];
+      if (f) {
+        showMarkdown(f);
+        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+      }
+    });
+  });
+}
+
+renderSharedWithMe();
+
 // Custom tooltip for truncated filenames
 const tooltipEl = document.createElement('div');
 
@@ -80,6 +122,50 @@ document.addEventListener('mouseout', (e) => {
     tooltipEl.style.transform = 'translateY(-50%) translateX(-4px)';
   }
 });
+
+function showNotFound(path) {
+  // A doc the viewer can't reach (filtered out of the tree) or that doesn't exist:
+  // a clean in-app page instead of silently bouncing to the home. The wording is
+  // deliberately ambiguous (not-found OR no-access) to keep the no-existence-oracle.
+  currentFile = null;
+  contentEl.style.maxWidth = '';
+  contentEl.style.padding = '';
+  document.getElementById('todo-widget')?.classList.remove('hidden');
+  // Reset the doc header/breadcrumb (path + mtime + actions) — else it would keep
+  // revealing the path's existence and a "modified X ago" (an existence oracle).
+  breadcrumbPath.textContent = '/';
+  breadcrumbDate.textContent = '';
+  breadcrumbActions.classList.add('hidden');
+  breadcrumbActions.classList.remove('flex');
+  tocPanel.classList.add('hidden');
+  contentEl.innerHTML =
+    '<div class="max-w-md mx-auto mt-24 text-center">' +
+    '<div class="text-5xl mb-4 opacity-60">🔒</div>' +
+    '<h1 class="text-xl font-semibold text-ink-100 mb-2 !border-0 !p-0">' +
+    escapeHtml(t('notFoundTitle')) + '</h1>' +
+    '<p class="text-sm text-ink-400 mb-1">' + escapeHtml(t('notFoundBody')) + '</p>' +
+    '<p class="text-[11px] text-ink-500 font-mono mb-6 break-all">' + escapeHtml(path) + '</p>' +
+    '<button id="nf-home" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium">' +
+    escapeHtml(t('notFoundHome')) + '</button></div>';
+  document.getElementById('nf-home')?.addEventListener('click', () => {
+    history.replaceState(null, '', location.pathname);
+    showWelcome();
+  });
+}
+
+function routeFromHash() {
+  // Route from the URL hash once fileMap reflects the viewer's accessible docs.
+  const hash = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
+  if (!hash || hash === 'mind') return showWelcome();
+  const f = fileMap[hash];
+  if (f && f.ext === '.md') return showMarkdown(f);
+  if (f) return showWelcome();
+  // Not in the (per-viewer filtered) tree. Only declare "not found / no access"
+  // once the tree is actually loaded (server mode loads it async via softReload) —
+  // before that, hold on the welcome to avoid a false flash.
+  if (Object.keys(fileMap).length) showNotFound(hash);
+  else showWelcome();
+}
 
 function showWelcome() {
   currentFile = null;

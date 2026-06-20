@@ -398,12 +398,9 @@ const EMBED_MIND = location.hash.replace(/^#/, '') === 'mind';
 
 if (EMBED_MIND) {
   showWelcome();
-} else if (location.hash) {
-  const path = decodeURIComponent(location.hash.slice(1));
-
-  if (fileMap[path] && fileMap[path].ext === '.md') showMarkdown(fileMap[path]);
-  else showWelcome();
-} else showWelcome();
+} else {
+  routeFromHash();
+}
 
 // ─── Connections graph view ────────────────────────────────────────────────────
 const graphOverlay = document.getElementById('graph-overlay');

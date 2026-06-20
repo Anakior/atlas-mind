@@ -8,7 +8,8 @@
       "prefix": "people who value ",
       "suffix": ".",
       "pos": 180,
-      "created": 1781081036
+      "created": 1781081036,
+      "author": "mira@example.com"
     },
     {
       "id": "note-notion-2",
@@ -17,7 +18,8 @@
       "prefix": "you intend to ",
       "suffix": " — and increasingly",
       "pos": 600,
-      "created": 1781322236
+      "created": 1781322236,
+      "author": "sam@example.com"
     }
   ]
 }
