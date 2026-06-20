@@ -602,13 +602,11 @@ class FileStore:
                        if u.get("role") == "admin")
 
     def list_admin_facing_users(self) -> list:
-        """{email, role, hidden_folders, pending, invite_expires_at} of human
-        accounts (admin/viewer), NEVER a hash. `pending` = invited but hasn't set
-        a password yet. 'api' accounts are listed separately by
-        list_api_identities."""
+        """{email, role, pending, invite_expires_at} of human accounts
+        (admin/viewer), NEVER a hash. `pending` = invited but hasn't set a
+        password yet. 'api' accounts are listed separately by list_api_identities."""
         with self._locks[self.USERS_FILE]:
             return [{"email": u.get("email"), "role": u.get("role"),
-                     "hidden_folders": u.get("hidden_folders") or [],
                      "pending": bool(u.get("invite_token_hash")),
                      "invite_expires_at": u.get("invite_expires_at")}
                     for u in self._load(self.USERS_FILE)
@@ -713,6 +711,20 @@ class FileStore:
         shares.sort(key=lambda s: -(s.get("created_at") or 0))
         # The cleartext token is returned so the admin UI shows a copyable link.
         return [_normalize_share(s) for s in shares[:limit]]
+
+    def list_shares_for_path(self, path: str) -> list:
+        """Active (non-revoked) shares targeting EXACTLY `path`. The R3 adapter
+        exposes each as a virtual `anon:<token_sha256>` view-grant in
+        effective_level, so a /s/<token> visitor is evaluated by the SAME ACL path
+        as everyone else. Returns [{token_sha256, expires_at}] — NEVER the cleartext
+        token; expiry is left to effective_level's grant check (single source)."""
+        with self._locks[self.SHARES_FILE]:
+            shares = self._load(self.SHARES_FILE)
+        return [{"token_sha256": s.get("token_sha256"),
+                 "expires_at": s.get("expires_at") or 0}
+                for s in shares
+                if s.get("path") == path and not s.get("revoked")
+                and s.get("token_sha256")]
 
     def revoke_share(self, share_id: str) -> bool:
         # Plain equality on the id field: accepts native uuid4s as well as the
@@ -913,19 +925,28 @@ class FileStore:
     # member emails at evaluation time (a user inherits all its groups' grants).
 
     def groups_for_email(self, email: str) -> list:
-        """Names of the groups `email` belongs to ([] if none)."""
+        """Names of the groups `email` belongs to ([] if none). CASE-INSENSITIVE:
+        both the query and the stored memberships are compared lowercased, so a
+        group grant resolves whatever case a member typed at login (user emails are
+        lowercased the same way) — and legacy mixed-case memberships still match."""
         if not email:
             return []
+        email = email.strip().lower()
         with self._locks[self.GROUPS_FILE]:
             groups = self._load(self.GROUPS_FILE, dict)
             return [name for name, members in groups.items()
-                    if isinstance(members, list) and email in members]
+                    if isinstance(members, list)
+                    and email in [m.strip().lower() for m in members
+                                  if isinstance(m, str)]]
 
     def set_group(self, name: str, emails) -> None:
-        """Create/replace a group's membership (deduped, order kept)."""
+        """Create/replace a group's membership (lowercased + deduped, order kept).
+        Emails are normalized to lowercase so a grant resolves regardless of the
+        case typed — mirrors the user-email normalization at account creation."""
         with self._locks[self.GROUPS_FILE]:
             groups = dict(self._load(self.GROUPS_FILE, dict))
-            groups[name] = list(dict.fromkeys(e for e in emails if e))
+            groups[name] = list(dict.fromkeys(
+                e.strip().lower() for e in emails if e and e.strip()))
             self._write(self.GROUPS_FILE, groups)
 
     def get_group(self, name: str):

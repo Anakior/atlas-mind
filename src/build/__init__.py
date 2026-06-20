@@ -88,7 +88,7 @@ def _git_commit_dates(repo_root: Path) -> dict[str, int]:
 
 def walk(path: Path, *, content_root: Path | None = None,
          embed_content: bool = False, _accum: dict | None = None,
-         excluded_names=None, excluded_prefixes=None) -> dict:
+         excluded_names=None, excluded_prefixes=None, keep=None) -> dict:
     """Recursively walk the knowledge-base content folder.
 
     `content_root` is the content root: doc paths (`rel`) are computed relative
@@ -102,6 +102,12 @@ def walk(path: Path, *, content_root: Path | None = None,
     `_accum` collects flat list of .md files for downstream indexing (search,
     backlinks). When embed_content=True, each .md node also carries `content`
     inline — used by the offline build.
+
+    `keep`: optional predicate ``keep(rel) -> bool`` over content-relative doc
+    paths. When set, a file is included ONLY if it passes; the offline build
+    passes its ACL filter here, so an excluded doc lands in NO embed (tree,
+    content, search, backlinks, tasks, notes) and its empty folders are pruned.
+    Default None = no filtering (online build — the server filters /api/tree).
     """
     if content_root is None:
         content_root = path
@@ -130,12 +136,17 @@ def walk(path: Path, *, content_root: Path | None = None,
             sub = walk(child, content_root=content_root,
                        embed_content=embed_content, _accum=_accum,
                        excluded_names=excluded_names,
-                       excluded_prefixes=excluded_prefixes)
+                       excluded_prefixes=excluded_prefixes, keep=keep)
             if sub["children"]:
                 node["children"].append(sub)
             continue
         ext = child.suffix.lower()
         rel = child.relative_to(content_root).as_posix()
+        if keep is not None and not keep(rel):
+            # ACL (R1, offline build): this doc is outside the export's visible
+            # set (a private doc, or invisible to --as <email>). Skip it BEFORE
+            # reading its content, so its name/path/text leak into no embed.
+            continue
         file_node = {
             "name": child.name,
             "type": "file",

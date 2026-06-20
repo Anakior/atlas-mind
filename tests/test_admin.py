@@ -711,8 +711,12 @@ class TestAdminUiPanel(unittest.TestCase):
         # body.admin-cloud stays set to manage the visibility of admin tabs.
         self.assertIn("classList.add('admin-cloud')", self.index)
         self.assertIn("data.role === 'admin'", self.index)
-        # The admin tabs are hidden outside admin-cloud.
-        self.assertIn('body:not(.admin-cloud) .settings-tab[data-tab="users"]', self.index)
+        # Every admin-only tab is hidden outside admin-cloud — a member must not
+        # see a tab it cannot use (e.g. Groups, whose /api/admin/groups is admin-gated).
+        for tab in ("users", "tokens", "nodes", "groups", "shares"):
+            self.assertIn(
+                'body:not(.admin-cloud) .settings-tab[data-tab="%s"]' % tab,
+                self.index)
 
     def test_settings_uses_admin_endpoints_via_fetch(self):
         # The panel talks to the admin endpoints (no CLI-only logic).
