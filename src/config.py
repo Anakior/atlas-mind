@@ -5,7 +5,7 @@ time from __file__ then reassigned one by one in __main__ in cloud mode) and
 DECOUPLES the engine (src/ + web/) from the mind (the content directory).
 
 Sources, in order of priority:
-  1. environment variables (PORT, KB_AUTH_ENABLED, SESSION_SECRET,
+  1. environment variables (PORT, ATLAS_BIND, KB_AUTH_ENABLED, SESSION_SECRET,
      GIT_PULL_INTERVAL, GITHUB_WEBHOOK_SECRET, ATLAS_TRUSTED_IP_HEADER,
      ATLAS_STORE, ATLAS_STORE_DIR, GITHUB_REPO_URL)
   2. <mind>/atlas.toml (optional, tomllib — stdlib)
@@ -285,6 +285,15 @@ class AtlasConfig:
             raise AtlasConfigError(
                 f"PORT / server.port must be between 0 and 65535 "
                 f"(got {self.port})")
+
+        # Bind interface override (ATLAS_BIND). Default (None): server.run binds
+        # loopback for local/dev and 0.0.0.0 only for real cloud. The docker dev
+        # sandbox sets ATLAS_BIND=0.0.0.0 so the container's port is reachable
+        # through the host port map (which pins the HOST side to 127.0.0.1, so it
+        # stays loopback-only). Setting it to 0.0.0.0 in a bare dev sandbox would
+        # expose the trivially-credentialed instance on the LAN — only do that
+        # behind a loopback-pinned port map or a firewall.
+        self.bind_host = (env.get("ATLAS_BIND") or "").strip() or None
 
         # Historical env semantics preserved: any NON-EMPTY value enables auth
         # (including "0"), an empty value disables it.

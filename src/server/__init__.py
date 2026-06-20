@@ -538,7 +538,10 @@ def run() -> None:
         signal.signal(signal.SIGTERM, _graceful_flush)
 
     # Dev sandbox + local both bind loopback; only real cloud listens on 0.0.0.0.
-    bind = "0.0.0.0" if (CONFIG.auth_enabled and not CONFIG.dev_mode) else "127.0.0.1"
+    # ATLAS_BIND overrides this (docker dev sets it to 0.0.0.0 so the host port
+    # map — pinned to 127.0.0.1 — can reach the container).
+    bind = CONFIG.bind_host or (
+        "0.0.0.0" if (CONFIG.auth_enabled and not CONFIG.dev_mode) else "127.0.0.1")
     mode = "dev sandbox" if CONFIG.dev_mode else ("cloud" if CONFIG.auth_enabled else "local")
     print(f"{CONFIG.site_name} ({mode}) : http://{bind}:{CONFIG.port}")
     try:
