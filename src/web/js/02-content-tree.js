@@ -56,15 +56,13 @@ const ICONS = {
 };
 const FOLDER_ICON =
   '<svg class="w-4 h-4 text-[#fbc678] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>';
-// Icon for the « Mental nodes » umbrella: a network node (AI teal), distinct
-// from the yellow folder → you see at a glance it isn't your own content.
+// « Mental nodes » umbrella icon: teal network node, distinct from the yellow folder.
 const REMOTE_FOLDER_ICON =
   '<svg class="w-4 h-4 text-[#59d0cf] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z"/></svg>';
 // « Share as node » icon (Heroicons link) shown on hover over folders/docs.
 const LINK_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg>';
-// « Rename » icon (Heroicons pencil) — replaces the old ✎ unicode character
-// which didn't align with the neighboring SVGs.
+// « Rename » icon (Heroicons pencil).
 const PENCIL_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Z"/></svg>';
 const FILE_ICON =
@@ -152,7 +150,7 @@ function renderTree(node, depth = 0, prefix = '') {
         (isRemoteFile ? ' tree-remote' : '');
       a.dataset.path = child.path;
       const nameHtml = `<span class="truncate min-w-0 flex-1 leading-snug" data-name="${escapeHtml(child.name)}">${escapeHtml(child.name)}</span>`;
-      // Sharing-state dot (U3/D2): private = amber, shared-by-me = sky,
+      // Sharing-state dot: private = amber, shared-by-me = sky,
       // shared-with-me (granted) = emerald, commons = none.
       const visBadge =
         child.vis === 'private'

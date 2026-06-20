@@ -5,8 +5,6 @@
                    (GET) / CSRF_BASE (POST) + an in-handler can_manage() check, so a
                    non-admin owner can share WITHOUT being admin.
 - /api/admin/groups : admin-only CRUD of named groups (principals group:<name>).
-
-See atlas-mind/cdc-commons-repo-partage.md §3/§5/§11.
 """
 import sys
 import time
@@ -53,14 +51,14 @@ def acl_post(handler):
         handler._send_json(400, {"error": "path required"})
         return
     ctx = handler._viewer_ctx()
+    actor = (handler._session() or {}).get("email")
     if not _s.can_read(rel, ctx):
         handler._send_json(404, {"error": "not found"})  # no-existence-oracle
         return
     if not _s.can_manage(rel, ctx):
         # Audit the DENIED attempt too (abuse detection): someone tried to change the
         # sharing of a doc they don't own.
-        denier = (handler._session() or {}).get("email", "?")
-        sys.stderr.write(f"[acl-audit] DENIED {action} path={rel} by={denier} "
+        sys.stderr.write(f"[acl-audit] DENIED {action} path={rel} by={actor or '?'} "
                          f"ip={handler._client_ip()}\n")
         sys.stderr.flush()
         handler._send_json(403, {"error": "only the owner or an admin can manage sharing"})
@@ -76,7 +74,7 @@ def acl_post(handler):
             if level not in _GRANTABLE:
                 handler._send_json(400, {"error": "level must be view, comment or edit"})
                 return
-            # Optional time-limited grant (D4): expires_days → absolute epoch.
+            # Optional time-limited grant: expires_days → absolute epoch.
             # 0/absent = no expiry; a negative value is rejected (would create an
             # already-expired, inert grant).
             expires_at = 0
@@ -91,8 +89,7 @@ def acl_post(handler):
                     handler._send_json(400, {"error": "expires_days must be a positive number"})
                     return
                 expires_at = int(time.time()) + days * 86400
-            # Record who granted it (D6): audit + "shared by …" attribution.
-            actor = (handler._session() or {}).get("email")
+            # Record who granted it: audit + "shared by …" attribution.
             store.grant(rel, principal, level, expires_at=expires_at,
                         by=("user:" + actor) if actor else None)
         elif action == "revoke":
@@ -115,14 +112,13 @@ def acl_post(handler):
         print(f"[acl] {action} on {rel} failed: {e}", file=sys.stderr)
         handler._send_json(503, {"error": "registry unavailable"})
         return
-    # Audit trail (C2): who changed the sharing of what, when. A multi-user atlas
+    # Audit trail: who changed the sharing of what, when. A multi-user atlas
     # needs this for incident response / abuse detection — the access log records
     # the IP+verb but not the actor's identity nor the action/principal.
-    actor = (handler._session() or {}).get("email", "?")
     sys.stderr.write(
         f"[acl-audit] {action} path={rel} "
         f"principal={(data.get('principal') or '-').strip() or '-'} "
-        f"by={actor} ip={handler._client_ip()}\n")
+        f"by={actor or '?'} ip={handler._client_ip()}\n")
     sys.stderr.flush()
     entry = store.get_acl(rel) or {}
     handler._send_json(200, {"ok": True, "path": rel,
@@ -186,7 +182,7 @@ def groups_post(handler):
     if not isinstance(members, list):
         handler._send_json(400, {"error": "members must be a list"})
         return
-    # Validate each member is a real email (C6): an unvalidated string (typo,
+    # Validate each member is a real email: an unvalidated string (typo,
     # control chars) becomes a dead grant that never matches a login — a silent
     # no-op that reads as "shared" but grants no one.
     emails = []

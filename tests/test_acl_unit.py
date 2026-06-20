@@ -50,7 +50,7 @@ class TestEffectiveLevel(unittest.TestCase):
         return acl.viewer_ctx(ident, self.fs)
 
     def test_api_token_owns_the_commons(self):
-        # An unbound API token writes the commons out of the box (owner-level →
+        # An unbound API token writes the commons (owner-level →
         # read/edit/move/delete all work).
         ctx = self.api_ctx()
         self.assertEqual(self.lvl("notes/c.md", ctx), "owner")
@@ -141,7 +141,7 @@ class TestEffectiveLevel(unittest.TestCase):
         self.fs.grant("wizishop/doc.md", "user:fab@x", "edit")
         self.assertEqual(self.lvl("wizishop/doc.md", self.ctx("fab@x")), "edit")
 
-    # ── tokens api / acts_as (decision §11.2) ─────────────────────────────
+    # ── tokens api / acts_as ──────────────────────────────────────────────
     def test_acts_as_inherits_human(self):
         self.fs.upsert_user("human@x", {"role": "viewer"})
         self.fs.set_owner("doc.md", "user:human@x")

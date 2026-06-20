@@ -10,7 +10,7 @@ TODO_HEADER = "# To-do\n\nEditable from the widget in the bottom-right of the vi
 
 def _norm_cat(value):
     # Categories (CONFIG.todo_categories) stored under H2 sections; unknown
-    # values fall back to the default. See parse_todos / write_todos.
+    # values fall back to the default.
     v = (value or "").strip().lower()
     return v if v in _s.CONFIG.todo_categories else _s.CONFIG.todo_cat_default
 

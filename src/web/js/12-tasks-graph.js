@@ -31,9 +31,7 @@ function closeTasks() {
   tasksOverlay.classList.add('hidden');
 }
 
-// Mirrors renderTasks's layout (per-doc header + checkbox rows) so swapping in the
-// real content causes no layout jump. Deterministic widths via a seeded LCG:
-// identical skeleton every open, never uniform.
+// Skeleton mirrors renderTasks layout (no jump on swap). Seeded LCG → same skeleton each open.
 function renderTasksSkeleton() {
   let state = 0x9e3779b9 >>> 0;
   const next = () => (state = (state * 1664525 + 1013904223) >>> 0);
@@ -439,11 +437,10 @@ function graphDraw(st) {
     drawOrganicZones(ctx, st);
   }
 
-  // ── Neural pass: glowing curved synapses + firing pulses + node bloom ──
+  // ── Render pass: link arcs + node glow ──
   const now = performance.now();
 
-  // 1) Synapses: wikilinks bow into arcs (additive glow); tag links stay faint
-  //    and straight — structural scaffolding behind the firing network.
+  // 1) Wikilinks bow into arcs (additive glow); tag links stay faint and straight.
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
 
@@ -503,7 +500,7 @@ function graphDraw(st) {
   }
 
   ctx.restore();
-  // 3) Soft neural bloom under every doc node; recently-edited ones breathe.
+  // 3) Radial glow under each doc node; recently-edited ones pulse.
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
 

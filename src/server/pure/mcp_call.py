@@ -442,9 +442,8 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
         if ctx is not None and ctx.primary:
             try:
                 _s.get_store().set_creator(rel, ctx.primary)
-                # An admin OR an API token → the doc stays in the COMMONS (an AI's
-                # notes are shared with the owner, not private to the token). Only a
-                # human member's new doc is private to them by default.
+                # An admin or an API token → the doc stays in the commons; only a
+                # human member's new doc is private by default.
                 if not ctx.is_admin and not ctx.api and not _s.in_private_space(rel):
                     _s.get_store().set_owner(rel, ctx.primary)
             except Exception as e:

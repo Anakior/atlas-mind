@@ -60,7 +60,7 @@ def _folder_tags(rel: str) -> list[str]:
     `projets/alpha/doc.md` → ['projets', 'alpha']. Doc at the root → []."""
     parts = rel.split("/")[:-1]  # excludes the file name
     # Mirrors of remote nodes (remotes/<source>/…) don't pollute the tag space:
-    # they already have their dedicated region in the Mind (#10).
+    # they already have their dedicated region in the Mind.
     if parts and parts[0] == "remotes":
         return []
     return [p.strip().lower() for p in parts if p.strip()]

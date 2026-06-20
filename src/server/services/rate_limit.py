@@ -54,7 +54,7 @@ class RateLimiter:
             if len(buckets) > self._cap:
                 _evict_stale_buckets(buckets, cutoff)
             bucket = buckets.setdefault(key, [])
-            bucket[:] = [t for t in bucket if t > cutoff]   # drop entries older than 60s
+            bucket[:] = [t for t in bucket if t > cutoff]
             if len(bucket) >= limit:
                 return False
             bucket.append(now)

@@ -20,9 +20,6 @@ Usage:
 
 All user/token/share commands operate on the mind's FileStore
 (<mind>/.atlas by default, or store.dir from atlas.toml).
-
-`main()` is the clean entry-point alias for future packaging
-(console_script `atlas = cli:main`).
 """
 from __future__ import annotations
 
@@ -83,7 +80,7 @@ def _file_store(config: AtlasConfig) -> store.FileStore:
     return store.FileStore(config.store_dir)
 
 
-def _run_build(mind: Path, *, offline: bool = False, as_email: str = None) -> int:
+def _run_build(mind: Path, *, offline: bool = False, as_email: str | None = None) -> int:
     """Build the mind's viewer via `python -m build` (inherited output). Always the
     ENGINE's build: PYTHONPATH puts the engine src first, so a mind never builds
     with its own (now-forbidden) shipped build."""
@@ -1388,7 +1385,7 @@ def cmd_token_create(args) -> int:
     # Optional: bind the token to a HUMAN account (acts_as). The AI then also sees
     # that person's PRIVATE space, not just the commons (an unbound token writes the
     # commons but never a private doc). Validated against a real admin/viewer.
-    acts_as = getattr(args, "acts_as", None)
+    acts_as = args.acts_as
     if acts_as:
         acts_as = _normalize_email(acts_as)
         human = file_store.get_user_by_email(acts_as)
@@ -1516,7 +1513,7 @@ def cmd_doctor(args) -> int:
     _show("bad_owner", "Owner is a deleted account — reassign manually")
     _show("bad_creator", "Creator is a deleted account")
 
-    if not getattr(args, "fix", False):
+    if not args.fix:
         print("\nRun `atlas doctor --fix` to clean the SAFE issues (orphan ACL "
               "entries, dead shares, dead grants). Stale owners/creators are left "
               "for manual reassignment — auto-clearing would expose a private doc.")

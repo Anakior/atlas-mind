@@ -104,7 +104,6 @@ class GitSync:
         def _sync():
             with self._lock:
                 try:
-                    # autostash: preserves our uncommitted changes during the rebase
                     self.run("pull", "--rebase", "--autostash", "--quiet", timeout=30)
                     self.build()
                     self.run("add", "-A")

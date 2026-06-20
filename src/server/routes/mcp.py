@@ -75,7 +75,6 @@ def handle(handler):
 
         response = _s._mcp_jsonrpc(req, ctx)
         if response is None:
-            # Notification → 204 No Content
             handler.send_response(204)
             handler.end_headers()
             return

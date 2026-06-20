@@ -143,7 +143,7 @@ def walk(path: Path, *, content_root: Path | None = None,
         ext = child.suffix.lower()
         rel = child.relative_to(content_root).as_posix()
         if keep is not None and not keep(rel):
-            # ACL (R1, offline build): this doc is outside the export's visible
+            # ACL (offline build): this doc is outside the export's visible
             # set (a private doc, or invisible to --as <email>). Skip it BEFORE
             # reading its content, so its name/path/text leak into no embed.
             continue

@@ -72,7 +72,7 @@ def _load_config():
 
 def _offline_keep(cfg, as_email):
     """Predicate deciding which content-relative doc paths are embedded in the
-    offline monolith — privacy of a STATIC, access-control-free artifact (R1).
+    offline monolith — privacy of a STATIC, access-control-free artifact.
 
     Default (as_email None): the COMMON SOCLE only — docs with NO owner anywhere
     on their ancestor chain. EVERY account's PRIVATE docs are excluded. With
@@ -142,7 +142,7 @@ def main() -> int:
         encoding="utf-8")
 
     if args.offline:
-        # R1: filter the offline export to the common socle (or --as <email>'s
+        # Filter the offline export to the common socle (or --as <email>'s
         # view). One predicate threaded through walk() filters the tree AND
         # md_files at the source, so embed_content / backlinks / tasks / the
         # MiniSearch index all inherit it; notes (loaded separately) match it.
@@ -175,8 +175,12 @@ def main() -> int:
         html = inline_vendor_assets(html, web_dir)
         out_offline.write_text(html, encoding="utf-8")
         size = out_offline.stat().st_size
-        scope = (f"view of {args.as_email}" if args.as_email
-                 else "common socle" if keep is not None else "all content")
+        if args.as_email:
+            scope = f"view of {args.as_email}"
+        elif keep is not None:
+            scope = "common socle"
+        else:
+            scope = "all content"
         print(f"Generated {out_offline.name} ({size:,} bytes, "
               f"{len(accum['md_files'])} .md inline — {scope})")
         return 0
@@ -208,7 +212,7 @@ def main() -> int:
     backlinks_data.write_text(json.dumps(backlinks, ensure_ascii=False), encoding="utf-8")
 
     # Annotations index (disposable, gitignored): {rel_doc: nb_notes}, for the
-    # tree's "📝 n" badges; the data lives in .notes/.
+    # tree's note-count badges; the data lives in .notes/.
     notes_index = {rel: len(ns) for rel, ns in load_all_notes(notes_dir).items()}
     notes_index_path.write_text(json.dumps(notes_index, ensure_ascii=False), encoding="utf-8")
 

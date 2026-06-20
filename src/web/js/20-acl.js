@@ -1,4 +1,4 @@
-// ── Access & sharing (model B per-document ACL) ──────────────────────────────
+// ── Access & sharing (per-document ACL) ──────────────────────────────────────
 // The "Accès" button on a doc opens a dialog to see/own/share it with users,
 // groups, or everyone — backed by /api/acl. Read-only for a non-manager.
 (function () {
@@ -37,8 +37,6 @@
     }
     return dir || { users: [], groups: [] };
   }
-
-  // (native datalist removed — AtlasCombobox above handles the suggestions.)
 
   function myPrincipal() {
     return meState && meState.email ? 'user:' + meState.email : null;

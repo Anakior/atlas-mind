@@ -1126,7 +1126,7 @@ settingsRemotesList.addEventListener('click', async (e) => {
   }
 });
 
-// ── Groups (model B principals group:<name>) ──
+// ── Groups (principals group:<name>) ──
 async function loadSettingsGroups() {
   const list = document.getElementById('settings-groups-list');
 
@@ -1310,5 +1310,5 @@ document.querySelectorAll('.settings-tab').forEach((tab) => {
 
 // ── Minimal QR code generator (no external lib) ───────────────────────────────
 // QR Model 2, byte mode, EC level L — enough for an otpauth:// URI (~120 bytes →
-// version 6/7). Full encoder: GF(256), Reed-Solomon, optimal mask, fixed patterns.
+// version 6/7).
 // On encoding failure (improbably long URI) the caller falls back to the plaintext secret.

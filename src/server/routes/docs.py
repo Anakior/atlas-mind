@@ -20,7 +20,7 @@ def file_put(handler):
     if not rel or ".." in rel.split("/"):
         handler._send_json(400, {"error": "invalid path"})
         return
-    rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level): kills //, ./, trailing /
+    rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level)
     if _s._is_readonly_path(rel):
         handler._send_json(403, {"error": "remote mirror is read-only"})
         return
@@ -73,7 +73,7 @@ def file_put(handler):
 
 
 def _annotate_vis(node, store, principals=None):
-    """Tag each FILE node with its sharing state for the tree badge (U3/D2),
+    """Tag each FILE node with its sharing state for the tree badge,
     relative to the VIEWER: `private` (you own it, no grant), `shared` (you own it
     AND shared it out), `granted` (someone else owns it and shared it WITH you);
     commons → nothing. `principals` None (superuser/local) keeps the legacy
@@ -327,7 +327,6 @@ def dir_rename(handler):
     if dst.exists():
         handler._send_json(409, {"error": "destination exists"})
         return
-    # Prevent moving into a subfolder of itself
     try:
         dst.relative_to(src)
         handler._send_json(400, {"error": "destination is inside source"})

@@ -18,7 +18,7 @@ if (isServerMode) {
 
       if (data.authenticated && data.role && data.role !== 'admin') {
         // Member (non-admin): may write its OWN docs — the server enforces per
-        // document (M5). We KEEP the `viewer-mode` class (CSS now hides only the
+        // document. We KEEP the `viewer-mode` class (CSS now hides only the
         // still-global Todos widget) but do NOT set the __viewerMode flag, so the
         // write affordances (create/edit/delete/move/share/rename) are available;
         // disallowed actions fail with a clean 403/404 from the backend. Notes

@@ -171,7 +171,6 @@ def webhook(handler):
         handler.send_response(401)
         handler.end_headers()
         return
-    # Only react to push events
     event = handler.headers.get("X-GitHub-Event", "")
     if event == "push":
         threading.Thread(target=_s.pull_and_rebuild, daemon=True).start()

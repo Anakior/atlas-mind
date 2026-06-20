@@ -52,8 +52,7 @@ def users_post(handler):
     # Invite URL derived from the request host (the instance may run behind any
     # domain): https in cloud, http otherwise — mirrors tokens_post / nodes_post.
     host = handler.headers.get("Host", "")
-    # https only in REAL cloud; the dev sandbox + local both serve plain http on
-    # loopback (an https URL there hits the http server with a TLS handshake → 400).
+    # https only in real cloud; dev/local serve plain http on loopback (https → 400).
     scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
     invite_url = (f"{scheme}://{host}/invite/{token}" if host
                   else f"/invite/{token}")
@@ -161,8 +160,7 @@ def tokens_post(handler):
     # mcp_url derived from the request host (the client may run behind any
     # domain): https scheme in the cloud, http otherwise.
     host = handler.headers.get("Host", "")
-    # https only in REAL cloud; the dev sandbox + local both serve plain http on
-    # loopback (an https URL there hits the http server with a TLS handshake → 400).
+    # https only in real cloud; dev/local serve plain http on loopback (https → 400).
     scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
     mcp_url = f"{scheme}://{host}/mcp/{token}" if host else f"/mcp/{token}"
     # The PLAINTEXT token is returned only HERE, a single time.
@@ -191,7 +189,7 @@ def tokens_delete(handler):
     handler._send_json(200, {"ok": True})
 
 
-# ── Atlas nodes — administration (hive, #10) ────────────────────────
+# ── Atlas nodes — administration (hive) ────────────────────────────
 def update_check(handler):
     current = _s.current_version()
     if not _s.CONFIG.update_check:
@@ -238,8 +236,7 @@ def nodes_post(handler):
         handler._send_json(503, {"error": "registry unavailable"})
         return
     host = handler.headers.get("Host", "")
-    # https only in REAL cloud; the dev sandbox + local both serve plain http on
-    # loopback (an https URL there hits the http server with a TLS handshake → 400).
+    # https only in real cloud; dev/local serve plain http on loopback (https → 400).
     scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
     origin = f"{scheme}://{host}" if host else ""
     # The PLAINTEXT token is returned only HERE, wrapped in the copyable link.
@@ -267,7 +264,7 @@ def nodes_delete(handler):
     handler._send_json(200, {"ok": True})
 
 
-# ── Remote node subscriptions — administration (#10 Phase B) ──────────────
+# ── Remote node subscriptions — administration ──────────────────────
 def remotes_get(handler):
     try:
         remotes = _s.get_store().list_remotes()

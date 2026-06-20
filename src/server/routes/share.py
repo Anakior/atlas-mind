@@ -111,7 +111,7 @@ def create(handler):
     days = _s._safe_int(data.get("expires_days"))
     if _resolve_target(handler, rel) is None:
         return
-    # Owner-or-admin only (CDC §5): the doc's owner may mint a public link. 404
+    # Owner-or-admin only: the doc's owner may mint a public link. 404
     # first if it is not even readable (no-existence-oracle), 403 if not manageable.
     ctx = handler._viewer_ctx()
     if not ctx.superuser:

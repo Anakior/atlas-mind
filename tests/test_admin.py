@@ -655,13 +655,14 @@ class TestAdminUiPanel(unittest.TestCase):
         cls.srv.stop()
 
     def test_baked_tree_not_indexed_in_server_mode(self):
-        # ACL: the baked FULL tree is indexed into fileMap ONLY in offline
-        # (file://) mode. In server mode that boot-time index would leak private
-        # doc names + the total count through every fileMap consumer (Recent,
-        # search, the Mind, stats) BEFORE the per-account filtered softReload().
-        # The gate mirrors the tree-render gate in 02-content-tree.js.
+        # ACL: the baked FULL tree is indexed into fileMap ONLY in the offline
+        # build (IS_OFFLINE_BUILD). In server mode that boot-time index would leak
+        # private doc names + the total count through every fileMap consumer
+        # (Recent, search, the Mind, stats) BEFORE the per-account filtered
+        # softReload(). Gated on IS_OFFLINE_BUILD, not the protocol — a static
+        # offline build is served over https on Pages. Mirrors 02-content-tree.js.
         self.assertIn(
-            "if (!location.protocol.startsWith('http')) {\n  index(TREE);",
+            "if (IS_OFFLINE_BUILD) {\n  index(TREE);",
             self.index)
         # softReload still rebuilds fileMap from the FILTERED /api/tree.
         self.assertIn("const res = await fetch('/api/tree');", self.index)

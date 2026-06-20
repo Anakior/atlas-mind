@@ -1,7 +1,5 @@
 function renderSkeleton(file) {
-  // Variable but deterministic layout: same doc → same skeleton (visual
-  // consistency on refresh), different docs → different layouts (less
-  // "Windows OS wallpaper"). Simple LCG over the hash of the path.
+  // Deterministic per-path skeleton (same doc → same layout). LCG seeded by hashStr(path).
   let state = (file && file.path ? hashStr(file.path) : 1) || 1;
   const next = () => (state = (state * 1664525 + 1013904223) >>> 0);
   const range = (min, max) => min + (next() % (max - min + 1));
@@ -38,7 +36,6 @@ function renderSkeleton(file) {
     range(4, 9) +
     'rem;margin-bottom:1.75rem;"></div>';
 
-  // Title + meta (always present)
   parts.push(
     '<div class="skeleton-title" style="height:2.4rem;width:' +
       range(48, 78) +
@@ -55,10 +52,8 @@ function renderSkeleton(file) {
       '</div>',
   );
 
-  // First paragraph (always)
   parts.push(para(range(3, 5)));
 
-  // 1 to 3 sections (h2 + paragraph, sometimes a code block)
   const sections = range(1, 3);
 
   for (let s = 0; s < sections; s++) {

@@ -93,7 +93,6 @@ function renderPdfFrame(file) {
     '</a>' +
     '</div>' +
     body;
-  // Same hides as for a .html: TOC/backlinks/notes + TOC button + todos widget.
   tocList.innerHTML = '';
   tocLinks.innerHTML = '';
   tocNotes.innerHTML = '';
@@ -128,8 +127,7 @@ function loadMammoth() {
   return _mammothPromise;
 }
 
-// Render a .docx: converted to HTML in the browser (mammoth), injected into the
-// .prose article. Read-only, fully client-side (nothing is sent anywhere).
+// .docx → HTML via mammoth, injected into .prose. Read-only, client-side.
 async function renderDocxFrame(file) {
   btnEdit.classList.add('hidden');
   btnSave.classList.add('hidden');
@@ -137,7 +135,6 @@ async function renderDocxFrame(file) {
   contentEl.style.maxWidth = '';
   contentEl.style.padding = '';
   contentEl.innerHTML = renderSkeleton(file);
-  // Same hides as for .html/.pdf: TOC/backlinks/notes/todos.
   tocList.innerHTML = '';
   tocLinks.innerHTML = '';
   tocNotes.innerHTML = '';

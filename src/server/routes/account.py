@@ -14,7 +14,7 @@ def logout_all(handler):
         print(f"[account] logout-all: {e}", file=sys.stderr)
         handler._send_json(503, {"error": "registry unavailable"})
         return
-    # The current session is now invalid: clear the cookies.
+    # Session now invalid → clear the cookies.
     handler.send_response(200)
     handler.send_header("Set-Cookie",
                      f"{_s.COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")

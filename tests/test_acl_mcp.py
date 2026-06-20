@@ -107,7 +107,7 @@ class TestMcpBearerAcl(unittest.TestCase):
                            headers=self._bearer(self.bare_token)).json()
         self.assertFalse(any(r.get("path") == "secret/private.md" for r in res))
 
-    # ── T1 (CDC §8): NO read/discovery tool leaks a private doc to a bare token ──
+    # ── NO read/discovery tool leaks a private doc to a bare token ──
     def test_no_read_tool_leaks_private_content_to_bare_token(self):
         # Every path-addressed read tool: a bare token gets "not found", NEVER the
         # private content (the _visible gate fires before any git/blob read).
@@ -174,8 +174,7 @@ class TestMcpWriteLadder(unittest.TestCase):
         return bool(res.get("isError")), res["content"][0]["text"]
 
     def test_bare_can_edit_commons(self):
-        # An API/MCP token writes the COMMONS out of the box (the AI manages the
-        # shared mind). Private spaces still require acts_as (tests below).
+        # An API/MCP token writes the commons; private spaces still require acts_as.
         err, text = self._call(self.bare, "edit_doc",
                                {"path": "public/note.md", "content": "edited by the AI"})
         self.assertFalse(err, text)

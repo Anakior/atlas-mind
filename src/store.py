@@ -141,10 +141,9 @@ _dummy_bcrypt_lock = threading.Lock()
 
 
 def _dummy_bcrypt_verify(password: str) -> None:
-    """Verify a dummy bcrypt hash rounds=12 — the cost of a real bcrypt account.
-    Exact replica of server.py's former _dummy_bcrypt, lazy
-    import included: without bcrypt installed, ImportError propagates (like the
-    former `import bcrypt` in authenticate() → 503 on the login side)."""
+    """Verify a dummy bcrypt hash rounds=12 — the cost of a real bcrypt account, so
+    a login against a non-existent user takes the same time as a real one. Without
+    bcrypt installed, ImportError propagates (→ 503 on the login side)."""
     global _dummy_bcrypt_hash
     import bcrypt
     if _dummy_bcrypt_hash is None:
@@ -306,7 +305,7 @@ class FileStore:
     NODES_FILE = "nodes.json"
     REMOTES_FILE = "remotes.json"
     STATE_FILE = "state.json"
-    ACL_FILE = "acl.json"        # per-document ACL (model B): {path: {owner, grants[]}}
+    ACL_FILE = "acl.json"        # per-document ACL: {path: {owner, grants[]}}
     GROUPS_FILE = "groups.json"  # principals: {group_name: [emails]}
     TODOS_FILE = "todos.json"    # per-member todos (private, not git): {email: [items]}
 
@@ -723,7 +722,7 @@ class FileStore:
         return [_normalize_share(s) for s in shares[:limit]]
 
     def list_shares_for_path(self, path: str) -> list:
-        """Active (non-revoked) shares targeting EXACTLY `path`. The R3 adapter
+        """Active (non-revoked) shares targeting EXACTLY `path`. The share adapter
         exposes each as a virtual `anon:<token_sha256>` view-grant in
         effective_level, so a /s/<token> visitor is evaluated by the SAME ACL path
         as everyone else. Returns [{token_sha256, expires_at}] — NEVER the cleartext
@@ -817,7 +816,7 @@ class FileStore:
             lambda p: p.startswith(old_prefix),
             lambda p: new_prefix + p[len(old_prefix):])
 
-    # ── per-document ACL + groups (model B — partage à la Notion) ─────────────
+    # ── per-document ACL + groups ─────────────────────────────────────────────
     # acl.json is a DICT keyed by content-relative path (file OR folder, the
     # folder without extension). Value = {owner, grants:[{principal, level, at,
     # expires_at?}]}. Same lock/atomic-write/fail-CLOSED machinery as the rest:
@@ -948,8 +947,9 @@ class FileStore:
             if not entry:
                 return
             creator = entry.get("creator")
-            acl[path] = {"creator": creator, "grants": []} if creator else None
-            if acl[path] is None:
+            if creator:
+                acl[path] = {"creator": creator, "grants": []}
+            else:
                 del acl[path]
             self._write(self.ACL_FILE, acl)
 
@@ -1203,7 +1203,7 @@ class FileStore:
             data[email] = [dict(t) for t in items]
             self._write(self.TODOS_FILE, data)
 
-    # ── Atlas nodes (hive, #10) ─────────────────────────────────────────
+    # ── Atlas nodes (hive) ─────────────────────────────────────────────
     def create_node(self, name: str, path: str, token: str) -> dict:
         """Publish a node: the folder/file `path` (relative to content/) becomes
         readable read-only via `token` (stored as SHA256). Upsert by name:
@@ -1247,7 +1247,7 @@ class FileStore:
                     return True
         return False
 
-    # ── Subscriptions to remote nodes (hive, #10 Phase B) ───────────────
+    # ── Subscriptions to remote nodes (hive) ───────────────────────────
     def add_remote(self, record: dict) -> dict:
         """Register a subscription to a remote node (upsert by local name).
 

@@ -3,19 +3,19 @@
 Pure resolution of an *effective permission level* for a (path, viewer) pair
 against the central registry (``store.get_acl`` + groups). NO enforcement lives
 here: callers (handler, mcp_call, apiv1) turn ``effective_level`` into 404s and
-write gates. See ``atlas-mind/cdc-commons-repo-partage.md`` §4/§5.
+write gates.
 
 Model B:
 - A path with **no ACL entry anywhere on its chain** = *socle commun*: visible
   (``view``) to any authenticated account, **including an unbound api token** (a
   token sees shared content but never a private space; bind it via ``acts_as`` to
-  give it a human's full identity, §11.2).
+  give it a human's full identity).
 - An entry with an ``owner`` makes the path **private**: only the owner and the
   explicitly granted principals see it. Sharing is positive (``grant``); the most
   permissive grant wins.
 - **Folder inheritance is additive descending**, BUT an explicit-owner child
   **cuts** the inheritance coming from above (a private sub-doc under a shared
-  folder is never re-exposed) — the classic Notion trap, closed (§4).
+  folder is never re-exposed) — the classic Notion trap, closed.
 
 Principals are opaque strings typed by prefix: ``user:<email>``, ``group:<name>``,
 ``anon:<token_sha256>`` (a share-link), and ``*`` = any authenticated human.
@@ -26,7 +26,7 @@ import time
 import server as _s
 
 # Ordered permission ladder. ``comment`` is reserved but folded onto ``view`` in
-# v1 (decision §11.4); kept in the order so a future grant slots in cleanly.
+# v1; kept in the order so a future grant slots in cleanly.
 LEVELS = {"view": 1, "comment": 2, "edit": 3, "owner": 4}
 
 
@@ -49,9 +49,8 @@ class ViewerCtx:
         # superuser: full bypass (sees everything), reserved for LOCAL mode — the
         # single operator on their own machine. Never set from a cloud identity.
         self.superuser = superuser
-        # api: an API/MCP service token — full write on the COMMONS (the AI manages
-        # the shared mind out of the box). Private spaces still require the bound
-        # human (acts_as); distinct from is_admin (no Settings / admin routes).
+        # api: an API/MCP token — full write on the commons; private spaces still
+        # require the bound human (acts_as). Distinct from is_admin (no admin routes).
         self.api = api
 
 
@@ -80,9 +79,9 @@ def viewer_ctx(identity, store=None):
 
     - None → anonymous (:data:`ANON`).
     - human (admin/viewer) → own principal + groups + ``*``.
-    - api/MCP token with ``acts_as=<human email>`` → **inherits that human**
-      (decision §11.2, "un token MCP = un humain"); without ``acts_as`` →
-      least privilege: only its own ``user:<email>``, NOT a member of ``*``.
+    - api/MCP token with ``acts_as=<human email>`` → inherits that human (private
+      space + grants); without ``acts_as`` → commons-only (writes the commons, but
+      no private space). Both carry ``api=True``.
     """
     store = store or _s.get_store()
     if not identity:
@@ -94,15 +93,12 @@ def viewer_ctx(identity, store=None):
         if acts_as:
             human = store.get_user_by_email(acts_as)
             if human:
-                # Bound: the AI acts AS the human — their private space + grants —
-                # PLUS the API commons-write capability (api=True).
+                # Bound: act as the human (private space + grants) + commons write.
                 h = _ctx_for_human(human, store)
                 return ViewerCtx(h.principals, h.is_admin, h.primary, api=True)
-        # Unbound token: full write on the COMMONS (api=True, the AI's service
-        # identity) but NEVER admin and NEVER in a private space — owned/private
-        # docs stay hidden until the token is bound via `acts_as` to a human
-        # (decision §11.2). Mono-user reality (§11.3): the owner binds his token to
-        # himself/admin and sees everything.
+        # Unbound: writes the commons (api=True) but never admin and never in a
+        # private space — owned docs stay hidden until the token is bound to a human
+        # via acts_as. (Single-user: bind the token to yourself to see everything.)
         principals = {"*"}
         if email:
             principals.add("user:" + email)
@@ -114,10 +110,10 @@ def viewer_ctx(identity, store=None):
 def share_ctx(token):
     """ViewerCtx for a /s/<token> visitor: the single ``anon:<sha256(token)>``
     principal (the verified capability). effective_level grants ``view`` on docs
-    that carry an active share for this token (R3 — share-links unified into the
-    ACL path). NOT a member of ``*`` (a share is not an authenticated account)."""
-    import hashlib
-    sha = hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+    that carry an active share for this token (share-links unified into the ACL
+    path). NOT a member of ``*`` (a share is not an authenticated account)."""
+    import store
+    sha = store.hash_share_token(token)
     return ViewerCtx(frozenset({"anon:" + sha}), False, None)
 
 
@@ -156,7 +152,7 @@ def effective_level(rel, ctx, store=None):
         if entry:
             present.append((idx, entry))
 
-    # R3: a /s/<token> visitor carries an anon:<token_sha256> principal. Expose the
+    # A /s/<token> visitor carries an anon:<token_sha256> principal. Expose the
     # active share-links on THIS doc as matching anon: view-grants, so the share is
     # evaluated by the SAME path as everything else (no second authorization system).
     # Guarded on an anon: principal → zero cost for normal (non-share) access, and
@@ -181,7 +177,7 @@ def effective_level(rel, ctx, store=None):
     for idx, entry in present:
         if owner_idx is not None and idx > owner_idx:
             continue
-        for g in entry.get("grants", ()):  # noqa: E741
+        for g in entry.get("grants", ()):
             if g.get("principal") not in ctx.principals:
                 continue
             exp = g.get("expires_at") or 0
@@ -198,9 +194,8 @@ def effective_level(rel, ctx, store=None):
             return "owner"
         return best  # a grant level, or None (hidden — including from the admin)
 
-    # Not governed by an owner → commons. An API/MCP token (the AI's service
-    # identity) gets full write on the shared commons out of the box; the private
-    # spaces it must NOT touch were already handled by the owner branch above.
+    # Not governed by an owner → commons. An API/MCP token gets full write here;
+    # private spaces are handled by the owner branch above.
     if ctx.api:
         return "owner"
     # The CREATOR curates their own doc (owner-level: "on the commons only the

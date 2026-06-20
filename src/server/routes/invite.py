@@ -1,7 +1,7 @@
 """Invitation routes: the accept page (where an invited user sets their OWN
 password) and its submit endpoint.
 
-C1 — an admin creates a PENDING account (email + role) and gets a single-use
+An admin creates a PENDING account (email + role) and gets a single-use
 invite link /invite/<token>; the invitee opens it, chooses a password, and the
 account is activated + logged in. Only the token's SHA256 lives on the account
 (invite_token_hash); the cleartext travels solely in the URL the admin shares.

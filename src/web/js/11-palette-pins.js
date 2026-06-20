@@ -391,9 +391,8 @@ btnPin.addEventListener('click', () => {
 });
 renderPinned();
 
-// Embed mode (#mind): the landing page iframes this viewer for a chrome-less
-// live Mind hero. We only build the base view here; the graph is opened (controls
-// hidden) once it is fully wired, below.
+// Embed mode (#mind): landing page iframes this viewer as a chrome-less Mind hero.
+// Build the base view here; the graph opens (controls hidden) once fully wired, below.
 const EMBED_MIND = location.hash.replace(/^#/, '') === 'mind';
 
 if (EMBED_MIND) {

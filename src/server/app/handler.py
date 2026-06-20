@@ -373,7 +373,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _send_invite_page(self, email, token, error=None, status=200):
-        """The invite-accept page (C1): the invitee sets their OWN password. The
+        """The invite-accept page: the invitee sets their OWN password. The
         email is display-only (bound to the invite) and the opaque token rides in a
         hidden field (already in the invitee's URL)."""
         error_html = f'<p class="err">{html.escape(error)}</p>' if error else ""
@@ -435,7 +435,7 @@ class Handler(SimpleHTTPRequestHandler):
         if error:
             self._send_share_error(error)
             return
-        # R3: authorize through the unified ACL path — the verified token is an
+        # Authorize through the unified ACL path — the verified token is an
         # anon:<token_sha256> principal that effective_level grants `view` via the
         # share adapter (store.list_shares_for_path). verify_share_token already
         # gated revoked/expired/unknown above; this is fail-closed belt-and-braces
@@ -593,7 +593,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return True
             if role == "auth" and not self._require_auth_or_401():
                 return True
-            # CSRF (T4): a mutating POST extension route that requires a session
+            # CSRF: a mutating POST extension route that requires a session
             # must carry the same synchronizer-token defense as the core POST
             # routes (CSRF_BASE / ADMIN_CSRF) — otherwise a third-party page could
             # drive it with the visitor's cookie. A `public` route self-protects.
@@ -603,7 +603,7 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 handler(self, match)
             except Exception as e:
-                print(f"[extensions] erreur handler {self.command} {path}: {e}",
+                print(f"[extensions] handler error {self.command} {path}: {e}",
                       file=sys.stderr)
                 try:
                     self._send_json(500, {"error": "extension error"})

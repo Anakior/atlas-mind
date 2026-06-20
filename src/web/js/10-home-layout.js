@@ -31,7 +31,7 @@ function renderRecent() {
 
 renderRecent();
 
-// "Shared with me" (D1): docs another member shared WITH the viewer, discovered
+// "Shared with me": docs another member shared WITH the viewer, discovered
 // via /api/shared-with-me. Cloud-only and fully defensive — any failure (offline
 // build, local mode, empty list, network error) just leaves the section hidden, so
 // it can never break the home view.
@@ -475,7 +475,6 @@ function showWelcome() {
   const homeGraphBtn = contentEl.querySelector('#home-graph-btn');
 
   if (homeGraphBtn) homeGraphBtn.addEventListener('click', openGraph);
-  // Instant floating tooltip on the activity heatmap
   const hm = contentEl.querySelector('#home-heatmap');
 
   if (hm) {

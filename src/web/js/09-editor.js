@@ -109,7 +109,7 @@ const MD_TOOLBAR_HTML =
 // ─── [[wikilink]] autocomplete in the editor ──────────────────────────────────
 // Triggered by typing `[[`: suggests docs (filtered by name/path), keyboard nav,
 // inserts an always-resolvable target (name only if unique, full path otherwise).
-// 100% client-side, relies on fileMap.
+// Client-side, from fileMap.
 let wlOpen = false,
   wlItems = [],
   wlActive = 0,

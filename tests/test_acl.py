@@ -6,7 +6,7 @@ no-existence-oracle), search, and the Mind/backlinks index. The admin bypasses
 everything. Filtering is ALWAYS server-side (never a client-side mask).
 
 Replaces the previous `hidden_folders` blacklist suite (that mechanism is retired
-in favor of model B — see atlas-mind/cdc-commons-repo-partage.md §8).
+in favor of model B).
 """
 import sys
 import unittest

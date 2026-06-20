@@ -1,8 +1,6 @@
 // ── Atlas combobox — one reusable "search + create" field ───────────────────
-// Replaces the inconsistent native <datalist> fields (the ▼ that did nothing, no
-// click-to-filter, no "create new"). A factory (the viewer is concatenated IIFEs,
-// not ES modules): AtlasCombobox(input, opts) -> controller. Behaviour mirrors the
-// palette / wikilink menu (filter-as-you-type, active index, scrollIntoView).
+// Factory (the viewer is concatenated IIFEs, not ES modules):
+// AtlasCombobox(input, opts) -> controller.
 //
 //   opts.source     : () => string[] | async () => string[]   current suggestions
 //   opts.creatable  : bool   offer « Créer "X" » when the typed value has no match
