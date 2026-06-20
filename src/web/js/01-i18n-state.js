@@ -1083,12 +1083,13 @@ function index(node) {
   }
 }
 
-// Offline/file:// only: index the baked FULL tree into fileMap. In SERVER mode
-// that baked tree is the owner's complete build-time view, so indexing it here
-// would leak private doc names + the total count through every fileMap consumer
-// (Recent, search, the Mind, stats) BEFORE softReload() swaps in the per-account
-// filtered /api/tree. Mirrors the tree-render gate in 02-content-tree.js.
-if (!location.protocol.startsWith('http')) {
+// Offline build only: index the baked FULL tree into fileMap. In SERVER mode that
+// baked tree is the owner's complete build-time view, so indexing it here would
+// leak private doc names + the total count through every fileMap consumer (Recent,
+// search, the Mind, stats) BEFORE softReload() swaps in the per-account filtered
+// /api/tree. Gated on IS_OFFLINE_BUILD, NOT the protocol: a static offline build is
+// served over https on GitHub Pages, so a file:// check would wrongly skip it.
+if (IS_OFFLINE_BUILD) {
   index(TREE);
 }
 statsEl.textContent = t('statsLine', mdCount, otherCount);

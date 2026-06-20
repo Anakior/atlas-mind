@@ -266,8 +266,10 @@ async function decorateRemoteOrigins() {
 // In SERVER mode the baked tree is the FULL build-time view (generated as the
 // owner). Never render it — a viewer would see private names in the menu. The
 // bootstrap fetches /api/tree (filtered per account) on init via softReload().
-// Only the offline/file:// build renders the embedded tree directly.
-if (!location.protocol.startsWith('http')) {
+// Only the offline build renders the embedded tree directly. Gated on
+// IS_OFFLINE_BUILD, NOT the protocol: GitHub Pages serves the offline build over
+// https, so a file:// check would leave the demo with an empty tree.
+if (IS_OFFLINE_BUILD) {
   treeEl.appendChild(renderTree(TREE));
   decorateTreeBadges();
   decorateRemoteOrigins();

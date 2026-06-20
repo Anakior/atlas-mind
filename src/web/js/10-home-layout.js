@@ -36,7 +36,7 @@ renderRecent();
 // build, local mode, empty list, network error) just leaves the section hidden, so
 // it can never break the home view.
 async function renderSharedWithMe() {
-  if (!sharedSection || !location.protocol.startsWith('http')) return;
+  if (!sharedSection || IS_OFFLINE_BUILD || !location.protocol.startsWith('http')) return;
   let docs;
   try {
     const r = await fetch('/api/shared-with-me');
