@@ -13,6 +13,8 @@ if (isServerMode) {
         const bar = document.getElementById('user-bar');
 
         document.getElementById('user-email').textContent = data.name || data.email;
+        const avatar = document.getElementById('user-avatar');
+        if (avatar) avatar.innerHTML = constellationSvg(data.email, 30);
         bar.classList.remove('hidden');
       }
 

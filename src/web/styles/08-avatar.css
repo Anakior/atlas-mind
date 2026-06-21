@@ -1,0 +1,15 @@
+/* Constellation avatar (02-avatar.js) + Atlas mark: graph orbit, halo pulse, star
+   twinkle, and the mark's float. All motion off under prefers-reduced-motion. */
+.cst-star { animation: cstTwinkle 3s ease-in-out infinite; }
+.cst-orbit { transform-box: view-box; transform-origin: center; animation: cstOrbit 32s linear infinite; }
+.cst-pulse { transform-box: view-box; transform-origin: center; animation: cstPulse 4.5s ease-in-out infinite; }
+.cst-float { transform-box: view-box; animation: cstFloat 5s ease-in-out infinite; }
+
+@keyframes cstTwinkle { 0%, 100% { opacity: .5 } 50% { opacity: 1 } }
+@keyframes cstOrbit { to { transform: rotate(360deg) } }
+@keyframes cstPulse { 0%, 100% { opacity: .55; transform: scale(.96) } 50% { opacity: 1; transform: scale(1.06) } }
+@keyframes cstFloat { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3.5px) } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cst-star, .cst-orbit, .cst-pulse, .cst-float { animation: none }
+}

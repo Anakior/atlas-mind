@@ -356,6 +356,7 @@ async function loadSettingsUsers() {
         return (
           '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
           '<div class="admin-row">' +
+          '<div class="flex-shrink-0 mr-2.5">' + constellationSvg(u.email, 28) + '</div>' +
           '<div class="flex-1 min-w-0">' +
           nameLine +
           '<div class="' +
@@ -1337,6 +1338,8 @@ async function loadAccountProfile() {
     const data = await settingsFetch('/api/account/profile');
     first.value = data.first_name || '';
     last.value = data.last_name || '';
+    const avatar = document.getElementById('account-profile-avatar');
+    if (avatar && data.email) avatar.innerHTML = constellationSvg(data.email, 64);
   } catch (e) {
     showSettingsError(e.message);
   }
