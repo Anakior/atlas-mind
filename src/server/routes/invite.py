@@ -62,12 +62,18 @@ def submit(handler):
         return
     token = data.get("token") or ""
     password = data.get("password") or ""
+    first_name = (data.get("first_name") or "").strip()
+    last_name = (data.get("last_name") or "").strip()
     if len(password) < 8:
         handler._send_json(400, {"error": _s._t("invite_password_too_short")})
         return
+    if not _s.valid_name(first_name) or not _s.valid_name(last_name):
+        handler._send_json(400, {"error": _s._t("invite_invalid_name")})
+        return
     try:
         result = _s.get_store().accept_invite(
-            store.hash_api_token(token), store.hash_password(password))
+            store.hash_api_token(token), store.hash_password(password),
+            first_name=first_name or None, last_name=last_name or None)
     except Exception as e:
         _s.registry_503(handler, "[invite] could not accept invite", e)
         return

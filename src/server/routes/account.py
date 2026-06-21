@@ -3,6 +3,40 @@ import sys
 import server as _s
 
 
+def profile_get(handler):
+    """GET /api/account/profile: the current session user's {email, first_name,
+    last_name}. Names are optional (missing → empty string)."""
+    email = handler._session().get("email")
+    user = _s.get_store().get_user_by_email(email) or {}
+    handler._send_json(200, {
+        "email": email,
+        "first_name": user.get("first_name") or "",
+        "last_name": user.get("last_name") or "",
+    })
+
+
+def profile_post(handler):
+    """POST /api/account/profile {first_name?, last_name?}: updates the caller's
+    OWN names only. Empty/absent clears the field; rejects invalid names."""
+    data = handler._read_json()
+    fields = {}
+    for key in ("first_name", "last_name"):
+        if key not in data:
+            continue
+        value = data.get(key)
+        if not _s.valid_name(value):
+            handler._send_json(400, {"error": f"invalid {key}"})
+            return
+        fields[key] = (value or "").strip() or None
+    email = handler._session().get("email")
+    try:
+        _s.get_store().upsert_user(email, fields)
+    except Exception as e:
+        _s.registry_503(handler, "[account] profile", e)
+        return
+    handler._send_json(200, {"ok": True})
+
+
 def logout_all(handler):
     """POST /api/account/logout-all: bumps the epoch → logs out all
     sessions of this account (including this one). The client must log in again."""

@@ -485,6 +485,116 @@ class TestInviteFlow(unittest.TestCase):
         entry = next(u for u in users if u["email"] == "listed@test.local")
         self.assertTrue(entry["pending"])
 
+    def test_accept_with_names_shows_them_in_admin_listing(self):
+        # End-to-end name brick: invite → accept carrying first+last → the admin
+        # users endpoint surfaces both halves (distinct fields).
+        token = self._mint("named-invitee@test.local")
+        accept = self.srv.post("/api/invite", json_body={
+            "token": token, "password": "invitee-chosen-pw",
+            "first_name": "Grace", "last_name": "Hopper"})
+        self.assertEqual(accept.status, 200, accept.text)
+        users = self.srv.get("/api/admin/users", headers=self._admin()).json()
+        entry = next(u for u in users if u["email"] == "named-invitee@test.local")
+        self.assertEqual(entry["first_name"], "Grace")
+        self.assertEqual(entry["last_name"], "Hopper")
+        self.assertFalse(entry["pending"])  # activated by the accept
+
+    def test_accept_rejects_invalid_name(self):
+        token = self._mint("badname@test.local")
+        resp = self.srv.post("/api/invite", json_body={
+            "token": token, "password": "invitee-chosen-pw",
+            "first_name": "a\x00b"})
+        self.assertEqual(resp.status, 400)
+        # The account stays pending (the bad accept did not activate it).
+        self.assertIsNotNone(
+            self.fs.get_user_by_email("badname@test.local").get("invite_token_hash"))
+
+
+class TestProfile(unittest.TestCase):
+    """Self-service profile (/api/account/profile): a member reads and edits its
+    OWN first/last name only — never another account's."""
+
+    srv: AtlasServer
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer(extra_env=cloud_env())
+        cls.srv.start()
+        cls.fs = file_store_of(cls.srv)
+        seed_admin_and_viewer(cls.fs)
+        cls.viewer_cookie = session_cookie(cls.srv, VIEWER_EMAIL, VIEWER_PASSWORD)
+        cls.viewer_csrf = csrf_token_for(cls.srv, cls.viewer_cookie)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def _viewer(self):
+        return {"Cookie": self.viewer_cookie, "X-CSRF-Token": self.viewer_csrf}
+
+    def test_get_own_profile(self):
+        # Dedicated name-less account so the assertion does not depend on the
+        # mutations the other tests apply to the shared viewer record.
+        self.fs.upsert_user("getme@test.local", {
+            "password_hash": store.hash_password("getme-strong-pw"),
+            "role": "viewer"})
+        cookie = session_cookie(self.srv, "getme@test.local", "getme-strong-pw")
+        resp = self.srv.get("/api/account/profile", headers={"Cookie": cookie})
+        self.assertEqual(resp.status, 200)
+        body = resp.json()
+        self.assertEqual(body["email"], "getme@test.local")
+        # Name-less by default → both halves empty, never absent keys.
+        self.assertEqual(body["first_name"], "")
+        self.assertEqual(body["last_name"], "")
+
+    def test_post_updates_own_first_and_last(self):
+        resp = self.srv.post("/api/account/profile", headers=self._viewer(),
+                             json_body={"first_name": "Grace", "last_name": "Hopper"})
+        self.assertEqual(resp.status, 200, resp.text)
+        stored = self.fs.get_user_by_email(VIEWER_EMAIL)
+        self.assertEqual(stored["first_name"], "Grace")
+        self.assertEqual(stored["last_name"], "Hopper")
+        # Reflected on a subsequent GET.
+        body = self.srv.get("/api/account/profile",
+                            headers={"Cookie": self.viewer_cookie}).json()
+        self.assertEqual(body["first_name"], "Grace")
+        self.assertEqual(body["last_name"], "Hopper")
+
+    def test_post_clears_a_field_with_empty_string(self):
+        self.fs.upsert_user(VIEWER_EMAIL, {"first_name": "X", "last_name": "Y"})
+        resp = self.srv.post("/api/account/profile", headers=self._viewer(),
+                             json_body={"first_name": ""})
+        self.assertEqual(resp.status, 200)
+        stored = self.fs.get_user_by_email(VIEWER_EMAIL)
+        self.assertIsNone(stored.get("first_name"))
+        self.assertEqual(stored.get("last_name"), "Y")  # untouched
+
+    def test_post_rejects_invalid_name(self):
+        resp = self.srv.post("/api/account/profile", headers=self._viewer(),
+                             json_body={"first_name": "a\x00b"})
+        self.assertEqual(resp.status, 400)
+        self.assertIn("invalid first_name", resp.json()["error"])
+
+    def test_cannot_set_another_accounts_name(self):
+        # The route writes ONLY the session user's record: a target email in the
+        # body is ignored, the admin's name is never touched.
+        before = self.fs.get_user_by_email(ADMIN_EMAIL)
+        resp = self.srv.post("/api/account/profile", headers=self._viewer(),
+                             json_body={"email": ADMIN_EMAIL,
+                                        "first_name": "Mallory",
+                                        "last_name": "Intruder"})
+        self.assertEqual(resp.status, 200)
+        admin_after = self.fs.get_user_by_email(ADMIN_EMAIL)
+        self.assertEqual(admin_after.get("first_name"), before.get("first_name"))
+        self.assertEqual(admin_after.get("last_name"), before.get("last_name"))
+        self.assertNotEqual(admin_after.get("first_name"), "Mallory")
+        # The write landed on the CALLER (the viewer) instead.
+        self.assertEqual(
+            self.fs.get_user_by_email(VIEWER_EMAIL).get("first_name"), "Mallory")
+
+    def test_profile_requires_auth(self):
+        self.assertEqual(self.srv.get("/api/account/profile").status, 401)
+
 
 class TestAdminTokens(unittest.TestCase):
     """API tokens via /api/admin/tokens."""

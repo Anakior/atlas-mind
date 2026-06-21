@@ -72,6 +72,14 @@ button:active{transform:scale(0.98)}
       <input id="invite-email" type="email" value="__INVITE_EMAIL__" autocomplete="username" readonly>
     </div>
     <div class="field">
+      <label for="invite-first-name">__FIRST_NAME_LABEL__</label>
+      <input id="invite-first-name" name="first_name" type="text" placeholder="__FIRST_NAME_PLACEHOLDER__" autocomplete="given-name" maxlength="100">
+    </div>
+    <div class="field">
+      <label for="invite-last-name">__LAST_NAME_LABEL__</label>
+      <input id="invite-last-name" name="last_name" type="text" placeholder="__LAST_NAME_PLACEHOLDER__" autocomplete="family-name" maxlength="100">
+    </div>
+    <div class="field">
       <label for="invite-password">__PASSWORD_LABEL__</label>
       <input id="invite-password" name="password" type="password" placeholder="__PASSWORD_PLACEHOLDER__" autocomplete="new-password" minlength="8" required autofocus>
     </div>
@@ -83,7 +91,12 @@ button:active{transform:scale(0.98)}
 document.getElementById('invite-form').addEventListener('submit', async function(e) {
   e.preventDefault();
   const form = e.target;
-  const payload = { token: form.token.value, password: form.password.value };
+  const payload = {
+    token: form.token.value,
+    first_name: form.first_name.value,
+    last_name: form.last_name.value,
+    password: form.password.value,
+  };
   const resp = await fetch('/api/invite', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

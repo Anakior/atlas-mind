@@ -32,18 +32,28 @@ def submit(handler):
         return
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
+    first_name = (data.get("first_name") or "").strip()
+    last_name = (data.get("last_name") or "").strip()
     if not _s.is_valid_email(email):
         handler._send_json(400, {"error": _s._t("setup_invalid_email")})
         return
     if len(password) < 8:
         handler._send_json(400, {"error": _s._t("setup_password_too_short")})
         return
+    if not _s.valid_name(first_name) or not _s.valid_name(last_name):
+        handler._send_json(400, {"error": _s._t("setup_invalid_name")})
+        return
     def _create_admin():
-        _s.get_store().upsert_user(email, {
+        doc = {
             "password_hash": store.hash_password(password),
             "role": "admin",
             "created_at": int(time.time()),
-        })
+        }
+        if first_name:
+            doc["first_name"] = first_name
+        if last_name:
+            doc["last_name"] = last_name
+        _s.get_store().upsert_user(email, doc)
     try:
         # Anti-race guard: a second concurrent POST must not create a second
         # "first" admin. consume() re-checks has_admin under the lock and

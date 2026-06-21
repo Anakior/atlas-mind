@@ -113,4 +113,5 @@ def me(handler):
         user = _s.get_store().get_user_by_email(email) or {}
         payload["csrf_token"] = _s.make_csrf_token(email, epoch)
         payload["totp_enabled"] = bool(user.get("totp_enabled"))
+        payload["name"] = _s.display_name(user) or email
     handler._send_json(200, payload)

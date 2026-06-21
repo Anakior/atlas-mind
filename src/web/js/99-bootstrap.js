@@ -12,7 +12,7 @@ if (isServerMode) {
       if (data.cloud && data.authenticated && data.email) {
         const bar = document.getElementById('user-bar');
 
-        document.getElementById('user-email').textContent = data.email;
+        document.getElementById('user-email').textContent = data.name || data.email;
         bar.classList.remove('hidden');
       }
 

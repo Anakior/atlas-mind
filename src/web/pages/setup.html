@@ -75,6 +75,14 @@ button:active{transform:scale(0.98)}
       <p class="field-help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span>__TOKEN_HELP__</span></p>
     </div>
     <div class="field">
+      <label for="setup-first-name">__FIRST_NAME_LABEL__</label>
+      <input id="setup-first-name" name="first_name" type="text" placeholder="__FIRST_NAME_PLACEHOLDER__" autocomplete="given-name" maxlength="100">
+    </div>
+    <div class="field">
+      <label for="setup-last-name">__LAST_NAME_LABEL__</label>
+      <input id="setup-last-name" name="last_name" type="text" placeholder="__LAST_NAME_PLACEHOLDER__" autocomplete="family-name" maxlength="100">
+    </div>
+    <div class="field">
       <label for="setup-email">__EMAIL_LABEL__</label>
       <input id="setup-email" name="email" type="email" placeholder="__EMAIL_PLACEHOLDER__" autocomplete="username" required>
     </div>
@@ -93,6 +101,8 @@ document.getElementById('setup-form').addEventListener('submit', async function(
   const form = e.target;
   const payload = {
     setup_token: form.setup_token.value,
+    first_name: form.first_name.value,
+    last_name: form.last_name.value,
     email: form.email.value,
     password: form.password.value,
   };

@@ -195,7 +195,10 @@ function settingsSelectTab(name) {
     loadSettingsNodes();
     loadSettingsRemotes();
   } else if (name === 'groups') loadSettingsGroups();
-  else if (name === 'security') refreshSecurityState();
+  else if (name === 'security') {
+    refreshSecurityState();
+    loadAccountProfile();
+  }
 }
 
 // Node name from a path: last segment, slugified.
@@ -319,6 +322,14 @@ async function loadSettingsUsers() {
         const roleLabel = u.role === 'admin' ? t('settingsRoleAdmin') : t('settingsRoleViewer');
         const roleCls = u.role === 'admin' ? 'text-accent' : 'text-ink-400';
         const emailEsc = escapeHtml(u.email);
+        const fullName = [u.first_name, u.last_name].map((p) => (p || '').trim()).filter(Boolean).join(' ');
+        const nameLine = fullName
+          ? '<div class="text-ink-100 font-medium truncate" title="' +
+            escapeHtml(fullName) +
+            '">' +
+            escapeHtml(fullName) +
+            '</div>'
+          : '';
         // A pending account was invited but hasn't set a password yet: show a
         // badge, and offer "resend invite" instead of "reset password" (which 404s
         // on a pending account — the password is set via the invite link).
@@ -346,7 +357,10 @@ async function loadSettingsUsers() {
           '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
           '<div class="admin-row">' +
           '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-100 font-medium truncate" title="' +
+          nameLine +
+          '<div class="' +
+          (fullName ? 'text-ink-400 text-xs' : 'text-ink-100 font-medium') +
+          ' truncate" title="' +
           emailEsc +
           '">' +
           emailEsc +
@@ -1307,6 +1321,52 @@ settingsBackdrop.addEventListener('click', (e) => {
 document.querySelectorAll('.settings-tab').forEach((tab) => {
   tab.addEventListener('click', () => settingsSelectTab(tab.dataset.tab));
 });
+
+// ── Your name (self-service, Profil tab) ──────────────────────────────────────
+// The form lives in the settings partial (05-settings.html); here we only prefill
+// it from the account and persist edits.
+async function loadAccountProfile() {
+  const form = document.getElementById('account-profile-form');
+  const first = document.getElementById('account-profile-first');
+  const last = document.getElementById('account-profile-last');
+  if (!form || !first || !last) return;
+  if (!form.dataset.wired) {
+    form.dataset.wired = '1';
+    form.addEventListener('submit', saveAccountProfile);
+  }
+  try {
+    const data = await settingsFetch('/api/account/profile');
+    first.value = data.first_name || '';
+    last.value = data.last_name || '';
+  } catch (e) {
+    showSettingsError(e.message);
+  }
+}
+
+async function saveAccountProfile(e) {
+  e.preventDefault();
+  clearSettingsError();
+  const btn = e.target.querySelector('button[type="submit"]');
+  const first = document.getElementById('account-profile-first').value.trim();
+  const last = document.getElementById('account-profile-last').value.trim();
+  btn.disabled = true;
+  try {
+    await settingsFetch('/api/account/profile', {
+      method: 'POST',
+      body: JSON.stringify({ first_name: first, last_name: last }),
+    });
+    const status = document.getElementById('account-profile-status');
+    if (status) {
+      status.textContent = t('profileSaved');
+      status.classList.remove('hidden');
+      setTimeout(() => status.classList.add('hidden'), 2500);
+    }
+  } catch (err) {
+    showSettingsError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 // ── Minimal QR code generator (no external lib) ───────────────────────────────
 // QR Model 2, byte mode, EC level L — enough for an otpauth:// URI (~120 bytes →

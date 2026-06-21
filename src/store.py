@@ -36,6 +36,7 @@ import os
 import tempfile
 import threading
 import time
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -265,6 +266,32 @@ def new_invite_fields(role: str) -> tuple:
         "invite_expires_at": now + INVITE_TTL_SECONDS,
     }
     return token, fields
+
+
+MAX_NAME_LEN = 100
+
+
+def valid_name(s) -> bool:
+    """A first/last name field. None or empty is allowed ("no name"); otherwise
+    1..MAX_NAME_LEN chars after strip, with no Unicode control/format char —
+    blocks C0/C1/DEL and bidi overrides (U+202E) that would spoof the displayed name."""
+    if s is None or s == "":
+        return True
+    if not isinstance(s, str):
+        return False
+    s = s.strip()
+    if not (1 <= len(s) <= MAX_NAME_LEN):
+        return False
+    return not any(unicodedata.category(c)[0] == "C" for c in s)
+
+
+def display_name(user: dict) -> str:
+    """"First Last" for the UI (each half stripped, a missing half collapsed away).
+    Falls back to the email when BOTH names are absent."""
+    parts = [(user.get("first_name") or "").strip(),
+             (user.get("last_name") or "").strip()]
+    name = " ".join(p for p in parts if p)
+    return name or (user.get("email") or "")
 
 
 def _public_api_identity(user: dict) -> dict:
@@ -531,13 +558,15 @@ class FileStore:
                 users.append({"email": email, **dict(fields)})
             self._write(self.USERS_FILE, users)
 
-    def accept_invite(self, token_sha256: str, password_hash: str):
+    def accept_invite(self, token_sha256: str, password_hash: str,
+                      first_name=None, last_name=None):
         """ATOMICALLY redeem an invite: under the USERS_FILE lock, match the
         PENDING account by invite-token hash, refuse if it has expired, set the
-        real password + bump the session epoch, and CLEAR the invite fields
-        (single-use). Returns {email, role} on success, None otherwise (unknown /
-        expired / already redeemed — the SAME None, no oracle). A concurrent
-        redeem of the same token loses: the second pass finds no invite_token_hash."""
+        real password + bump the session epoch, optionally stamp the invitee's
+        first/last name, and CLEAR the invite fields (single-use). Returns
+        {email, role} on success, None otherwise (unknown / expired / already
+        redeemed — the SAME None, no oracle). A concurrent redeem of the same
+        token loses: the second pass finds no invite_token_hash."""
         if not token_sha256 or not password_hash:
             return None
         now = int(time.time())
@@ -551,6 +580,10 @@ class FileStore:
                     return None  # expired (left in place; admin re-invites or deletes)
                 user["password_hash"] = password_hash
                 user["session_epoch"] = int(user.get("session_epoch") or 0) + 1
+                if first_name:
+                    user["first_name"] = first_name
+                if last_name:
+                    user["last_name"] = last_name
                 for key in ("invite_token_hash", "invite_created_at",
                             "invite_expires_at"):
                     user.pop(key, None)
@@ -634,13 +667,16 @@ class FileStore:
                        if u.get("role") == "admin")
 
     def list_admin_facing_users(self) -> list:
-        """{email, role, pending, invite_expires_at} of human accounts
-        (admin/viewer), NEVER a hash. `pending` = invited but hasn't set a
-        password yet. 'api' accounts are listed separately by list_api_identities."""
+        """{email, role, pending, invite_expires_at, first_name, last_name} of
+        human accounts (admin/viewer), NEVER a hash. `pending` = invited but hasn't
+        set a password yet. Name-less accounts report "" for both halves. 'api'
+        accounts are listed separately by list_api_identities."""
         with self._locks[self.USERS_FILE]:
             return [{"email": u.get("email"), "role": u.get("role"),
                      "pending": bool(u.get("invite_token_hash")),
-                     "invite_expires_at": u.get("invite_expires_at")}
+                     "invite_expires_at": u.get("invite_expires_at"),
+                     "first_name": u.get("first_name") or "",
+                     "last_name": u.get("last_name") or ""}
                     for u in self._load(self.USERS_FILE)
                     if u.get("role") != API_ROLE]
 

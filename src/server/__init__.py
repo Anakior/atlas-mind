@@ -68,6 +68,7 @@ from server.constants import (  # noqa: F401
 
 
 import store  # identity/share registry: FileStore (JSON under .atlas/)
+from store import valid_name, display_name  # noqa: F401  account name field + UI render
 from config import AtlasConfig, AtlasConfigError, resolve_mind_root
 
 # WHITE-BOX TEST CONTRACT — tests/test_admin.py imports server._is_newer and
@@ -648,13 +649,15 @@ def run() -> None:
         "0.0.0.0" if (CONFIG.auth_enabled and not CONFIG.dev_mode) else "127.0.0.1")
     mode = "dev sandbox" if CONFIG.dev_mode else ("cloud" if CONFIG.auth_enabled else "local")
     print(f"{CONFIG.site_name} ({mode}) : http://{bind}:{CONFIG.port}")
-    try:
-        todo_display = CONFIG.todo_file.relative_to(CONFIG.root)
-    except ValueError:
-        # [todo].file absolute and outside the mind: display as-is instead of
-        # killing the boot on the relative_to.
-        todo_display = CONFIG.todo_file
-    print(f"Todo -> {todo_display}")
+    if not CONFIG.auth_enabled:
+        # Only local mode uses the single git-versioned todo file; cloud/dev store
+        # todos per-account in .atlas/todos.json, so there is no single file to show.
+        try:
+            todo_display = CONFIG.todo_file.relative_to(CONFIG.root)
+        except ValueError:
+            # An absolute [todo].file outside the mind: show as-is, don't kill boot.
+            todo_display = CONFIG.todo_file
+        print(f"Todo -> {todo_display}")
     print("Ctrl+C to stop")
     try:
         AtlasHTTPServer((bind, CONFIG.port), _CTX, Handler).serve_forever()

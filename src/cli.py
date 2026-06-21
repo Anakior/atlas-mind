@@ -762,6 +762,10 @@ def cmd_dev(args) -> int:
     scratch = (Path(args.dir).expanduser().resolve() if args.dir
                else _DEFAULT_DEV_MIND)
     status = _seed_dev_mind(scratch, reset=args.reset)
+    # Always rebuild the viewer: a dev sandbox must reflect the current engine src
+    # on every start, so it never serves a stale dist/ from a previous run.
+    if _run_build(scratch) != 0:
+        print("warning: viewer build failed; serving the previous build.", file=sys.stderr)
     env = _dev_serve_env(scratch, port=args.port, fresh=args.fresh)
 
     port = args.port or DEFAULT_PORT
@@ -1316,12 +1320,21 @@ def cmd_user_add(args) -> int:
     if len(password) < MIN_PASSWORD_LENGTH:
         raise CliError(
             f"password too short (minimum {MIN_PASSWORD_LENGTH} characters).")
-    file_store.upsert_user(email, {
+    doc = {
         "password_hash": store.hash_password(password),
         "role": args.role,
         "created_at": int(time.time()),
-    })
+    }
+    for field, raw in (("first_name", args.first_name), ("last_name", args.last_name)):
+        if raw is None:
+            continue
+        if not store.valid_name(raw):
+            raise CliError(f"invalid {field}: {raw!r}")
+        doc[field] = raw.strip()
+    file_store.upsert_user(email, doc)
     print(f"Account created: {email} (role {args.role})")
+    if doc.get("first_name") or doc.get("last_name"):
+        print(f"  name: {store.display_name(doc)}")
     return 0
 
 
@@ -1669,6 +1682,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_user_add.add_argument("--email", required=True)
     p_user_add.add_argument("--role", choices=("admin", "viewer"),
                             default="admin")
+    p_user_add.add_argument("--first-name", default=None, help="Account holder's first name.")
+    p_user_add.add_argument("--last-name", default=None, help="Account holder's last name.")
     p_user_add.add_argument("--password", default=None,
                             help="Password (otherwise prompted with hidden input).")
     p_user_add.set_defaults(func=cmd_user_add)

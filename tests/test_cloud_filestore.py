@@ -187,6 +187,117 @@ class TestPasswordHelpers(unittest.TestCase):
             self.assertIsNone(fs.dummy_verify("whatever"))
 
 
+class TestAccountNames(unittest.TestCase):
+    """Optional first_name/last_name on accounts (CDC brick): two DISTINCT fields,
+    schemaless on the FileStore, surfaced through upsert/get, display_name,
+    accept_invite and list_admin_facing_users. A name-less account is unchanged."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.fs = store.FileStore(self.tmp.name)
+
+    def test_upsert_stores_both_halves_distinctly(self):
+        self.fs.upsert_user("named@x.fr", {
+            "password_hash": "x", "role": "viewer",
+            "first_name": "Ada", "last_name": "Lovelace"})
+        user = self.fs.get_user_by_email("named@x.fr")
+        # Two separate keys — never a single merged "name".
+        self.assertEqual(user["first_name"], "Ada")
+        self.assertEqual(user["last_name"], "Lovelace")
+        self.assertNotIn("name", user)
+
+    def test_first_and_last_are_independent(self):
+        # Only a first name: the last stays absent (no implicit merge/split).
+        self.fs.upsert_user("first@x.fr", {
+            "role": "viewer", "first_name": "Grace"})
+        only_first = self.fs.get_user_by_email("first@x.fr")
+        self.assertEqual(only_first["first_name"], "Grace")
+        self.assertNotIn("last_name", only_first)
+        # Only a last name.
+        self.fs.upsert_user("last@x.fr", {"role": "viewer", "last_name": "Hopper"})
+        only_last = self.fs.get_user_by_email("last@x.fr")
+        self.assertEqual(only_last["last_name"], "Hopper")
+        self.assertNotIn("first_name", only_last)
+
+    def test_display_name_is_first_then_last(self):
+        self.assertEqual(
+            store.display_name({"first_name": "Ada", "last_name": "Lovelace",
+                                "email": "a@x.fr"}),
+            "Ada Lovelace")
+
+    def test_display_name_collapses_a_missing_half(self):
+        self.assertEqual(
+            store.display_name({"first_name": "Ada", "email": "a@x.fr"}), "Ada")
+        self.assertEqual(
+            store.display_name({"last_name": "Lovelace", "email": "a@x.fr"}),
+            "Lovelace")
+
+    def test_display_name_falls_back_to_email_when_both_absent(self):
+        self.assertEqual(store.display_name({"email": "anon@x.fr"}), "anon@x.fr")
+        # Empty strings count as absent → still the email.
+        self.assertEqual(
+            store.display_name({"first_name": "", "last_name": "",
+                                "email": "anon@x.fr"}),
+            "anon@x.fr")
+
+    def test_nameless_account_behaves_identically(self):
+        # An account created without names exposes "" for both halves and is
+        # otherwise indistinguishable from a legacy record.
+        self.fs.upsert_user("plain@x.fr", {"password_hash": "x", "role": "viewer"})
+        user = self.fs.get_user_by_email("plain@x.fr")
+        self.assertNotIn("first_name", user)
+        self.assertNotIn("last_name", user)
+        listed = next(u for u in self.fs.list_admin_facing_users()
+                      if u["email"] == "plain@x.fr")
+        self.assertEqual(listed["first_name"], "")
+        self.assertEqual(listed["last_name"], "")
+
+    def test_accept_invite_carries_first_and_last(self):
+        token, fields = store.new_invite_fields("viewer")
+        self.fs.upsert_user("invitee@x.fr", fields)
+        result = self.fs.accept_invite(
+            store.hash_api_token(token), store.hash_password("chosen-pw-strong"),
+            first_name="Katherine", last_name="Johnson")
+        self.assertEqual(result["email"], "invitee@x.fr")
+        user = self.fs.get_user_by_email("invitee@x.fr")
+        self.assertEqual(user["first_name"], "Katherine")
+        self.assertEqual(user["last_name"], "Johnson")
+        # The invite is consumed (names did not interfere with single-use).
+        self.assertNotIn("invite_token_hash", user)
+
+    def test_accept_invite_without_names_leaves_them_absent(self):
+        token, fields = store.new_invite_fields("viewer")
+        self.fs.upsert_user("noname@x.fr", fields)
+        self.fs.accept_invite(
+            store.hash_api_token(token), store.hash_password("chosen-pw-strong"))
+        user = self.fs.get_user_by_email("noname@x.fr")
+        self.assertNotIn("first_name", user)
+        self.assertNotIn("last_name", user)
+
+    def test_list_admin_facing_users_exposes_names(self):
+        self.fs.upsert_user("dev@x.fr", {
+            "role": "admin", "first_name": "Alan", "last_name": "Turing"})
+        entry = next(u for u in self.fs.list_admin_facing_users()
+                     if u["email"] == "dev@x.fr")
+        self.assertEqual(entry["first_name"], "Alan")
+        self.assertEqual(entry["last_name"], "Turing")
+
+    def test_valid_name_guard(self):
+        # Reuses the shared guard: empty/None allowed, control chars rejected,
+        # 1..100 chars after strip.
+        self.assertTrue(store.valid_name(None))
+        self.assertTrue(store.valid_name(""))
+        self.assertTrue(store.valid_name("Ada"))
+        self.assertTrue(store.valid_name("x" * 100))
+        self.assertFalse(store.valid_name("x" * 101))
+        self.assertFalse(store.valid_name("a\x00b"))    # NUL
+        self.assertFalse(store.valid_name("a\x7fb"))    # DEL
+        self.assertFalse(store.valid_name("line\nbreak"))
+        self.assertFalse(store.valid_name("a\x85b"))    # C1 (NEL)
+        self.assertFalse(store.valid_name("a" + chr(0x202e) + "b"))  # bidi override (spoof)
+
+
 class TestCloudFileStoreAuth(unittest.TestCase):
     """Cookie login + roles in cloud mode, 100% file-based registry."""
 

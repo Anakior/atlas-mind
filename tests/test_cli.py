@@ -354,6 +354,50 @@ class TestCliUser(CliMindTest):
         self.assertEqual(record["email"], "lecteur@test.local")
         self.assertEqual(record["role"], "viewer")
 
+    def test_user_add_persists_first_and_last_name(self):
+        self.init_mind()
+        result = run_cli("user", "add", self.mind, "--email", "ada@test.local",
+                         "--password", PASSWORD,
+                         "--first-name", "Ada", "--last-name", "Lovelace")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = self.users_json()[0]
+        # Two distinct fields, never a merged "name".
+        self.assertEqual(record["first_name"], "Ada")
+        self.assertEqual(record["last_name"], "Lovelace")
+        self.assertNotIn("name", record)
+        # Displayed back in "First Last" order on creation.
+        self.assertIn("Ada Lovelace", result.stdout)
+
+    def test_user_add_first_name_only(self):
+        # A single half is allowed; the other stays absent (no implicit merge).
+        self.init_mind()
+        result = run_cli("user", "add", self.mind, "--email", "grace@test.local",
+                         "--password", PASSWORD, "--first-name", "Grace")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = self.users_json()[0]
+        self.assertEqual(record["first_name"], "Grace")
+        self.assertNotIn("last_name", record)
+
+    def test_user_add_without_names_is_nameless(self):
+        # The default path stays schemaless: no name keys at all.
+        self.init_mind()
+        run_cli("user", "add", self.mind, "--email", "plain@test.local",
+                "--password", PASSWORD)
+        record = self.users_json()[0]
+        self.assertNotIn("first_name", record)
+        self.assertNotIn("last_name", record)
+
+    def test_user_add_rejects_control_char_name(self):
+        # A NUL can't be passed as an argv on Windows (ValueError before exec), so
+        # exercise the guard with another control char (newline) it also rejects.
+        self.init_mind()
+        result = run_cli("user", "add", self.mind, "--email", "bad@test.local",
+                         "--password", PASSWORD, "--first-name", "line\nbreak")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid first_name", result.stderr)
+        # Rejected before any write: no registry created.
+        self.assertFalse((self.mind / ".atlas" / "users.json").exists())
+
     def test_user_add_rejects_duplicate_email(self):
         self.init_mind()
         run_cli("user", "add", self.mind, "--email", "admin@test.local",
