@@ -951,12 +951,12 @@ class TestSecurityUi(unittest.TestCase):
         self.assertIn('confirmDialog(', self.index)
 
     def test_security_i18n_keys_in_both_languages(self):
-        for fr_value in ("settingsTabSecurity: 'Sécurité'",
+        for fr_value in ("settingsTabProfile: 'Profil'",
                          "securityTotpEnable: 'Activer le 2FA'",
                          "securityLogoutAll: 'Déconnecter toutes mes sessions'",
                          "totpRecoveryWarn:"):
             self.assertIn(fr_value, self.index)
-        for en_value in ("settingsTabSecurity: 'Security'",
+        for en_value in ("settingsTabProfile: 'Profile'",
                          "securityTotpEnable: 'Enable 2FA'",
                          "securityLogoutAll: 'Sign out all my sessions'",
                          "totpRecoveryWarn:"):

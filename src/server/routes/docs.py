@@ -60,7 +60,7 @@ def file_put(handler):
             _s._stamp_new_doc(rel, ctx, private=data.get("private"))
         except Exception as e:
             print(f"[file_put creator] {e}", file=sys.stderr)
-    _s.trigger_sync()
+    _s.commit_change(ctx, f"docs: {'create' if not existed else 'edit'} {rel}", target)
     handler._send_json(200, {"ok": True, "mtime": int(target.stat().st_mtime)})
 
 
@@ -243,7 +243,7 @@ def revert(handler):
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(show.stdout, encoding="utf-8")
-    _s.trigger_sync()
+    _s.commit_change(ctx, f"docs: revert {rel}", target)
     handler._send_json(200, {"ok": True})
 
 
@@ -278,7 +278,9 @@ def move(handler):
     # Keep the doc's privacy + share links with it (ACL repointed before the git sync;
     # a registry hiccup must not fail the move — the doctor reconciles any orphan).
     _s._repoint_doc(payload["from"], payload["to"])
-    _s.trigger_sync()
+    touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
+    _s.commit_change(ctx, f"docs: move {payload['from']} -> {payload['to']}",
+                     *(_s.CONFIG.content_root / p for p in touched))
     handler._send_json(200, {"ok": True, **payload})
 
 
@@ -357,7 +359,7 @@ def dir_rename(handler):
         store.repoint_shares_under(csrc, dst_rel)
     except Exception as e:
         print(f"[dir rename repoint] {e}", file=sys.stderr)
-    _s.trigger_sync()
+    _s.commit_change(ctx, f"docs: rename folder {src_rel} -> {dst_rel}", src, dst)
     handler._send_json(200, {"ok": True, "from": src_rel, "to": dst_rel})
 
 
@@ -401,5 +403,5 @@ def delete(handler):
         store.delete_shares_for_path(crel)
     except Exception as e:
         print(f"[delete cleanup] {e}", file=sys.stderr)
-    _s.trigger_sync()
+    _s.commit_change(ctx, f"docs: delete {rel}", target)
     handler._send_json(200, {"ok": True})

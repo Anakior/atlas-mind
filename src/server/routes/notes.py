@@ -45,7 +45,7 @@ def create(handler):
     notes = _s.load_notes(rel)
     notes.append(note)
     _s.save_notes(rel, notes)
-    _s.trigger_sync()
+    _s.commit_change(handler._viewer_ctx(), f"notes: annotate {rel}", _s._notes_path(rel))
     handler._send_json(200, note)
 
 
@@ -71,7 +71,7 @@ def patch(handler):
     hit["note"] = note_text[:5000]
     hit["updated"] = int(time.time())
     _s.save_notes(rel, notes)
-    _s.trigger_sync()
+    _s.commit_change(handler._viewer_ctx(), f"notes: edit annotation {rel}", _s._notes_path(rel))
     handler._send_json(200, hit)
 
 
@@ -91,5 +91,5 @@ def delete(handler):
         handler._send_json(404, {"error": "not found"})
         return
     _s.save_notes(rel, kept)
-    _s.trigger_sync()
+    _s.commit_change(handler._viewer_ctx(), f"notes: delete annotation {rel}", _s._notes_path(rel))
     handler._send_json(200, {"ok": True})

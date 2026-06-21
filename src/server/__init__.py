@@ -457,6 +457,25 @@ def trigger_sync():
     _CTX.git_sync.trigger_sync()
 
 
+def commit_change(ctx, subject, *paths):
+    """Attributed commit of ONE content action then a background push: `paths` are the
+    absolute files it touched (doc + side effects), `subject` the commit summary, `ctx`
+    the actor. Falls back to the anonymous trigger_sync backstop when the actor is
+    unknown or the attributed commit errors — the content is already on disk, so a git
+    hiccup must never fail the caller's write."""
+    from server.pure import acl
+    author, trailers = acl.attribution_for(ctx)
+    if author is None and not trailers:      # anonymous / local / system → backstop
+        _CTX.git_sync.trigger_sync()
+        return
+    try:
+        rel = [Path(p).resolve().relative_to(CONFIG.root).as_posix() for p in paths]
+        _CTX.git_sync.commit_change(subject, rel, author=author, trailers=trailers)
+    except Exception as e:
+        print(f"[commit_change] {e}", file=sys.stderr, flush=True)
+        _CTX.git_sync.trigger_sync()         # content is on disk; let the backstop catch it
+
+
 # Only the legacy-format migration stays here (boot-time IO); todos/notes are
 # re-exported above.
 
@@ -606,11 +625,16 @@ def run() -> None:
     _CTX = AppContext.build(CONFIG, build_store(CONFIG))
 
     if CONFIG.auth_enabled:
-        if freshly_cloned:
-            # Set the bot's git identity on the fresh clone only (values from CONFIG).
-            git("config", "user.email", CONFIG.git_author_email)
-            git("config", "user.name", CONFIG.git_author_name)
-        # Rebuild the viewer on cold start in case the cloned repo is fresh.
+        # Set always (idempotent): a checkout restored from the volume may lack it.
+        git("config", "user.email", CONFIG.git_author_email)
+        git("config", "user.name", CONFIG.git_author_name)
+        if not freshly_cloned:
+            # Repo persisted on the volume: refresh now instead of waiting for the pull
+            # loop. Best-effort — a slow/offline remote must not block boot.
+            try:
+                git("pull", "--rebase", "--autostash", "--quiet", timeout=30)
+            except Exception as e:
+                print(f"[boot] git pull skipped: {e}", file=sys.stderr, flush=True)
         _CTX.git_sync.build()
 
     # Mind's server extensions, loaded once at boot. A broken one is reported on

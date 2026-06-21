@@ -448,7 +448,7 @@ def _tool_create_doc(args, ctx):
             _s._stamp_new_doc(rel, ctx)
         except Exception as e:
             print(f"[create_doc owner] {e}", file=sys.stderr)
-    _s.trigger_sync()
+    _s.commit_change(ctx, f"docs: create {rel}", target)
     return text_result(f"Document created: {rel}")
 
 
@@ -479,13 +479,13 @@ def _tool_edit_doc(args, ctx):
         if count > 1:
             return text_result(f"'old_string' appears {count} times — it must be unique. Add surrounding context to make it unique.", is_error=True)
         target.write_text(current.replace(old_string, new_string, 1), encoding="utf-8")
-        _s.trigger_sync()
+        _s.commit_change(ctx, f"docs: edit {rel}", target)
         return text_result(f"Document edited (targeted replacement): {rel}")
     if content is not None:
         if not isinstance(content, str):
             return text_result("'content' must be a string", is_error=True)
         target.write_text(content, encoding="utf-8")
-        _s.trigger_sync()
+        _s.commit_change(ctx, f"docs: edit {rel}", target)
         return text_result(f"Document rewritten: {rel}")
     return text_result("Provide either 'old_string'+'new_string' (patch) or 'content' (rewrite)", is_error=True)
 
@@ -511,7 +511,9 @@ def _tool_move_doc(args, ctx):
         return text_result(payload, is_error=True)
     # Repoint the ACL + shares BEFORE the git sync (privacy travels with the doc).
     _s._repoint_doc(payload["from"], payload["to"])
-    _s.trigger_sync()
+    touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
+    _s.commit_change(ctx, f"docs: move {payload['from']} -> {payload['to']}",
+                     *(_s.CONFIG.content_root / p for p in touched))
     n, files = payload["links_updated"], len(payload["rewrites"])
     msg = f"Moved: {payload['from']} -> {payload['to']}."
     msg += (f" {n} incoming wikilink(s) rewritten in {files} doc(s)."
@@ -605,7 +607,7 @@ def _tool_delete_doc(args, ctx):
         _store.delete_shares_for_path(rel)
     except Exception as e:
         print(f"[delete cleanup] {e}", file=sys.stderr)
-    _s.trigger_sync()
+    _s.commit_change(ctx, f"docs: delete {rel}", target, _s.CONFIG.content_root / trashed)
     return text_result(f"Document moved to trash (reversible): {rel} -> {trashed}")
 
 
@@ -847,7 +849,7 @@ def _tool_doc_revert(args, ctx):
         return text_result(f"Revision not found: {rev}", is_error=True)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(show.stdout, encoding="utf-8")
-    _s.trigger_sync()
+    _s.commit_change(ctx, f"docs: revert {rel}", target)
     return text_result(f"Reverted {rel} to revision {rev[:8]} "
                        "(written as a forward-moving change; the prior version stays in history).")
 

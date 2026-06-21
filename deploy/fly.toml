@@ -22,6 +22,9 @@ kill_timeout = '30s'
   # with the content; since the Fly rootfs is ephemeral, the volume makes it persistent.
   ATLAS_STORE = 'file'
   ATLAS_STORE_DIR = '/data/atlas-store'
+  # Content checkout on the volume too (not the ephemeral rootfs): a local commit then
+  # survives a machine recreation and is pushed on the next boot. Overrides /app/repo.
+  KB_REPO_PATH = '/data/kb'
 
 [mounts]
   source = 'atlas_store'

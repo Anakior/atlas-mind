@@ -425,7 +425,7 @@ const STRINGS = {
     titleLabel: 'Titre',
     bodyLabel: 'Corps',
     // Profil + Sécurité (nom, 2FA, sessions)
-    settingsTabSecurity: 'Profil',
+    settingsTabProfile: 'Profil',
     profileNameTitle: 'Votre nom',
     profileNameHint: "Affiché dans l'application.",
     profileFirstName: 'Prénom',
@@ -918,7 +918,7 @@ const STRINGS = {
     titleLabel: 'Title',
     bodyLabel: 'Body',
     // Profile + Security (name, 2FA, sessions)
-    settingsTabSecurity: 'Profile',
+    settingsTabProfile: 'Profile',
     profileNameTitle: 'Your name',
     profileNameHint: 'Shown across the app.',
     profileFirstName: 'First name',
