@@ -646,7 +646,8 @@ class TestAdminTokens(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         identities = resp.json()
         entry = next(i for i in identities if i["label"] == "lister")
-        self.assertEqual(entry["email"], "lister@api.local")
+        self.assertTrue(entry["email"].endswith(".api.local"))  # per-owner namespaced
+        self.assertEqual(entry["acts_as"], ADMIN_EMAIL)         # bound to its creator
         self.assertEqual(entry["role"], "api")
         # Neither cleartext token nor hash exposed.
         self.assertNotIn("token", entry)
@@ -664,14 +665,22 @@ class TestAdminTokens(unittest.TestCase):
                              json_body={})
         self.assertEqual(resp.status, 400)
 
-    def test_viewer_forbidden_on_tokens(self):
-        create = self.srv.post("/api/admin/tokens",
-                               headers={"Cookie": self.viewer_cookie},
-                               json_body={"label": "nope"})
-        self.assertEqual(create.status, 403)
-        listing = self.srv.get("/api/admin/tokens",
-                               headers={"Cookie": self.viewer_cookie})
-        self.assertEqual(listing.status, 403)
+    def test_viewer_manages_only_own_tokens(self):
+        # A member creates a token bound to THEMSELVES and sees only their own —
+        # never the admin's (tokens are personal, no cross-account visibility).
+        vh = {"Cookie": self.viewer_cookie,
+              "X-CSRF-Token": csrf_token_for(self.srv, self.viewer_cookie)}
+        create = self.srv.post("/api/admin/tokens", headers=vh,
+                               json_body={"label": "mine"})
+        self.assertEqual(create.status, 201)
+        self.assertEqual(create.json()["acts_as"], VIEWER_EMAIL)
+        self.srv.post("/api/admin/tokens", headers=self._admin(),
+                      json_body={"label": "admins-token"})
+        listing = self.srv.get("/api/admin/tokens", headers=vh)
+        self.assertEqual(listing.status, 200)
+        labels = {t["label"] for t in listing.json()}
+        self.assertIn("mine", labels)
+        self.assertNotIn("admins-token", labels)
 
 
 class TestAdminCsrf(unittest.TestCase):
@@ -821,12 +830,16 @@ class TestAdminUiPanel(unittest.TestCase):
         # body.admin-cloud stays set to manage the visibility of admin tabs.
         self.assertIn("classList.add('admin-cloud')", self.index)
         self.assertIn("data.role === 'admin'", self.index)
-        # Every admin-only tab is hidden outside admin-cloud — a member must not
-        # see a tab it cannot use (e.g. Groups, whose /api/admin/groups is admin-gated).
-        for tab in ("users", "tokens", "nodes", "groups", "shares"):
+        # Admin-only tabs stay hidden outside admin-cloud — a member must not see a tab
+        # it cannot use (e.g. Groups, whose /api/admin/groups is admin-gated).
+        for tab in ("users", "nodes", "groups", "shares"):
             self.assertIn(
                 'body:not(.admin-cloud) .settings-tab[data-tab="%s"]' % tab,
                 self.index)
+        # Tokens is per-account (a member manages their own) → gated on cloud-auth, not
+        # admin, like the Profile tab.
+        self.assertIn(
+            'body:not(.cloud-authed) .settings-tab[data-tab="tokens"]', self.index)
 
     def test_settings_uses_admin_endpoints_via_fetch(self):
         # The panel talks to the admin endpoints (no CLI-only logic).

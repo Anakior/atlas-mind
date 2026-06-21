@@ -14,12 +14,12 @@
   body.cloud-authed #settings-btn { display: inline-flex !important; }
   /* Tabs/sections reserved for the admin: hidden for a reader. */
   body:not(.admin-cloud) .settings-tab[data-tab="users"],
-  body:not(.admin-cloud) .settings-tab[data-tab="tokens"],
   body:not(.admin-cloud) .settings-tab[data-tab="nodes"],
   body:not(.admin-cloud) .settings-tab[data-tab="groups"],
   body:not(.admin-cloud) .settings-tab[data-tab="shares"] { display: none; }
-  /* Security tab: visible only for a cloud-authenticated account. */
-  body:not(.cloud-authed) .settings-tab[data-tab="security"] { display: none; }
+  /* Profile + Tokens: per-account tabs, visible to any cloud-authenticated user. */
+  body:not(.cloud-authed) .settings-tab[data-tab="security"],
+  body:not(.cloud-authed) .settings-tab[data-tab="tokens"] { display: none; }
   /* Active Settings tab */
   .settings-tab.is-active { color: #fff; border-bottom-color: #1d9bd1; }
   /* 2FA recovery codes: readable and copyable monospace grid. */

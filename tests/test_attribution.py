@@ -1,8 +1,8 @@
-"""attribution_for(ctx) → (author, trailers).
+"""attribution_for(ctx, ai) → (author, trailers).
 
-A human editing alone authors it with no trailer; an MCP token acting for a human
-authors it to that human + an `X-Atlas-Author: ai/<label>` trailer; an autonomous token
-has no human author (the bot authors) + the trailer; anonymous has neither."""
+A human editing alone authors it with no trailer; an MCP write carries the AI family
+the actor declares as an `X-Atlas-Author: ai/<family>` trailer (slugified, so it can't
+inject); an api account has no human author (the bot authors); anonymous has neither."""
 import sys
 import unittest
 from pathlib import Path
@@ -16,22 +16,19 @@ from server.pure import acl    # noqa: E402
 
 API = _s.API_ROLE
 HUMAN = {"email": "ada@x", "first_name": "Ada", "last_name": "Lovelace", "role": "admin"}
-BOT = {"email": "bot@api.local", "role": API, "label": "bot"}
+BOT = {"email": "bot@api.local", "role": API}
 
 
 class FakeStore:
-    def __init__(self, users, groups=None):
-        self._users, self._groups = users, groups or {}
+    def __init__(self, users):
+        self._users = users
 
     def get_user_by_email(self, email):
         return self._users.get(email)
 
-    def groups_for_email(self, email):
-        return self._groups.get(email, [])
 
-
-def _ctx(primary, agent=None, api=False):
-    return acl.ViewerCtx(frozenset(), False, primary, api=api, agent=agent)
+def _ctx(primary, api=False):
+    return acl.ViewerCtx(frozenset(), False, primary, api=api)
 
 
 class TestAttribution(unittest.TestCase):
@@ -39,33 +36,31 @@ class TestAttribution(unittest.TestCase):
         self.store = FakeStore({"ada@x": HUMAN, "bot@api.local": BOT})
 
     def test_human_alone_has_no_trailer(self):
-        author, trailers = acl.attribution_for(_ctx("user:ada@x"), self.store)
+        author, trailers = acl.attribution_for(_ctx("user:ada@x"), store=self.store)
         self.assertEqual(author, ("Ada Lovelace", "ada@x"))
         self.assertEqual(trailers, [])
 
-    def test_mcp_for_a_human_marks_the_ai(self):
+    def test_mcp_write_marks_the_ai_family(self):
         author, trailers = acl.attribution_for(
-            _ctx("user:ada@x", agent="claude", api=True), self.store)
+            _ctx("user:ada@x", api=True), ai="claude", store=self.store)
         self.assertEqual(author, ("Ada Lovelace", "ada@x"))
         self.assertEqual(trailers, ["X-Atlas-Author: ai/claude"])
 
-    def test_autonomous_ai_is_bot_authored_and_marked(self):
+    def test_api_account_is_bot_authored(self):
         author, trailers = acl.attribution_for(
-            _ctx("user:bot@api.local", agent="bot", api=True), self.store)
+            _ctx("user:bot@api.local", api=True), ai="claude", store=self.store)
         self.assertIsNone(author)
-        self.assertEqual(trailers, ["X-Atlas-Author: ai/bot"])
+        self.assertEqual(trailers, ["X-Atlas-Author: ai/claude"])
+
+    def test_ai_value_is_slugified_so_it_cannot_inject(self):
+        _, trailers = acl.attribution_for(
+            _ctx("user:ada@x", api=True), ai="Claude\nFake-Trailer: x", store=self.store)
+        self.assertEqual(len(trailers), 1)
+        self.assertNotIn("\n", trailers[0])
+        self.assertTrue(trailers[0].startswith("X-Atlas-Author: ai/"))
 
     def test_anonymous_has_no_attribution(self):
-        self.assertEqual(acl.attribution_for(_ctx(None), self.store), (None, []))
-
-    def test_viewer_ctx_threads_token_label_into_agent(self):
-        bound = acl.viewer_ctx({"email": "claude@api.local", "role": API,
-                                "acts_as": "ada@x", "label": "claude"}, self.store)
-        self.assertEqual(bound.agent, "claude")
-        self.assertEqual(bound.primary, "user:ada@x")                # acts AS the human
-        unbound = acl.viewer_ctx({"email": "bot@api.local", "role": API,
-                                  "acts_as": None, "label": "bot"}, self.store)
-        self.assertEqual(unbound.agent, "bot")
+        self.assertEqual(acl.attribution_for(_ctx(None), store=self.store), (None, []))
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ import server as _s
 # Permission ladder + grant resolution live in `store` (single source, shared with
 # store.list_docs_shared_with so the two can't drift); re-exported here for
 # `acl.LEVELS` and `from ...acl import LEVELS`.
-from store import LEVELS, best_grant
+from store import LEVELS, best_grant, slugify_token_label
 
 
 class ViewerCtx:
@@ -38,10 +38,9 @@ class ViewerCtx:
     - ``is_admin``: bypasses the ACL entirely (sees/owns everything).
     - ``primary``: the principal stamped as ``owner`` on create (or None).
     """
-    __slots__ = ("principals", "is_admin", "primary", "superuser", "api", "agent")
+    __slots__ = ("principals", "is_admin", "primary", "superuser", "api")
 
-    def __init__(self, principals, is_admin, primary, superuser=False, api=False,
-                 agent=None):
+    def __init__(self, principals, is_admin, primary, superuser=False, api=False):
         self.principals = frozenset(principals)
         # is_admin: curates the COMMONS (owner-level on ownerless paths) but is
         # NOT special inside another user's private space.
@@ -53,8 +52,6 @@ class ViewerCtx:
         # api: an API/MCP token — full write on the commons; private spaces still
         # require the bound human (acts_as). Distinct from is_admin (no admin routes).
         self.api = api
-        # MCP/api token label (e.g. "claude"), for attribution's Co-Authored-By.
-        self.agent = agent
 
 
 # Anonymous caller (no session, no token): no principals → only share-links and
@@ -98,8 +95,7 @@ def viewer_ctx(identity, store=None):
             if human:
                 # Bound: act as the human (private space + grants) + commons write.
                 h = _ctx_for_human(human, store)
-                return ViewerCtx(h.principals, h.is_admin, h.primary, api=True,
-                                 agent=identity.get("label"))
+                return ViewerCtx(h.principals, h.is_admin, h.primary, api=True)
         # Unbound: writes the commons (api=True) but never admin and never in a
         # private space — owned docs stay hidden until the token is bound to a human
         # via acts_as. (Single-user: bind the token to yourself to see everything.)
@@ -107,21 +103,26 @@ def viewer_ctx(identity, store=None):
         if email:
             principals.add("user:" + email)
         return ViewerCtx(principals, False, ("user:" + email) if email else None,
-                         api=True, agent=identity.get("label"))
+                         api=True)
     return _ctx_for_human(identity, store)
 
 
-def attribution_for(ctx, store=None):
+def attribution_for(ctx, ai=None, store=None):
     """Git author + trailers for a write: author = the responsible human, or None
-    (autonomous AI / anonymous → the bot authors). trailers carry
-    `X-Atlas-Author: ai/<label>` only for an MCP/API write — the sole AI marker."""
+    (autonomous AI / anonymous → the bot authors). `ai` is the actor's self-reported AI
+    family (MCP writes); it becomes the `X-Atlas-Author: ai/<family>` trailer — the sole
+    AI marker. Slugified: it lands in the commit body, so it must not inject."""
     store = store or _s.get_store()
     primary = ctx.primary if ctx else None
-    agent = ctx.agent if ctx else None
     email = primary[len("user:"):] if primary and primary.startswith("user:") else None
     user = store.get_user_by_email(email) if email else None
     author = (_s.display_name(user), email) if user and user.get("role") != _s.API_ROLE else None
-    trailers = [f"X-Atlas-Author: ai/{agent}"] if agent else []
+    trailers = []
+    if ai:
+        try:
+            trailers = ["X-Atlas-Author: ai/" + slugify_token_label(ai)]
+        except ValueError:
+            pass
     return author, trailers
 
 

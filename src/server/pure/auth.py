@@ -230,7 +230,7 @@ def verify_api_bearer(authorization_header: str):
         except Exception:
             pass
         return {"email": user.get("email", "claude@api.local"), "role": _s.API_ROLE,
-                "acts_as": user.get("acts_as"), "label": user.get("label")}
+                "acts_as": user.get("acts_as")}
     except Exception as e:
         print(f"[verify_api_bearer] registry lookup failed: {e}", file=sys.stderr)
         return None
@@ -271,8 +271,7 @@ def resolve_mcp_identity(token: str):
         except Exception:
             pass
         return {"email": user.get("email", "claude@api.local"),
-                "role": _s.API_ROLE, "acts_as": user.get("acts_as"),
-                "label": user.get("label")}
+                "role": _s.API_ROLE, "acts_as": user.get("acts_as")}
     except Exception as e:
         print(f"[resolve_mcp_identity] registry lookup failed: {e}", file=sys.stderr)
         return None

@@ -1302,10 +1302,11 @@ async function refreshUpdateBanner() {
 function openSettings() {
   hideTokenResult();
   settingsBackdrop.classList.remove('hidden');
-  // Admin → Users tab; viewer → Security, the only tab meant for them.
+  // Everyone lands on Profile (the per-account tab, first in the bar); admin-only
+  // tabs are one click away.
   const isAdmin = document.body.classList.contains('admin-cloud');
 
-  settingsSelectTab(isAdmin ? 'users' : 'security');
+  settingsSelectTab('security');
 
   if (isAdmin) refreshUpdateBanner();
 }

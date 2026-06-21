@@ -457,14 +457,15 @@ def trigger_sync():
     _CTX.git_sync.trigger_sync()
 
 
-def commit_change(ctx, subject, *paths):
+def commit_change(ctx, subject, *paths, ai=None):
     """Attributed commit of ONE content action then a background push: `paths` are the
     absolute files it touched (doc + side effects), `subject` the commit summary, `ctx`
-    the actor. Falls back to the anonymous trigger_sync backstop when the actor is
-    unknown or the attributed commit errors — the content is already on disk, so a git
-    hiccup must never fail the caller's write."""
+    the actor, `ai` its self-reported AI family (MCP only → the ai/<family> trailer).
+    Falls back to the anonymous trigger_sync backstop when the actor is unknown or the
+    attributed commit errors — the content is already on disk, so a git hiccup must
+    never fail the caller's write."""
     from server.pure import acl
-    author, trailers = acl.attribution_for(ctx)
+    author, trailers = acl.attribution_for(ctx, ai=ai)
     if author is None and not trailers:      # anonymous / local / system → backstop
         _CTX.git_sync.trigger_sync()
         return

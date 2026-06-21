@@ -1467,6 +1467,26 @@ def cmd_token_revoke(args) -> int:
     return 0
 
 
+def cmd_token_revoke_all(args) -> int:
+    """Kill switch: revoke EVERY token bound to a human account at once — matched by
+    acts_as, so it catches the user's tokens whatever their email scheme."""
+    mind = _require_mind(args.dir)
+    file_store = _file_store(_load_config(mind))
+    owner = _normalize_email(args.acts_as)
+    revoked = 0
+    for record in file_store.list_users():
+        if (record.get("role") == store.API_ROLE
+                and record.get("acts_as") == owner
+                and record.get("api_token_hash")):
+            file_store.upsert_user(record["email"], {
+                "api_token_hash": None,
+                "api_token_revoked_at": int(time.time()),
+            })
+            revoked += 1
+    print(f"Revoked {revoked} active token(s) bound to {owner}: every call now returns 401.")
+    return 0
+
+
 # ─── share ─────────────────────────────────────────────────────────────────────
 
 
@@ -1717,6 +1737,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_token_revoke.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
     p_token_revoke.add_argument("--label", default=DEFAULT_TOKEN_LABEL)
     p_token_revoke.set_defaults(func=cmd_token_revoke)
+    p_token_revoke_all = token_sub.add_parser(
+        "revoke-all", help="Revoke EVERY token bound to a user at once (kill switch).")
+    p_token_revoke_all.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
+    p_token_revoke_all.add_argument("--acts-as", dest="acts_as", required=True, metavar="EMAIL",
+                                    help="Revoke every token bound to this human account.")
+    p_token_revoke_all.set_defaults(func=cmd_token_revoke_all)
 
     p_share = subparsers.add_parser(
         "share", help="Share links of the file registry.")

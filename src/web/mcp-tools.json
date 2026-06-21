@@ -83,11 +83,16 @@
         "content": {
           "type": "string",
           "description": "For a .md: full markdown body with an H1 title. For a .html: a complete self-contained HTML page (<!DOCTYPE html>…</html>), inline CSS/JS included."
+        },
+        "ai": {
+          "type": "string",
+          "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
         }
       },
       "required": [
         "path",
-        "content"
+        "content",
+        "ai"
       ]
     }
   },
@@ -112,10 +117,15 @@
         "content": {
           "type": "string",
           "description": "Rewrite mode: the full new markdown content. Ignored if old_string is provided."
+        },
+        "ai": {
+          "type": "string",
+          "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
         }
       },
       "required": [
-        "path"
+        "path",
+        "ai"
       ]
     }
   },
@@ -132,11 +142,16 @@
         "to": {
           "type": "string",
           "description": "NEW relative .md path (e.g. projects/draft-final.md). Same folder + new name = a plain rename."
+        },
+        "ai": {
+          "type": "string",
+          "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
         }
       },
       "required": [
         "from",
-        "to"
+        "to",
+        "ai"
       ]
     }
   },
@@ -205,10 +220,15 @@
         "path": {
           "type": "string",
           "description": "Relative path of the .md/.html to delete"
+        },
+        "ai": {
+          "type": "string",
+          "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
         }
       },
       "required": [
-        "path"
+        "path",
+        "ai"
       ]
     }
   },
@@ -399,11 +419,16 @@
         "rev": {
           "type": "string",
           "description": "The revision to restore to: a commit SHA (from doc_history) or HEAD~N."
+        },
+        "ai": {
+          "type": "string",
+          "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
         }
       },
       "required": [
         "path",
-        "rev"
+        "rev",
+        "ai"
       ]
     }
   }

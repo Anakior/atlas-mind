@@ -209,12 +209,16 @@ def slugify_token_label(label: str) -> str:
     return slug
 
 
-def token_email(label: str) -> str:
-    """Identity email of a token, derived from the label (<slug>@api.local).
+def token_email(label: str, owner=None) -> str:
+    """Identity email of a token: <slug>@api.local, or <slug>@<owner-hash>.api.local
+    when bound to an owner — so two people can each label a token "claude" without
+    colliding (and nobody can regenerate/hijack another's by reusing the label).
 
-    Single source of truth for the format (CLI and admin endpoints point here):
-    the label "claude" yields claude@api.local, the historical identity."""
-    return f"{slugify_token_label(label)}@api.local"
+    Single source of truth for the format (CLI + admin endpoints point here)."""
+    slug = slugify_token_label(label)
+    if owner:
+        return f"{slug}@{hashlib.sha256(owner.encode()).hexdigest()[:12]}.api.local"
+    return f"{slug}@api.local"
 
 
 def new_api_token_fields(label: str, *, set_unusable_password: bool) -> tuple:
@@ -301,6 +305,7 @@ def _public_api_identity(user: dict) -> dict:
     return {
         "email": user.get("email"),
         "label": user.get("label"),
+        "acts_as": user.get("acts_as"),
         "role": API_ROLE,
         "created_at": user.get("api_token_created_at"),
         "last_used_at": user.get("api_last_used_at"),
@@ -697,13 +702,13 @@ class FileStore:
             identities.append(meta)
         return identities
 
-    def create_api_identity(self, label: str) -> tuple:
+    def create_api_identity(self, label: str, acts_as=None) -> tuple:
         """Create (or regenerate) the label's 'api' account, returns (meta, token).
 
         The cleartext is returned only HERE, once; only its SHA256 is stored.
         Critical section under the USERS_FILE lock: no TOCTOU between the
         existence check and the write."""
-        email = token_email(label)
+        email = token_email(label, owner=acts_as)
         with self._locks[self.USERS_FILE]:
             users = [dict(u) for u in self._load(self.USERS_FILE)]
             existing = next((u for u in users if u.get("email") == email), None)
@@ -713,6 +718,8 @@ class FileStore:
                     f"{existing.get('role')!r} account")
             token, fields = new_api_token_fields(
                 label, set_unusable_password=existing is None)
+            if acts_as is not None:
+                fields["acts_as"] = acts_as
             if existing is not None:
                 existing.update(fields)
                 existing["email"] = email

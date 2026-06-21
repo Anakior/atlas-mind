@@ -128,9 +128,12 @@ def tokens_get(handler):
     try:
         identities = _s.get_store().list_api_identities()
     except Exception as e:
-        _s.registry_503(handler, "[admin] list tokens", e)
+        _s.registry_503(handler, "[tokens] list", e)
         return
-    handler._send_json(200, identities)
+    # Tokens are personal: everyone (admins included) sees ONLY the tokens that act in
+    # their own name — no one inspects another's.
+    me = (handler._session() or {}).get("email")
+    handler._send_json(200, [t for t in identities if t.get("acts_as") == me])
 
 
 def tokens_post(handler):
@@ -147,8 +150,12 @@ def tokens_post(handler):
     except ValueError:
         handler._send_json(400, {"error": "invalid label"})
         return
+    # acts_as = the creator: the token acts in their name (commons + their private
+    # space). The UI never binds a token to someone else — that would impersonate them.
+    # (The CLI may: that operator has server access, a different trust level.)
+    creator = (handler._session() or {}).get("email")
     try:
-        meta, token = _s.get_store().create_api_identity(label)
+        meta, token = _s.get_store().create_api_identity(label, acts_as=creator)
     except ValueError as e:
         # Label colliding with a non-'api' account.
         handler._send_json(409, {"error": str(e)})
@@ -164,6 +171,7 @@ def tokens_post(handler):
         "mcp_url": mcp_url,
         "label": label,
         "email": meta.get("email"),
+        "acts_as": creator,
     })
 
 
@@ -173,12 +181,26 @@ def tokens_delete(handler):
     if not identifier:
         handler._send_json(400, {"error": "id or label required"})
         return
+    # Tokens are personal: you may revoke only one acting in your name (matched by label
+    # or email), admins included. Not yours → 404 (no existence oracle).
+    me = (handler._session() or {}).get("email")
     try:
-        if not _s.get_store().revoke_api_identity(identifier):
+        mine = [t for t in _s.get_store().list_api_identities() if t.get("acts_as") == me]
+    except Exception as e:
+        _s.registry_503(handler, "[tokens] revoke", e)
+        return
+    match = next((t for t in mine if identifier in (t.get("label"), t.get("email"))), None)
+    if not match:
+        handler._send_json(404, {"error": "token not found or already revoked"})
+        return
+    try:
+        # Revoke by the resolved email: a per-owner namespaced token's label alone no
+        # longer maps to its identity (two owners can share a label).
+        if not _s.get_store().revoke_api_identity(match["email"]):
             handler._send_json(404, {"error": "token not found or already revoked"})
             return
     except Exception as e:
-        _s.registry_503(handler, "[admin] revoke token", e)
+        _s.registry_503(handler, "[tokens] revoke", e)
         return
     handler._send_json(200, {"ok": True})
 
