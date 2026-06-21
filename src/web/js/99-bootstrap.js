@@ -14,7 +14,7 @@ if (isServerMode) {
 
         document.getElementById('user-email').textContent = data.name || data.email;
         const avatar = document.getElementById('user-avatar');
-        if (avatar) avatar.innerHTML = constellationSvg(data.email, 30);
+        if (avatar) avatar.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 30);
         bar.classList.remove('hidden');
       }
 

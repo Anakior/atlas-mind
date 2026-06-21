@@ -114,4 +114,8 @@ def me(handler):
         payload["csrf_token"] = _s.make_csrf_token(email, epoch)
         payload["totp_enabled"] = bool(user.get("totp_enabled"))
         payload["name"] = _s.display_name(user) or email
+        # Raw name halves so the client seeds the avatar identically to the admin
+        # list / profile (avatarSeed = name + email); display_name above is for text.
+        payload["first_name"] = user.get("first_name") or ""
+        payload["last_name"] = user.get("last_name") or ""
     handler._send_json(200, payload)

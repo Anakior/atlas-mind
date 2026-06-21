@@ -20,6 +20,17 @@ def _svg(identity, size=56):
     return out.stdout
 
 
+def _seed(first, last, email):
+    script = (
+        "const {avatarSeed} = require(process.argv[1]);"
+        "process.stdout.write(avatarSeed(process.argv[2], process.argv[3], process.argv[4]));"
+    )
+    out = subprocess.run(
+        ["node", "-e", script, str(AVATAR_JS), first, last, email],
+        capture_output=True, text=True, check=True)
+    return out.stdout
+
+
 @unittest.skipUnless(shutil.which("node"), "node not available")
 class TestConstellationAvatar(unittest.TestCase):
     def test_deterministic(self):
@@ -40,6 +51,21 @@ class TestConstellationAvatar(unittest.TestCase):
         ids_b = set(re.findall(r'id="([^"]+)"', _svg("bob@example.com")))
         self.assertTrue(ids_a)
         self.assertEqual(ids_a & ids_b, set())
+
+    def test_avatar_seed_is_name_plus_email(self):
+        # No name -> pure email (stable, same as before names existed).
+        self.assertEqual(_seed("", "", "ada@example.com"), "ada@example.com")
+        # Name halves trimmed, blanks dropped, then concatenated with the email.
+        self.assertEqual(_seed(" Ada ", "Lovelace", "ada@example.com"),
+                         "Ada Lovelaceada@example.com")
+        self.assertEqual(_seed("Ada", "", "ada@example.com"), "Adaada@example.com")
+
+    def test_setting_a_name_changes_the_avatar(self):
+        # The avatar reflects the name: adding/changing it yields a different drawing
+        # (the email keeps it unique; this change-on-rename is intended).
+        no_name = _svg(_seed("", "", "ada@example.com"))
+        named = _svg(_seed("Ada", "Lovelace", "ada@example.com"))
+        self.assertNotEqual(no_name, named)
 
 
 if __name__ == "__main__":

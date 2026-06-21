@@ -1,8 +1,22 @@
-// Constellation avatar: a deterministic mini star-graph from an identity, seeded by
-// the email so it never changes when a name is added. Pure (returns an SVG string),
-// no DOM/network/storage, so it works in the offline static build.
+// Constellation avatar: a deterministic mini star-graph from an identity. The
+// identity is built by avatarSeed() = the account name (when set) + its email, so
+// the avatar reflects the person's name yet stays unique per account and falls back
+// to a pure-email seed when no name is set (it does change on rename — intended).
+// Pure (returns an SVG string), no DOM/network/storage, works in the offline build.
 (function (root) {
   'use strict';
+
+  // Seed string for an account's avatar: "First Last" (each half trimmed, blanks
+  // dropped) concatenated with the email. Empty name -> email only. Compute it the
+  // SAME way on every surface (user bar, admin list, profile) or one account would
+  // render different avatars.
+  function avatarSeed(firstName, lastName, email) {
+    var name = [firstName, lastName]
+      .map(function (s) { return (s == null ? '' : String(s)).trim(); })
+      .filter(Boolean)
+      .join(' ');
+    return name + (email == null ? '' : String(email));
+  }
 
   // Seeded hash (FNV-1a, shift-mixed) -> the constellation seed.
   function fnv1a(str) {
@@ -63,13 +77,25 @@
     const accIdx = (primIdx + 2 + ((rnd() * 3) | 0)) % BAND.length;
     const acc = BAND[accIdx];
 
+    // Backdrop variety (seeded): the nebula glow drifts + spreads, and a second wisp
+    // in a third hue is offset over it — so identities differ by their background as
+    // much as by their graph, which lets the satellite count stay low without looking
+    // samey.
+    const nebCx = round(30 + rnd() * 34);
+    const nebCy = round(26 + rnd() * 30);
+    const nebR = round(66 + rnd() * 22);
+    const wispC = BAND[(accIdx + 1 + ((rnd() * 3) | 0)) % BAND.length];
+    const wCx = round(18 + rnd() * 64);
+    const wCy = round(18 + rnd() * 64);
+    const wR = round(36 + rnd() * 26);
+
     const VB = 100;
     const cx = 50, cy = 50;
     // Small render: drop fine detail + cut blur so the graph stays a crisp silhouette at 24px.
     const small = size <= 36;
 
     // Hub + orbiting satellites.
-    const satN = 5 + ((rnd() * 3) | 0);
+    const satN = 3 + ((rnd() * 3) | 0);
     const baseAng = rnd() * Math.PI * 2;
     const ringR = 33;
     const even = rnd() < 0.55;
@@ -121,11 +147,17 @@
       '" viewBox="0 0 ' + VB + ' ' + VB + '" role="img" aria-label="avatar">';
 
     s += '<defs>';
-    // Deep radial nebula backdrop, tinted by the identity hue.
-    s += '<radialGradient id="neb_' + uid + '" cx="42%" cy="38%" r="74%">';
+    // Deep radial nebula backdrop (glow drifts + spreads per identity), tinted by the
+    // identity hue, plus a second offset wisp in a third hue for backdrop variety.
+    s += '<radialGradient id="neb_' + uid + '" cx="' + nebCx + '%" cy="' + nebCy + '%" r="' + nebR + '%">';
     s += '<stop offset="0%" stop-color="' + hsl(prim, -30) + '"/>';
     s += '<stop offset="40%" stop-color="' + hsla(acc, -34, 0.55) + '"/>';
     s += '<stop offset="100%" stop-color="#0b1220"/>';
+    s += '</radialGradient>';
+    s += '<radialGradient id="wisp_' + uid + '" cx="' + wCx + '%" cy="' + wCy + '%" r="' + wR + '%">';
+    s += '<stop offset="0%" stop-color="' + hsla(wispC, -8, 0.5) + '"/>';
+    s += '<stop offset="55%" stop-color="' + hsla(wispC, -22, 0.16) + '"/>';
+    s += '<stop offset="100%" stop-color="' + hsla(wispC, -22, 0) + '"/>';
     s += '</radialGradient>';
 
     // Hub: white-hot gold-forward core.
@@ -162,6 +194,7 @@
     s += '<g clip-path="url(#clip_' + uid + ')">';
     s += '<rect x="0" y="0" width="' + VB + '" height="' + VB + '" fill="#0b1220"/>';
     s += '<rect x="0" y="0" width="' + VB + '" height="' + VB + '" fill="url(#neb_' + uid + ')"/>';
+    s += '<rect x="0" y="0" width="' + VB + '" height="' + VB + '" fill="url(#wisp_' + uid + ')"/>';
 
     for (let ff = 0; ff < field.length; ff++) {
       const p = field[ff];
@@ -230,7 +263,8 @@
   }
 
   root.constellationSvg = constellationSvg;
+  root.avatarSeed = avatarSeed;
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { constellationSvg };
+    module.exports = { constellationSvg, avatarSeed };
   }
 })(typeof window !== 'undefined' ? window : globalThis);
