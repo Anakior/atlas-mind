@@ -40,7 +40,7 @@ uvx atlas-mind serve ~/my-mind    # or: pipx run atlas-mind serve ~/my-mind
 pip install atlas-mind
 ```
 
-Requires **Python >= 3.11** and a **git repository for your content**. Full options, source install and `python3 src/cli.py` usage in **[docs/install.md](docs/install.md)**.
+Requires **Python >= 3.11** and a **git repository for your content**.
 
 ## Quick start
 
@@ -51,11 +51,13 @@ atlas serve ~/my-mind    # build once if needed, then serve on http://127.0.0.1:
 
 `init` is never destructive (it refuses a non-empty directory without `--force` and keeps any file already present). `serve` listens on `127.0.0.1:8765` with authentication off by default. To produce the static viewer without serving: `atlas build ~/my-mind [--offline]`.
 
-See **[all CLI commands →](docs/cli.md)** (`user`, `token`, `share`, `deploy`).
+See `atlas --help` for all commands (`user`, `token`, `share`, `deploy`).
 
 ## Use it with your AI (MCP)
 
-Atlas Mind is designed to be the external memory your assistant reads and writes. Mint a token and point your AI at it:
+Atlas Mind is designed to be the external memory your assistant reads and writes. On a deployed instance, each user mints their **own** token from the web UI — **Settings → Tokens** — bound to their account; it prints the MCP URL to point your AI at.
+
+Locally (or to script it), the CLI does the same:
 
 ```bash
 atlas token create ~/my-mind --label claude
@@ -69,7 +71,7 @@ The MCP endpoint exposes **nineteen tools** in four groups:
 - **graph**: `get_links`, `get_backlinks`, `list_by_tag`, `get_mind_topology`
 - **time-travel** (your mind is a git repo): `doc_history`, `doc_at`, `doc_diff`, `search_history`, `changelog`, `doc_blame`, `doc_revert`
 
-`atlas init` scaffolds `AGENTS.md` + `content/agents/` + `content/ai-sessions/` so the assistant knows your conventions. There is also a **REST API v1** (Bearer tokens, create-only writes) with a published **OpenAPI 3.1** spec. More in **[docs/ai.md](docs/ai.md)**.
+`atlas init` scaffolds `AGENTS.md` + `content/agents/` + `content/ai-sessions/` so the assistant knows your conventions. There is also a **REST API v1** (Bearer tokens, create-only writes) with a published **OpenAPI 3.1** spec.
 
 ## Features
 
@@ -83,19 +85,17 @@ The MCP endpoint exposes **nineteen tools** in four groups:
 - **Offline & PWA**: a self-contained `index-offline.html` that works from `file://`, an installable PWA via service worker, live reload over SSE.
 - **i18n**: French and English, a single carefully-built dark theme, re-skinnable via a CSS extension.
 
-Deep dives: **[features](docs/features.md)** · **[Hive Mind / Atlas nodes](docs/hive-mind.md)** · **[collaboration](docs/collaboration.md)**.
-
 ## Self-hosting
 
-- **Cloud mode**: accounts and login (admin / member roles), per-document access control, cookie sessions, optional **TOTP 2FA** with recovery codes, per-account lockout and per-IP login rate limiting, full CSRF defence. The honest details are in the **[security model](docs/security.md)**.
-- **Deployment**: `atlas deploy ~/my-mind --target compose|systemd|fly`; `fly --wizard` deploys end-to-end. See **[docs/deployment.md](docs/deployment.md)**.
-- **Configuration**: a small `atlas.toml` (brand prefix, port, auth, content paths). **[Full key reference →](docs/configuration.md)**.
-- **Updating**: engine and content update independently, and upgrading the engine never touches your notes. **[How to update →](docs/updating.md)**.
+- **Cloud mode**: accounts and login (admin / member roles), per-document access control, cookie sessions, optional **TOTP 2FA** with recovery codes, per-account lockout and per-IP login rate limiting, full CSRF defence.
+- **Deployment**: `atlas deploy ~/my-mind --target compose|systemd|fly`; `fly --wizard` deploys end-to-end.
+- **Configuration**: a small `atlas.toml` (brand prefix, port, auth, content paths).
+- **Updating**: engine and content update independently, and upgrading the engine never touches your notes.
 
 ## Documentation
 
-[Install](docs/install.md) · [CLI](docs/cli.md) · [Features](docs/features.md) · [MCP & AI](docs/ai.md) · [Hive Mind](docs/hive-mind.md) · [Collaboration](docs/collaboration.md) · [Configuration](docs/configuration.md) · [Deployment](docs/deployment.md) · [Updating](docs/updating.md) · [Building from source](docs/building.md) · [Extensions](docs/extensions.md) · [Security model](docs/security.md)
+The documentation is itself an Atlas mind — **[browse it in the live demo →](https://atlas-mind.anakior.app/demo/)** (the `guides/` and `features/` sections).
 
 ## Licence
 
-AGPL v3, see [LICENSE](LICENSE). The "Atlas" + "Mind" branding in the viewer and login page is a fixed part of the project. Details in **[docs/licence.md](docs/licence.md)**.
+AGPL v3, see [LICENSE](LICENSE). The "Atlas" + "Mind" branding in the viewer and login page is a fixed part of the project.

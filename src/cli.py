@@ -15,6 +15,7 @@ Usage:
     python3 src/cli.py token create <dir> [--label claude]
     python3 src/cli.py token list <dir>
     python3 src/cli.py token revoke <dir> [--label claude]
+    python3 src/cli.py token revoke-all <dir> --acts-as a@b.c
     python3 src/cli.py share list <dir>
     python3 src/cli.py share revoke <dir> --id <id>
 
@@ -253,9 +254,9 @@ conventions (and duplicate it as `CLAUDE.md` if you use Claude Code).
 
 ## Access via MCP
 
-The Atlas exposes an MCP server: six tools `search_docs`, `read_doc`,
-`list_tree`, `recent_docs`, `create_doc`, `edit_doc`. Create a token with
-`atlas token create <mind>` and point your assistant at
+The Atlas exposes an MCP server: nineteen tools to read, write, map and rewind
+your mind. Each user mints their own token from the web UI (**Settings → Tokens**,
+or `atlas token create <mind>` locally) and points their assistant at
 `https://<your-atlas>/mcp/<token>`. The AI can then search, read and create
 documents directly in your memory palace.
 
@@ -393,11 +394,11 @@ conventions (et duplique-le en `CLAUDE.md` si tu utilises Claude Code).
 
 ## Accès via MCP
 
-L'Atlas expose un serveur MCP : six outils `search_docs`, `read_doc`,
-`list_tree`, `recent_docs`, `create_doc`, `edit_doc`. Crée un token avec
-`atlas token create <mind>` et branche ton assistant sur
-`https://<ton-atlas>/mcp/<token>`. L'IA peut alors chercher, lire et créer des
-documents directement dans ton palais mental.
+L'Atlas expose un serveur MCP : dix-neuf outils pour lire, écrire, cartographier
+et rembobiner ton mind. Chaque utilisateur crée son propre token depuis l'UI web
+(**Paramètres → Tokens**, ou `atlas token create <mind>` en local) et branche son
+assistant sur `https://<ton-atlas>/mcp/<token>`. L'IA peut alors chercher, lire et
+créer des documents directement dans ton palais mental.
 
 ## Conventions de rangement (à adapter)
 

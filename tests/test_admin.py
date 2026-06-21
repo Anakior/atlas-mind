@@ -7,7 +7,7 @@ Covers batch 2c:
   closes (404 + 409).
 - Account CRUD: /api/admin/users (admin OK, viewer → 403, last admin not
   deletable, hash never exposed).
-- API tokens: /api/admin/tokens (creation → working Bearer on /api/v1/search,
+- API tokens: /api/tokens (creation → working Bearer on /api/v1/search,
   revocation → 401, listing without the secret).
 - Basic CSRF: non-JSON Content-Type refused, third-party origin refused (403).
 
@@ -359,12 +359,12 @@ class TestAdminUsers(unittest.TestCase):
         # Repro 2c: a 5000-char label became a giant <slug>@api.local email in
         # the registry.
         huge = "x" * 5000
-        resp = self.srv.post("/api/admin/tokens", headers=self._admin(),
+        resp = self.srv.post("/api/tokens", headers=self._admin(),
                              json_body={"label": huge})
         self.assertEqual(resp.status, 400)
 
     def test_create_token_control_char_label_400(self):
-        resp = self.srv.post("/api/admin/tokens", headers=self._admin(),
+        resp = self.srv.post("/api/tokens", headers=self._admin(),
                              json_body={"label": "tok\x00en"})
         self.assertEqual(resp.status, 400)
 
@@ -596,7 +596,7 @@ class TestProfile(unittest.TestCase):
 
 
 class TestAdminTokens(unittest.TestCase):
-    """API tokens via /api/admin/tokens."""
+    """API tokens via /api/tokens."""
 
     srv: AtlasServer
 
@@ -618,7 +618,7 @@ class TestAdminTokens(unittest.TestCase):
         return {"Cookie": self.admin_cookie, "X-CSRF-Token": self.admin_csrf}
 
     def test_create_token_bearer_works_then_revoke_401(self):
-        resp = self.srv.post("/api/admin/tokens", headers=self._admin(),
+        resp = self.srv.post("/api/tokens", headers=self._admin(),
                              json_body={"label": "claude"})
         self.assertEqual(resp.status, 201)
         body = resp.json()
@@ -633,16 +633,16 @@ class TestAdminTokens(unittest.TestCase):
         self.assertEqual(search.status, 200)
 
         # Revocation → 401.
-        revoke = self.srv.delete("/api/admin/tokens", headers=self._admin(),
+        revoke = self.srv.delete("/api/tokens", headers=self._admin(),
                                  json_body={"label": "claude"})
         self.assertEqual(revoke.status, 200)
         after = self.srv.get("/api/v1/search?q=alpha", headers=bearer)
         self.assertEqual(after.status, 401)
 
     def test_list_tokens_no_secret(self):
-        self.srv.post("/api/admin/tokens", headers=self._admin(),
+        self.srv.post("/api/tokens", headers=self._admin(),
                       json_body={"label": "lister"})
-        resp = self.srv.get("/api/admin/tokens", headers=self._admin())
+        resp = self.srv.get("/api/tokens", headers=self._admin())
         self.assertEqual(resp.status, 200)
         identities = resp.json()
         entry = next(i for i in identities if i["label"] == "lister")
@@ -656,12 +656,12 @@ class TestAdminTokens(unittest.TestCase):
         self.assertNotIn("api_token_hash", resp.text)
 
     def test_revoke_unknown_404(self):
-        resp = self.srv.delete("/api/admin/tokens", headers=self._admin(),
+        resp = self.srv.delete("/api/tokens", headers=self._admin(),
                                json_body={"label": "never-emitted"})
         self.assertEqual(resp.status, 404)
 
     def test_create_token_missing_label_400(self):
-        resp = self.srv.post("/api/admin/tokens", headers=self._admin(),
+        resp = self.srv.post("/api/tokens", headers=self._admin(),
                              json_body={})
         self.assertEqual(resp.status, 400)
 
@@ -670,13 +670,13 @@ class TestAdminTokens(unittest.TestCase):
         # never the admin's (tokens are personal, no cross-account visibility).
         vh = {"Cookie": self.viewer_cookie,
               "X-CSRF-Token": csrf_token_for(self.srv, self.viewer_cookie)}
-        create = self.srv.post("/api/admin/tokens", headers=vh,
+        create = self.srv.post("/api/tokens", headers=vh,
                                json_body={"label": "mine"})
         self.assertEqual(create.status, 201)
         self.assertEqual(create.json()["acts_as"], VIEWER_EMAIL)
-        self.srv.post("/api/admin/tokens", headers=self._admin(),
+        self.srv.post("/api/tokens", headers=self._admin(),
                       json_body={"label": "admins-token"})
-        listing = self.srv.get("/api/admin/tokens", headers=vh)
+        listing = self.srv.get("/api/tokens", headers=vh)
         self.assertEqual(listing.status, 200)
         labels = {t["label"] for t in listing.json()}
         self.assertIn("mine", labels)
@@ -735,15 +735,15 @@ class TestAdminCsrf(unittest.TestCase):
         self.assertEqual(resp.status, 201)
 
     def test_cross_origin_refused_on_token_delete(self):
-        self.srv.post("/api/admin/tokens", headers=self._admin(),
+        self.srv.post("/api/tokens", headers=self._admin(),
                       json_body={"label": "csrf-target"})
         resp = self.srv.delete(
-            "/api/admin/tokens",
+            "/api/tokens",
             json_body={"label": "csrf-target"},
             headers={**self._admin(), "Referer": "https://evil.example.com/x"})
         self.assertEqual(resp.status, 403)
         # The token was NOT revoked.
-        identities = self.srv.get("/api/admin/tokens",
+        identities = self.srv.get("/api/tokens",
                                   headers=self._admin()).json()
         entry = next(i for i in identities if i["label"] == "csrf-target")
         self.assertFalse(entry["revoked"])
@@ -845,7 +845,7 @@ class TestAdminUiPanel(unittest.TestCase):
         # The panel talks to the admin endpoints (no CLI-only logic).
         self.assertIn("/api/admin/users", self.index)
         self.assertIn("/api/admin/users/password", self.index)
-        self.assertIn("/api/admin/tokens", self.index)
+        self.assertIn("/api/tokens", self.index)
         self.assertIn("/api/share/list", self.index)
 
     def test_settings_panel_is_mobile_responsive(self):

@@ -11,8 +11,9 @@ protocol — it never pulls your brain into its own.
 
 ## How it connects: MCP
 
-A running instance exposes an **MCP** (Model Context Protocol) endpoint. You mint
-a token (`atlas token create <mind>`) and point your assistant at
+A running instance exposes an **MCP** (Model Context Protocol) endpoint. Each user
+mints their own token from the web UI (**Settings → Tokens**, or `atlas token
+create <mind>` locally) and points their assistant at
 `https://<your-atlas>/mcp/<token>`. From then on the AI works your mind through
 **nineteen tools**, grouped into four superpowers.
 

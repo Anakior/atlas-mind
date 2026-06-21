@@ -20,7 +20,7 @@
             "environment_variables": [
                 {
                     "name": "ATLAS_MCP_URL",
-                    "description": "MCP URL of your running Atlas Mind instance, printed by `atlas token create` (e.g. https://your-atlas/mcp/<token>)",
+                    "description": "MCP URL of your running Atlas Mind instance, minted in Settings → Tokens in the web UI (or `atlas token create` locally), e.g. https://your-atlas/mcp/<token>",
                     "is_required": true,
                     "is_secret": true
                 }

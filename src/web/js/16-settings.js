@@ -468,7 +468,7 @@ async function loadSettingsTokens() {
   settingsTokensList.innerHTML = '';
 
   try {
-    const tokens = await settingsFetch('/api/admin/tokens');
+    const tokens = await settingsFetch('/api/tokens');
     const active = Array.isArray(tokens) ? tokens.filter((tk) => !tk.revoked) : [];
 
     if (active.length === 0) {
@@ -523,7 +523,7 @@ settingsTokenForm.addEventListener('submit', async (e) => {
   if (!label) return;
 
   try {
-    const data = await settingsFetch('/api/admin/tokens', {
+    const data = await settingsFetch('/api/tokens', {
       method: 'POST',
       body: JSON.stringify({ label }),
     });
@@ -640,7 +640,7 @@ settingsTokensList.addEventListener('click', async (e) => {
       ? { id: revokeBtn.dataset.id }
       : { label: revokeBtn.dataset.label };
 
-    await settingsFetch('/api/admin/tokens', {
+    await settingsFetch('/api/tokens', {
       method: 'DELETE',
       body: JSON.stringify(body),
     });
