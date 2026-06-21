@@ -1,0 +1,30 @@
+{
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+    "name": "app.anakior/atlas-mind",
+    "description": "Self-hosted git-native knowledge base with an MCP endpoint your AI reads, writes and rewinds",
+    "version": "0.1.10",
+    "website_url": "https://atlas-mind.anakior.app/",
+    "repository": {
+        "url": "https://github.com/Anakior/atlas-mind",
+        "source": "github"
+    },
+    "packages": [
+        {
+            "registry_type": "pypi",
+            "identifier": "atlas-mind",
+            "version": "0.6.3",
+            "transport": {
+                "type": "streamable-http",
+                "url": "{ATLAS_MCP_URL}"
+            },
+            "environment_variables": [
+                {
+                    "name": "ATLAS_MCP_URL",
+                    "description": "MCP URL of your running Atlas Mind instance, printed by `atlas token create` (e.g. https://your-atlas/mcp/<token>)",
+                    "is_required": true,
+                    "is_secret": true
+                }
+            ]
+        }
+    ]
+}

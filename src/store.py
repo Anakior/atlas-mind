@@ -163,6 +163,29 @@ def hash_api_token(token: str) -> str:
     return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
 
 
+# Ordered permission ladder (model B); `comment` is reserved, resolves as `view` in
+# v1. Single source of truth — acl.effective_level AND list_docs_shared_with rank
+# grants through LEVELS/best_grant, so the two resolutions can never drift.
+LEVELS = {"view": 1, "comment": 2, "edit": 3, "owner": 4}
+
+
+def best_grant(grants, principals, now):
+    """The most-permissive LIVE grant in `grants` held by one of `principals`
+    (skipping expired), or None. `grants` is a list of {principal, level,
+    expires_at?}; ranking is by LEVELS, so a grant with an unknown level is ignored."""
+    best = None
+    for g in grants:
+        if g.get("principal") not in principals:
+            continue
+        exp = g.get("expires_at") or 0
+        if exp and now > exp:
+            continue
+        rank = LEVELS.get(g.get("level"))
+        if rank and (best is None or rank > LEVELS[best["level"]]):
+            best = g
+    return best
+
+
 # Unusable password sentinel for 'api' accounts: looks like bcrypt but never
 # verifies. Historical value shared with cli.py — an 'api' account rejects login.
 UNUSABLE_PASSWORD_HASH = "$2b$12$" + "x" * 53
@@ -886,7 +909,6 @@ class FileStore:
         GRANT — the "shared with me" view, so a member can discover what was shared
         with them. Excludes docs the viewer OWNS and expired grants. Returns
         [{path, level, granted_by, expires_at}] (best grant per doc), path-sorted."""
-        rank = {"view": 1, "comment": 2, "edit": 3, "owner": 4}
         principals = set(principals or ())
         now = int(time.time())
         with self._locks[self.ACL_FILE]:
@@ -895,20 +917,12 @@ class FileStore:
         for path, entry in acl.items():
             if entry.get("owner") in principals:
                 continue  # the viewer owns it — not "shared WITH" them
-            best = None
-            for g in entry.get("grants", []):
-                if g.get("principal") not in principals:
-                    continue
+            g = best_grant(entry.get("grants", []), principals, now)
+            if g:
                 exp = g.get("expires_at") or 0
-                if exp and now > exp:
-                    continue
-                lvl = g.get("level", "view")
-                if best is None or rank.get(lvl, 0) > rank.get(best["level"], 0):
-                    best = {"path": path, "level": lvl,
+                out.append({"path": path, "level": g.get("level", "view"),
                             "granted_by": g.get("granted_by"),
-                            "expires_at": exp or None}
-            if best:
-                out.append(best)
+                            "expires_at": exp or None})
         out.sort(key=lambda d: d["path"])
         return out
 

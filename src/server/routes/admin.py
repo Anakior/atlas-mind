@@ -11,12 +11,21 @@ from server import _is_newer, PROJECT_URL
 import server as _s
 
 
+def _public_url(handler, suffix=""):
+    """Absolute URL for `suffix` from the request Host — https in real cloud, http on
+    dev/local loopback. Falls back to the relative `suffix` when there's no Host."""
+    host = handler.headers.get("Host", "")
+    if not host:
+        return suffix
+    scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
+    return f"{scheme}://{host}{suffix}"
+
+
 def users_get(handler):
     try:
         users = _s.get_store().list_admin_facing_users()
     except Exception as e:
-        handler._send_json(503, {"error": "registry unavailable"})
-        print(f"[admin] list users: {e}", file=sys.stderr)
+        _s.registry_503(handler, "[admin] list users", e)
         return
     handler._send_json(200, users)
 
@@ -46,16 +55,10 @@ def users_post(handler):
         token, fields = store.new_invite_fields(role)
         _s.get_store().upsert_user(email, fields)
     except Exception as e:
-        print(f"[admin] invite user: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] invite user", e)
         return
-    # Invite URL derived from the request host (the instance may run behind any
-    # domain): https in cloud, http otherwise — mirrors tokens_post / nodes_post.
-    host = handler.headers.get("Host", "")
-    # https only in real cloud; dev/local serve plain http on loopback (https → 400).
-    scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
-    invite_url = (f"{scheme}://{host}/invite/{token}" if host
-                  else f"/invite/{token}")
+    # Invite URL from the request host (https in real cloud, http on dev/local).
+    invite_url = _public_url(handler, f"/invite/{token}")
     handler._send_json(201, {"email": email, "role": role,
                              "invite_url": invite_url})
 
@@ -87,8 +90,7 @@ def users_password(handler):
         })
         _s.reset_login_failures(email)
     except Exception as e:
-        print(f"[admin] reset password: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] reset password", e)
         return
     handler._send_json(200, {"ok": True, "email": email})
 
@@ -117,8 +119,7 @@ def users_delete(handler):
         handler._send_json(409, {"error": "cannot delete the last admin"})
         return
     except Exception as e:
-        print(f"[admin] delete user: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] delete user", e)
         return
     handler._send_json(200, {"ok": True, "email": email})
 
@@ -127,8 +128,7 @@ def tokens_get(handler):
     try:
         identities = _s.get_store().list_api_identities()
     except Exception as e:
-        print(f"[admin] list tokens: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] list tokens", e)
         return
     handler._send_json(200, identities)
 
@@ -154,15 +154,10 @@ def tokens_post(handler):
         handler._send_json(409, {"error": str(e)})
         return
     except Exception as e:
-        print(f"[admin] create token: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] create token", e)
         return
-    # mcp_url derived from the request host (the client may run behind any
-    # domain): https scheme in the cloud, http otherwise.
-    host = handler.headers.get("Host", "")
-    # https only in real cloud; dev/local serve plain http on loopback (https → 400).
-    scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
-    mcp_url = f"{scheme}://{host}/mcp/{token}" if host else f"/mcp/{token}"
+    # mcp_url from the request host (https in real cloud, http on dev/local).
+    mcp_url = _public_url(handler, f"/mcp/{token}")
     # The PLAINTEXT token is returned only HERE, a single time.
     handler._send_json(201, {
         "token": token,
@@ -183,8 +178,7 @@ def tokens_delete(handler):
             handler._send_json(404, {"error": "token not found or already revoked"})
             return
     except Exception as e:
-        print(f"[admin] revoke token: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] revoke token", e)
         return
     handler._send_json(200, {"ok": True})
 
@@ -209,8 +203,7 @@ def nodes_get(handler):
     try:
         nodes = _s.get_store().list_nodes()
     except Exception as e:
-        print(f"[admin] list nodes: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] list nodes", e)
         return
     handler._send_json(200, nodes)
 
@@ -232,13 +225,9 @@ def nodes_post(handler):
     try:
         _s.get_store().create_node(name, clean, token)
     except Exception as e:
-        print(f"[admin] create node: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] create node", e)
         return
-    host = handler.headers.get("Host", "")
-    # https only in real cloud; dev/local serve plain http on loopback (https → 400).
-    scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
-    origin = f"{scheme}://{host}" if host else ""
+    origin = _public_url(handler)
     # The PLAINTEXT token is returned only HERE, wrapped in the copyable link.
     handler._send_json(201, {
         "name": name,
@@ -258,8 +247,7 @@ def nodes_delete(handler):
             handler._send_json(404, {"error": "node not found or already revoked"})
             return
     except Exception as e:
-        print(f"[admin] revoke node: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] revoke node", e)
         return
     handler._send_json(200, {"ok": True})
 
@@ -269,8 +257,7 @@ def remotes_get(handler):
     try:
         remotes = _s.get_store().list_remotes()
     except Exception as e:
-        print(f"[admin] list remotes: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] list remotes", e)
         return
     handler._send_json(200, remotes)
 
@@ -289,8 +276,7 @@ def remotes_post(handler):
         remote = _s.get_store().add_remote(decoded)
         result = _s.sync_remote(_s.get_store().get_remote(name))
     except Exception as e:
-        print(f"[admin] add remote: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] add remote", e)
         return
     _s.trigger_sync()  # the new mirror must show up in the index
     handler._send_json(201, {"remote": remote, "sync": result})
@@ -310,8 +296,7 @@ def remotes_sync(handler):
             results = {r["name"]: _s.sync_remote(r)
                        for r in _s.get_store().list_remotes(include_token=True)}
     except Exception as e:
-        print(f"[admin] sync remote: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] sync remote", e)
         return
     _s.trigger_sync()  # propagate mirror changes into the index
     handler._send_json(200, {"results": results})
@@ -328,8 +313,7 @@ def remotes_delete(handler):
             handler._send_json(404, {"error": "remote not found"})
             return
     except Exception as e:
-        print(f"[admin] remove remote: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] remove remote", e)
         return
     import shutil
     mirror = _s._remote_mirror_root(name)
@@ -359,8 +343,7 @@ def remotes_appropriate(handler):
             handler._send_json(404, {"error": "remote not found"})
             return
     except Exception as e:
-        print(f"[admin] appropriate: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[admin] appropriate", e)
         return
     mirror = _s._remote_mirror_root(name)
     if not _s._mirror_is_under_remotes(mirror) or not mirror.exists():

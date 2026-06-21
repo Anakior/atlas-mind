@@ -21,3 +21,4 @@ content/
 # a couple of highlighted passages baked in.
 !examples/demo-mind/.notes/
 !examples/demo-mind/.notes/**
+key.pem

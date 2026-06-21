@@ -53,19 +53,11 @@ def file_put(handler):
     target.write_text(content, encoding="utf-8")
     if not existed and ctx.primary:  # new doc → stamp creator + default visibility
         try:
-            store = _s.get_store()
-            # Brand-new doc → start from a clean ACL slate, so a path recycled after
-            # a delete can't inherit a stale owner/grants (defends against any
-            # orphaned entry, whatever its cause).
-            store.delete_acl(rel)
-            store.set_creator(rel, ctx.primary)
-            # Default: a member's new doc is private (Notion); an admin's stays
-            # commons (curator). The `private` flag (New-Document toggle) overrides.
-            # A doc created inside a private folder is private by inheritance and
-            # never gets its own owner (which would cut that inheritance).
-            private = bool(data.get("private", not ctx.is_admin and not ctx.api))
-            if private and not _s.in_private_space(rel):
-                store.set_owner(rel, ctx.primary)
+            # Clean ACL slate first, so a path recycled after a delete can't inherit a
+            # stale owner/grants. Then stamp creator + default visibility — the
+            # `private` flag (New-Document toggle) overrides the default.
+            _s.get_store().delete_acl(rel)
+            _s._stamp_new_doc(rel, ctx, private=data.get("private"))
         except Exception as e:
             print(f"[file_put creator] {e}", file=sys.stderr)
     _s.trigger_sync()
@@ -283,16 +275,9 @@ def move(handler):
         code = {"invalid": 400, "not_found": 404, "exists": 409}.get(status, 500)
         handler._send_json(code, {"error": payload})
         return
-    # Keep the doc's privacy + share links with it. Repoint the ACL FIRST and
-    # BEFORE the git sync, to minimize the window where the moved file exists at its
-    # new path with no ACL (which would read as commons). Best-effort: a registry
-    # hiccup must not fail the move (the registry doctor reconciles any orphan).
-    try:
-        store = _s.get_store()
-        store.repoint_acl_by_path(payload["from"], payload["to"])  # privacy travels first
-        store.repoint_shares_by_path(payload["from"], payload["to"])
-    except Exception as e:
-        print(f"[move repoint] {e}", file=sys.stderr)
+    # Keep the doc's privacy + share links with it (ACL repointed before the git sync;
+    # a registry hiccup must not fail the move — the doctor reconciles any orphan).
+    _s._repoint_doc(payload["from"], payload["to"])
     _s.trigger_sync()
     handler._send_json(200, {"ok": True, **payload})
 

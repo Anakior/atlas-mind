@@ -24,10 +24,10 @@ import posixpath
 import time
 
 import server as _s
-
-# Ordered permission ladder. ``comment`` is reserved but folded onto ``view`` in
-# v1; kept in the order so a future grant slots in cleanly.
-LEVELS = {"view": 1, "comment": 2, "edit": 3, "owner": 4}
+# Permission ladder + grant resolution live in `store` (single source, shared with
+# store.list_docs_shared_with so the two can't drift); re-exported here for
+# `acl.LEVELS` and `from ...acl import LEVELS`.
+from store import LEVELS, best_grant
 
 
 class ViewerCtx:
@@ -177,15 +177,9 @@ def effective_level(rel, ctx, store=None):
     for idx, entry in present:
         if owner_idx is not None and idx > owner_idx:
             continue
-        for g in entry.get("grants", ()):
-            if g.get("principal") not in ctx.principals:
-                continue
-            exp = g.get("expires_at") or 0
-            if exp and now > exp:
-                continue
-            rank = LEVELS.get(g.get("level"))
-            if rank and (best is None or rank > LEVELS[best]):
-                best = g["level"]
+        g = best_grant(entry.get("grants", ()), ctx.principals, now)
+        if g and (best is None or LEVELS[g["level"]] > LEVELS[best]):
+            best = g["level"]
 
     if owner is not None:
         # Private space (owned). NO admin bypass: the admin sees it only as the

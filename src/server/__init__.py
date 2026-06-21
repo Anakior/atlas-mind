@@ -167,6 +167,42 @@ def can_create(rel, ctx, store=None):
 
 def in_private_space(rel, store=None):
     return _acl_in_private_space(_canonical_rel(rel), store)
+
+
+def _stamp_new_doc(rel, ctx, *, private=None):
+    """On create: stamp the creator, then (unless admin/api/in a private space) make
+    the doc private to its creator. `private` overrides the default (the New-Document
+    toggle); None → a human member's doc is private, an admin's or an API token's
+    stays in the commons. Callers own the surrounding try/except + any clean-slate
+    delete_acl (these differ per write surface)."""
+    store = get_store()
+    store.set_creator(rel, ctx.primary)
+    if private is None:
+        private = not ctx.is_admin and not ctx.api
+    if private and not in_private_space(rel):
+        store.set_owner(rel, ctx.primary)
+
+
+def _repoint_doc(frm, to):
+    """Move a doc's ACL + share-registry entries from `frm` to `to`. Best-effort and
+    logged — called BEFORE the git sync so the moved doc never lands at its new path
+    with no ACL (which would read as commons)."""
+    try:
+        store = get_store()
+        store.repoint_acl_by_path(frm, to)   # privacy travels first
+        store.repoint_shares_by_path(frm, to)
+    except Exception as e:
+        print(f"[move repoint] {e}", file=sys.stderr)
+
+
+def registry_503(handler, context, e):
+    """Map a registry/store failure to the uniform fail-closed 503, logging
+    `context` + the exception. One home for the payload so the store-op handlers
+    can't drift on the error shape; each call site keeps its own except (+ return)."""
+    print(f"{context}: {e}", file=sys.stderr)
+    handler._send_json(503, {"error": "registry unavailable"})
+
+
 from server.pure.hive import (  # noqa: F401  federation node links / mirror / fetch
     encode_node_link, decode_node_link, verify_node_bearer, _validate_node_path,
     _iter_node_files, _remote_mirror_root, _is_readonly_path, _is_safe_node_name,

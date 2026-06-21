@@ -50,8 +50,7 @@ def submit(handler):
         # closes the window in the same critical section.
         claimed = _s._CTX.setup_token.consume(_create_admin)
     except Exception as e:
-        print(f"[setup] could not create admin account: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[setup] could not create admin account", e)
         return
     if not claimed:
         handler._send_json(409, {"error": "setup already completed"})

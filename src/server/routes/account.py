@@ -11,8 +11,7 @@ def logout_all(handler):
     try:
         handler._bump_session_epoch(email)
     except Exception as e:
-        print(f"[account] logout-all: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[account] logout-all", e)
         return
     # Session now invalid → clear the cookies.
     handler.send_response(200)
@@ -38,8 +37,7 @@ def totp_init(handler):
     try:
         _s.get_store().upsert_user(email, {"totp_pending_secret": secret})
     except Exception as e:
-        print(f"[account] totp init: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[account] totp init", e)
         return
     uri = _s.totp_provisioning_uri(secret, email, _s.CONFIG.site_name)
     handler._send_json(200, {"secret": secret, "otpauth_uri": uri})
@@ -74,8 +72,7 @@ def totp_enable(handler):
         })
         handler._bump_session_epoch(email)
     except Exception as e:
-        print(f"[account] totp enable: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[account] totp enable", e)
         return
     # Epoch changed: reissue fresh cookies so we don't log out the user who just
     # enabled 2FA from THIS session.
@@ -118,8 +115,7 @@ def totp_disable(handler):
         })
         handler._bump_session_epoch(email)
     except Exception as e:
-        print(f"[account] totp disable: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[account] totp disable", e)
         return
     new_epoch = _s.current_session_epoch(email)
     handler.send_response(200)

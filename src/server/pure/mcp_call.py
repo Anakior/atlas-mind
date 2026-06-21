@@ -437,15 +437,11 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
             return text_result("'content' must be a string", is_error=True)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        # On create: stamp the CREATOR (all roles → "créé par X"). A non-admin's
-        # new doc is also private to them by default; an admin's stays commons.
+        # On create: stamp the creator + default visibility (a human member's doc is
+        # private; an admin's or an API token's stays in the commons).
         if ctx is not None and ctx.primary:
             try:
-                _s.get_store().set_creator(rel, ctx.primary)
-                # An admin or an API token → the doc stays in the commons; only a
-                # human member's new doc is private by default.
-                if not ctx.is_admin and not ctx.api and not _s.in_private_space(rel):
-                    _s.get_store().set_owner(rel, ctx.primary)
+                _s._stamp_new_doc(rel, ctx)
             except Exception as e:
                 print(f"[create_doc owner] {e}", file=sys.stderr)
         _s.trigger_sync()
@@ -507,15 +503,8 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
         status, payload = _s._move_md_with_relink(src_rel, dst_rel)
         if status != "ok":
             return text_result(payload, is_error=True)
-        # Repoint the ACL + shares BEFORE the git sync, to minimize the window where
-        # the moved doc lands at its new path with no ACL (which would read as
-        # commons). Mirrors the /api/file/move ordering. Best-effort.
-        try:
-            _store = _s.get_store()
-            _store.repoint_acl_by_path(payload["from"], payload["to"])  # privacy first
-            _store.repoint_shares_by_path(payload["from"], payload["to"])
-        except Exception as e:
-            print(f"[move repoint] {e}", file=sys.stderr)
+        # Repoint the ACL + shares BEFORE the git sync (privacy travels with the doc).
+        _s._repoint_doc(payload["from"], payload["to"])
         _s.trigger_sync()
         n, files = payload["links_updated"], len(payload["rewrites"])
         msg = f"Moved: {payload['from']} -> {payload['to']}."

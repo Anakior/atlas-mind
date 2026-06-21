@@ -109,8 +109,7 @@ def acl_post(handler):
             handler._send_json(400, {"error": "unknown action"})
             return
     except Exception as e:
-        print(f"[acl] {action} on {rel} failed: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, f"[acl] {action} on {rel} failed", e)
         return
     # Audit trail: who changed the sharing of what, when. A multi-user atlas
     # needs this for incident response / abuse detection — the access log records
@@ -135,8 +134,7 @@ def shared_with_me(handler):
     try:
         docs = _s.get_store().list_docs_shared_with(mine)
     except Exception as e:
-        print(f"[acl] shared-with-me: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[acl] shared-with-me", e)
         return
     # Defense-in-depth: only return what the caller can still actually read.
     docs = [d for d in docs if _s.can_read(d["path"], ctx)]
@@ -154,8 +152,7 @@ def directory(handler):
             u.get("email") for u in st.list_admin_facing_users() if u.get("email"))
         groups = sorted((st.list_groups() or {}).keys())
     except Exception as e:
-        print(f"[acl] directory: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[acl] directory", e)
         return
     handler._send_json(200, {"users": users, "groups": groups})
 
@@ -166,8 +163,7 @@ def groups_get(handler):
     try:
         groups = _s.get_store().list_groups()
     except Exception as e:
-        print(f"[acl] list groups: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[acl] list groups", e)
         return
     handler._send_json(200, groups)
 
@@ -197,8 +193,7 @@ def groups_post(handler):
     try:
         _s.get_store().set_group(name, emails)
     except Exception as e:
-        print(f"[acl] set group: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[acl] set group", e)
         return
     handler._send_json(200, {"ok": True, "name": name, "members": emails})
 
@@ -214,7 +209,6 @@ def groups_delete(handler):
             handler._send_json(404, {"error": "group not found"})
             return
     except Exception as e:
-        print(f"[acl] delete group: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[acl] delete group", e)
         return
     handler._send_json(200, {"ok": True})

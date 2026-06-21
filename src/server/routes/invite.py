@@ -69,8 +69,7 @@ def submit(handler):
         result = _s.get_store().accept_invite(
             store.hash_api_token(token), store.hash_password(password))
     except Exception as e:
-        print(f"[invite] could not accept invite: {e}", file=sys.stderr)
-        handler._send_json(503, {"error": "registry unavailable"})
+        _s.registry_503(handler, "[invite] could not accept invite", e)
         return
     if not result:
         handler._send_json(409, {"error": _s._t("invite_invalid")})

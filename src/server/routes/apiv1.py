@@ -85,13 +85,9 @@ def post(handler):
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
-    if ctx.primary:  # stamp creator (all roles); non-admin → private by default
+    if ctx.primary:  # stamp creator + default visibility (member → private, admin/api → commons)
         try:
-            _s.get_store().set_creator(rel, ctx.primary)
-            # admin OR API token → stays in the commons; only a human member's new
-            # doc is private by default.
-            if not ctx.is_admin and not ctx.api and not _s.in_private_space(rel):
-                _s.get_store().set_owner(rel, ctx.primary)
+            _s._stamp_new_doc(rel, ctx)
         except Exception:
             pass
     _s.trigger_sync()
