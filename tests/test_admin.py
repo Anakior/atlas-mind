@@ -554,7 +554,6 @@ class TestProfile(unittest.TestCase):
         stored = self.fs.get_user_by_email(VIEWER_EMAIL)
         self.assertEqual(stored["first_name"], "Grace")
         self.assertEqual(stored["last_name"], "Hopper")
-        # Reflected on a subsequent GET.
         body = self.srv.get("/api/account/profile",
                             headers={"Cookie": self.viewer_cookie}).json()
         self.assertEqual(body["first_name"], "Grace")

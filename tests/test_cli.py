@@ -365,7 +365,6 @@ class TestCliUser(CliMindTest):
         self.assertEqual(record["first_name"], "Ada")
         self.assertEqual(record["last_name"], "Lovelace")
         self.assertNotIn("name", record)
-        # Displayed back in "First Last" order on creation.
         self.assertIn("Ada Lovelace", result.stdout)
 
     def test_user_add_first_name_only(self):

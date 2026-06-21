@@ -424,7 +424,7 @@ const STRINGS = {
     notFoundHome: 'Retour à l\'accueil',
     titleLabel: 'Titre',
     bodyLabel: 'Corps',
-    // Sécurité (2FA + sessions)
+    // Profil + Sécurité (nom, 2FA, sessions)
     settingsTabSecurity: 'Profil',
     profileNameTitle: 'Votre nom',
     profileNameHint: "Affiché dans l'application.",
@@ -917,7 +917,7 @@ const STRINGS = {
     notFoundHome: 'Back home',
     titleLabel: 'Title',
     bodyLabel: 'Body',
-    // Security (2FA + sessions)
+    // Profile + Security (name, 2FA, sessions)
     settingsTabSecurity: 'Profile',
     profileNameTitle: 'Your name',
     profileNameHint: 'Shown across the app.',

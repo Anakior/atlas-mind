@@ -1323,8 +1323,7 @@ document.querySelectorAll('.settings-tab').forEach((tab) => {
 });
 
 // ── Your name (self-service, Profil tab) ──────────────────────────────────────
-// The form lives in the settings partial (05-settings.html); here we only prefill
-// it from the account and persist edits.
+// The form is static in 05-settings.html; here we just prefill + save it.
 async function loadAccountProfile() {
   const form = document.getElementById('account-profile-form');
   const first = document.getElementById('account-profile-first');

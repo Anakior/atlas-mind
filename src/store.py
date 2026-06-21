@@ -286,8 +286,8 @@ def valid_name(s) -> bool:
 
 
 def display_name(user: dict) -> str:
-    """"First Last" for the UI (each half stripped, a missing half collapsed away).
-    Falls back to the email when BOTH names are absent."""
+    """The UI display name: First Last (each half stripped, a missing half collapsed
+    away). Falls back to the email when both names are absent."""
     parts = [(user.get("first_name") or "").strip(),
              (user.get("last_name") or "").strip()]
     name = " ".join(p for p in parts if p)
