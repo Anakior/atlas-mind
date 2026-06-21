@@ -5,4 +5,4 @@ Installed as the `atlas_mind` package; the console entry point is `atlas`
 scripts (python3 src/cli.py …) — cli/server/build bootstrap their own directory
 onto sys.path so the flat intra-package imports resolve in both modes.
 """
-__version__ = "0.6.3"
+__version__ = "0.6.4"
