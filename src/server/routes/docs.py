@@ -156,14 +156,10 @@ def history(handler):
         if not record:
             continue
         fields = (record.split("\x1f") + ["", "", "", "", ""])[:5]
-        ai = fields[4].strip()  # X-Atlas-Author trailer → AI family (13d filter)
-        if ai.lower().startswith("x-atlas-author:"):
-            ai = ai.split(":", 1)[1].strip()
-        if ai.startswith("ai/"):
-            ai = ai[3:]
+        ai = _s.parse_ai_trailer(fields[4])  # X-Atlas-Author trailer → AI family (13d filter)
         revisions.append({
             "sha": fields[0], "author": fields[1],
-            "date": fields[2], "subject": fields[3], "ai": ai.strip() or None,
+            "date": fields[2], "subject": fields[3], "ai": ai,
         })
     handler._send_json(200, {"path": rel, "revisions": revisions})
 
@@ -251,6 +247,44 @@ def activity(handler):
         handler._send_json(500, {"error": "git log failed"})
         return
     handler._send_json(200, {"events": events})
+
+
+def stale(handler):
+    """GET /api/stale?months=&limit= — docs untouched for N months (13c obsolescence).
+    Deterministic, AUTH only (never anonymous), ACL-scrubbed per viewer."""
+    from urllib.parse import urlparse, parse_qs as _pqs
+    query = _pqs(urlparse(handler.path).query)
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser and not ctx.primary:
+        handler._send_json(403, {"error": "forbidden"})
+        return
+    try:
+        months = min(24, max(1, int(query.get("months", ["6"])[0])))
+    except ValueError:
+        months = 6
+    try:
+        limit = min(100, max(1, int(query.get("limit", ["40"])[0])))
+    except ValueError:
+        limit = 40
+    items = _s._api_stale(months, limit, None if ctx.superuser else ctx)
+    handler._send_json(200, {"months": months, "stale": items})
+
+
+def contradictions(handler):
+    """GET /api/contradictions?limit= — candidate doc PAIRS (shared tags/links) for the AI
+    to judge (13c). Server pre-filter only; AUTH, never anonymous, ACL-scrubbed."""
+    from urllib.parse import urlparse, parse_qs as _pqs
+    query = _pqs(urlparse(handler.path).query)
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser and not ctx.primary:
+        handler._send_json(403, {"error": "forbidden"})
+        return
+    try:
+        limit = min(50, max(1, int(query.get("limit", ["15"])[0])))
+    except ValueError:
+        limit = 15
+    items = _s._contradiction_candidates(None if ctx.superuser else ctx, limit)
+    handler._send_json(200, {"candidates": items})
 
 
 def revert(handler):

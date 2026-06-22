@@ -187,6 +187,72 @@ def _api_recent(days: int, limit: int, ctx=None) -> list:
     return items[:limit]
 
 
+_MONTH_SECONDS = 2629800  # 30.4375 days
+
+
+def _api_stale(months: int, limit: int, ctx=None) -> list:
+    """Docs untouched for `months`+ months (13c obsolescence), oldest first. Dates come
+    from the last git commit per doc (survives clone/pull, unlike mtime); mtime is a
+    fallback when git is unavailable. Deterministic, ACL-scrubbed per ctx."""
+    cutoff = time.time() - months * _MONTH_SECONDS
+    dates = _s._import_build()._git_commit_dates(_s.CONFIG.root)
+    items = []
+    for rel, path in _s._iter_doc_files():
+        if not _visible(rel, ctx):
+            continue
+        ts = dates.get(rel)
+        if ts is None:
+            try:
+                ts = int(path.stat().st_mtime)
+            except OSError:
+                continue
+        if ts >= cutoff:
+            continue
+        items.append({
+            "path": rel, "name": path.name, "last_modified": int(ts),
+            "months_ago": round((time.time() - ts) / _MONTH_SECONDS, 1),
+        })
+    items.sort(key=lambda h: h["last_modified"])
+    return items[:limit]
+
+
+def _contradiction_candidates(ctx=None, limit: int = 15) -> list:
+    """Candidate doc PAIRS to review for contradiction (13c): docs that share a frontmatter
+    tag or are wikilinked — i.e. topical overlap that *could* hide a contradiction. This is
+    only a deterministic PRE-FILTER (zero LLM); the AI judges via read_doc/doc_diff. Folder
+    tags are ignored (they'd pair every doc in a folder); ubiquitous tags (>12 docs) are
+    skipped as noise. ACL-scrubbed per ctx."""
+    build = _s._import_build()
+    tag_map = {}
+    known = set()
+    for rel, _name, text in _doc_corpus(ctx):
+        known.add(rel)
+        ft, _ = build._parse_frontmatter(text)
+        for tg in (ft or []):
+            tag_map.setdefault(tg, []).append(rel)
+    cand = {}
+    for tg, docs in tag_map.items():
+        if not (2 <= len(docs) <= 12):
+            continue
+        for i, a in enumerate(docs):
+            for b in docs[i + 1:]:
+                key = (a, b) if a < b else (b, a)
+                cand.setdefault(key, {"shared": set(), "linked": False})["shared"].add(tg)
+    for rel, edges in _links_graph(ctx).items():
+        for tgt in edges.get("out", []):
+            if tgt == rel or tgt not in known:  # skip self-links + dangling wikilinks
+                continue
+            key = (rel, tgt) if rel < tgt else (tgt, rel)
+            cand.setdefault(key, {"shared": set(), "linked": False})["linked"] = True
+    out = [
+        {"a": a, "b": b, "shared_tags": sorted(info["shared"]), "linked": info["linked"],
+         "score": len(info["shared"]) + (2 if info["linked"] else 0)}
+        for (a, b), info in cand.items()
+    ]
+    out.sort(key=lambda x: -x["score"])
+    return out[:limit]
+
+
 # ─── Git time-travel helpers (back the doc_history/at/diff/blame/changelog/revert
 #     and search_history MCP tools) ────────────────────────────────────────────
 # Every git call goes through _s.git (subprocess arg-list, NO shell). Doc paths are
@@ -862,18 +928,14 @@ def _activity_events(days, limit, author, type_filter, ctx):
         typ = _ACTIVITY_VERB_TYPE.get(verb) or _ACTIVITY_STATUS_TYPE.get(files[0]["status"], "edit")
         if type_filter and typ != type_filter:
             continue
-        ai = (trailer or "").strip()
-        if ai.lower().startswith("x-atlas-author:"):
-            ai = ai.split(":", 1)[1].strip()
-        if ai.startswith("ai/"):
-            ai = ai[3:]
+        ai = _s.parse_ai_trailer(trailer)
         try:
             date = datetime.datetime.fromisoformat(aI).astimezone(datetime.timezone.utc).isoformat()
         except (ValueError, TypeError):
             date = aI
         events.append({
             "sha": sha, "short_sha": sha[:7], "author": an, "email": ae,
-            "ai": ai.strip() or None, "date": date, "type": typ,
+            "ai": ai, "date": date, "type": typ,
             "title": posixpath.splitext(posixpath.basename(files[0]["path"]))[0],
             "subject": subj, "paths": [f["path"] for f in files],
         })
@@ -898,6 +960,33 @@ def _tool_activity(args, ctx):
         return text_result(f"No activity in the last {days} days")
     return text_result(json.dumps({"since_days": days, "events": events},
                                   ensure_ascii=False, indent=2))
+
+
+def _tool_stale(args, ctx):
+    try:
+        months = min(24, max(1, int(args.get("months", 6))))
+    except (ValueError, TypeError):
+        months = 6
+    try:
+        limit = min(100, max(1, int(args.get("limit", 30))))
+    except (ValueError, TypeError):
+        limit = 30
+    items = _api_stale(months, limit, ctx)
+    if not items:
+        return text_result(f"No document untouched for {months}+ months")
+    return text_result(json.dumps({"months": months, "stale": items},
+                                  ensure_ascii=False, indent=2))
+
+
+def _tool_contradictions(args, ctx):
+    try:
+        limit = min(50, max(1, int(args.get("limit", 15))))
+    except (ValueError, TypeError):
+        limit = 15
+    items = _contradiction_candidates(ctx, limit)
+    if not items:
+        return text_result("No contradiction candidates (no docs share tags or links)")
+    return text_result(json.dumps({"candidates": items}, ensure_ascii=False, indent=2))
 
 
 def _tool_doc_blame(args, ctx):
@@ -980,6 +1069,8 @@ _TOOLS = {
     "search_history": _tool_search_history,
     "changelog": _tool_changelog,
     "activity": _tool_activity,
+    "stale": _tool_stale,
+    "contradictions": _tool_contradictions,
     "doc_blame": _tool_doc_blame,
     "doc_revert": _tool_doc_revert,
 }

@@ -2,9 +2,7 @@
 // Reads GET /api/activity (the read side of the attribution layer); reuses the real
 // constellation avatars. Hidden offline / when there is nothing to show.
 (function () {
-  const esc = (s) =>
-    String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const esc = escapeHtml;  // canonical (escapes ' too), from 01-i18n-state.js
 
   // CDC event types -> display label + tint + Heroicons-v2 outline path (clean line
   // icons, matching the rest of the app). Keyed by the type /api/activity returns.
@@ -25,6 +23,7 @@
     en: { create: 'created', edit: 'edited', move: 'moved', delete: 'deleted', check: 'checked', revert: 'reverted' },
   };
   const verb = (type) => (VERB[LANG] || VERB.fr)[type] || type;
+  const docTitle = (p) => ((p || '').split('/').pop() || p).replace(/\.(md|html)$/i, '');
 
   const AI = {
     claude: 'M12 2.6l1.6 5.9 5.9 1.6-5.9 1.6L12 21.4l-1.6-7.7L4.5 12l5.9-1.6L12 2.6Z',
@@ -55,12 +54,14 @@
   };
 
   function rel(min) {
-    if (min < 1) return "à l'instant";
+    const en = LANG === 'en';
+    if (min < 1) return en ? 'just now' : "à l'instant";
     if (min < 60) return min + ' min';
     const h = Math.round(min / 60);
     if (h < 24) return h + ' h';
     const d = Math.round(min / 1440);
-    return d === 1 ? 'hier' : 'il y a ' + d + ' j';
+    if (d === 1) return en ? 'yesterday' : 'hier';
+    return en ? d + 'd ago' : 'il y a ' + d + ' j';
   }
   function dayKey(min) {
     const d = new Date(Date.now() - min * 60000);
@@ -68,9 +69,9 @@
     const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const b = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const diff = Math.round((a - b) / 86400000);
-    if (diff <= 0) return "Aujourd'hui";
-    if (diff === 1) return 'Hier';
-    return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    if (diff <= 0) return LANG === 'en' ? 'Today' : "Aujourd'hui";
+    if (diff === 1) return LANG === 'en' ? 'Yesterday' : 'Hier';
+    return d.toLocaleDateString(LANG === 'en' ? 'en-US' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
   // /api/activity event -> render item.
@@ -90,6 +91,7 @@
       agoMin: isNaN(t) ? 0 : Math.max(0, Math.round((Date.now() - t) / 60000)),
       sha: e.short_sha || (e.sha || '').slice(0, 7),
       path: (e.paths && e.paths[0]) || '',
+      subject: e.subject || '',
     };
   }
 
@@ -104,12 +106,17 @@
   let _items = null;
   let _orreryItems = [];   // the list the constellation nodes index into (respects the filter)
   let _aiOnly = false;     // 13d: filter the feed to AI-authored events only
+  let _digest = null;      // 13b: factual digest of the last 7 days (computed from the events)
+  let _health = null;      // 13c: { stale, cands } for the Santé view
+  let _healthExpanded = false;
+  let _candExpanded = false;
+  let _healthTab = (() => { try { return localStorage.getItem('atlas:healthTab') || 'stale'; } catch (_) { return 'stale'; } })();  // 13c: persisted Santé sub-view
   const shownItems = () => (_aiOnly ? _items.filter((i) => i.ai) : _items);
 
   async function load() {
     if (IS_OFFLINE_BUILD || !location.protocol.startsWith('http')) return null;
     try {
-      const r = await fetch('/api/activity?since=60&limit=40');
+      const r = await fetch('/api/activity?since=60&limit=200');
       if (!r.ok) return null;
       const data = await r.json();
       return Array.isArray(data.events) ? data.events.map(toItem) : null;
@@ -125,7 +132,7 @@
     const out = [];
     for (const e of items) {
       const last = out[out.length - 1];
-      if (last && last.title === e.title && last.who === e.who
+      if (last && last.path === e.path && last.who === e.who
           && last.type === e.type && last.ai === e.ai) {
         last.count += 1;
       } else {
@@ -140,7 +147,7 @@
     const ty = TY(e.type);
     const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${esc(e.ai)}</span>` : '';
     return (
-      `<div class="act-row flex items-center gap-3" data-path="${esc(e.path)}" title="Voir les modifications">
+      `<div class="act-row flex items-center gap-3" data-path="${esc(e.path)}" title="${t('actSeeChanges')}">
         <div class="relative shrink-0" style="line-height:0">${avatar(e, 30)}${e.ai ? aiBadge(e.ai) : ''}</div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5"><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
@@ -156,12 +163,12 @@
     );
   }
 
-  const JOURNAL_PREVIEW = 6;
+  const JOURNAL_PREVIEW = 8;
   let _expanded = false;
 
   function journalHtml() {
     const all = shownItems();
-    if (!all.length) return '<div class="text-ink-500 text-sm py-4 text-center">Aucune écriture IA récente.</div>';
+    if (!all.length) return `<div class="text-ink-500 text-sm py-4 text-center">${_aiOnly ? t('actEmptyAi') : t('actEmpty')}</div>`;
     let out = '';
     let day = '';
     const shown = _expanded ? all : all.slice(0, JOURNAL_PREVIEW);
@@ -175,7 +182,7 @@
     });
     // Toggle in place — no extra view to navigate to, the feed just unfolds.
     if (all.length > JOURNAL_PREVIEW) {
-      out += `<div class="text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${_expanded ? 'Réduire ↑' : 'Voir tout →'}</a></div>`;
+      out += `<div class="text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${_expanded ? t('actCollapse') : t('actSeeAll')}</a></div>`;
     }
     return out;
   }
@@ -349,25 +356,130 @@
     'activity-seg px-3 py-1 text-xs font-medium ' + (active ? 'is-active bg-accent text-white' : 'text-ink-300');
   // A checkbox-style filter (small box + label), not a button — reads as "filter the feed".
   const aiFilterHtml = () =>
-    `<button type="button" data-ai-filter class="flex items-center gap-1.5 text-xs transition ${_aiOnly ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" title="Filtrer : écritures IA seulement">` +
+    `<button type="button" data-ai-filter class="flex items-center gap-1.5 text-xs transition ${_aiOnly ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" title="${t('actAiOnly')}">` +
     `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ${_aiOnly ? '#1d9bd1' : '#5e6066'};background:${_aiOnly ? '#1d9bd1' : 'transparent'}">${_aiOnly ? '✓' : ''}</span>` +
-    `IA seulement</button>`;
+    `${t('actAiOnly')}</button>`;
+
+  // 13b — factual digest over the last 7 days (deterministic, derived from the events;
+  // the narrative side is the AI via the existing `activity` MCP tool, on demand).
+  function computeDigest(items) {
+    const WIN = 7 * 24 * 60; // minutes in 7 days
+    const docs = new Set(), authors = new Set();
+    let created = 0, checked = 0, ai = 0;
+    for (const i of items) {
+      if (i.agoMin > WIN) continue;
+      if (i.path) docs.add(i.path);
+      if (i.who) authors.add(i.who);
+      if (i.type === 'create') created += 1;
+      if (i.type === 'check' && /^checked/i.test(i.subject || '')) checked += 1;
+      if (i.ai) ai += 1;
+    }
+    return { docs: docs.size, created, checked, contributors: authors.size, ai };
+  }
+
+  function digestHtml() {
+    const d = _digest;
+    if (!d) return '';
+    const ic = (path, color) =>
+      `<svg width="13" height="13" fill="none" stroke="${color}" stroke-width="1.9" viewBox="0 0 24 24" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
+    const pill = (icon, n, label) =>
+      `<span class="act-legend-chip">${icon}<span class="text-ink-100 font-semibold">${n}</span> ${label}</span>`;
+    const parts = [];
+    if (d.docs) parts.push(pill(ic('M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z', '#5e6066'), d.docs, t('digestDocs', d.docs)));
+    if (d.created) parts.push(pill(ic('M12 4v16m8-8H4', TY('create').color), d.created, t('digestCreated', d.created)));
+    if (d.checked) parts.push(pill(ic('M5 13l4 4L19 7', TY('check').color), d.checked, t('digestChecked', d.checked)));
+    if (d.contributors) parts.push(pill(ic('M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4z', '#5e6066'), d.contributors, t('digestContributors', d.contributors)));
+    if (d.ai) parts.push(pill(ic('M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z', '#e8941c'), d.ai, t('digestViaAi', d.ai)));
+    if (!parts.length) return '';
+    const hr = '<hr style="border:none;border-top:1px solid #2a2a32;margin:0">';
+    return (
+      `<div style="position:relative;margin-bottom:12px">
+        ${hr}
+        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 9px">${parts.join('')}</div>
+        ${hr}
+        <span class="act-digest-when text-ink-500" style="position:absolute;right:0;bottom:5px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;pointer-events:none">${t('digestWeek')}</span>
+      </div>`
+    );
+  }
+
+  // 13c — Santé : obsolescence (déterministe serveur) + candidats de contradiction (pré-filtre
+  // serveur ; l'IA juge via MCP). Les clics sur un doc rouvrent son historique.
+  async function loadHealth(h) {
+    let stale = [], cands = [];
+    try {
+      const [rs, rc] = await Promise.all([
+        fetch('/api/stale?months=6&limit=40'),
+        fetch('/api/contradictions?limit=50'),
+      ]);
+      if (rs.ok) stale = (await rs.json()).stale || [];
+      if (rc.ok) cands = (await rc.json()).candidates || [];
+    } catch (_) {}
+    _health = { stale, cands };
+    h.innerHTML = healthHtml();
+  }
+
+  function healthHtml() {
+    if (!_health) return `<div class="text-ink-500 text-sm py-6 text-center">${t('healthLoading')}</div>`;
+    const tab = (active, v, label) =>
+      `<button type="button" data-htab="${v}" class="px-3 py-1.5 text-xs font-medium transition ${active ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" style="border-bottom:2px solid ${active ? '#1d9bd1' : 'transparent'};margin-bottom:-1px">${label}</button>`;
+    const toggle =
+      `<div class="flex mb-3" style="border-bottom:1px solid #2a2a32">`
+      + tab(_healthTab === 'stale', 'stale', t('healthTabStale'))
+      + tab(_healthTab === 'cont', 'cont', t('healthTabCont'))
+      + `</div>`;
+    return toggle + (_healthTab === 'stale' ? staleHtml() : contHtml());
+  }
+
+  function staleHtml() {
+    const stale = _health.stale;
+    if (!stale.length) return `<div class="text-ink-500 text-sm py-1">${t('healthNoStale')}</div>`;
+    const shown = _healthExpanded ? stale : stale.slice(0, 8);
+    let out = shown.map((s) =>
+      `<div class="act-row" data-path="${esc(s.path)}" title="${t('healthOpenHist')}"><div class="flex items-center justify-between gap-3">`
+      + `<div class="min-w-0"><div class="text-sm text-ink-200 truncate">${esc(docTitle(s.path))}</div>`
+      + `<div class="text-xs text-ink-500 truncate">${esc(s.path)}</div></div>`
+      + `<div class="shrink-0 text-xs text-ink-500">${t('healthMonthsAgo', Math.round(s.months_ago))}</div></div></div>`).join('');
+    if (stale.length > 8) {
+      out += `<div class="text-right mt-1"><a class="act-hsee text-sm text-accent hover:underline cursor-pointer">${_healthExpanded ? t('actCollapse') : t('actSeeAllN', stale.length)}</a></div>`;
+    }
+    return out;
+  }
+
+  function contHtml() {
+    const cands = _health.cands;
+    if (!cands.length) return `<div class="text-ink-500 text-sm py-1">${t('healthNoCand')}</div>`;
+    const shown = _candExpanded ? cands : cands.slice(0, 8);
+    let out = `<div class="text-xs text-ink-500 mb-2">${t('healthAskAi')}</div>`;
+    out += shown.map((c) => {
+      const meta = [c.linked ? t('healthLinked') : '', c.shared_tags.length ? t('healthTags', esc(c.shared_tags.join(', '))) : ''].filter(Boolean).join(' · ');
+      return `<div class="py-1.5"><div class="flex items-center gap-2 text-sm min-w-0">`
+        + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${esc(c.a)}">${esc(docTitle(c.a))}</span>`
+        + `<span class="text-ink-500 shrink-0">⇄</span>`
+        + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${esc(c.b)}">${esc(docTitle(c.b))}</span></div>`
+        + (meta ? `<div class="text-xs text-ink-500 mt-0.5 truncate">${meta}</div>` : '') + '</div>';
+    }).join('');
+    if (cands.length > 8) out += `<div class="text-right mt-1"><a class="act-csee text-sm text-accent hover:underline cursor-pointer">${_candExpanded ? t('actCollapse') : t('actSeeAllN', cands.length)}</a></div>`;
+    return out;
+  }
 
   function cardHtml() {
     return (
       `<div id="home-activity-card" class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="!mb-0 !mt-0">Activité</h2>
-          <div class="flex items-center gap-2">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h2 class="!mb-0 !mt-0">${t('actTitle')}</h2>
+          <div class="flex items-center gap-2 shrink-0">
             ${aiFilterHtml()}
             <div class="inline-flex rounded-lg border subtle-border overflow-hidden">
-              <button type="button" data-view="journal" class="${segClass(true)}">Journal</button>
-              <button type="button" data-view="orrery" class="${segClass(false)}">Constellation</button>
+              <button type="button" data-view="journal" class="${segClass(true)}">${t('actJournal')}</button>
+              <button type="button" data-view="orrery" class="${segClass(false)}">${t('actConstellation')}</button>
+              <button type="button" data-view="health" class="${segClass(false)}">${t('actHealth')}</button>
             </div>
           </div>
         </div>
+        ${digestHtml()}
         <div id="activity-journal">${journalHtml()}</div>
         <div id="activity-orrery" class="hidden"></div>
+        <div id="activity-health" class="hidden"></div>
       </div>`
     );
   }
@@ -375,14 +487,17 @@
   function setView(card, v, persist) {
     const j = card.querySelector('#activity-journal');
     const o = card.querySelector('#activity-orrery');
+    const h = card.querySelector('#activity-health');
     if (v === 'orrery') {
       if (!o.dataset.rendered) { o.innerHTML = orreryHtml(); o.dataset.rendered = '1'; wireOrreryHover(o); wireSun(o); }
       // clear leftover one-shot animation classes so re-showing the tab never replays them
       o.querySelectorAll('.act-spin,.act-sun,.act-egg').forEach((el) => el.classList.remove('spinning', 'pop', 'show'));
-      j.classList.add('hidden'); o.classList.remove('hidden');
-    } else {
-      o.classList.add('hidden'); j.classList.remove('hidden');
+    } else if (v === 'health' && !h.dataset.rendered) {
+      h.dataset.rendered = '1'; h.innerHTML = healthHtml(); loadHealth(h);
     }
+    j.classList.toggle('hidden', v !== 'journal');
+    o.classList.toggle('hidden', v !== 'orrery');
+    h.classList.toggle('hidden', v !== 'health');
     card.querySelectorAll('[data-view]').forEach((b) => { b.className = segClass(b.dataset.view === v); });
     if (persist) { try { localStorage.setItem('atlas:activityView', v); } catch (_) {} }
   }
@@ -391,7 +506,7 @@
     let saved = 'journal';
     try { saved = localStorage.getItem('atlas:activityView') || 'journal'; } catch (_) {}
     const q = new URLSearchParams(location.search).get('view');
-    if (q === 'journal' || q === 'orrery') saved = q;
+    if (q === 'journal' || q === 'orrery' || q === 'health') saved = q;
     setView(card, saved, false);
     card.querySelectorAll('[data-view]').forEach((b) =>
       b.addEventListener('click', () => setView(card, b.dataset.view, true)));
@@ -412,7 +527,24 @@
         card.querySelector('#activity-journal').innerHTML = journalHtml();
         return;
       }
-      const row = ev.target.closest('.act-row[data-path]');
+      if (ev.target.closest('.act-hsee')) {
+        _healthExpanded = !_healthExpanded;
+        card.querySelector('#activity-health').innerHTML = healthHtml();
+        return;
+      }
+      if (ev.target.closest('.act-csee')) {
+        _candExpanded = !_candExpanded;
+        card.querySelector('#activity-health').innerHTML = healthHtml();
+        return;
+      }
+      const ht = ev.target.closest('[data-htab]');
+      if (ht) {
+        _healthTab = ht.dataset.htab;
+        try { localStorage.setItem('atlas:healthTab', _healthTab); } catch (_) {}
+        card.querySelector('#activity-health').innerHTML = healthHtml();
+        return;
+      }
+      const row = ev.target.closest('[data-path]');
       if (row && row.dataset.path) openDocHistory(row.dataset.path);
     });
   }
@@ -427,6 +559,7 @@
     _expanded = false;
     const raw = await load();
     _items = raw ? aggregate(raw) : raw;
+    _digest = raw ? computeDigest(raw) : null;
     if (!_items || !_items.length) { m.innerHTML = ''; return; }  // offline / nothing → no card
     m.innerHTML = cardHtml();
     wire(m.querySelector('#home-activity-card'));
@@ -465,6 +598,7 @@
     '@keyframes act-egg{0%{opacity:0;transform:translate(-50%,8px)}15%{opacity:1;transform:translate(-50%,0)}72%{opacity:1}100%{opacity:0;transform:translate(-50%,-12px)}}',
     '}',
     '@media (max-width:767px){',
+    '.act-digest-when{display:none}',
     '.act-orrery{flex-direction:column;gap:10px}',
     '.act-legend{flex-direction:row;flex-wrap:wrap;justify-content:center;align-self:stretch}',
     '.act-pop{position:fixed;left:8px;right:8px;bottom:8px;top:auto;width:auto;transform:none;z-index:50}',

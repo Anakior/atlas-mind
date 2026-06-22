@@ -126,6 +126,18 @@ def attribution_for(ctx, ai=None, store=None):
     return author, trailers
 
 
+def parse_ai_trailer(raw):
+    """X-Atlas-Author trailer value (git %(trailers:…valueonly)) → AI family, or None for a
+    human write. Tolerates a reparsed 'X-Atlas-Author:' prefix and strips the 'ai/' marker.
+    The read-side inverse of the trailer attribution_for writes."""
+    ai = (raw or "").strip()
+    if ai.lower().startswith("x-atlas-author:"):
+        ai = ai.split(":", 1)[1].strip()
+    if ai.startswith("ai/"):
+        ai = ai[3:]
+    return ai.strip() or None
+
+
 def share_ctx(token):
     """ViewerCtx for a /s/<token> visitor: the single ``anon:<sha256(token)>``
     principal (the verified capability). effective_level grants ``view`` on docs

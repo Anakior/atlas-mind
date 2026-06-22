@@ -266,7 +266,10 @@ function formatRevDate(iso) {
 }
 
 async function openHistory(file) {
-  file = file || currentFile;  // optional target → lets the activity feed peek a doc's history without navigating
+  // Optional target → the activity feed can peek a doc's history without navigating. Guard on a
+  // real file (path is a string): btn-history binds this as a click handler, so a passed MouseEvent
+  // (or its array-valued .path on old Chrome) must NOT be taken as `file`.
+  file = (file && typeof file.path === 'string') ? file : currentFile;
 
   if (!historyAvailable(file)) return;
   historyFile = file;
@@ -625,7 +628,7 @@ function diffToDom(diffText) {
   return wrap;
 }
 
-document.getElementById('btn-history').addEventListener('click', openHistory);
+document.getElementById('btn-history').addEventListener('click', () => openHistory());
 document.getElementById('history-close').addEventListener('click', closeHistory);
 historyOverlay.addEventListener('click', (e) => {
   if (e.target === historyOverlay) closeHistory();

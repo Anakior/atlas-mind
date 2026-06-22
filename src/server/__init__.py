@@ -102,7 +102,7 @@ from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live task
     _live_tasks_index, _normalize_text, _html_to_text, _HTML_BLOCK_RE,
 )
 from server.pure.acl import (  # noqa: F401  per-document ACL (model B — partage à la Notion)
-    ViewerCtx, viewer_ctx, share_ctx, effective_level, LEVELS,
+    ViewerCtx, viewer_ctx, share_ctx, effective_level, LEVELS, parse_ai_trailer,
     can_read as _acl_can_read, can_write as _acl_can_write,
     can_manage as _acl_can_manage, can_create as _acl_can_create,
     in_private_space as _acl_in_private_space,
@@ -212,6 +212,7 @@ from server.pure.hive import (  # noqa: F401  federation node links / mirror / f
 )
 from server.pure.mcp_call import (  # noqa: F401  MCP dispatch + graph/tag/trash/search
     _doc_corpus, _links_graph, _tags_for, _soft_delete, _api_search, _api_recent,
+    _api_stale, _contradiction_candidates,
     _activity_events, _mcp_call_tool, _mcp_jsonrpc,
 )
 from server.extensions import load_server_extensions  # noqa: F401

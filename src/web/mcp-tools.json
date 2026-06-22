@@ -411,6 +411,43 @@
     }
   },
   {
+    "name": "stale",
+    "description": "Obsolescence audit (13c): documents untouched for N+ months, dated by their last git commit (reliable in cloud, unlike mtime). Deterministic, oldest first. Use it for a maintenance pass — decisions/notes that may be outdated, 'what hasn't been confirmed in a while'. Returns { months, stale: [{path, name, last_modified, months_ago}] }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "months": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 24,
+          "description": "Untouched-for threshold, in months."
+        },
+        "limit": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    }
+  },
+  {
+    "name": "contradictions",
+    "description": "Contradiction pre-filter (13c): candidate document PAIRS that share frontmatter tags or are wikilinked — same topic, so they MIGHT disagree. This is only a deterministic shortlist; YOU then judge each pair by reading both docs (read_doc / doc_diff) to confirm a real contradiction or an outdated statement. Highest topical overlap first. Returns { candidates: [{a, b, shared_tags, linked, score}] }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 1,
+          "maximum": 50
+        }
+      }
+    }
+  },
+  {
     "name": "doc_blame",
     "description": "Per-line provenance of a document: for each line, which commit/author/date last changed it. Answers 'which commit is responsible for THIS exact fact/line'. Pass 'pattern' to blame only the lines containing a string (no line numbers needed), or start/end for a line range. Whole-file blame is capped.",
     "inputSchema": {
