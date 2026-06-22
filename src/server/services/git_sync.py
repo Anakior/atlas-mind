@@ -79,6 +79,9 @@ class GitSync:
         if not paths:
             return
         self.run("add", "-A", "--", *paths)
+        # One line only: a stray newline (e.g. from a doc/folder name) must not split
+        # the subject into a body that forges an X-Atlas-Author trailer.
+        subject = " ".join(subject.split())
         msg = subject + ("\n\n" + "\n".join(trailers) if trailers else "")
         args = ["commit", "--only", "-m", msg, "--quiet"]
         if author:

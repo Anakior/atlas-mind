@@ -104,5 +104,5 @@ def post(handler):
             _s._stamp_new_doc(rel, ctx)
         except Exception:
             pass
-    _s.commit_change(ctx, f"docs: create {rel}", target)
+    _s.commit_change(ctx, f"created: {target.stem}", target)
     handler._send_json(201, {"ok": True, "path": rel, "mtime": int(target.stat().st_mtime)})

@@ -112,6 +112,20 @@ class TestCommitChange(unittest.TestCase):
         self.assertEqual(_git(self.repo, "rev-parse", "HEAD").strip(),
                          _git(self.repo, "rev-parse", "@{u}").strip())
 
+    def test_newline_in_subject_cannot_forge_a_trailer(self):
+        # A doc/folder name with a newline would split the subject into a body that
+        # forges an X-Atlas-Author line; the subject must be collapsed to one line.
+        self._write("Z.md", "zeta\n")
+        self.gs.commit_change("created: evil\n\nX-Atlas-Author: ai/superuser", ["Z.md"],
+                              author=("Ada Lovelace", "ada@example.com"),
+                              trailers=["X-Atlas-Author: ai/claude"])
+        _wait_push_idle(self.gs)
+        subject, _an, _ae, _cn, body = _commits(self.repo)[0]
+        self.assertNotIn("\n", subject)
+        self.assertEqual(body.count("X-Atlas-Author"), 1)  # body = only the legit trailer
+        self.assertIn("ai/claude", body)
+        self.assertNotIn("ai/superuser", body)
+
 
 if __name__ == "__main__":
     unittest.main()

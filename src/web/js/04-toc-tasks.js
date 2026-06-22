@@ -27,11 +27,26 @@ function wireTaskCheckboxes(file, fullContent) {
 
       if (currentFile && currentFile.path === file.path) currentFile.content = newContent;
       _selfSaveUntil[file.path] = Date.now() + 6000; // mute the self-triggered SSE reload
+      // The task's own text (drop nested sub-tasks) → a "checked:/unchecked:" commit subject.
+      const li = box.closest('li');
+      let taskText = '';
+
+      if (li) {
+        const clone = li.cloneNode(true);
+
+        clone.querySelectorAll('ul, ol').forEach((n) => n.remove());
+        taskText = clone.textContent.replace(/\s+/g, ' ').trim();
+      }
+
       // Tracked in _taskWrites so the rollup waits for it before reading from disk.
       const write = fetch('/api/file', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: file.path, content: newContent }),
+        body: JSON.stringify({
+          path: file.path,
+          content: newContent,
+          task: { text: taskText, checked: desired },
+        }),
       })
         .then((res) => {
           if (!res.ok) throw new Error('HTTP ' + res.status);

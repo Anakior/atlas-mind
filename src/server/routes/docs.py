@@ -60,7 +60,14 @@ def file_put(handler):
             _s._stamp_new_doc(rel, ctx, private=data.get("private"))
         except Exception as e:
             print(f"[file_put creator] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"docs: {'create' if not existed else 'edit'} {rel}", target)
+    task = data.get("task")  # the viewer sends this on a checkbox toggle (04-toc-tasks.js)
+    if not existed:
+        subject = f"created: {target.stem}"
+    elif isinstance(task, dict) and (task.get("text") or "").strip():
+        subject = f"{'checked' if task.get('checked') else 'unchecked'}: {_s._clean_subject(task['text'])}"
+    else:
+        subject = f"edited: {target.stem}"
+    _s.commit_change(ctx, subject, target)
     handler._send_json(200, {"ok": True, "mtime": int(target.stat().st_mtime)})
 
 
@@ -243,7 +250,8 @@ def revert(handler):
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(show.stdout, encoding="utf-8")
-    _s.commit_change(ctx, f"docs: revert {rel}", target)
+    short = _s.git("rev-parse", "--short", rev).stdout.strip() or rev[:8]
+    _s.commit_change(ctx, f"reverted: {target.stem} @ {short}", target)
     handler._send_json(200, {"ok": True})
 
 
@@ -279,8 +287,9 @@ def move(handler):
     # a registry hiccup must not fail the move — the doctor reconciles any orphan).
     _s._repoint_doc(payload["from"], payload["to"])
     touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
-    _s.commit_change(ctx, f"docs: move {payload['from']} -> {payload['to']}",
-                     *(_s.CONFIG.content_root / p for p in touched))
+    subject = (f"moved: {posixpath.splitext(payload['from'])[0]}"
+               f" → {posixpath.splitext(payload['to'])[0]}")
+    _s.commit_change(ctx, subject, *(_s.CONFIG.content_root / p for p in touched))
     handler._send_json(200, {"ok": True, **payload})
 
 
@@ -359,7 +368,7 @@ def dir_rename(handler):
         store.repoint_shares_under(csrc, dst_rel)
     except Exception as e:
         print(f"[dir rename repoint] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"docs: rename folder {src_rel} -> {dst_rel}", src, dst)
+    _s.commit_change(ctx, f"folder moved: {src_rel} → {dst_rel}", src, dst)
     handler._send_json(200, {"ok": True, "from": src_rel, "to": dst_rel})
 
 
@@ -403,5 +412,5 @@ def delete(handler):
         store.delete_shares_for_path(crel)
     except Exception as e:
         print(f"[delete cleanup] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"docs: delete {rel}", target)
+    _s.commit_change(ctx, f"deleted: {target.stem}", target)
     handler._send_json(200, {"ok": True})

@@ -477,6 +477,12 @@ def commit_change(ctx, subject, *paths, ai=None):
         _CTX.git_sync.trigger_sync()         # content is on disk; let the backstop catch it
 
 
+def _clean_subject(text, limit=100):
+    """Collapse free-form text (an AI commit_message, a task label) into a single,
+    length-capped line — so it can't break the commit subject or inject a trailer."""
+    return " ".join((text or "").split())[:limit]
+
+
 # Only the legacy-format migration stays here (boot-time IO); todos/notes are
 # re-exported above.
 

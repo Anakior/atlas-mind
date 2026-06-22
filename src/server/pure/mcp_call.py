@@ -448,7 +448,7 @@ def _tool_create_doc(args, ctx):
             _s._stamp_new_doc(rel, ctx)
         except Exception as e:
             print(f"[create_doc owner] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"docs: create {rel}", target, ai=args.get("ai"))
+    _s.commit_change(ctx, f"created: {target.stem}", target, ai=args.get("ai"))
     return text_result(f"Document created: {rel}")
 
 
@@ -463,6 +463,7 @@ def _tool_edit_doc(args, ctx):
         return text_result(f"Document not found: {rel} (use create_doc to create a new one)", is_error=True)
     if ctx is not None and not _s.can_write(rel, ctx, "edit"):
         return text_result("Insufficient permission (need edit on this document).", is_error=True)
+    subject = _s._clean_subject(args.get("commit_message")) or f"edited: {target.stem}"
     old_string = args.get("old_string")
     new_string = args.get("new_string")
     content = args.get("content")
@@ -479,13 +480,13 @@ def _tool_edit_doc(args, ctx):
         if count > 1:
             return text_result(f"'old_string' appears {count} times — it must be unique. Add surrounding context to make it unique.", is_error=True)
         target.write_text(current.replace(old_string, new_string, 1), encoding="utf-8")
-        _s.commit_change(ctx, f"docs: edit {rel}", target, ai=args.get("ai"))
+        _s.commit_change(ctx, subject, target, ai=args.get("ai"))
         return text_result(f"Document edited (targeted replacement): {rel}")
     if content is not None:
         if not isinstance(content, str):
             return text_result("'content' must be a string", is_error=True)
         target.write_text(content, encoding="utf-8")
-        _s.commit_change(ctx, f"docs: edit {rel}", target, ai=args.get("ai"))
+        _s.commit_change(ctx, subject, target, ai=args.get("ai"))
         return text_result(f"Document rewritten: {rel}")
     return text_result("Provide either 'old_string'+'new_string' (patch) or 'content' (rewrite)", is_error=True)
 
@@ -512,7 +513,9 @@ def _tool_move_doc(args, ctx):
     # Repoint the ACL + shares BEFORE the git sync (privacy travels with the doc).
     _s._repoint_doc(payload["from"], payload["to"])
     touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
-    _s.commit_change(ctx, f"docs: move {payload['from']} -> {payload['to']}",
+    subject = (f"moved: {posixpath.splitext(payload['from'])[0]}"
+               f" → {posixpath.splitext(payload['to'])[0]}")
+    _s.commit_change(ctx, subject,
                      *(_s.CONFIG.content_root / p for p in touched), ai=args.get("ai"))
     n, files = payload["links_updated"], len(payload["rewrites"])
     msg = f"Moved: {payload['from']} -> {payload['to']}."
@@ -607,7 +610,7 @@ def _tool_delete_doc(args, ctx):
         _store.delete_shares_for_path(rel)
     except Exception as e:
         print(f"[delete cleanup] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"docs: delete {rel}", target, _s.CONFIG.content_root / trashed,
+    _s.commit_change(ctx, f"deleted: {target.stem}", target, _s.CONFIG.content_root / trashed,
                      ai=args.get("ai"))
     return text_result(f"Document moved to trash (reversible): {rel} -> {trashed}")
 
@@ -850,7 +853,8 @@ def _tool_doc_revert(args, ctx):
         return text_result(f"Revision not found: {rev}", is_error=True)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(show.stdout, encoding="utf-8")
-    _s.commit_change(ctx, f"docs: revert {rel}", target, ai=args.get("ai"))
+    short = _s.git("rev-parse", "--short", rev).stdout.strip() or rev[:8]
+    _s.commit_change(ctx, f"reverted: {target.stem} @ {short}", target, ai=args.get("ai"))
     return text_result(f"Reverted {rel} to revision {rev[:8]} "
                        "(written as a forward-moving change; the prior version stays in history).")
 

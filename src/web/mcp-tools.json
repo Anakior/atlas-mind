@@ -118,6 +118,10 @@
           "type": "string",
           "description": "Rewrite mode: the full new markdown content. Ignored if old_string is provided."
         },
+        "commit_message": {
+          "type": "string",
+          "description": "Optional. A short, specific summary of WHAT you changed and WHY (e.g. 'corrige le taux de TVA', 'ajoute la section pricing'), like a human changelog line. Becomes the commit subject. Do NOT write generic filler ('update doc', 'edit') — omit it instead and the server falls back to a clear default."
+        },
         "ai": {
           "type": "string",
           "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
