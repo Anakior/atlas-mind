@@ -145,7 +145,7 @@ def history(handler):
     # --follow tracks renames/moves so pre-move commits still load (revision/diff/
     # revert resolve the path-at-revision via _doc_path_at). -z + \x1f keep
     # records/fields unambiguous; -n 100 bounds payload.
-    fmt = "%H%x1f%an%x1f%aI%x1f%s"
+    fmt = "%H%x1f%an%x1f%aI%x1f%s%x1f%(trailers:key=X-Atlas-Author,valueonly)"
     result = _s.git("log", "--follow", "-n", "100", "--format=" + fmt, "-z",
                  "--", repo_rel)
     if result.returncode != 0:
@@ -155,10 +155,15 @@ def history(handler):
     for record in result.stdout.split("\x00"):
         if not record:
             continue
-        fields = (record.split("\x1f") + ["", "", "", ""])[:4]
+        fields = (record.split("\x1f") + ["", "", "", "", ""])[:5]
+        ai = fields[4].strip()  # X-Atlas-Author trailer → AI family (13d filter)
+        if ai.lower().startswith("x-atlas-author:"):
+            ai = ai.split(":", 1)[1].strip()
+        if ai.startswith("ai/"):
+            ai = ai[3:]
         revisions.append({
             "sha": fields[0], "author": fields[1],
-            "date": fields[2], "subject": fields[3],
+            "date": fields[2], "subject": fields[3], "ai": ai.strip() or None,
         })
     handler._send_json(200, {"path": rel, "revisions": revisions})
 

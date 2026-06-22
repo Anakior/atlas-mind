@@ -8,6 +8,9 @@
 !orgBtn)
 !st.panFrom)
 -mr-0.5
+-mr-1
+-translate-x-1/2
+-translate-y-1/2
 a.vx
 a.vy
 a.wikilink
@@ -68,6 +71,7 @@ aclRevokedToast
 aclSharedToast
 aclYou
 across
+act-review-bk
 actDownload
 actEdit
 actGraph
@@ -165,6 +169,7 @@ automatiquement.
 autre
 autres
 available:
+avant)
 avec
 avez
 await
@@ -224,6 +229,7 @@ border-l
 border-navy-500
 border-navy-600
 border-r
+border-rose-500/40
 border-t
 borderBottomWidth
 borderLeftWidth
@@ -319,6 +325,7 @@ chacun
 change
 changed)
 changement
+changement.
 changements
 changes
 characters
@@ -450,6 +457,7 @@ d2
 d2,
 dans
 dashed
+data-act-review
 days
 daysAgo
 de
@@ -486,6 +494,7 @@ device
 devices.
 devras
 dialog-card
+diff
 dim
 dir
 dir-rename-backdrop
@@ -505,6 +514,7 @@ distinct
 div
 do
 doc
+doc)
 docCreated
 docDeleted
 docMoved
@@ -560,6 +570,7 @@ e2.t._adj
 each
 ease
 ease,
+ease-in-out
 edges
 edges)
 edges,
@@ -843,6 +854,7 @@ hover:brightness-110
 hover:text-accent
 hover:text-amber-300
 hover:text-emerald-300
+hover:text-ink-100
 hover:text-rose-300
 hover:text-rose-400
 hover:text-white
@@ -882,6 +894,7 @@ injoignable
 inline
 inline-flex
 input
+inset-0
 inside
 instance.
 instead
@@ -944,6 +957,7 @@ leading-relaxed
 leading-snug
 least
 lecture
+left-1/2
 left.
 len
 len)
@@ -1015,6 +1029,7 @@ matches
 matching
 matter
 max-h-64
+max-h-72
 max-w-4xl
 max-w-md
 max-w-none
@@ -1083,6 +1098,7 @@ mr-1
 mt-0.5
 mt-1
 mt-1.5
+mt-2
 mt-24
 mt-3
 mt-6
@@ -1237,12 +1253,14 @@ outside
 ouvrir
 overflow-hidden
 overflow-y-auto
+overlay-backdrop
 overview
 own
 owner
 owner:
 ox:
 oy:
+p-1
 p-2
 p-2.5
 p-3
@@ -1263,6 +1281,7 @@ palette-input
 palette-list
 paletteResultsCapped
 pan
+panel-card
 panel-divider
 par
 partage
@@ -1369,6 +1388,7 @@ py-2
 py-2.5
 py-4
 py-6
+py-8
 que
 qui
 quick-capture-backdrop
@@ -1475,6 +1495,7 @@ resize-none
 resizeGraph()
 rest
 restauration.
+restaurer
 restent
 restera
 restored.
@@ -1516,6 +1537,7 @@ rounded-b-md
 rounded-lg
 rounded-md
 rounded-t-md
+rounded-xl
 row
 row.className
 row.type
@@ -1894,6 +1916,7 @@ text-ink-600
 text-left
 text-orange-400
 text-purple-400
+text-rose-300
 text-rose-400
 text-sky-300/70
 text-sky-400
@@ -1967,6 +1990,7 @@ token
 tokens
 tokens.
 ton
+top-1/2
 top-2
 top-level
 topic

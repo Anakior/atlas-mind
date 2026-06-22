@@ -102,6 +102,9 @@
   }
 
   let _items = null;
+  let _orreryItems = [];   // the list the constellation nodes index into (respects the filter)
+  let _aiOnly = false;     // 13d: filter the feed to AI-authored events only
+  const shownItems = () => (_aiOnly ? _items.filter((i) => i.ai) : _items);
 
   async function load() {
     if (IS_OFFLINE_BUILD || !location.protocol.startsWith('http')) return null;
@@ -157,9 +160,11 @@
   let _expanded = false;
 
   function journalHtml() {
+    const all = shownItems();
+    if (!all.length) return '<div class="text-ink-500 text-sm py-4 text-center">Aucune écriture IA récente.</div>';
     let out = '';
     let day = '';
-    const shown = _expanded ? _items : _items.slice(0, JOURNAL_PREVIEW);
+    const shown = _expanded ? all : all.slice(0, JOURNAL_PREVIEW);
     shown.forEach((e) => {
       const k = dayKey(e.agoMin);
       if (k !== day) {
@@ -169,7 +174,7 @@
       out += row(e);
     });
     // Toggle in place — no extra view to navigate to, the feed just unfolds.
-    if (_items.length > JOURNAL_PREVIEW) {
+    if (all.length > JOURNAL_PREVIEW) {
       out += `<div class="text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${_expanded ? 'Réduire ↑' : 'Voir tout →'}</a></div>`;
     }
     return out;
@@ -183,7 +188,7 @@
     const radii = [104, 172, 236];
     // Cap + even split by recency RANK (not raw time): each ring gets a balanced share
     // so a burst of recent edits can't pile onto one ring. Inner = most recent.
-    const items = _items.slice(0, ORRERY_CAP).map((e, i) => ({ e, i }));
+    const items = (_orreryItems = shownItems()).slice(0, ORRERY_CAP).map((e, i) => ({ e, i }));
     const perRing = Math.max(1, Math.ceil(items.length / 3));
     const rings = [[], [], []];
     items.forEach((it, idx) => rings[Math.min(2, Math.floor(idx / perRing))].push(it));
@@ -266,7 +271,7 @@
     const pop = container.querySelector('.act-pop');
     if (!wrap || !pop) return;
     const show = (node) => {
-      const e = _items[+node.dataset.i];
+      const e = _orreryItems[+node.dataset.i];
       if (!e) return;
       pop.innerHTML = popHtml(e);
       pop.classList.remove('hidden');
@@ -297,7 +302,7 @@
       n.addEventListener('focus', () => show(n));
       n.addEventListener('blur', hide);
       n.addEventListener('click', () => {
-        const e = _items[+n.dataset.i];
+        const e = _orreryItems[+n.dataset.i];
         if (!noHover) { if (e) openDocHistory(e.path); return; }
         if (activeNode === n) { if (e) openDocHistory(e.path); }   // 2nd tap on same node → open history
         else { activeNode = n; show(n); }                          // 1st tap → reveal the popover
@@ -342,15 +347,23 @@
   // ── Card shell + view switch ──────────────────────────────────────────
   const segClass = (active) =>
     'activity-seg px-3 py-1 text-xs font-medium ' + (active ? 'is-active bg-accent text-white' : 'text-ink-300');
+  // A checkbox-style filter (small box + label), not a button — reads as "filter the feed".
+  const aiFilterHtml = () =>
+    `<button type="button" data-ai-filter class="flex items-center gap-1.5 text-xs transition ${_aiOnly ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" title="Filtrer : écritures IA seulement">` +
+    `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ${_aiOnly ? '#1d9bd1' : '#5e6066'};background:${_aiOnly ? '#1d9bd1' : 'transparent'}">${_aiOnly ? '✓' : ''}</span>` +
+    `IA seulement</button>`;
 
   function cardHtml() {
     return (
       `<div id="home-activity-card" class="border subtle-border rounded-lg p-4 bg-black/15">
         <div class="flex items-center justify-between mb-3">
           <h2 class="!mb-0 !mt-0">Activité</h2>
-          <div class="inline-flex rounded-lg border subtle-border overflow-hidden">
-            <button type="button" data-view="journal" class="${segClass(true)}">Journal</button>
-            <button type="button" data-view="orrery" class="${segClass(false)}">Constellation</button>
+          <div class="flex items-center gap-2">
+            ${aiFilterHtml()}
+            <div class="inline-flex rounded-lg border subtle-border overflow-hidden">
+              <button type="button" data-view="journal" class="${segClass(true)}">Journal</button>
+              <button type="button" data-view="orrery" class="${segClass(false)}">Constellation</button>
+            </div>
           </div>
         </div>
         <div id="activity-journal">${journalHtml()}</div>
@@ -383,6 +396,16 @@
     card.querySelectorAll('[data-view]').forEach((b) =>
       b.addEventListener('click', () => setView(card, b.dataset.view, true)));
     card.addEventListener('click', (ev) => {
+      const fbtn = ev.target.closest('[data-ai-filter]');
+      if (fbtn) {
+        _aiOnly = !_aiOnly;
+        _expanded = false;
+        fbtn.outerHTML = aiFilterHtml();
+        card.querySelector('#activity-journal').innerHTML = journalHtml();
+        const o = card.querySelector('#activity-orrery');
+        if (o.dataset.rendered) { o.innerHTML = orreryHtml(); wireOrreryHover(o); wireSun(o); }
+        return;
+      }
       if (ev.target.closest('[data-view]')) return;
       if (ev.target.closest('.act-seeall')) {
         _expanded = !_expanded;
