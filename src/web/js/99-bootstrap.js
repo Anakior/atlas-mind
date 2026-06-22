@@ -1,4 +1,17 @@
 if (isServerMode) {
+  // Boot skeleton: in server mode the sidebar tree + content render only AFTER /api/me +
+  // /api/tree (the baked tree is the owner's full view, never shown — privacy). Until
+  // then, show a shimmer skeleton instead of a flash of empty menu/home. softReload()
+  // (called once /api/tree lands) replaces it with the real tree + route.
+  treeEl.innerHTML = Array.from({ length: 7 }, (_, i) =>
+    `<div class="skeleton" style="height:1rem;margin:.55rem .5rem;width:${55 + ((i * 17) % 40)}%"></div>`).join('');
+  contentEl.innerHTML =
+    '<div class="not-prose" style="max-width:46rem;margin:0 auto;padding-top:2.5rem">' +
+    '<div class="skeleton-title" style="height:2.2rem;width:55%;margin-bottom:1.6rem"></div>' +
+    Array.from({ length: 6 }, (_, i) =>
+      `<div class="skeleton" style="height:.9rem;margin:.7rem 0;width:${70 + ((i * 13) % 26)}%"></div>`).join('') +
+    '</div>';
+
   fetch('/api/me')
     .then((r) => r.json())
     .then((data) => {
@@ -139,8 +152,11 @@ if (isServerMode) {
       } else {
         // No doc open: (re-)route from the URL hash now that fileMap reflects the
         // viewer's accessible docs — so a link to a doc they can't see lands on the
-        // clean not-found page instead of silently bouncing home.
+        // clean not-found page instead of silently bouncing home. Preserve scroll so a
+        // live re-render of the home (SSE/periodic) doesn't jump to the top under you.
+        const sp = document.querySelector('main').scrollTop;
         routeFromHash();
+        document.querySelector('main').scrollTop = sp;
       }
     } catch (e) {
       console.warn('softReload failed, fallback to location.reload', e);

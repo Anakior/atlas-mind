@@ -18,6 +18,14 @@
   };
   const TY = (t) => TYPES[t] || TYPES.edit;
 
+  // Verb labels by UI language (LANG from 01-i18n-state.js). A local map (vs t()) keeps
+  // them next to TYPES and avoids colliding with existing STRINGS keys (create/edit…).
+  const VERB = {
+    fr: { create: 'créé', edit: 'édité', move: 'déplacé', delete: 'supprimé', check: 'coché', revert: 'restauré' },
+    en: { create: 'created', edit: 'edited', move: 'moved', delete: 'deleted', check: 'checked', revert: 'reverted' },
+  };
+  const verb = (type) => (VERB[LANG] || VERB.fr)[type] || type;
+
   const AI = {
     claude: 'M12 2.6l1.6 5.9 5.9 1.6-5.9 1.6L12 21.4l-1.6-7.7L4.5 12l5.9-1.6L12 2.6Z',
     chatgpt: 'M12 3.2 18.5 7v8L12 18.8 5.5 15V7L12 3.2Z',
@@ -33,8 +41,9 @@
   const aiBadge = (family) =>
     `<span class="activity-badge"><svg width="9" height="9" viewBox="0 0 24 24" fill="#e8941c"><path d="${AI[family] || AI.generic}"/></svg></span>`;
 
+  // Atlas Bot (the app's own automated writes) shows the application logo itself.
   const botAvatar = (size) =>
-    `<svg width="${size}" height="${size}" viewBox="0 0 40 40"><defs><radialGradient id="actbot" cx="42%" cy="38%"><stop offset="0" stop-color="#ffd9a0"/><stop offset="55%" stop-color="#e8941c"/><stop offset="100%" stop-color="#9a5a10"/></radialGradient></defs><rect width="40" height="40" rx="9" fill="#1a181e"/><path d="M8 27 q12 -7 24 0" stroke="rgba(232,148,28,.35)" stroke-width="1.2" fill="none"/><circle cx="20" cy="18" r="6.5" fill="url(#actbot)"/><circle cx="17.6" cy="15.6" r="1.8" fill="rgba(255,255,255,.6)"/></svg>`;
+    `<img src="/icon.svg" width="${size}" height="${size}" alt="Atlas" style="display:block">`;
 
   const avatar = (e, size) => {
     if (e.bot) return botAvatar(size);
@@ -134,7 +143,7 @@
           <div class="flex items-center gap-1.5"><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
           <div class="flex items-center gap-1.5 text-sm mt-0.5">
             ${iconSvg(e.type, 14)}
-            <span style="color:${ty.color};font-weight:600">${ty.label}</span>
+            <span style="color:${ty.color};font-weight:600">${verb(e.type)}</span>
             <span class="text-ink-300 truncate">${esc(e.title)}</span>
             ${e.count > 1 ? `<span class="text-ink-500 text-xs shrink-0">×${e.count}</span>` : ''}
           </div>
@@ -205,7 +214,7 @@
   function orreryHtml() {
     const { ringSvg, nodes, cx, cy } = orreryNodes();
     const legend = Object.keys(TYPES)
-      .map((k) => `<span class="act-legend-chip">${iconSvg(k, 12)}<span>${TYPES[k].label}</span></span>`)
+      .map((k) => `<span class="act-legend-chip">${iconSvg(k, 12)}<span>${verb(k)}</span></span>`)
       .join('');
     return (
       `<div class="act-orrery flex items-start gap-4">
@@ -214,10 +223,25 @@
             <defs>
               <radialGradient id="actcore" cx="42%" cy="38%"><stop offset="0" stop-color="#ffd9a0"/><stop offset="55%" stop-color="#e8941c"/><stop offset="100%" stop-color="#8a4f0e"/></radialGradient>
               <radialGradient id="actglow" cx="50%" cy="50%"><stop offset="0" stop-color="rgba(232,148,28,.15)"/><stop offset="70%" stop-color="rgba(232,148,28,0)"/></radialGradient>
+              <radialGradient id="actsunlimb" cx="42%" cy="38%"><stop offset="58%" stop-color="rgba(0,0,0,0)"/><stop offset="100%" stop-color="rgba(70,35,5,.6)"/></radialGradient>
+              <clipPath id="actsunclip"><circle cx="${cx}" cy="${cy}" r="27"/></clipPath>
+              <filter id="actsunblur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.3"/></filter>
             </defs>
-            <circle cx="${cx}" cy="${cy}" r="120" fill="url(#actglow)"/>
+            <circle class="act-glow" cx="${cx}" cy="${cy}" r="120" fill="url(#actglow)"/>
             <g class="act-spin">${ringSvg}${nodes}</g>
-            <circle class="act-sun" cx="${cx}" cy="${cy}" r="27" fill="url(#actcore)"/>
+            <g class="act-sun"><g class="act-sun-pulse">
+              <circle cx="${cx}" cy="${cy}" r="27" fill="url(#actcore)"/>
+              <g clip-path="url(#actsunclip)" filter="url(#actsunblur)">
+                <circle cx="${cx - 7}" cy="${cy - 8}" r="6" fill="#fff1d6" opacity=".5"/>
+                <circle cx="${cx + 8}" cy="${cy - 3}" r="5.4" fill="#b86f12" opacity=".5"/>
+                <circle cx="${cx - 3}" cy="${cy + 8}" r="6.7" fill="#a55f0f" opacity=".45"/>
+                <circle cx="${cx - 11}" cy="${cy + 3}" r="4" fill="#ffe2b0" opacity=".4"/>
+                <circle cx="${cx + 9}" cy="${cy + 9}" r="4.7" fill="#8a4f0e" opacity=".5"/>
+                <circle cx="${cx + 2}" cy="${cy - 11}" r="3.4" fill="#ffe9c4" opacity=".4"/>
+              </g>
+              <circle cx="${cx}" cy="${cy}" r="27" fill="url(#actsunlimb)"/>
+              <circle cx="${cx - 7}" cy="${cy - 9}" r="4" fill="#fff7e6" opacity=".55" filter="url(#actsunblur)"/>
+            </g></g>
           </svg>
           <div class="act-pop dialog-card hidden"></div>
           <div class="act-egg"></div>
@@ -232,7 +256,7 @@
     const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${esc(e.ai)}</span>` : '';
     return (
       `<div class="flex items-center gap-2 mb-1.5"><span style="line-height:0">${avatar(e, 26)}</span><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
-       <div class="flex items-baseline gap-1.5 text-sm"><span style="color:${ty.color};font-weight:600;white-space:nowrap">${ty.label}</span><span class="text-ink-300" style="min-width:0;overflow-wrap:anywhere">${esc(e.title)}</span>${e.count > 1 ? `<span class="text-ink-500 text-xs" style="white-space:nowrap">×${e.count}</span>` : ''}</div>
+       <div class="flex items-baseline gap-1.5 text-sm"><span style="color:${ty.color};font-weight:600;white-space:nowrap">${verb(e.type)}</span><span class="text-ink-300" style="min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(e.title)}</span>${e.count > 1 ? `<span class="text-ink-500 text-xs" style="white-space:nowrap">×${e.count}</span>` : ''}</div>
        <div class="text-xs text-ink-500 font-mono mt-1.5">${rel(e.agoMin)} · ${esc(e.sha)}</div>`
     );
   }
@@ -246,6 +270,10 @@
       if (!e) return;
       pop.innerHTML = popHtml(e);
       pop.classList.remove('hidden');
+      if (window.matchMedia('(max-width:767px)').matches) {
+        pop.style.left = pop.style.top = pop.style.transform = '';  // CSS bottom-sheet positions it
+        return;
+      }
       const nb = node.getBoundingClientRect(), wb = wrap.getBoundingClientRect();
       let left = nb.left - wb.left + nb.width / 2;
       const half = pop.offsetWidth / 2;
@@ -261,6 +289,8 @@
       }
     };
     const hide = () => pop.classList.add('hidden');
+    const noHover = window.matchMedia('(hover: none)').matches;  // touch: no hover → tap to reveal
+    let activeNode = null;
     wrap.querySelectorAll('.act-node').forEach((n) => {
       n.addEventListener('mouseenter', () => show(n));
       n.addEventListener('mouseleave', hide);
@@ -268,8 +298,13 @@
       n.addEventListener('blur', hide);
       n.addEventListener('click', () => {
         const e = _items[+n.dataset.i];
-        if (e) openDocHistory(e.path);
+        if (!noHover) { if (e) openDocHistory(e.path); return; }
+        if (activeNode === n) { if (e) openDocHistory(e.path); }   // 2nd tap on same node → open history
+        else { activeNode = n; show(n); }                          // 1st tap → reveal the popover
       });
+    });
+    wrap.addEventListener('click', (ev) => {
+      if (!ev.target.closest('.act-node')) { hide(); activeNode = null; }  // tap the empty sky → dismiss
     });
   }
 
@@ -287,6 +322,11 @@
     const spin = container.querySelector('.act-spin');
     const egg = container.querySelector('.act-egg');
     if (!sun) return;
+    // Drop each one-shot class when its animation ends, so it doesn't persist and replay
+    // when the hidden orrery is shown again (Journal ⇄ Constellation switch re-displays it).
+    if (spin) spin.addEventListener('animationend', () => spin.classList.remove('spinning'));
+    sun.addEventListener('animationend', () => sun.classList.remove('pop'));
+    if (egg) egg.addEventListener('animationend', () => egg.classList.remove('show'));
     let n = 0;
     sun.addEventListener('click', () => {
       n += 1;
@@ -324,6 +364,8 @@
     const o = card.querySelector('#activity-orrery');
     if (v === 'orrery') {
       if (!o.dataset.rendered) { o.innerHTML = orreryHtml(); o.dataset.rendered = '1'; wireOrreryHover(o); wireSun(o); }
+      // clear leftover one-shot animation classes so re-showing the tab never replays them
+      o.querySelectorAll('.act-spin,.act-sun,.act-egg').forEach((el) => el.classList.remove('spinning', 'pop', 'show'));
       j.classList.add('hidden'); o.classList.remove('hidden');
     } else {
       o.classList.add('hidden'); j.classList.remove('hidden');
@@ -379,11 +421,12 @@
     '.act-node-inner{transform-box:fill-box;transform-origin:center;transition:transform .12s}',
     '.act-node:hover .act-node-inner,.act-node:focus .act-node-inner{transform:scale(1.22)}',
     '.act-node:focus{outline:none}',
-    '.act-pop{position:absolute;transform:translate(-50%,-100%);min-width:200px;max-width:300px;padding:11px 13px;border-radius:14px;pointer-events:none;z-index:20}',
+    '.act-pop{position:absolute;transform:translate(-50%,-100%);width:280px;padding:11px 13px;border-radius:14px;pointer-events:none;z-index:20}',
     '.act-pop.hidden{display:none}',
     '.act-legend{display:flex;flex-direction:column;gap:7px;flex-shrink:0;align-self:center}',
     '.act-legend-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(255,255,255,.03);font-size:11px;color:#b0b1b5}',
-    '.act-sun{transform-box:fill-box;transform-origin:center}',
+    '.act-sun{transform-box:view-box;transform-origin:360px 265px}',
+    '.act-sun-pulse{transform-box:view-box;transform-origin:360px 265px}',
     '.act-spin{transform-box:view-box;transform-origin:360px 265px}',
     '.act-egg{position:absolute;left:50%;top:calc(50% + 52px);transform:translate(-50%,0);font-size:13px;font-weight:600;color:#f3bd6a;opacity:0;pointer-events:none;white-space:nowrap;text-shadow:0 1px 6px rgba(0,0,0,.7)}',
     '@media (prefers-reduced-motion: no-preference){',
@@ -391,8 +434,17 @@
     '@keyframes act-orbit{to{transform:rotate(360deg)}}',
     '.act-sun.pop{animation:act-sunpop .5s ease}',
     '@keyframes act-sunpop{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}',
+    '.act-sun-pulse{animation:act-pulse 4s ease-in-out infinite}',
+    '@keyframes act-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}',
+    '.act-glow{animation:act-glowpulse 4s ease-in-out infinite}',
+    '@keyframes act-glowpulse{0%,100%{opacity:.5}50%{opacity:1}}',
     '.act-egg.show{animation:act-egg 1.9s ease forwards}',
     '@keyframes act-egg{0%{opacity:0;transform:translate(-50%,8px)}15%{opacity:1;transform:translate(-50%,0)}72%{opacity:1}100%{opacity:0;transform:translate(-50%,-12px)}}',
+    '}',
+    '@media (max-width:767px){',
+    '.act-orrery{flex-direction:column;gap:10px}',
+    '.act-legend{flex-direction:row;flex-wrap:wrap;justify-content:center;align-self:stretch}',
+    '.act-pop{position:fixed;left:8px;right:8px;bottom:8px;top:auto;width:auto;transform:none;z-index:50}',
     '}',
   ].join('');
   document.head.appendChild(st);

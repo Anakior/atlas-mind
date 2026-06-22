@@ -169,6 +169,7 @@ function routeFromHash() {
 
 function showWelcome() {
   currentFile = null;
+  document.querySelector('main').scrollTop = 0;  // a fresh home view starts at the top
   // Reset width/padding overrides left by a previous .html render
   // (renderHtmlFrame), else the home page inherits full-width; restore the
   // todo widget hidden during the HTML preview.

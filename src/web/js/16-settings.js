@@ -1203,6 +1203,11 @@ async function loadSettingsGroups() {
   }
 }
 
+// Node path = a creatable combobox over the mind's existing folders (publish an existing
+// folder as a federation node, or type a new path) — like the new-file folder field.
+const settingsNodePathEl = document.getElementById('settings-node-path');
+if (settingsNodePathEl) AtlasCombobox(settingsNodePathEl, { source: getAllDirs, creatable: true });
+
 const settingsGroupForm = document.getElementById('settings-group-form');
 
 if (settingsGroupForm) {

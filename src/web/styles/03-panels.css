@@ -22,6 +22,15 @@
       0 18px 48px -12px rgba(0, 0, 0, 0.7),
       inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
+  /* Combobox dropdown: same glass as dialogs (defined here, not as a Tailwind class —
+     arbitrary/utility classes built in JS strings don't always survive the precompile). */
+  .atlas-cb-pop {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 45%),
+      rgba(30, 29, 37, 0.72);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
   .panel-divider { border-color: #2a2a32; }
   .subtle-border { border-color: #2a2a32; }
   .palette-active { background: rgba(29, 155, 209, 0.18); }

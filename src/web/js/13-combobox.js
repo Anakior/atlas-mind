@@ -33,8 +33,12 @@ window.AtlasUI = {
 
     const pop = document.createElement('div');
     pop.className =
-      'atlas-cb-pop fixed z-[70] hidden max-h-64 overflow-y-auto scrollbar-thin ' +
-      'rounded-md border subtle-border bg-navy-800 shadow-2xl shadow-black/70 text-sm';
+      'atlas-cb-pop fixed hidden max-h-64 overflow-y-auto scrollbar-thin ' +
+      'rounded-md border subtle-border shadow-2xl shadow-black/70 text-sm';
+    // z-index set inline, NOT via a Tailwind class: the arbitrary `z-[70]` lived only in
+    // this JS string, which the CSS build doesn't scan, so it compiled to z-index:auto →
+    // the dropdown rendered BEHIND the dialog (backdrops go up to z-[65]). Inline wins.
+    pop.style.zIndex = '80';
     document.body.appendChild(pop);
 
     const norm = opts.normalize || ((v) => v);
