@@ -799,6 +799,107 @@ def _tool_changelog(args, ctx):
                                   ensure_ascii=False, indent=2))
 
 
+# Read side of the attribution layer (the timeline / brick 13a): map a commit to one
+# normalized event TYPE. The targeted subject prefix is the richest signal (it tells
+# check from edit, revert/folder-move from a plain M/R); git status is the fallback for
+# legacy commits that predate the attribution work.
+_ACTIVITY_VERB_TYPE = {
+    "created": "create", "edited": "edit", "moved": "move", "folder": "move",
+    "deleted": "delete", "checked": "check", "unchecked": "check",
+    "reverted": "revert", "annotated": "edit", "annotation": "edit",
+}
+_ACTIVITY_STATUS_TYPE = {"A": "create", "M": "edit", "D": "delete", "R": "move", "C": "move"}
+
+
+def _activity_events(days, limit, author, type_filter, ctx):
+    """Corpus-wide activity feed: git log over content/ carrying the X-Atlas-Author
+    trailer + author email, mapped to the CDC event model
+    {sha, short_sha, author, email, ai, date (UTC), type, title, subject, paths}.
+    ACL-scrubbed per `ctx` (None = unfiltered/internal). Returns None on git failure."""
+    fmt = ("%x1e%H\x1f%an\x1f%ae\x1f%aI\x1f%s\x1f"
+           "%(trailers:key=X-Atlas-Author,valueonly)")
+    opts = ["log", "--since=" + str(days) + ".days.ago", "-n", str(limit),
+            "--format=" + fmt, "--name-status", "-M", "-z"]
+    if author:
+        opts.append("--author=" + author)
+    opts += ["--", "content"]
+    result = _s.git(*opts)
+    if result.returncode != 0:
+        return None
+    excluded = _s._import_build().EXCLUDED_NAMES
+    events = []
+    for rec in result.stdout.split("\x1e"):
+        rec = rec.strip("\n")
+        if not rec:
+            continue
+        head, _, rest = rec.partition("\x00")
+        sha, an, ae, aI, subj, trailer = (head.split("\x1f") + [""] * 6)[:6]
+        if not sha:
+            continue
+        tokens = [t for t in (x.lstrip("\n") for x in rest.split("\x00")) if t]
+        files = []
+        i = 0
+        while i < len(tokens):
+            status = tokens[i]
+            if status[:1] in ("R", "C") and i + 2 < len(tokens):
+                new_rel = _strip_content(tokens[i + 2])
+                old_rel = _strip_content(tokens[i + 1])
+                # A soft-delete is a rename INTO .trash (excluded); keep the visible side
+                # so the event isn't dropped — its "deleted:" subject still types it.
+                rel = new_rel if (new_rel and _history_path_included(new_rel, excluded)) else old_rel
+                if rel is not None and _history_path_included(rel, excluded):
+                    files.append({"status": status[:1], "path": rel})
+                i += 3
+            else:
+                rel = _strip_content(tokens[i + 1]) if i + 1 < len(tokens) else None
+                if rel is not None and _history_path_included(rel, excluded):
+                    files.append({"status": status[:1] or "?", "path": rel})
+                i += 2
+        files = [f for f in files if _visible(f["path"], ctx)]
+        if not files:
+            continue
+        verb = subj.split(":", 1)[0].strip().split(" ")[0].lower() if ":" in subj else ""
+        typ = _ACTIVITY_VERB_TYPE.get(verb) or _ACTIVITY_STATUS_TYPE.get(files[0]["status"], "edit")
+        if type_filter and typ != type_filter:
+            continue
+        ai = (trailer or "").strip()
+        if ai.lower().startswith("x-atlas-author:"):
+            ai = ai.split(":", 1)[1].strip()
+        if ai.startswith("ai/"):
+            ai = ai[3:]
+        try:
+            date = datetime.datetime.fromisoformat(aI).astimezone(datetime.timezone.utc).isoformat()
+        except (ValueError, TypeError):
+            date = aI
+        events.append({
+            "sha": sha, "short_sha": sha[:7], "author": an, "email": ae,
+            "ai": ai.strip() or None, "date": date, "type": typ,
+            "title": posixpath.splitext(posixpath.basename(files[0]["path"]))[0],
+            "subject": subj, "paths": [f["path"] for f in files],
+        })
+    return events
+
+
+def _tool_activity(args, ctx):
+    try:
+        days = min(365, max(1, int(args.get("days", 14))))
+    except (ValueError, TypeError):
+        days = 14
+    try:
+        limit = min(200, max(1, int(args.get("limit", 50))))
+    except (ValueError, TypeError):
+        limit = 50
+    author = (args.get("author") or "").strip() or None
+    type_filter = (args.get("type") or "").strip() or None
+    events = _activity_events(days, limit, author, type_filter, ctx)
+    if events is None:
+        return text_result("git log failed", is_error=True)
+    if not events:
+        return text_result(f"No activity in the last {days} days")
+    return text_result(json.dumps({"since_days": days, "events": events},
+                                  ensure_ascii=False, indent=2))
+
+
 def _tool_doc_blame(args, ctx):
     rel = (args.get("path") or "").strip()
     target = _s._validate_doc_path(rel)
@@ -878,6 +979,7 @@ _TOOLS = {
     "doc_diff": _tool_doc_diff,
     "search_history": _tool_search_history,
     "changelog": _tool_changelog,
+    "activity": _tool_activity,
     "doc_blame": _tool_doc_blame,
     "doc_revert": _tool_doc_revert,
 }

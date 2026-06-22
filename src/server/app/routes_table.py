@@ -58,6 +58,7 @@ GET_ROUTES = [
     router.Route(_RK.EXACT_NOQUERY, "/api/history", docs.history, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/revision", docs.revision, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/diff", docs.diff, _G.AUTH),
+    router.Route(_RK.EXACT_NOQUERY, "/api/activity", docs.activity, _G.AUTH),
     router.Route(_RK.EXACT, "/api/account/profile", account.profile_get, _G.AUTH),
     router.Route(_RK.EXACT, "/api/events", system.events, _G.AUTH),
     router.Route(_RK.EXACT, "/.well-known/openapi.json", system.openapi, _G.PUBLIC),

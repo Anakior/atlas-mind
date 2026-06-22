@@ -364,24 +364,6 @@ function showWelcome() {
     })
     .join('');
 
-  const pinnedDocs = pins.map((p) => fileMap[p]).filter(Boolean);
-  const pinnedHtml = pinnedDocs.length
-    ? pinnedDocs
-        .map(
-          (f) =>
-            '<a data-recent-path="' +
-            f.path +
-            '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
-            '<div class="text-sm text-ink-100 font-medium font-sans truncate">' +
-            escapeHtml(f.name) +
-            '</div>' +
-            '<div class="text-[11px] text-ink-500 mt-0.5 font-sans truncate">' +
-            escapeHtml(f.path.split('/').slice(0, -1).join('/') || t('rootLabel')) +
-            '</div></a>',
-        )
-        .join('')
-    : '<div class="text-sm text-ink-500">' + t('noFavorites') + '</div>';
-
   contentEl.innerHTML = `
     <h1 class="!mb-2"><span style="font-family:'Corinthia',cursive;font-weight:700;font-size:1.7em;line-height:.9;color:#eef0f2">${escapeHtml(SITE_PREFIX)}</span> <span style="display:inline-flex;align-items:center;gap:.4em;line-height:1;margin-left:.22em"><span style="font-family:'Lora',Georgia,serif;font-style:italic;font-weight:600;font-size:1.3em;color:#e8941c;text-shadow:0 1px 2px rgba(0,0,0,0.6),0 0 1px rgba(0,0,0,0.85)">Atlas</span><span class="nebula-pill">Mind</span></span></h1>
     <p class="lead text-ink-400 !mt-0">${escapeHtml(TAGLINE)}</p>
@@ -408,28 +390,14 @@ function showWelcome() {
       </div>
     </div>
 
-    <div class="not-prose mb-10 border subtle-border rounded-lg p-4 bg-black/15">
-      <div class="flex items-baseline justify-between mb-3">
-        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t('activityTitle')}</div>
-        <div class="text-[10px] text-ink-500">${t('lessLabel')} <span style="display:inline-block;width:8px;height:8px;background:#1a1820;border-radius:2px;margin:0 2px;"></span><span style="display:inline-block;width:8px;height:8px;background:rgba(29,155,209,0.36);border-radius:2px;margin:0 2px;"></span><span style="display:inline-block;width:8px;height:8px;background:#1d9bd1;border-radius:2px;margin:0 2px;"></span> ${t('moreLabel')}</div>
-      </div>
-      <div id="home-heatmap" style="display:grid;grid-template-columns:repeat(53, 1fr);grid-template-rows:repeat(7, 1fr);grid-auto-flow:column;gap:2px;width:100%;aspect-ratio:53 / 7;">
-        ${heatmapCells.join('')}
-      </div>
-    </div>
+    <div class="not-prose mb-10" id="home-activity-mount"></div>
 
-    <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-      <div>
-        <h2 class="!mb-4 !mt-0">${t('favorites')}</h2>
-        <div class="grid grid-cols-1 gap-2">${pinnedHtml}</div>
+    <div class="not-prose mb-10">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="!mb-0 !mt-0">Tags</h2>
+        <button id="home-graph-btn" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded-lg border subtle-border transition" title="${t('graphBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>${t('graphLabel')}</button>
       </div>
-      <div>
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="!mb-0 !mt-0">Tags</h2>
-          <button id="home-graph-btn" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded-lg border subtle-border transition" title="${t('graphBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>${t('graphLabel')}</button>
-        </div>
-        <div class="doc-tags">${tagCloud || '<span class="text-sm text-ink-500">' + t('noTags') + '</span>'}</div>
-      </div>
+      <div class="doc-tags">${tagCloud || '<span class="text-sm text-ink-500">' + t('noTags') + '</span>'}</div>
     </div>
 
     <h2 class="!mt-0 !mb-4">${t('recentlyModified')}</h2>
@@ -475,6 +443,7 @@ function showWelcome() {
   const homeGraphBtn = contentEl.querySelector('#home-graph-btn');
 
   if (homeGraphBtn) homeGraphBtn.addEventListener('click', openGraph);
+  if (window.mountActivity) window.mountActivity();
   const hm = contentEl.querySelector('#home-heatmap');
 
   if (hm) {

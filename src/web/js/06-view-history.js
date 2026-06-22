@@ -265,8 +265,8 @@ function formatRevDate(iso) {
     : d.toLocaleDateString(LANG, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-async function openHistory() {
-  const file = currentFile;
+async function openHistory(file) {
+  file = file || currentFile;  // optional target → lets the activity feed peek a doc's history without navigating
 
   if (!historyAvailable(file)) return;
   historyFile = file;

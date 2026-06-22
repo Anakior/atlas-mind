@@ -63,8 +63,9 @@ def file_put(handler):
     task = data.get("task")  # the viewer sends this on a checkbox toggle (04-toc-tasks.js)
     if not existed:
         subject = f"created: {target.stem}"
-    elif isinstance(task, dict) and (task.get("text") or "").strip():
-        subject = f"{'checked' if task.get('checked') else 'unchecked'}: {_s._clean_subject(task['text'])}"
+    elif isinstance(task, dict) and "checked" in task:
+        label = _s._clean_subject(task.get("text") or "") or target.stem
+        subject = f"{'checked' if task.get('checked') else 'unchecked'}: {label}"
     else:
         subject = f"edited: {target.stem}"
     _s.commit_change(ctx, subject, target)
@@ -217,6 +218,34 @@ def diff(handler):
     handler._send_json(200, {
         "path": rel, "from": rev_from, "to": rev_to, "diff": result.stdout,
     })
+
+
+def activity(handler):
+    """GET /api/activity?since=&author=&type=&limit= — corpus-wide activity feed (the
+    read side of the attribution layer). AUTH only; never anonymous (a share link can't
+    reach /api/*), and each event is ACL-scrubbed to the viewer."""
+    from urllib.parse import urlparse, parse_qs as _pqs
+    query = _pqs(urlparse(handler.path).query)
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser and not ctx.primary:
+        handler._send_json(403, {"error": "forbidden"})
+        return
+    try:
+        days = min(365, max(1, int(query.get("since", ["30"])[0])))
+    except ValueError:
+        days = 30
+    try:
+        limit = min(200, max(1, int(query.get("limit", ["60"])[0])))
+    except ValueError:
+        limit = 60
+    author = (query.get("author", [""])[0] or "").strip() or None
+    type_filter = (query.get("type", [""])[0] or "").strip() or None
+    events = _s._activity_events(days, limit, author, type_filter,
+                                 None if ctx.superuser else ctx)
+    if events is None:
+        handler._send_json(500, {"error": "git log failed"})
+        return
+    handler._send_json(200, {"events": events})
 
 
 def revert(handler):

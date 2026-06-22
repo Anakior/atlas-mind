@@ -381,6 +381,36 @@
     }
   },
   {
+    "name": "activity",
+    "description": "Corpus-wide activity feed — the AI-aware read side of the attribution layer: who did what, when, and whether an AI was involved. Each event is a commit mapped to { sha, author, email, ai (the AI family that wrote it, or null for a human edit), date (UTC), type (create | edit | move | delete | check | revert), title, subject, paths }. Use it (vs changelog) when you care about attribution — e.g. 'what did the AI change lately', 'what has <person> touched', or to review a single kind of change.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "days": {
+          "type": "integer",
+          "default": 14,
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Window in days."
+        },
+        "author": {
+          "type": "string",
+          "description": "Optional: only events whose author matches this (substring), e.g. a person's name or 'Atlas Bot'."
+        },
+        "type": {
+          "type": "string",
+          "description": "Optional: keep only this event type — create | edit | move | delete | check | revert."
+        },
+        "limit": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        }
+      }
+    }
+  },
+  {
     "name": "doc_blame",
     "description": "Per-line provenance of a document: for each line, which commit/author/date last changed it. Answers 'which commit is responsible for THIS exact fact/line'. Pass 'pattern' to blame only the lines containing a string (no line numbers needed), or start/end for a line range. Whole-file blame is capped.",
     "inputSchema": {
