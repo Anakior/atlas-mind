@@ -12,7 +12,7 @@
         {
             "registry_type": "pypi",
             "identifier": "atlas-mind",
-            "version": "0.7.6",
+            "version": "0.8.0",
             "transport": {
                 "type": "streamable-http",
                 "url": "{ATLAS_MCP_URL}"
