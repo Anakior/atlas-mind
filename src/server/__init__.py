@@ -74,7 +74,7 @@ from config import AtlasConfig, AtlasConfigError, resolve_mind_root
 # WHITE-BOX TEST CONTRACT — tests/test_admin.py imports server._is_newer and
 # server._evict_stale_buckets; keep these two re-exports.
 from server.services.rate_limit import _evict_stale_buckets  # noqa: F401
-from server.services.update_check import _is_newer, _version_tuple  # noqa: F401
+from server.services.update_check import _is_newer  # noqa: F401
 
 from server.context import AppContext, AtlasHTTPServer
 from server.pure import docs  # document-domain logic (path validation / traversal / move)
@@ -94,7 +94,7 @@ from server.pure.auth import (  # noqa: F401  token/CSRF/share/bearer crypto + i
     _has_control_chars, is_valid_email, _b64url_nopad, _b64url_nopad_decode,
     current_session_epoch, make_token, verify_token, authenticate_user, authenticate,
     new_share_token, verify_share_token, make_csrf_token, verify_csrf_token,
-    consume_recovery_code, _hash_api_token, verify_api_bearer, _verify_mcp_token,
+    consume_recovery_code, _hash_api_token, verify_api_bearer,
     resolve_mcp_identity,
 )
 from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live tasks / search text
@@ -545,12 +545,6 @@ def sync_remote(remote: dict) -> dict:
     """Pull one remote node's manifest + delta into remotes/<name>/. Delegates to
     the RemoteSync service."""
     return _CTX.remote_sync.sync_one(remote)
-
-
-def sync_all_remotes() -> bool:
-    """Resync all subscriptions (periodic loop). Delegates to the RemoteSync
-    service."""
-    return _CTX.remote_sync.sync_all()
 
 
 from server.render.search_cache import _doc_entry, _DOC_CACHE  # noqa: F401

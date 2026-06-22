@@ -236,30 +236,10 @@ def verify_api_bearer(authorization_header: str):
         return None
 
 
-def _verify_mcp_token(token: str) -> bool:
-    """Bearer verification for the /mcp/<token> channel: the token hashes to an API
-    identity in the registry. Touches last_used best-effort."""
-    if not token:
-        return False
-    try:
-        token_hash = _hash_api_token(token)
-        user = _s.get_store().find_api_identity(token_hash)
-        if user:
-            try:
-                _s.get_store().touch_last_used(user)
-            except Exception:
-                pass
-            return True
-        return False
-    except Exception as e:
-        print(f"[verify_mcp_token] registry lookup failed: {e}", file=sys.stderr)
-        return False
-
-
 def resolve_mcp_identity(token: str):
     """Identity {email, role, acts_as?} behind an MCP token (/mcp/<token>), or
-    None. Unlike _verify_mcp_token (a bool), it KEEPS the identity so the dispatch
-    can enforce per-document ACL. Touches last_used best-effort."""
+    None. KEEPS the identity (not just a bool) so the dispatch can enforce
+    per-document ACL. Touches last_used best-effort."""
     if not token:
         return None
     try:
