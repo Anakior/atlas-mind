@@ -111,16 +111,12 @@ def tree(handler):
 def search(handler):
     """GET /api/search?q=&limit= — server-side search (transfers O(results),
     not O(corpus)); filtered per-viewer (auth)."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    query = _pqs(urlparse(handler.path).query)
+    query = handler._query()
     q = (query.get("q", [""])[0] or "").strip()
     if not q:
         handler._send_json(200, [])
         return
-    try:
-        limit = min(50, max(1, int(query.get("limit", ["50"])[0])))
-    except ValueError:
-        limit = 50
+    limit = _s.clamp_int(query.get("limit", [None])[0], 50, 1, 50)
     ctx = handler._viewer_ctx()
     results = _s._api_search(q, limit, None if ctx.superuser else ctx)
     handler._send_json(200, results)
@@ -132,8 +128,7 @@ def history(handler):
     root) while ?path= is relative to content/, so the pathspec is prefixed
     with "content/". Always `--` before the pathspec; revisions are
     regex-checked."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    rel = (_pqs(urlparse(handler.path).query).get("path", [""])[0] or "").strip()
+    rel = (handler._query().get("path", [""])[0] or "").strip()
     if _s._validate_doc_path(rel) is None:
         handler._send_json(400, {"error": "invalid path"})
         return
@@ -167,8 +162,7 @@ def history(handler):
 def revision(handler):
     """GET /api/revision?path=&rev= — a doc's content at a past revision
     (auth)."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    query = _pqs(urlparse(handler.path).query)
+    query = handler._query()
     rel = (query.get("path", [""])[0] or "").strip()
     rev = (query.get("rev", [""])[0] or "").strip()
     if _s._validate_doc_path(rel) is None:
@@ -191,8 +185,7 @@ def revision(handler):
 def diff(handler):
     """GET /api/diff?path=&from=&to= — diff a doc between two revisions, across
     a rename if needed (auth)."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    query = _pqs(urlparse(handler.path).query)
+    query = handler._query()
     rel = (query.get("path", [""])[0] or "").strip()
     rev_from = (query.get("from", [""])[0] or "").strip()
     rev_to = (query.get("to", [""])[0] or "").strip()
@@ -225,20 +218,13 @@ def activity(handler):
     """GET /api/activity?since=&author=&type=&limit= — corpus-wide activity feed (the
     read side of the attribution layer). AUTH only; never anonymous (a share link can't
     reach /api/*), and each event is ACL-scrubbed to the viewer."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    query = _pqs(urlparse(handler.path).query)
+    query = handler._query()
     ctx = handler._viewer_ctx()
     if not ctx.superuser and not ctx.primary:
         handler._send_json(403, {"error": "forbidden"})
         return
-    try:
-        days = min(365, max(1, int(query.get("since", ["30"])[0])))
-    except ValueError:
-        days = 30
-    try:
-        limit = min(200, max(1, int(query.get("limit", ["60"])[0])))
-    except ValueError:
-        limit = 60
+    days = _s.clamp_int(query.get("since", [None])[0], 30, 1, 365)
+    limit = _s.clamp_int(query.get("limit", [None])[0], 60, 1, 200)
     author = (query.get("author", [""])[0] or "").strip() or None
     type_filter = (query.get("type", [""])[0] or "").strip() or None
     events = _s._activity_events(days, limit, author, type_filter,
@@ -252,20 +238,13 @@ def activity(handler):
 def stale(handler):
     """GET /api/stale?months=&limit= — docs untouched for N months (13c obsolescence).
     Deterministic, AUTH only (never anonymous), ACL-scrubbed per viewer."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    query = _pqs(urlparse(handler.path).query)
+    query = handler._query()
     ctx = handler._viewer_ctx()
     if not ctx.superuser and not ctx.primary:
         handler._send_json(403, {"error": "forbidden"})
         return
-    try:
-        months = min(24, max(1, int(query.get("months", ["6"])[0])))
-    except ValueError:
-        months = 6
-    try:
-        limit = min(100, max(1, int(query.get("limit", ["40"])[0])))
-    except ValueError:
-        limit = 40
+    months = _s.clamp_int(query.get("months", [None])[0], 6, 1, 24)
+    limit = _s.clamp_int(query.get("limit", [None])[0], 40, 1, 100)
     items = _s._api_stale(months, limit, None if ctx.superuser else ctx)
     handler._send_json(200, {"months": months, "stale": items})
 
@@ -273,16 +252,12 @@ def stale(handler):
 def contradictions(handler):
     """GET /api/contradictions?limit= — candidate doc PAIRS (shared tags/links) for the AI
     to judge (13c). Server pre-filter only; AUTH, never anonymous, ACL-scrubbed."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    query = _pqs(urlparse(handler.path).query)
+    query = handler._query()
     ctx = handler._viewer_ctx()
     if not ctx.superuser and not ctx.primary:
         handler._send_json(403, {"error": "forbidden"})
         return
-    try:
-        limit = min(50, max(1, int(query.get("limit", ["15"])[0])))
-    except ValueError:
-        limit = 15
+    limit = _s.clamp_int(query.get("limit", [None])[0], 15, 1, 50)
     items = _s._contradiction_candidates(None if ctx.superuser else ctx, limit)
     handler._send_json(200, {"candidates": items})
 

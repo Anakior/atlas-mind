@@ -90,6 +90,7 @@ from server.pure.todos_md import (  # noqa: F401
     TODO_HEADER, _norm_cat, parse_todos, write_todos, load_todos,
 )
 from server.pure.notes_md import _notes_path, load_notes, save_notes  # noqa: F401
+from server.pure.params import clamp_int  # noqa: F401  request-param clamp (routes + tools)
 from server.pure.auth import (  # noqa: F401  token/CSRF/share/bearer crypto + identity
     _has_control_chars, is_valid_email, _b64url_nopad, _b64url_nopad_decode,
     current_session_epoch, make_token, verify_token, authenticate_user, authenticate,
@@ -210,10 +211,12 @@ from server.pure.hive import (  # noqa: F401  federation node links / mirror / f
     _mirror_is_under_remotes, _atomic_write_bytes, _is_blocked_ip, _validate_remote_url,
     _http_get_bearer, _prune_empty_dirs,
 )
-from server.pure.mcp_call import (  # noqa: F401  MCP dispatch + graph/tag/trash/search
-    _doc_corpus, _links_graph, _tags_for, _soft_delete, _api_search, _api_recent,
-    _api_stale, _contradiction_candidates,
-    _activity_events, _mcp_call_tool, _mcp_jsonrpc,
+from server.pure.queries import (  # noqa: F401  read-side corpus/feed queries
+    _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
+    _api_stale, _contradiction_candidates, _activity_events,
+)
+from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
+    _soft_delete, _mcp_call_tool, _mcp_jsonrpc,
 )
 from server.extensions import load_server_extensions  # noqa: F401
 

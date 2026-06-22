@@ -531,6 +531,11 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError):
             return {}
 
+    def _query(self):
+        """Parsed query-string dict ({k: [v, ...]}), the read sibling of _read_json."""
+        from urllib.parse import urlparse, parse_qs
+        return parse_qs(urlparse(self.path).query)
+
     def _accepts_gzip(self):
         return "gzip" in self.headers.get("Accept-Encoding", "").lower()
 

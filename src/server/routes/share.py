@@ -64,8 +64,7 @@ def list_shares(handler):
     """GET /api/share/list — admin: the share links, each with a copyable token and
     a `file_exists` flag (a moved/deleted target is flagged broken, with a
     `suggested_path` so it can be reactivated)."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    query = _pqs(urlparse(handler.path).query)
+    query = handler._query()
     filter_path = (query.get("path", [""])[0] or "").strip()
     include_revoked = query.get("include_revoked", ["0"])[0] == "1"
     try:

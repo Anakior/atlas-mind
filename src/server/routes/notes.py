@@ -7,8 +7,7 @@ import server as _s
 
 def list_notes(handler):
     """GET /api/notes?path=<rel> — the annotations of a doc (auth)."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    rel = (_pqs(urlparse(handler.path).query).get("path", [""])[0] or "").strip()
+    rel = (handler._query().get("path", [""])[0] or "").strip()
     if _s._notes_path(rel) is None:
         handler._send_json(400, {"error": "invalid path"})
         return
@@ -55,8 +54,7 @@ def create(handler):
 def patch(handler):
     """PATCH /api/notes?path=<rel>&id=<id> — edit an annotation's text
     (admin + CSRF already enforced by the verb-level guard in do_PATCH)."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    q = _pqs(urlparse(handler.path).query)
+    q = handler._query()
     rel = (q.get("path", [""])[0] or "").strip()
     note_id = (q.get("id", [""])[0] or "").strip()
     if _s._notes_path(rel) is None or not note_id:
@@ -83,8 +81,7 @@ def patch(handler):
 def delete(handler):
     """DELETE /api/notes?path=<rel>&id=<id> — remove an annotation (admin +
     CSRF already enforced by the verb-level guard in do_DELETE)."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    q = _pqs(urlparse(handler.path).query)
+    q = handler._query()
     rel = (q.get("path", [""])[0] or "").strip()
     note_id = (q.get("id", [""])[0] or "").strip()
     if _s._notes_path(rel) is None or not note_id:

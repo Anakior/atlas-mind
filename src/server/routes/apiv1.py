@@ -9,10 +9,7 @@ def _v1_search(handler, ctx, query):
     if not q:
         handler._send_json(400, {"error": "missing query parameter 'q'"})
         return
-    try:
-        limit = min(50, max(1, int(query.get("limit", ["10"])[0])))
-    except ValueError:
-        limit = 10
+    limit = _s.clamp_int(query.get("limit", [None])[0], 10, 1, 50)
     handler._send_json(200, _s._api_search(q, limit, ctx))
 
 
@@ -42,11 +39,8 @@ def _v1_tree(handler, ctx, query):
 
 
 def _v1_recent(handler, ctx, query):
-    try:
-        days = max(1, int(query.get("days", ["7"])[0]))
-        limit = min(100, max(1, int(query.get("limit", ["20"])[0])))
-    except ValueError:
-        days, limit = 7, 20
+    days = _s.clamp_int(query.get("days", [None])[0], 7, 1)
+    limit = _s.clamp_int(query.get("limit", [None])[0], 20, 1, 100)
     handler._send_json(200, _s._api_recent(days, limit, ctx))
 
 

@@ -419,7 +419,6 @@
   }
 
   function healthHtml() {
-    if (!_health) return `<div class="text-ink-500 text-sm py-6 text-center">${t('healthLoading')}</div>`;
     const tab = (active, v, label) =>
       `<button type="button" data-htab="${v}" class="px-3 py-1.5 text-xs font-medium transition ${active ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" style="border-bottom:2px solid ${active ? '#1d9bd1' : 'transparent'};margin-bottom:-1px">${label}</button>`;
     const toggle =
@@ -427,7 +426,9 @@
       + tab(_healthTab === 'stale', 'stale', t('healthTabStale'))
       + tab(_healthTab === 'cont', 'cont', t('healthTabCont'))
       + `</div>`;
-    return toggle + (_healthTab === 'stale' ? staleHtml() : contHtml());
+    // Keep the sub-toggle stable; only the body swaps skeleton → content on fetch.
+    const body = !_health ? skelRows(3) : (_healthTab === 'stale' ? staleHtml() : contHtml());
+    return toggle + body;
   }
 
   function staleHtml() {
@@ -460,6 +461,26 @@
     }).join('');
     if (cands.length > 8) out += `<div class="text-right mt-1"><a class="act-csee text-sm text-accent hover:underline cursor-pointer">${_candExpanded ? t('actCollapse') : t('actSeeAllN', cands.length)}</a></div>`;
     return out;
+  }
+
+  function skelRow() {
+    return '<div class="flex items-center gap-3 py-2">'
+      + '<div class="act-skel" style="width:30px;height:30px;border-radius:8px"></div>'
+      + '<div class="flex-1"><div class="act-skel" style="width:42%;height:10px"></div>'
+      + '<div class="act-skel" style="width:26%;height:8px;margin-top:6px"></div></div>'
+      + '<div class="act-skel" style="width:38px;height:8px"></div></div>';
+  }
+  function skelRows(n) {
+    let s = '';
+    for (let i = 0; i < n; i++) s += skelRow();
+    return s;
+  }
+  function skeletonHtml() {
+    return '<div class="border subtle-border rounded-lg p-4 bg-black/15">'
+      + '<div class="flex items-center justify-between mb-4">'
+      + '<div class="act-skel" style="width:90px;height:18px"></div>'
+      + '<div class="act-skel" style="width:150px;height:26px;border-radius:8px"></div></div>'
+      + skelRows(4) + '</div>';
   }
 
   function cardHtml() {
@@ -557,6 +578,10 @@
     // Re-fetch on every mount: the feed must reflect edits made since the home was
     // last shown (e.g. a task toggle) — no caching, or it stays stale until reload.
     _expanded = false;
+    // Don't leave the card slot blank while /api/activity fetches: cached card
+    // instantly on re-visit, a skeleton on the very first load.
+    if (_items && _items.length) { m.innerHTML = cardHtml(); wire(m.querySelector('#home-activity-card')); }
+    else if (_items === null) m.innerHTML = skeletonHtml();
     const raw = await load();
     _items = raw ? aggregate(raw) : raw;
     _digest = raw ? computeDigest(raw) : null;
@@ -571,6 +596,7 @@
     '.activity-badge{position:absolute;right:-3px;bottom:-3px;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:999px;background:#1a181e;border:1px solid rgba(232,148,28,.6)}',
     '.act-row{padding:7px 8px;margin:0 -8px;border-radius:8px;cursor:pointer;transition:background .12s}',
     '.act-row:hover{background:rgba(255,255,255,.035)}',
+    '.act-skel{background:rgba(255,255,255,.06);border-radius:5px}',
     '.activity-seg{cursor:pointer;transition:color .12s,background .12s}',
     '.activity-seg:not(.is-active):hover{color:#d1d2d3}',
     '.act-node{cursor:pointer}',
@@ -596,6 +622,8 @@
     '@keyframes act-glowpulse{0%,100%{opacity:.5}50%{opacity:1}}',
     '.act-egg.show{animation:act-egg 1.9s ease forwards}',
     '@keyframes act-egg{0%{opacity:0;transform:translate(-50%,8px)}15%{opacity:1;transform:translate(-50%,0)}72%{opacity:1}100%{opacity:0;transform:translate(-50%,-12px)}}',
+    '.act-skel{animation:act-skel 1.3s ease-in-out infinite}',
+    '@keyframes act-skel{0%,100%{opacity:.4}50%{opacity:.85}}',
     '}',
     '@media (max-width:767px){',
     '.act-digest-when{display:none}',
