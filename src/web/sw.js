@@ -102,6 +102,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // 2b. Rollup des tâches : muté à chaque coche, calculé live côté serveur. En
+  // stale-while-revalidate le SW resservait la copie périmée (la tâche réapparaît
+  // non cochée à la réouverture de la vue), d'où network-first : frais en ligne,
+  // fallback cache hors-ligne.
+  if (sameOrigin && url.pathname === '/_tasks-index.json') {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          putInCache(req, res);
+
+          return res;
+        })
+        .catch(() => caches.match(req)),
+    );
+
+    return;
+  }
+
   // 3. Reste (/vendor/, .md, _search-data.json, icônes…) : stale-while-revalidate.
   event.respondWith(
     caches.match(req).then((cached) => {

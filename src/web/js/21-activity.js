@@ -144,10 +144,14 @@
     );
   }
 
+  const JOURNAL_PREVIEW = 6;
+  let _expanded = false;
+
   function journalHtml() {
     let out = '';
     let day = '';
-    _items.slice(0, 6).forEach((e) => {
+    const shown = _expanded ? _items : _items.slice(0, JOURNAL_PREVIEW);
+    shown.forEach((e) => {
       const k = dayKey(e.agoMin);
       if (k !== day) {
         day = k;
@@ -155,7 +159,10 @@
       }
       out += row(e);
     });
-    out += '<div class="text-right mt-3"><a class="text-sm text-accent hover:underline cursor-pointer">Voir tout →</a></div>';
+    // Toggle in place — no extra view to navigate to, the feed just unfolds.
+    if (_items.length > JOURNAL_PREVIEW) {
+      out += `<div class="text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${_expanded ? 'Réduire ↑' : 'Voir tout →'}</a></div>`;
+    }
     return out;
   }
 
@@ -335,6 +342,11 @@
       b.addEventListener('click', () => setView(card, b.dataset.view, true)));
     card.addEventListener('click', (ev) => {
       if (ev.target.closest('[data-view]')) return;
+      if (ev.target.closest('.act-seeall')) {
+        _expanded = !_expanded;
+        card.querySelector('#activity-journal').innerHTML = journalHtml();
+        return;
+      }
       const row = ev.target.closest('.act-row[data-path]');
       if (row && row.dataset.path) openDocHistory(row.dataset.path);
     });
@@ -345,10 +357,11 @@
   window.mountActivity = async function () {
     const m = document.getElementById('home-activity-mount');
     if (!m) return;
-    if (_items === null) {
-      const raw = await load();
-      _items = raw ? aggregate(raw) : raw;
-    }
+    // Re-fetch on every mount: the feed must reflect edits made since the home was
+    // last shown (e.g. a task toggle) — no caching, or it stays stale until reload.
+    _expanded = false;
+    const raw = await load();
+    _items = raw ? aggregate(raw) : raw;
     if (!_items || !_items.length) { m.innerHTML = ''; return; }  // offline / nothing → no card
     m.innerHTML = cardHtml();
     wire(m.querySelector('#home-activity-card'));
