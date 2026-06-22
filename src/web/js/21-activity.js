@@ -1,4 +1,4 @@
-// Activity card (home) — Journal + Constellation views over the attributed git history.
+// Activity card (home) — Journal / Constellation / Santé views over the attributed git history.
 // Reads GET /api/activity (the read side of the attribution layer); reuses the real
 // constellation avatars. Hidden offline / when there is nothing to show.
 (function () {
@@ -74,7 +74,6 @@
     return d.toLocaleDateString(LANG === 'en' ? 'en-US' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
-  // /api/activity event -> render item.
   function toItem(e) {
     const author = (e.author || e.email || '').trim();
     const parts = author.split(/\s+/);
