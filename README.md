@@ -19,7 +19,7 @@ Own the data. Own the engine. Own the mind.
 **Atlas Mind** is a self-hostable wiki / knowledge base engine, and an external brain you share with your AI. It serves a single-page viewer from a folder of documents (a *mind*), keeping the **engine** (the code) cleanly decoupled from your **content** (your notes, in their own git repository). Built on three ideas:
 
 - **Multi-format, not just Markdown.** Markdown is first-class (rendered, linked, searched). Standalone **HTML** decks and dashboards, **PDFs**, and **Word `.docx`** are previewed inline, converted to readable HTML in your browser, nothing uploaded anywhere.
-- **AI-native.** It exposes an **MCP** endpoint (nineteen tools to read, write, map and rewind your mind), and `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how to use your mind.
+- **AI-native.** It exposes an **MCP** endpoint (twenty-two tools to read, write, map, rewind and audit your mind), and `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how to use your mind.
 - **Lightweight & self-contained.** A single Python HTTP server on the **standard library**: **no database**, accounts and share links live as plain JSON on disk, frontend libraries and fonts are vendored. A running instance makes **no third-party network calls**: your mind never leaves your disk, and nothing you write trains anyone's model.
 
 It is not a multi-tenant SaaS, a real-time collaborative editor, or a plugin marketplace. One focused mind per instance, fully yours.
@@ -64,12 +64,13 @@ atlas token create ~/my-mind --label claude
 # → prints the MCP URL: https://<your-atlas>/mcp/<token>
 ```
 
-The MCP endpoint exposes **nineteen tools** in four groups:
+The MCP endpoint exposes **twenty-two tools** in five groups:
 
 - **read**: `search_docs`, `read_doc`, `list_tree`, `recent_docs`
 - **write**: `create_doc`, `edit_doc`, `move_doc` (fixes incoming `[[backlinks]]`), `delete_doc` (soft-delete to `.trash/`)
 - **graph**: `get_links`, `get_backlinks`, `list_by_tag`, `get_mind_topology`
 - **time-travel** (your mind is a git repo): `doc_history`, `doc_at`, `doc_diff`, `search_history`, `changelog`, `doc_blame`, `doc_revert`
+- **activity** (the attribution layer's read side): `activity` (who changed what, with AI-author detection), `stale` (docs untouched for months — obsolescence), `contradictions` (same-topic doc pairs to review)
 
 `atlas init` scaffolds `AGENTS.md` + `content/agents/` + `content/ai-sessions/` so the assistant knows your conventions. There is also a **REST API v1** (Bearer tokens, create-only writes) with a published **OpenAPI 3.1** spec.
 
@@ -80,6 +81,7 @@ The MCP endpoint exposes **nineteen tools** in four groups:
 - **The Mind**: a force-directed mind palace where every document and tag is a navigable node, colour-grouped by folder, recent nodes glowing, orphans dimmed.
 - **Editing**: create / edit / rename / move / delete from the viewer (moving rewrites the wikilinks pointing at a doc), document templates, interactive task checkboxes, a categorised todos widget.
 - **History**: every document git-versioned, with a revision list, clean diffs, view/restore of past versions (restore is a new commit), renames and moves followed.
+- **Activity**: a home card over the attributed git history — a journal of who-changed-what (with AI-author detection and a per-doc history peek), a constellation of contributors, and a Health view that surfaces stale documents (obsolescence) and same-topic contradiction candidates for your AI to review.
 - **Annotations**: notes anchored to a text selection, re-anchored on later visits, with one-click copy-all-notes as Markdown.
 - **Sharing**: per-document access in cloud mode (private / shared with people or groups / common to the team), plus HMAC-signed public share links with optional expiry.
 - **Offline & PWA**: a self-contained `index-offline.html` that works from `file://`, an installable PWA via service worker, live reload over SSE.
