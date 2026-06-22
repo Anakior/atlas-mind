@@ -74,7 +74,7 @@ from config import AtlasConfig, AtlasConfigError, resolve_mind_root
 # WHITE-BOX TEST CONTRACT — tests/test_admin.py imports server._is_newer and
 # server._evict_stale_buckets; keep these two re-exports.
 from server.services.rate_limit import _evict_stale_buckets  # noqa: F401
-from server.services.update_check import _is_newer, _version_tuple  # noqa: F401
+from server.services.update_check import _is_newer  # noqa: F401
 
 from server.context import AppContext, AtlasHTTPServer
 from server.pure import docs  # document-domain logic (path validation / traversal / move)
@@ -90,11 +90,12 @@ from server.pure.todos_md import (  # noqa: F401
     TODO_HEADER, _norm_cat, parse_todos, write_todos, load_todos,
 )
 from server.pure.notes_md import _notes_path, load_notes, save_notes  # noqa: F401
+from server.pure.params import clamp_int  # noqa: F401  request-param clamp (routes + tools)
 from server.pure.auth import (  # noqa: F401  token/CSRF/share/bearer crypto + identity
     _has_control_chars, is_valid_email, _b64url_nopad, _b64url_nopad_decode,
     current_session_epoch, make_token, verify_token, authenticate_user, authenticate,
     new_share_token, verify_share_token, make_csrf_token, verify_csrf_token,
-    consume_recovery_code, _hash_api_token, verify_api_bearer, _verify_mcp_token,
+    consume_recovery_code, _hash_api_token, verify_api_bearer,
     resolve_mcp_identity,
 )
 from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live tasks / search text
@@ -102,7 +103,7 @@ from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live task
     _live_tasks_index, _normalize_text, _html_to_text, _HTML_BLOCK_RE,
 )
 from server.pure.acl import (  # noqa: F401  per-document ACL (model B — partage à la Notion)
-    ViewerCtx, viewer_ctx, share_ctx, effective_level, LEVELS,
+    ViewerCtx, viewer_ctx, share_ctx, effective_level, LEVELS, parse_ai_trailer,
     can_read as _acl_can_read, can_write as _acl_can_write,
     can_manage as _acl_can_manage, can_create as _acl_can_create,
     in_private_space as _acl_in_private_space,
@@ -210,9 +211,12 @@ from server.pure.hive import (  # noqa: F401  federation node links / mirror / f
     _mirror_is_under_remotes, _atomic_write_bytes, _is_blocked_ip, _validate_remote_url,
     _http_get_bearer, _prune_empty_dirs,
 )
-from server.pure.mcp_call import (  # noqa: F401  MCP dispatch + graph/tag/trash/search
-    _doc_corpus, _links_graph, _tags_for, _soft_delete, _api_search, _api_recent,
-    _activity_events, _mcp_call_tool, _mcp_jsonrpc,
+from server.pure.queries import (  # noqa: F401  read-side corpus/feed queries
+    _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
+    _api_stale, _contradiction_candidates, _activity_events,
+)
+from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
+    _soft_delete, _mcp_call_tool, _mcp_jsonrpc,
 )
 from server.extensions import load_server_extensions  # noqa: F401
 
@@ -544,12 +548,6 @@ def sync_remote(remote: dict) -> dict:
     """Pull one remote node's manifest + delta into remotes/<name>/. Delegates to
     the RemoteSync service."""
     return _CTX.remote_sync.sync_one(remote)
-
-
-def sync_all_remotes() -> bool:
-    """Resync all subscriptions (periodic loop). Delegates to the RemoteSync
-    service."""
-    return _CTX.remote_sync.sync_all()
 
 
 from server.render.search_cache import _doc_entry, _DOC_CACHE  # noqa: F401

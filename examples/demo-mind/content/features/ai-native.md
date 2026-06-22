@@ -15,7 +15,7 @@ A running instance exposes an **MCP** (Model Context Protocol) endpoint. Each us
 mints their own token from the web UI (**Settings → Tokens**, or `atlas token
 create <mind>` locally) and points their assistant at
 `https://<your-atlas>/mcp/<token>`. From then on the AI works your mind through
-**nineteen tools**, grouped into four superpowers.
+**twenty-two tools**, grouped into five superpowers.
 
 ### 1. Reads your whole mind
 
@@ -61,6 +61,17 @@ a present-state index can't do:
 
 This is how an AI answers *"when did we decide this — and what was it before?"*
 without you digging through git yourself.
+
+### 5. Knows who did what
+
+Every commit is attributed — author, date, and whether an **AI** wrote it — so the
+mind carries an [[features/activity-and-attribution|activity layer]] the AI can read and audit:
+
+| Tool             | What the AI does with it                                       |
+|------------------|----------------------------------------------------------------|
+| `activity`       | the attributed feed: who changed what, when, AI or human       |
+| `stale`          | documents untouched for months — obsolescence to revisit       |
+| `contradictions` | same-topic document pairs that may now disagree, to review     |
 
 ## The loop
 

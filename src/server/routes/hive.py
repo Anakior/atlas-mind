@@ -44,8 +44,7 @@ def file(handler):
     if not _s.api_rate_limit_ok("node:" + node["name"]):
         handler._send_json(429, {"error": "rate limit exceeded (120/min)"})
         return
-    from urllib.parse import urlparse, parse_qs as _pqs
-    rel = (_pqs(urlparse(handler.path).query).get("path", [""])[0] or "").strip()
+    rel = (handler._query().get("path", [""])[0] or "").strip()
     for node_rel, path in _s._iter_node_files(node["path"]):
         if node_rel != rel:
             continue

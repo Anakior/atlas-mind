@@ -22,8 +22,7 @@ def _valid_principal(p) -> bool:
 def acl_get(handler):
     """GET /api/acl?path= — the ACL entry of a doc + whether the caller manages it.
     A doc the caller can't read returns 404 (no-existence-oracle)."""
-    from urllib.parse import urlparse, parse_qs as _pqs
-    rel = (_pqs(urlparse(handler.path).query).get("path", [""])[0] or "").strip().strip("/")
+    rel = (handler._query().get("path", [""])[0] or "").strip().strip("/")
     if not rel:
         handler._send_json(400, {"error": "path required"})
         return

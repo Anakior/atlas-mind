@@ -1,76 +1,19 @@
-"""MCP tool dispatch + graph/tag/trash/search helpers backing the AI-native tools."""
-import datetime
+"""MCP tool dispatch (read-side queries live in pure/queries.py, git parsing in pure/git_history.py)."""
 import json
 import posixpath
-import re
 import sys
-import time
 from pathlib import Path
 
 import server as _s
-
-# The well-known empty-tree object: lets doc_diff express "this doc's first
-# appearance" as a normal two-tree diff (empty -> rev) instead of a special case.
-_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-# Output caps: a real .html deck in a mind can be ~2 MB; an uncapped diff/content/
-# blame would blow the model's context. The HTTP endpoints have no cap (a browser
-# doesn't care) — the MCP tools must.
-_MAX_OUTPUT_CHARS = 60000
-_MAX_BLAME_LINES = 600
-_BLAME_HEAD_RE = re.compile(r"^[0-9a-f]{40} \d+ \d+")
-
-
-def _visible(rel, ctx):
-    """Whether `ctx` may read `rel`. ctx=None → unfiltered (internal/local use,
-    e.g. direct calls in tests)."""
-    return ctx is None or _s.can_read(rel, ctx)
-
-
-def _doc_corpus(ctx=None):
-    """[(rel, name, text)] for every doc readable by `ctx`, each file read once.
-    THE choke-point: search/topology/tags/links all iterate here, so filtering
-    once propagates to every derived aggregate. utf-8-sig tolerates a BOM."""
-    out = []
-    for rel, path in _s._iter_doc_files():
-        if not _visible(rel, ctx):
-            continue
-        try:
-            out.append((rel, path.name, path.read_text(encoding="utf-8-sig")))
-        except (OSError, UnicodeDecodeError):
-            continue
-    return out
-
-
-def _links_graph(ctx=None):
-    """Wikilink graph {path: {"out": [...], "in": [...]}} over the docs readable by
-    `ctx`. Built on the filtered corpus so the graph never exposes a private doc as
-    a node; callers still scrub `out` edges that point at a private target."""
-    return _s._import_build().build_links_index(
-        [{"path": rel, "name": name, "body": text} for rel, name, text in _doc_corpus(ctx)])
-
-
-def _scrub_commits(commits, ctx):
-    """Drop, from each commit, the changed files `ctx` can't read; drop commits
-    left with no visible file. Keeps history tools from leaking private doc paths."""
-    if ctx is None:
-        return commits
-    out = []
-    for c in commits:
-        files = [f for f in c.get("files", []) if _visible(f.get("path", ""), ctx)]
-        if files:
-            out.append({**c, "files": files})
-    return out
-
-
-def _tags_for(build, rel: str, text: str) -> list:
-    """Folder-derived tags + frontmatter tags, merged and deduped — mirrors the
-    tag computation of build.walk so the MCP tools never diverge from the viewer."""
-    tags = list(build._folder_tags(rel))
-    fm_tags, _ = build._parse_frontmatter(text)
-    for t in fm_tags:
-        if t not in tags:
-            tags.append(t)
-    return tags
+from server.pure.queries import (
+    _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
+    _api_stale, _contradiction_candidates, _activity_events,
+)
+from server.pure.git_history import (
+    _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
+    _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
+)
+from server.pure.params import clamp_int
 
 
 def _soft_delete(target: Path) -> str:
@@ -93,268 +36,6 @@ def _soft_delete(target: Path) -> str:
     return ".trash/" + rel.as_posix()
 
 
-def _api_search(q: str, limit: int, ctx=None) -> list:
-    """Scoring: weighted occurrences (name x3, content x1), with typo tolerance
-    (a token that can't be found is corrected to the closest word in the
-    vocabulary). Content read via the _doc_entry in-memory cache."""
-    import difflib
-    tokens = [t for t in _s._normalize_text(q).split() if t]
-    if not tokens:
-        return []
-    entries = []
-    for rel, path in _s._iter_doc_files():
-        if not _visible(rel, ctx):
-            continue
-        e = _s._doc_entry(rel, path)
-        if e is not None:
-            entries.append((rel, path, e))
-    # Typo tolerance: a 4+-letter token absent from the vocabulary (as a substring)
-    # is replaced by the closest known word — restores MiniSearch's client-side fuzz.
-    vocab = set()
-    for _, _, e in entries:
-        vocab |= e["tokens"]
-    corrected = []
-    for t in tokens:
-        if len(t) < 4 or any(t in w for w in vocab):
-            corrected.append(t)
-        else:
-            near = difflib.get_close_matches(t, vocab, n=1, cutoff=0.78)
-            corrected.append(near[0] if near else t)
-    tokens = corrected
-    hits = []
-    for rel, path, e in entries:
-        name_n = e["name_n"]
-        content_n = e["content_n"]
-        content = e["content"]
-        score = 0
-        first_idx = -1
-        first_token = None
-        for t in tokens:
-            n_name = name_n.count(t)
-            n_content = content_n.count(t)
-            score += n_name * 3 + n_content
-            if n_content:
-                idx = content_n.find(t)
-                if first_idx == -1 or (idx >= 0 and idx < first_idx):
-                    first_idx = idx
-                    first_token = t
-        if score == 0:
-            continue
-        if first_idx >= 0 and first_token:
-            start = max(0, first_idx - 60)
-            end = min(len(content), first_idx + len(first_token) + 120)
-            snippet = (("…" if start > 0 else "")
-                       + content[start:end].replace("\n", " ").strip()
-                       + ("…" if end < len(content) else ""))
-        else:
-            snippet = content[:160].replace("\n", " ").strip() + ("…" if len(content) > 160 else "")
-        hits.append({
-            "path": rel,
-            "name": path.name,
-            "score": score,
-            "snippet": snippet,
-            "mtime": int(e["mtime"]),
-        })
-    hits.sort(key=lambda h: (-h["score"], -h["mtime"]))
-    return hits[:limit]
-
-
-def _api_recent(days: int, limit: int, ctx=None) -> list:
-    """Documents modified within the window, from most recent to oldest."""
-    cutoff = time.time() - days * 86400
-    items = []
-    for rel, path in _s._iter_doc_files():
-        if not _visible(rel, ctx):
-            continue
-        st = path.stat()
-        if st.st_mtime < cutoff:
-            continue
-        try:
-            content = path.read_text(encoding="utf-8")
-            preview = content[:160].replace("\n", " ").strip()
-            if len(content) > 160:
-                preview += "…"
-        except (OSError, UnicodeDecodeError):
-            preview = ""
-        items.append({
-            "path": rel,
-            "name": path.name,
-            "score": 0,
-            "snippet": preview,
-            "mtime": int(st.st_mtime),
-        })
-    items.sort(key=lambda h: -h["mtime"])
-    return items[:limit]
-
-
-# ─── Git time-travel helpers (back the doc_history/at/diff/blame/changelog/revert
-#     and search_history MCP tools) ────────────────────────────────────────────
-# Every git call goes through _s.git (subprocess arg-list, NO shell). Doc paths are
-# content/-relative on the MCP side; git runs at the repo root, so the pathspec is
-# prefixed with "content/". Revs the AGENT supplies are gated by _s._valid_git_rev
-# (SHA or HEAD~N only) — dates and relative bases are resolved to a SHA server-side
-# (the validator rejects them by design), and filter flags (--since/--grep/--author)
-# are passed as fused argv tokens, never through the rev validator.
-
-
-def _capped(text):
-    """Truncate a payload to protect the model context; returns (text, truncated)."""
-    if not text:
-        return text or "", False
-    if len(text) <= _MAX_OUTPUT_CHARS:
-        return text, False
-    return text[:_MAX_OUTPUT_CHARS], True
-
-
-def _fmt_commit(record: str) -> dict:
-    """Parse a '%H\\x1f%an\\x1f%aI\\x1f%s' record into a revision dict."""
-    f = (record.split("\x1f") + ["", "", "", ""])[:4]
-    return {"sha": f[0], "short_sha": f[0][:7], "author": f[1], "date": f[2], "subject": f[3]}
-
-
-def _git_doc_records(repo_rel: str, *opts):
-    """git log --follow over one doc, returning the raw '\\x1f'-field records
-    (newest-first) or None on failure. --follow keeps pre-rename commits."""
-    r = _s.git("log", "--follow", *opts, "--format=%H\x1f%an\x1f%aI\x1f%s", "-z", "--", repo_rel)
-    if r.returncode != 0:
-        return None
-    return [x for x in r.stdout.split("\x00") if x]
-
-
-def _safe_path_prefix(prefix: str):
-    """Validate a directory/file prefix for the history-search tools (which can't
-    reuse _validate_doc_path — it requires a .md/.html suffix). Returns the cleaned
-    prefix ('' = whole tree) or None if it tries to escape content/."""
-    prefix = (prefix or "").strip()
-    if not prefix:
-        return ""
-    if prefix.startswith("/") or ".." in prefix.split("/"):
-        return None
-    return prefix.strip("/")
-
-
-def _history_path_included(content_rel: str, excluded) -> bool:
-    """Apply the iter_doc_files visibility rules to a HISTORICAL path (a string from
-    git, not a current file): skip dot-folders/.trash, skip skill/tools/__pycache__,
-    skip excluded basenames, keep only .md/.html. iter_doc_files itself can't be used
-    here — its set is current-files-only, so deleted/trashed docs in history are absent."""
-    parts = content_rel.split("/")
-    if any(p == ".git" or p.startswith(".") for p in parts):
-        return False
-    if parts and parts[0] in ("skill", "tools", "__pycache__"):
-        return False
-    if parts[-1] in excluded:
-        return False
-    return content_rel.endswith((".md", ".html"))
-
-
-def _strip_content(p: str):
-    """Strip the 'content/' repo prefix from a git path, or None if not under it."""
-    return p[len("content/"):] if p.startswith("content/") else None
-
-
-def _parse_namestatus_log(stdout: str, excluded) -> list:
-    """Parse `git log --format=%x1e… --name-status -z` into commit dicts with their
-    changed DOC files. The leading \\x1e (record separator) delimits commits so the
-    flat -z stream is unambiguous; R/C statuses carry two paths (old + new). Commits
-    whose changed files are all excluded/non-doc are dropped."""
-    out = []
-    for rec in stdout.split("\x1e"):
-        rec = rec.strip("\n")
-        if not rec:
-            continue
-        head, _, rest = rec.partition("\x00")
-        sha, an, aI, subj = (head.split("\x1f") + ["", "", "", ""])[:4]
-        if not sha:
-            continue
-        # git inserts a '\n' between the format's \x00 terminator and the name-status
-        # block, so the first status token arrives as '\nM' / '\nR100' — strip it.
-        tokens = [t for t in (x.lstrip("\n") for x in rest.split("\x00")) if t]
-        files = []
-        i = 0
-        while i < len(tokens):
-            status = tokens[i]
-            if status[:1] in ("R", "C") and i + 2 < len(tokens):
-                new_rel = _strip_content(tokens[i + 2])
-                if new_rel is not None and _history_path_included(new_rel, excluded):
-                    files.append({"status": status[:1], "path": new_rel,
-                                  "old_path": _strip_content(tokens[i + 1])})
-                i += 3
-            else:
-                path = tokens[i + 1] if i + 1 < len(tokens) else ""
-                rel = _strip_content(path)
-                if rel is not None and _history_path_included(rel, excluded):
-                    files.append({"status": status[:1] or "?", "path": rel})
-                i += 2
-        if files:
-            out.append({"sha": sha, "short_sha": sha[:7], "author": an,
-                        "date": aI, "subject": subj, "files": files})
-    return out
-
-
-def _numstat_first(stdout: str):
-    """(added, removed) from the first `git diff --numstat` line; '-' (binary) -> 0."""
-    for line in stdout.splitlines():
-        parts = line.split("\t")
-        if len(parts) >= 2:
-            added = 0 if parts[0] == "-" else int(parts[0] or 0)
-            removed = 0 if parts[1] == "-" else int(parts[1] or 0)
-            return added, removed
-    return 0, 0
-
-
-def _doc_diff_between(repo_rel: str, base_sha: str, rev_sha: str):
-    """Unified diff + (added, removed) for a doc between two resolved SHAs. Mirrors
-    /api/diff: same-path -> pathspec diff; renamed-between-revs -> blob:blob diff;
-    base == empty tree -> the doc's introduction. Returns (diff_text|None, +, -)."""
-    to_path = _s._doc_path_at(repo_rel, rev_sha)
-    if base_sha == _EMPTY_TREE:
-        diff = _s.git("diff", base_sha, rev_sha, "--", to_path)
-        num = _s.git("diff", "--numstat", base_sha, rev_sha, "--", to_path)
-    else:
-        from_path = _s._doc_path_at(repo_rel, base_sha)
-        if from_path == to_path:
-            diff = _s.git("diff", base_sha, rev_sha, "--", from_path)
-            num = _s.git("diff", "--numstat", base_sha, rev_sha, "--", from_path)
-        else:
-            a, b = base_sha + ":" + from_path, rev_sha + ":" + to_path
-            diff = _s.git("diff", a, b)
-            num = _s.git("diff", "--numstat", a, b)
-    if diff.returncode != 0:
-        return None, 0, 0
-    added, removed = _numstat_first(num.stdout)
-    return diff.stdout, added, removed
-
-
-def _parse_blame(stdout: str) -> list:
-    """Parse `git blame --line-porcelain` into per-line attribution. --line-porcelain
-    repeats every header for every line, so each line carries author/time/summary."""
-    lines = []
-    cur = {}
-    for raw in stdout.split("\n"):
-        if _BLAME_HEAD_RE.match(raw):
-            p = raw.split(" ")
-            cur = {"sha": p[0], "short_sha": p[0][:7], "line_no": int(p[2])}
-        elif raw.startswith("author "):
-            cur["author"] = raw[len("author "):]
-        elif raw.startswith("author-time "):
-            cur["_epoch"] = raw[len("author-time "):]
-        elif raw.startswith("summary "):
-            cur["subject"] = raw[len("summary "):]
-        elif raw.startswith("\t"):
-            try:
-                date = datetime.datetime.fromtimestamp(
-                    int(cur.get("_epoch", "")), datetime.timezone.utc).isoformat()
-            except (ValueError, TypeError):
-                date = ""
-            lines.append({"line_no": cur.get("line_no"), "text": raw[1:],
-                          "sha": cur.get("sha"), "short_sha": cur.get("short_sha"),
-                          "author": cur.get("author", ""), "date": date,
-                          "subject": cur.get("subject", "")})
-            cur = {}
-    return lines
-
-
 def text_result(s: str, is_error: bool = False) -> dict:
     """Wrap a string as an MCP CallToolResult (with isError set when it's an error)."""
     out = {"content": [{"type": "text", "text": s}]}
@@ -367,10 +48,7 @@ def _tool_search_docs(args, ctx):
     q = (args.get("q") or "").strip()
     if not q:
         return text_result("Error: missing 'q' parameter", is_error=True)
-    try:
-        limit = min(50, max(1, int(args.get("limit", 10))))
-    except (ValueError, TypeError):
-        limit = 10
+    limit = clamp_int(args.get("limit"), 10, 1, 50)
     tag = (args.get("tag") or "").strip().lower()
     # Tag filter is additive: over-fetch then keep only hits that carry the tag.
     hits = _api_search(q, 50 if tag else limit, ctx)
@@ -413,11 +91,8 @@ def _tool_list_tree(args, ctx):
 
 
 def _tool_recent_docs(args, ctx):
-    try:
-        days = max(1, int(args.get("days", 7)))
-        limit = min(100, max(1, int(args.get("limit", 20))))
-    except (ValueError, TypeError):
-        days, limit = 7, 20
+    days = clamp_int(args.get("days"), 7, 1)
+    limit = clamp_int(args.get("limit"), 20, 1, 100)
     hits = _api_recent(days, limit, ctx)
     if not hits:
         return text_result(f"No document modified in the last {days} days")
@@ -621,10 +296,7 @@ def _tool_doc_history(args, ctx):
         return text_result(f"Invalid path (relative .md or .html, no '..'): {rel}", is_error=True)
     if not _visible(rel, ctx):
         return text_result(f"Document not found: {rel}", is_error=True)
-    try:
-        limit = min(100, max(1, int(args.get("limit", 30))))
-    except (ValueError, TypeError):
-        limit = 30
+    limit = clamp_int(args.get("limit"), 30, 1, 100)
     since = (args.get("since") or "").strip()
     until = (args.get("until") or "").strip()
     grep = (args.get("grep") or "").strip()
@@ -742,10 +414,7 @@ def _tool_search_history(args, ctx):
     prefix = _safe_path_prefix(args.get("path_prefix") or "")
     if prefix is None:
         return text_result("Invalid 'path_prefix'", is_error=True)
-    try:
-        limit = min(50, max(1, int(args.get("limit", 20))))
-    except (ValueError, TypeError):
-        limit = 20
+    limit = clamp_int(args.get("limit"), 20, 1, 50)
     pathspec = "content/" + prefix if prefix else "content"
     # Pickaxe: -S<str> finds commits where the OCCURRENCE COUNT of the term changed
     # (it entered or left history); -G<regex> matches added/removed lines. Fused
@@ -767,14 +436,8 @@ def _tool_search_history(args, ctx):
 
 
 def _tool_changelog(args, ctx):
-    try:
-        days = min(365, max(1, int(args.get("days", 14))))
-    except (ValueError, TypeError):
-        days = 14
-    try:
-        limit = min(200, max(1, int(args.get("limit", 50))))
-    except (ValueError, TypeError):
-        limit = 50
+    days = clamp_int(args.get("days"), 14, 1, 365)
+    limit = clamp_int(args.get("limit"), 50, 1, 200)
     author = (args.get("author") or "").strip()
     prefix = _safe_path_prefix(args.get("path") or "")
     if prefix is None:
@@ -799,96 +462,9 @@ def _tool_changelog(args, ctx):
                                   ensure_ascii=False, indent=2))
 
 
-# Read side of the attribution layer (the timeline / brick 13a): map a commit to one
-# normalized event TYPE. The targeted subject prefix is the richest signal (it tells
-# check from edit, revert/folder-move from a plain M/R); git status is the fallback for
-# legacy commits that predate the attribution work.
-_ACTIVITY_VERB_TYPE = {
-    "created": "create", "edited": "edit", "moved": "move", "folder": "move",
-    "deleted": "delete", "checked": "check", "unchecked": "check",
-    "reverted": "revert", "annotated": "edit", "annotation": "edit",
-}
-_ACTIVITY_STATUS_TYPE = {"A": "create", "M": "edit", "D": "delete", "R": "move", "C": "move"}
-
-
-def _activity_events(days, limit, author, type_filter, ctx):
-    """Corpus-wide activity feed: git log over content/ carrying the X-Atlas-Author
-    trailer + author email, mapped to the CDC event model
-    {sha, short_sha, author, email, ai, date (UTC), type, title, subject, paths}.
-    ACL-scrubbed per `ctx` (None = unfiltered/internal). Returns None on git failure."""
-    fmt = ("%x1e%H\x1f%an\x1f%ae\x1f%aI\x1f%s\x1f"
-           "%(trailers:key=X-Atlas-Author,valueonly)")
-    opts = ["log", "--since=" + str(days) + ".days.ago", "-n", str(limit),
-            "--format=" + fmt, "--name-status", "-M", "-z"]
-    if author:
-        opts.append("--author=" + author)
-    opts += ["--", "content"]
-    result = _s.git(*opts)
-    if result.returncode != 0:
-        return None
-    excluded = _s._import_build().EXCLUDED_NAMES
-    events = []
-    for rec in result.stdout.split("\x1e"):
-        rec = rec.strip("\n")
-        if not rec:
-            continue
-        head, _, rest = rec.partition("\x00")
-        sha, an, ae, aI, subj, trailer = (head.split("\x1f") + [""] * 6)[:6]
-        if not sha:
-            continue
-        tokens = [t for t in (x.lstrip("\n") for x in rest.split("\x00")) if t]
-        files = []
-        i = 0
-        while i < len(tokens):
-            status = tokens[i]
-            if status[:1] in ("R", "C") and i + 2 < len(tokens):
-                new_rel = _strip_content(tokens[i + 2])
-                old_rel = _strip_content(tokens[i + 1])
-                # A soft-delete is a rename INTO .trash (excluded); keep the visible side
-                # so the event isn't dropped — its "deleted:" subject still types it.
-                rel = new_rel if (new_rel and _history_path_included(new_rel, excluded)) else old_rel
-                if rel is not None and _history_path_included(rel, excluded):
-                    files.append({"status": status[:1], "path": rel})
-                i += 3
-            else:
-                rel = _strip_content(tokens[i + 1]) if i + 1 < len(tokens) else None
-                if rel is not None and _history_path_included(rel, excluded):
-                    files.append({"status": status[:1] or "?", "path": rel})
-                i += 2
-        files = [f for f in files if _visible(f["path"], ctx)]
-        if not files:
-            continue
-        verb = subj.split(":", 1)[0].strip().split(" ")[0].lower() if ":" in subj else ""
-        typ = _ACTIVITY_VERB_TYPE.get(verb) or _ACTIVITY_STATUS_TYPE.get(files[0]["status"], "edit")
-        if type_filter and typ != type_filter:
-            continue
-        ai = (trailer or "").strip()
-        if ai.lower().startswith("x-atlas-author:"):
-            ai = ai.split(":", 1)[1].strip()
-        if ai.startswith("ai/"):
-            ai = ai[3:]
-        try:
-            date = datetime.datetime.fromisoformat(aI).astimezone(datetime.timezone.utc).isoformat()
-        except (ValueError, TypeError):
-            date = aI
-        events.append({
-            "sha": sha, "short_sha": sha[:7], "author": an, "email": ae,
-            "ai": ai.strip() or None, "date": date, "type": typ,
-            "title": posixpath.splitext(posixpath.basename(files[0]["path"]))[0],
-            "subject": subj, "paths": [f["path"] for f in files],
-        })
-    return events
-
-
 def _tool_activity(args, ctx):
-    try:
-        days = min(365, max(1, int(args.get("days", 14))))
-    except (ValueError, TypeError):
-        days = 14
-    try:
-        limit = min(200, max(1, int(args.get("limit", 50))))
-    except (ValueError, TypeError):
-        limit = 50
+    days = clamp_int(args.get("days"), 14, 1, 365)
+    limit = clamp_int(args.get("limit"), 50, 1, 200)
     author = (args.get("author") or "").strip() or None
     type_filter = (args.get("type") or "").strip() or None
     events = _activity_events(days, limit, author, type_filter, ctx)
@@ -900,6 +476,24 @@ def _tool_activity(args, ctx):
                                   ensure_ascii=False, indent=2))
 
 
+def _tool_stale(args, ctx):
+    months = clamp_int(args.get("months"), 6, 1, 24)
+    limit = clamp_int(args.get("limit"), 30, 1, 100)
+    items = _api_stale(months, limit, ctx)
+    if not items:
+        return text_result(f"No document untouched for {months}+ months")
+    return text_result(json.dumps({"months": months, "stale": items},
+                                  ensure_ascii=False, indent=2))
+
+
+def _tool_contradictions(args, ctx):
+    limit = clamp_int(args.get("limit"), 15, 1, 50)
+    items = _contradiction_candidates(ctx, limit)
+    if not items:
+        return text_result("No contradiction candidates (no docs share tags or links)")
+    return text_result(json.dumps({"candidates": items}, ensure_ascii=False, indent=2))
+
+
 def _tool_doc_blame(args, ctx):
     rel = (args.get("path") or "").strip()
     target = _s._validate_doc_path(rel)
@@ -908,14 +502,8 @@ def _tool_doc_blame(args, ctx):
     if not target.exists() or not _visible(rel, ctx):
         return text_result(f"Document not found: {rel}", is_error=True)
     pattern = (args.get("pattern") or "").strip()
-    try:
-        start = max(0, int(args.get("start", 0)))
-    except (ValueError, TypeError):
-        start = 0
-    try:
-        end = max(0, int(args.get("end", 0)))
-    except (ValueError, TypeError):
-        end = 0
+    start = clamp_int(args.get("start"), 0, 0)
+    end = clamp_int(args.get("end"), 0, 0)
     blame_args = ["blame", "--line-porcelain"]
     if start > 0:
         blame_args += ["-L", f"{start},{end}" if end >= start and end > 0 else f"{start},"]
@@ -980,6 +568,8 @@ _TOOLS = {
     "search_history": _tool_search_history,
     "changelog": _tool_changelog,
     "activity": _tool_activity,
+    "stale": _tool_stale,
+    "contradictions": _tool_contradictions,
     "doc_blame": _tool_doc_blame,
     "doc_revert": _tool_doc_revert,
 }

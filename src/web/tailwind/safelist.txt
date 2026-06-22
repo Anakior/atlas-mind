@@ -84,6 +84,7 @@ actionFailed
 actions
 active
 activer
+activity
 activity-seg
 actuel
 actuelle
@@ -326,6 +327,7 @@ characters.
 chargement
 charger
 chars
+check
 checkbox
 checkbox,
 checked
@@ -389,6 +391,8 @@ content
 content.
 contenu
 continue
+contributeur
+contributor
 controllerchange
 copie
 copied
@@ -450,6 +454,7 @@ d2
 d2,
 dans
 dashed
+data-ai-filter
 days
 daysAgo
 de
@@ -486,6 +491,11 @@ device
 devices.
 devras
 dialog-card
+digestChecked
+digestContributors
+digestCreated
+digestDocs
+digestViaAi
 dim
 dir
 dir-rename-backdrop
@@ -560,6 +570,7 @@ e2.t._adj
 each
 ease
 ease,
+ease-in-out
 edges
 edges)
 edges,
@@ -623,6 +634,7 @@ faint
 faire
 fais
 fait
+faite
 faites
 faits
 fall
@@ -635,6 +647,7 @@ family-direct
 favori
 favorite
 favorites
+feed
 fichier
 fichier(s)).
 fichiers
@@ -801,10 +814,13 @@ history-detail
 history-list
 history-overlay
 history-path
+history-rev
 history.
 history.replaceState(null,
+historyAiOnly
 historyEmpty
 historyError
+historyNoAi
 historyNoChange
 historyPick
 historyRestore
@@ -843,6 +859,7 @@ hover:brightness-110
 hover:text-accent
 hover:text-amber-300
 hover:text-emerald-300
+hover:text-ink-200
 hover:text-rose-300
 hover:text-rose-400
 hover:text-white
@@ -1283,6 +1300,7 @@ path:
 pb-0.5
 pb-1
 pb-2
+pb-3
 pdfDocBanner
 pdfOfflineHint
 pending
@@ -1671,6 +1689,7 @@ settled.
 seul
 seule
 seule.
+seulement
 several
 shadow-2xl
 shadow-black/70
@@ -2000,6 +2019,7 @@ totpInvalidCode
 totpModalDisableTitle
 totpModalTitle
 totpRecoveryCopy
+touched
 touchend
 touchstart
 toujours
@@ -2020,6 +2040,7 @@ translateX(-4px)
 translateX(0)
 translateY(-50%)
 translucent
+transparent
 travels
 tree
 tree)
@@ -2121,6 +2142,7 @@ working.
 works
 wrap
 wrap.innerHTML
+writes
 wrong.
 x,
 x:

@@ -266,9 +266,9 @@ function formatRevDate(iso) {
 }
 
 async function openHistory(file) {
-  // Optional target → lets the activity feed peek a doc's history without navigating.
-  // Guard on a real file (path is a string): btn-history binds this directly as a click
-  // handler, so without this the MouseEvent would be taken as `file` and break history.
+  // Optional target → the activity feed can peek a doc's history without navigating. Guard on a
+  // real file (path is a string): btn-history binds this as a click handler, so a passed MouseEvent
+  // (or its array-valued .path on old Chrome) must NOT be taken as `file`.
   file = (file && typeof file.path === 'string') ? file : currentFile;
 
   if (!historyAvailable(file)) return;
@@ -299,17 +299,67 @@ async function openHistory(file) {
     return;
   }
 
+  historyAllRevisions = revisions;
+  historyAiOnly = false; // each doc opens unfiltered
+  historyCurrentSha = null;
+  renderHistoryList(file);
+}
+
+// 13d — AI-only filter on the revision list. State + renderer are module-level so the
+// toggle can re-render in place. showVersion always receives the FULL revisions array +
+// the absolute index, so the diff (parent = revisions[i+1]) stays correct when filtered.
+let historyAllRevisions = [];
+let historyAiOnly = false;
+let historyCurrentSha = null; // the revision shown in the detail pane (preserved across a filter toggle)
+
+function renderHistoryList(file) {
+  const revisions = historyAllRevisions;
+  const hasAi = revisions.some((r) => r.ai);
+  const shown = historyAiOnly ? revisions.filter((r) => r.ai) : revisions;
   historyList.innerHTML = '';
-  revisions.forEach((rev, i) => {
+
+  if (hasAi) {
+    const tg = document.createElement('button');
+
+    tg.type = 'button';
+    tg.className =
+      'flex items-center gap-1.5 w-full text-left px-2 py-1.5 mb-1.5 text-xs transition ' +
+      (historyAiOnly ? 'text-accent' : 'text-ink-400 hover:text-ink-200');
+    tg.innerHTML =
+      '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;' +
+      'border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ' +
+      (historyAiOnly ? '#1d9bd1' : '#5e6066') + ';background:' +
+      (historyAiOnly ? '#1d9bd1' : 'transparent') + '">' + (historyAiOnly ? '✓' : '') + '</span>' +
+      escapeHtml(t('historyAiOnly')) + ' seulement';
+    tg.addEventListener('click', () => {
+      historyAiOnly = !historyAiOnly;
+      renderHistoryList(file);
+    });
+    historyList.appendChild(tg);
+  }
+
+  if (!shown.length) {
+    const empty = document.createElement('div');
+
+    empty.className = 'text-ink-500 px-2 py-2 text-xs';
+    empty.textContent = t('historyNoAi');
+    historyList.appendChild(empty);
+
+    return;
+  }
+
+  shown.forEach((rev) => {
+    const i = revisions.indexOf(rev); // absolute index → keeps diff/parent correct under the filter
     const when = formatRevDate(rev.date);
     const row = document.createElement('button');
 
     row.type = 'button';
     row.className =
-      'block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 mb-0.5 transition';
+      'history-rev block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 mb-0.5 transition';
     row.innerHTML =
       '<div class="text-ink-200 truncate">' +
       escapeHtml(rev.subject || '(' + rev.sha.slice(0, 7) + ')') +
+      (rev.ai ? ' <span class="text-accent text-xs font-medium">· ' + escapeHtml(rev.ai) + '</span>' : '') +
       '</div>' +
       '<div class="text-xs text-ink-500 font-mono mt-0.5">' +
       escapeHtml(rev.sha.slice(0, 7)) +
@@ -317,13 +367,19 @@ async function openHistory(file) {
       (rev.author ? ' · ' + escapeHtml(rev.author) : '') +
       '</div>';
     row.addEventListener('click', () => {
-      historyList.querySelectorAll('button').forEach((b) => b.classList.remove('bg-accent/15'));
+      historyList.querySelectorAll('.history-rev').forEach((b) => b.classList.remove('bg-accent/15'));
       row.classList.add('bg-accent/15');
+      historyCurrentSha = rev.sha;
       showVersion(file, revisions, i);
     });
     historyList.appendChild(row);
   });
-  historyList.querySelector('button')?.click(); // open the latest revision by default
+  // Keep the shown revision selected across a filter toggle (no re-fetch → no flash);
+  // only auto-load when nothing is selected yet or the selection was filtered out.
+  const rows = historyList.querySelectorAll('.history-rev');
+  const keepIdx = shown.findIndex((r) => r.sha === historyCurrentSha);
+  if (keepIdx >= 0) rows[keepIdx].classList.add('bg-accent/15');
+  else rows[0]?.click();
 }
 
 // `toggle` = { label, handler } for the secondary button: document view ↔ diff
