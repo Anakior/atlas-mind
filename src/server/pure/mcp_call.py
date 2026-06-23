@@ -603,8 +603,13 @@ def _mcp_jsonrpc(req: dict, ctx=None):
 
     try:
         if method == "initialize":
+            # Echo the client's requested protocol version (the MCP-correct
+            # behavior); fall back to our own when the client omits it. Hardcoding
+            # an older version made strict clients (claude.ai web, which negotiates
+            # a newer revision) drop the session after a 200 handshake.
+            client_version = params.get("protocolVersion")
             return ok({
-                "protocolVersion": _s.MCP_PROTOCOL_VERSION,
+                "protocolVersion": client_version or _s.MCP_PROTOCOL_VERSION,
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": _s.CONFIG.site_slug, "version": "1.0.0"},
             })
