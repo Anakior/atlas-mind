@@ -538,8 +538,7 @@ function layoutStructured(st) {
   const DOC_SP = 15,
     CL_GAP = 22,
     FAM_GAP = 56,
-    FAM_PAD = 28,
-    LABEL_H = 26;
+    FAM_PAD = 28;
 
   // Phyllotaxis pack of a cluster's docs around a local (0,0); sets c.r.
   const packCluster = (c) => {
@@ -582,6 +581,9 @@ function layoutStructured(st) {
 
   const famList = Object.values(fams);
 
+  // Each family becomes a "cell": its subfolder clusters are arranged, then wrapped
+  // in ONE enclosing circle (radius = the clusters' extent from their centre + pad)
+  // rather than a box — so the map reads as cells, not rectangles.
   for (const f of famList) {
     const cl = Object.values(f.clusters);
 
@@ -590,13 +592,24 @@ function layoutStructured(st) {
     f._items = cl.map((c) => ({ c, w: c.r * 2, h: c.r * 2 }));
     const area = f._items.reduce((s, it) => s + it.w * it.h, 0);
     const box = rowPack(f._items, Math.max(f._items[0].w, Math.sqrt(area) * 1.25), CL_GAP);
+    // Offsets are measured from the clusters' bounding-box centre; the cell radius is
+    // the farthest cluster edge from it.
+    const bcx = box.w / 2,
+      bcy = box.h / 2;
+    let rad = 0;
 
-    f._w = box.w;
-    f._h = box.h;
+    for (const it of f._items) {
+      it._dx = it.x + it.c.r - bcx;
+      it._dy = it.y + it.c.r - bcy;
+      rad = Math.max(rad, Math.hypot(it._dx, it._dy) + it.c.r);
+    }
+    f._r = rad + FAM_PAD;
   }
 
-  famList.sort((a, b) => b._w * b._h - a._w * a._h);
-  const famItems = famList.map((f) => ({ f, w: f._w + FAM_PAD * 2, h: f._h + FAM_PAD * 2 + LABEL_H }));
+  // Pack the cells: a square of side 2r per family → the circles tile a grid and
+  // never overlap. Largest first keeps it tidy.
+  famList.sort((a, b) => b._r - a._r);
+  const famItems = famList.map((f) => ({ f, w: f._r * 2, h: f._r * 2 }));
   const totalArea = famItems.reduce((s, it) => s + it.w * it.h, 0);
   const total = rowPack(famItems, Math.max(famItems[0].w, Math.sqrt(totalArea) * 1.3), FAM_GAP);
 
@@ -607,14 +620,14 @@ function layoutStructured(st) {
 
   for (const fit of famItems) {
     const f = fit.f;
-    const fx = fit.x - cx,
-      fy = fit.y - cy;
+    const fx = fit.x + f._r - cx,
+      fy = fit.y + f._r - cy;
 
-    families.push({ x: fx, y: fy, w: fit.w, h: fit.h, name: f.name, color: hierColor(f.name, '') });
+    families.push({ x: fx, y: fy, r: f._r, name: f.name, color: hierColor(f.name, '') });
 
     for (const it of f._items) {
-      const ccx = fx + FAM_PAD + it.x + it.c.r;
-      const ccy = fy + FAM_PAD + LABEL_H + it.y + it.c.r;
+      const ccx = fx + it._dx,
+        ccy = fy + it._dy;
 
       it.c.docs.forEach((n) => {
         n.x = ccx + n._lx;

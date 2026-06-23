@@ -789,6 +789,7 @@ searchEl.addEventListener('input', () => {
   if (!q) {
     searchResultsEl.classList.add('hidden');
     treeEl.classList.remove('hidden');
+    if (treeHeaderEl) treeHeaderEl.classList.remove('hidden');
 
     if (recentList.children.length > 0) recentSection.classList.remove('hidden');
 
@@ -796,6 +797,7 @@ searchEl.addEventListener('input', () => {
   }
 
   treeEl.classList.add('hidden');
+  if (treeHeaderEl) treeHeaderEl.classList.add('hidden');
   recentSection.classList.add('hidden');
   searchResultsEl.classList.remove('hidden');
   searchDebounce = setTimeout(() => renderSearchResults(q), 140);

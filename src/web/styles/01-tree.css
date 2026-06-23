@@ -25,3 +25,19 @@
   }
   .caret { transition: transform 0.15s ease; }
   .caret.open { transform: rotate(90deg); }
+  /* « Nœuds mentaux » (remotes) section: fenced off at the bottom of the root
+     tree so the mirrors of other atlases don't sit amid your own folders.
+     Full-bleed rule (negative margins cancel the nav's px-2) so it spans the
+     whole sidebar like the section dividers above, with breathing room around. */
+  /* #tree-scoped so the margin-top beats Tailwind's `space-y-*` utility (higher
+     specificity), which would otherwise clamp the gap above the divider to 0.125rem
+     and leave it asymmetric with the padding-top below. */
+  #tree .tree-section--remotes {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    margin-left: -0.5rem;
+    margin-right: -0.5rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }

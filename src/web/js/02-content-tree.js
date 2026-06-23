@@ -78,13 +78,29 @@ function renderTree(node, depth = 0, prefix = '') {
   ul.className =
     depth === 0 ? 'space-y-0.5' : 'ml-3 border-l border-navy-600 pl-2 space-y-0.5 mt-0.5';
 
-  for (const child of node.children || []) {
+  // At the root, the « Nœuds mentaux » (remotes/) umbrella is pushed to the very
+  // bottom and visually fenced off (cf. .tree-section--remotes): it holds mirrors
+  // of OTHER atlases, not your own content, so it shouldn't sit amid your folders.
+  let children = node.children || [];
+
+  if (depth === 0) {
+    const own = [],
+      remotes = [];
+
+    for (const c of children) {
+      (c.type === 'dir' && c.name === 'remotes' ? remotes : own).push(c);
+    }
+    children = own.concat(remotes);
+  }
+
+  for (const child of children) {
     const li = document.createElement('li');
 
     if (child.type === 'dir') {
       const childPath = prefix ? prefix + '/' + child.name : child.name;
       // remotes/ = mirrors of remote nodes: read-only (rename hidden by .tree-remote CSS).
       const isRemoteRoot = childPath === 'remotes';
+      if (isRemoteRoot) li.className = 'tree-section--remotes';
       const isRemote = isRemoteRoot || childPath.startsWith('remotes/');
       const btn = document.createElement('button');
 
@@ -272,6 +288,35 @@ if (IS_OFFLINE_BUILD) {
   decorateTreeBadges();
   decorateRemoteOrigins();
 }
+
+// Toolbar button: expand or collapse every folder of the tree in one click.
+// Stateless toggle — flips on each press; operates on whatever is currently
+// rendered, so it keeps working after a softReload re-renders the tree.
+(function () {
+  const btn = document.getElementById('tree-toggle-all');
+
+  if (!btn) return;
+  // One static label for both directions (the global [data-tip] hover, like
+  // "Voir les modifications" — not the native title). aria mirrors it.
+  btn.dataset.tip = t('expandAllFolders');
+  btn.setAttribute('aria-label', t('expandAllFolders'));
+
+  btn.addEventListener('click', () => {
+    const dirs = treeEl.querySelectorAll('button[data-dir-path]');
+    // Derive the action from the actual tree, not a remembered flag: if anything is
+    // open, collapse everything; only expand when all folders are already closed.
+    const expand = ![...dirs].some((b) => b.querySelector('.caret')?.classList.contains('open'));
+
+    dirs.forEach((b) => {
+      const caret = b.querySelector('.caret');
+      const sub = b.parentElement.querySelector('ul');
+
+      if (!caret || !sub) return;
+      caret.classList.toggle('open', expand);
+      sub.classList.toggle('hidden', !expand);
+    });
+  });
+})();
 
 marked.setOptions({ gfm: true, breaks: false });
 // marked ≥ v5 removed the `highlight` setOptions option (silently ignored by the

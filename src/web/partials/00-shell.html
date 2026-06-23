@@ -45,7 +45,13 @@
       <div class="px-2 text-[10px] uppercase tracking-wider text-ink-500 font-semibold mb-1" data-i18n="sharedHeader">Partag&eacute;s avec vous</div>
       <ul id="shared-list" class="text-sm"></ul>
     </div>
-    <nav id="tree" class="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin px-2 py-3 text-sm"></nav>
+    <div id="tree-header" class="flex items-center justify-between px-2 pt-2 pb-1">
+      <span class="px-2 text-[10px] uppercase tracking-wider text-ink-500 font-semibold" data-i18n="treeContentHeader">Contenu</span>
+      <button id="tree-toggle-all" class="px-2 py-0.5 text-ink-500 hover:text-ink-200 rounded hover:bg-white/5 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"/></svg>
+      </button>
+    </div>
+    <nav id="tree" class="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin px-2 pt-1 pb-3 text-sm"></nav>
     <div id="search-results" class="hidden flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin px-2 py-3 text-sm"></div>
     <div id="user-bar" class="hidden px-3 py-2 border-t subtle-border flex items-center justify-between gap-2 text-xs">
       <div id="user-avatar" class="flex-shrink-0"></div>

@@ -13,16 +13,22 @@
     delete: { label: 'deleted', color: '#868a90', d: 'm14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0' },
     check: { label: 'checked', color: '#5fd0a6', d: 'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
     revert: { label: 'reverted', color: '#e8941c', d: 'M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3' },
+    // Mental-node subscriptions: the share/nodes glyph, tinted green (added) / grey (removed).
+    node_add: { label: 'added node', color: '#5fd0a6', d: 'M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z' },
+    node_remove: { label: 'removed node', color: '#868a90', d: 'M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z' },
   };
   const TY = (t) => TYPES[t] || TYPES.edit;
 
   // Verb labels by UI language (LANG from 01-i18n-state.js). A local map (vs t()) keeps
   // them next to TYPES and avoids colliding with existing STRINGS keys (create/edit…).
   const VERB = {
-    fr: { create: 'créé', edit: 'édité', move: 'déplacé', delete: 'supprimé', check: 'coché', revert: 'restauré' },
-    en: { create: 'created', edit: 'edited', move: 'moved', delete: 'deleted', check: 'checked', revert: 'reverted' },
+    fr: { create: 'créé', edit: 'édité', move: 'déplacé', delete: 'supprimé', check: 'coché', revert: 'restauré', node_add: 'ajouté le nœud', node_remove: 'retiré le nœud' },
+    en: { create: 'created', edit: 'edited', move: 'moved', delete: 'deleted', check: 'checked', revert: 'reverted', node_add: 'added the node', node_remove: 'removed the node' },
   };
   const verb = (type) => (VERB[LANG] || VERB.fr)[type] || type;
+  // In a sentence ("Ludovic a créé X"), French wants the auxiliary; English doesn't.
+  // The bare verb() stays for the orrery legend, where chips read as labels, not sentences.
+  const verbPhrase = (type) => (LANG === 'en' ? '' : 'a ') + verb(type);
   const docTitle = (p) => ((p || '').split('/').pop() || p).replace(/\.(md|html)$/i, '');
 
   const AI = {
@@ -152,7 +158,7 @@
           <div class="flex items-center gap-1.5"><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
           <div class="flex items-center gap-1.5 text-sm mt-0.5">
             ${iconSvg(e.type, 14)}
-            <span style="color:${ty.color};font-weight:600">${verb(e.type)}</span>
+            <span style="color:${ty.color};font-weight:600">${verbPhrase(e.type)}</span>
             <span class="text-ink-300 truncate">${esc(e.title)}</span>
             ${e.count > 1 ? `<span class="text-ink-500 text-xs shrink-0">×${e.count}</span>` : ''}
           </div>
@@ -267,7 +273,7 @@
     const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${esc(e.ai)}</span>` : '';
     return (
       `<div class="flex items-center gap-2 mb-1.5"><span style="line-height:0">${avatar(e, 26)}</span><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
-       <div class="flex items-baseline gap-1.5 text-sm"><span style="color:${ty.color};font-weight:600;white-space:nowrap">${verb(e.type)}</span><span class="text-ink-300" style="min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(e.title)}</span>${e.count > 1 ? `<span class="text-ink-500 text-xs" style="white-space:nowrap">×${e.count}</span>` : ''}</div>
+       <div class="flex items-baseline gap-1.5 text-sm"><span style="color:${ty.color};font-weight:600;white-space:nowrap">${verbPhrase(e.type)}</span><span class="text-ink-300" style="min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(e.title)}</span>${e.count > 1 ? `<span class="text-ink-500 text-xs" style="white-space:nowrap">×${e.count}</span>` : ''}</div>
        <div class="text-xs text-ink-500 font-mono mt-1.5">${rel(e.agoMin)} · ${esc(e.sha)}</div>`
     );
   }
@@ -488,11 +494,11 @@
   function cardHtml() {
     return (
       `<div id="home-activity-card" class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="flex items-center justify-between gap-3 mb-3">
+        <div class="act-card-head flex items-center justify-between gap-3 mb-3">
           <h2 class="!mb-0 !mt-0">${t('actTitle')}</h2>
-          <div class="flex items-center gap-2 shrink-0">
+          <div class="act-card-controls flex items-center gap-2 shrink-0">
             ${aiFilterHtml()}
-            <div class="inline-flex rounded-lg border subtle-border overflow-hidden">
+            <div class="act-seg-group inline-flex rounded-lg border subtle-border overflow-hidden">
               <button type="button" data-view="journal" class="${segClass(true)}">${t('actJournal')}</button>
               <button type="button" data-view="orrery" class="${segClass(false)}">${t('actConstellation')}</button>
               <button type="button" data-view="health" class="${segClass(false)}">${t('actHealth')}</button>
@@ -649,6 +655,14 @@
     '.act-orrery{flex-direction:column;gap:10px}',
     '.act-legend{flex-direction:row;flex-wrap:wrap;justify-content:center;align-self:stretch}',
     '.act-pop{position:fixed;left:8px;right:8px;bottom:8px;top:auto;width:auto;transform:none;z-index:50}',
+    // Header tabs overflow on narrow screens. Flatten the controls wrapper
+    // (display:contents) so the title, the AI filter and the segmented control are
+    // siblings of one wrapping row: title + "IA seulement" stay on the first line
+    // (justify-between), the tabs drop full-width onto the next.
+    '.act-card-head{flex-wrap:wrap}',
+    '.act-card-controls{display:contents}',
+    '.act-seg-group{flex:0 0 100%}',
+    '.act-seg-group>button{flex:1 1 0;padding-left:0;padding-right:0;text-align:center}',
     '}',
   ].join('');
   document.head.appendChild(st);

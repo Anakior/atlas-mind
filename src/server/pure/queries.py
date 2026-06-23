@@ -245,6 +245,9 @@ _ACTIVITY_VERB_TYPE = {
     "created": "create", "edited": "edit", "moved": "move", "folder": "move",
     "deleted": "delete", "checked": "check", "unchecked": "check",
     "reverted": "revert", "annotated": "edit", "annotation": "edit",
+    # Mental-node subscriptions (remotes/) get their own verbs so the feed reads
+    # "added/removed the node X" instead of a generic create/delete of mirror files.
+    "node_added": "node_add", "node_removed": "node_remove",
 }
 _ACTIVITY_STATUS_TYPE = {"A": "create", "M": "edit", "D": "delete", "R": "move", "C": "move"}
 

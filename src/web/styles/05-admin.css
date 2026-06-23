@@ -60,3 +60,19 @@
     .admin-row { flex-direction: row; align-items: center; }
     .admin-row__actions > button { min-height: 0; flex: 0 0 auto; }
   }
+  /* Pending-invite badge: an amber pill with a status dot, sitting next to the
+     role label. Cased/spaced on its own so it reads as a status, not as a word
+     glued to the uppercase role. */
+  .settings-pending-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    margin-left: 0.45rem; vertical-align: middle;
+    font-size: 0.625rem; font-weight: 600; line-height: 1.4;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: #fcd34d; background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.30); border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+  }
+  .settings-pending-badge::before {
+    content: ''; width: 5px; height: 5px; border-radius: 999px;
+    background: #fbbf24; flex-shrink: 0;
+  }

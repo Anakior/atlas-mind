@@ -293,22 +293,6 @@ function graphSimStep(st) {
   }
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  if (ctx.roundRect) {
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, r);
-    return;
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
 // Organic mode: a translucent radial blob + label per top-level folder, drawn at the
 // centroid/hull of wherever that family's nodes settled.
 function drawOrganicZones(ctx, st) {
@@ -380,14 +364,14 @@ function drawStructuredScaffold(ctx, st) {
   for (const f of st.families) {
     const x = SX(f.x),
       y = SY(f.y),
-      w = f.w * s,
-      h = f.h * s;
+      r = f.r * s;
 
-    roundRect(ctx, x, y, w, h, 14 * s);
-    const grad = ctx.createLinearGradient(x, y, x, y + h);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(x, y, r * 0.25, x, y, r);
 
-    grad.addColorStop(0, f.color + '16');
-    grad.addColorStop(1, f.color + '06');
+    grad.addColorStop(0, f.color + '18');
+    grad.addColorStop(1, f.color + '05');
     ctx.fillStyle = grad;
     ctx.fill();
     ctx.lineWidth = 1;
@@ -395,8 +379,10 @@ function drawStructuredScaffold(ctx, st) {
     ctx.stroke();
     ctx.font = '600 ' + Math.max(11, 13 * s) + 'px Manrope, system-ui, sans-serif';
     ctx.fillStyle = f.color + 'ee';
-    ctx.textBaseline = 'top';
-    ctx.fillText(f.name, x + 12 * s, y + 8 * s);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(f.name, x, y - r - 7 * s);
+    ctx.textAlign = 'left';
   }
 
   ctx.textBaseline = 'middle';

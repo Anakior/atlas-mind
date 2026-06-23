@@ -300,7 +300,10 @@ def remotes_post(handler):
     except Exception as e:
         _s.registry_503(handler, "[admin] add remote", e)
         return
-    _s.trigger_sync()  # the new mirror must show up in the index
+    # Attributed, typed commit → the feed reads "X added the node <name>" (and the
+    # build it triggers makes the new mirror show up). Anonymous ctx falls back to
+    # the generic backstop inside commit_change.
+    _s.commit_change(handler._viewer_ctx(), f"node_added: {name}", _s._remote_mirror_root(name))
     handler._send_json(201, {"remote": remote, "sync": result})
 
 
@@ -342,7 +345,8 @@ def remotes_delete(handler):
     if _s._mirror_is_under_remotes(mirror) and mirror.exists():
         shutil.rmtree(mirror, ignore_errors=True)
     _s._prune_empty_dirs(_s.CONFIG.content_root / _s.REMOTES_DIR)
-    _s.trigger_sync()
+    # Attributed, typed commit of the removal → "X removed the node <name>".
+    _s.commit_change(handler._viewer_ctx(), f"node_removed: {name}", mirror)
     handler._send_json(200, {"ok": True})
 
 

@@ -334,7 +334,7 @@ async function loadSettingsUsers() {
         // badge, and offer "resend invite" instead of "reset password" (which 404s
         // on a pending account — the password is set via the invite link).
         const pendingBadge = u.pending
-          ? ' <span class="ml-1.5 normal-case tracking-normal text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5">' +
+          ? ' <span class="settings-pending-badge">' +
             escapeHtml(t('settingsInvitePending')) +
             '</span>'
           : '';
