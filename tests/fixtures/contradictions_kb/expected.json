@@ -1,0 +1,41 @@
+{
+  "_doc": "Verite terrain du golden-corpus. 'pairable_by' dit si le detecteur ACTUEL (appariement par tag/lien partage) peut seulement atteindre la paire : tag | link | none. 'none' = angle mort structurel de l'actuel, cible de la refonte.",
+  "contradictions": [
+    {
+      "docs": ["infra/deploy-prod.md", "infra/deploy-staging.md"],
+      "kind": "numeric",
+      "pairable_by": "tag",
+      "detail": "timeout 30 s vs 60 s"
+    },
+    {
+      "docs": ["pricing.md", "pricing-faq.md"],
+      "kind": "numeric",
+      "pairable_by": "link",
+      "detail": "prix 29 vs 39 EUR"
+    },
+    {
+      "docs": ["config/sso-spec.md", "config/sso-roadmap.md"],
+      "kind": "deontic",
+      "pairable_by": "tag",
+      "detail": "SSO obligatoire vs optionnel"
+    },
+    {
+      "docs": ["notes-archi.md", "notes-data.md"],
+      "kind": "enum",
+      "pairable_by": "none",
+      "detail": "base de donnees PostgreSQL vs MongoDB (ni tag ni lien commun)"
+    },
+    {
+      "docs": ["cdc-feature.md"],
+      "kind": "intra-doc",
+      "pairable_by": "none",
+      "detail": "budget 15 j (estimation) vs 20 j (annexe), meme document"
+    }
+  ],
+  "traps": [
+    {
+      "docs": ["services/service-auth.md", "services/service-mail.md"],
+      "reason": "ports differents = services differents : meme attribut, sujet different, pas une contradiction (mais meme tag 'services')"
+    }
+  ]
+}

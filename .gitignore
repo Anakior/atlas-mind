@@ -21,4 +21,8 @@ content/
 # a couple of highlighted passages baked in.
 !examples/demo-mind/.notes/
 !examples/demo-mind/.notes/**
+# Exception: the contradiction-detection golden corpus is a test fixture read as
+# ground truth — versioned despite the content/ rule above.
+!tests/fixtures/contradictions_kb/content/
+!tests/fixtures/contradictions_kb/content/**
 key.pem
