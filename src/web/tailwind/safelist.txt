@@ -86,6 +86,7 @@ active
 activer
 activity
 activity-seg
+activity.
 actuel
 actuelle
 add
@@ -154,6 +155,7 @@ atlas.toml
 atlas:activityView
 atlas:doc-rendered
 atlas:edit-enter
+atlas:healthTab
 atlas:newdoc-visibility
 attente
 au
@@ -292,7 +294,9 @@ cam.scale)
 cam.scale),
 can
 cancel
+candidat
 candidate
+candidates
 cannot
 cantLoadDoc
 canvas
@@ -365,6 +369,7 @@ collapsed
 comboCreate
 combobox
 come
+comme
 comment
 commit
 common
@@ -386,13 +391,14 @@ confirm-title
 connecteur
 connector
 const
+cont
 container
 content
 content.
 contenu
 continue
-contributeur
-contributor
+contradiction
+contradictoire
 controllerchange
 copie
 copied
@@ -577,7 +583,9 @@ edges,
 edit
 editable
 edited
+edited).
 editing,
+either
 el
 el.textContent
 else
@@ -590,6 +598,7 @@ empty.textContent
 empty:hidden
 en
 en-GB
+en-US
 enable
 enabled.
 end
@@ -634,7 +643,6 @@ faint
 faire
 fais
 fait
-faite
 faites
 faits
 fall
@@ -793,6 +801,11 @@ head
 head.className
 head.style.marginBottom
 head.textContent
+health
+healthLinked
+healthTabCont
+healthTabStale
+healthTags
 heatCount
 heatNone
 here
@@ -996,6 +1009,7 @@ links,
 links.
 linksTitle
 list
+lit
 lives.
 load
 loadError
@@ -1070,6 +1084,7 @@ mis
 missing
 ml-3
 ml-6
+ml-auto
 mode
 mode)
 mode.
@@ -1080,6 +1095,7 @@ modified
 modifiedAgo
 moi
 moins
+mois
 molette
 mon-document
 monde
@@ -1180,6 +1196,7 @@ noeud
 nom
 nom-du-fichier
 non
+non-contradictory
 none
 none)
 normal-case
@@ -1270,6 +1287,8 @@ paddingLeft
 paddingRight
 paddingTop
 page
+pair
+paire
 palace
 palais
 palette
@@ -1300,7 +1319,6 @@ path:
 pb-0.5
 pb-1
 pb-2
-pb-3
 pdfDocBanner
 pdfOfflineHint
 pending
@@ -1312,6 +1330,7 @@ perdront
 perdu
 period
 permanently
+pers.
 personal
 personne.
 personnes
@@ -1420,6 +1439,8 @@ read
 read-only
 read-only.
 readingTime
+reads
+real
 recent
 recent-list
 recent-section
@@ -1499,6 +1520,7 @@ restored.
 result
 results
 resume
+resurfaces
 return
 revenir.
 reverted
@@ -1730,6 +1752,7 @@ shown
 shown)
 shows
 shrink-0
+si
 sidebar
 sidebar-backdrop
 sidebar-collapsed
@@ -1784,6 +1807,7 @@ st.panFrom.oy
 st.showTags
 st.subAnchors[a.subKey])
 st.ticks
+stale
 start
 stats
 statsLine
@@ -2019,7 +2043,6 @@ totpInvalidCode
 totpModalDisableTitle
 totpModalTitle
 totpRecoveryCopy
-touched
 touchend
 touchstart
 toujours
@@ -2143,18 +2166,19 @@ works
 wrap
 wrap.innerHTML
 writes
+writes.
 wrong.
 x,
 x:
 y,
 y:
 year
+yesterday
 yet.
 you
 your
 yours:
 z-50
-z-[70]
 zone
 zone.
 zones).

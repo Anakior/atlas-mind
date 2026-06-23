@@ -146,7 +146,7 @@
     const ty = TY(e.type);
     const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${esc(e.ai)}</span>` : '';
     return (
-      `<div class="act-row flex items-center gap-3" data-path="${esc(e.path)}" title="${t('actSeeChanges')}">
+      `<div class="act-row flex items-center gap-3" data-path="${esc(e.path)}" data-tip="${esc(t('actSeeChanges'))}">
         <div class="relative shrink-0" style="line-height:0">${avatar(e, 30)}${e.ai ? aiBadge(e.ai) : ''}</div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5"><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
@@ -435,7 +435,7 @@
     if (!stale.length) return `<div class="text-ink-500 text-sm py-1">${t('healthNoStale')}</div>`;
     const shown = _healthExpanded ? stale : stale.slice(0, 8);
     let out = shown.map((s) =>
-      `<div class="act-row" data-path="${esc(s.path)}" title="${t('healthOpenHist')}"><div class="flex items-center justify-between gap-3">`
+      `<div class="act-row" data-path="${esc(s.path)}" data-tip="${esc(t('healthOpenHist'))}"><div class="flex items-center justify-between gap-3">`
       + `<div class="min-w-0"><div class="text-sm text-ink-200 truncate">${esc(docTitle(s.path))}</div>`
       + `<div class="text-xs text-ink-500 truncate">${esc(s.path)}</div></div>`
       + `<div class="shrink-0 text-xs text-ink-500">${t('healthMonthsAgo', Math.round(s.months_ago))}</div></div></div>`).join('');
@@ -452,10 +452,13 @@
     let out = `<div class="text-xs text-ink-500 mb-2">${t('healthAskAi')}</div>`;
     out += shown.map((c) => {
       const meta = [c.linked ? t('healthLinked') : '', c.shared_tags.length ? t('healthTags', esc(c.shared_tags.join(', '))) : ''].filter(Boolean).join(' · ');
-      return `<div class="py-1.5"><div class="flex items-center gap-2 text-sm min-w-0">`
+      return `<div class="py-1.5"><div class="flex items-center gap-2 text-sm">`
+        + `<div class="flex items-center gap-2 min-w-0 flex-1">`
+        + (c.verdict === 'real' ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#5b1d1d;color:#ffb4b4">${t('healthReal')}</span>` : '')
         + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${esc(c.a)}">${esc(docTitle(c.a))}</span>`
         + `<span class="text-ink-500 shrink-0">⇄</span>`
         + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${esc(c.b)}">${esc(docTitle(c.b))}</span></div>`
+        + `<button type="button" class="act-cdismiss shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-lg border subtle-border bg-navy-600 hover:bg-navy-500 text-ink-300 hover:text-ink-100 transition" data-a="${esc(c.a)}" data-b="${esc(c.b)}" data-tip="${esc(t('healthDismissHint'))}">✓ ${t('healthDismiss')}</button></div>`
         + (meta ? `<div class="text-xs text-ink-500 mt-0.5 truncate">${meta}</div>` : '') + '</div>';
     }).join('');
     if (cands.length > 8) out += `<div class="text-right mt-1"><a class="act-csee text-sm text-accent hover:underline cursor-pointer">${_candExpanded ? t('actCollapse') : t('actSeeAllN', cands.length)}</a></div>`;
@@ -562,6 +565,23 @@
         _healthTab = ht.dataset.htab;
         try { localStorage.setItem('atlas:healthTab', _healthTab); } catch (_) {}
         card.querySelector('#activity-health').innerHTML = healthHtml();
+        return;
+      }
+      const cd = ev.target.closest('.act-cdismiss');
+      if (cd) {
+        // Human verdict "pas une contradiction" (13c) → POST none, drop the row. The global
+        // fetch wrapper injects the CSRF token. The pair resurfaces only if a doc is edited.
+        const { a, b } = cd.dataset;
+        cd.disabled = true;
+        fetch('/api/contradiction', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ a, b, verdict: 'none' }),
+        }).then((r) => {
+          if (r.ok) {
+            _health.cands = _health.cands.filter((c) => !((c.a === a && c.b === b) || (c.a === b && c.b === a)));
+            card.querySelector('#activity-health').innerHTML = healthHtml();
+          } else { cd.disabled = false; }
+        }).catch(() => { cd.disabled = false; });
         return;
       }
       const row = ev.target.closest('[data-path]');

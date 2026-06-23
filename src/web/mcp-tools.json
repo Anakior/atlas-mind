@@ -434,7 +434,7 @@
   },
   {
     "name": "contradictions",
-    "description": "Contradiction pre-filter (13c): candidate document PAIRS that share frontmatter tags or are wikilinked — same topic, so they MIGHT disagree. This is only a deterministic shortlist; YOU then judge each pair by reading both docs (read_doc / doc_diff) to confirm a real contradiction or an outdated statement. Highest topical overlap first. Returns { candidates: [{a, b, shared_tags, linked, score}] }.",
+    "description": "Contradiction pre-filter (13c): candidate document PAIRS that share frontmatter tags or are wikilinked — same topic, so they MIGHT disagree. Deterministic shortlist only; YOU then judge each pair by reading both docs (read_doc / doc_diff). When you conclude, persist the verdict with judge_contradiction so the pair stops resurfacing. Each candidate carries `verdict` (real | none | null=unjudged) from the cache when still valid (both docs unchanged since the judgment). Pairs dismissed `none` are hidden unless include_dismissed. Returns { candidates: [{a, b, shared_tags, linked, score, verdict}] }.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -443,8 +443,28 @@
           "default": 15,
           "minimum": 1,
           "maximum": 50
+        },
+        "include_dismissed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include pairs already dismissed as `none` (false positives). Default false."
         }
       }
+    }
+  },
+  {
+    "name": "judge_contradiction",
+    "description": "Persist your verdict on a candidate PAIR (13c feedback loop), after reading both docs. verdict='real' (they genuinely conflict) or 'none' (not a contradiction — clears the false positive so it stops resurfacing). The verdict is content-hash bound: it holds until either doc is edited, then the pair resurfaces as unjudged. NOTE: 'one doc is outdated' is NOT a verdict here — that is the stale tool's axis; judge only whether the two docs conflict.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "a": { "type": "string", "description": "Relative path of the first doc of the pair." },
+        "b": { "type": "string", "description": "Relative path of the second doc of the pair." },
+        "verdict": { "type": "string", "enum": ["real", "none"], "description": "real = they conflict; none = not a contradiction." },
+        "note": { "type": "string", "description": "Optional one-line rationale, stored with the verdict." },
+        "ai": { "type": "string", "description": "REQUIRED. Your AI FAMILY in lowercase (e.g. 'claude', 'chatgpt', 'gemini'). Attributes the verdict." }
+      },
+      "required": ["a", "b", "verdict", "ai"]
     }
   },
   {

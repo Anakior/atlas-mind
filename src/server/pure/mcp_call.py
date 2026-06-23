@@ -494,6 +494,32 @@ def _tool_contradictions(args, ctx):
     return text_result(json.dumps({"candidates": items}, ensure_ascii=False, indent=2))
 
 
+def _tool_judge_contradiction(args, ctx):
+    """Record a verdict on a candidate pair (13c feedback loop): real | none. 'none' clears a
+    false positive so it stops resurfacing. The verdict holds until either doc is edited (it
+    is content-hash bound). Writes the cache and commits it. 'contenu périmé' is NOT a verdict
+    here — that is the stale tool's axis; this only judges whether the two docs conflict."""
+    a = (args.get("a") or "").strip()
+    b = (args.get("b") or "").strip()
+    verdict = (args.get("verdict") or "").strip()
+    if verdict not in _s.VERDICTS:
+        return text_result(f"verdict must be one of {list(_s.VERDICTS)}", is_error=True)
+    ta, tb = _s._validate_doc_path(a), _s._validate_doc_path(b)
+    if ta is None or tb is None or a == b:
+        return text_result("invalid pair (need two distinct existing docs)", is_error=True)
+    if not (ta.exists() and tb.exists() and _visible(a, ctx) and _visible(b, ctx)):
+        return text_result("one or both docs not found / not visible", is_error=True)
+    try:
+        ha = _s.doc_hash(ta.read_text(encoding="utf-8-sig"))
+        hb = _s.doc_hash(tb.read_text(encoding="utf-8-sig"))
+    except OSError:
+        return text_result("doc unreadable", is_error=True)
+    path = _s.set_verdict(a, b, verdict, ha, hb, (args.get("ai") or "ai"), args.get("note") or "")
+    _s.commit_change(ctx, f"contradiction {verdict}: {ta.stem} ⇄ {tb.stem}", path, ai=args.get("ai"))
+    return text_result(f"Recorded verdict '{verdict}' for {a} ⇄ {b}. "
+                       "It holds until either doc is edited.")
+
+
 def _tool_doc_blame(args, ctx):
     rel = (args.get("path") or "").strip()
     target = _s._validate_doc_path(rel)
@@ -570,6 +596,7 @@ _TOOLS = {
     "activity": _tool_activity,
     "stale": _tool_stale,
     "contradictions": _tool_contradictions,
+    "judge_contradiction": _tool_judge_contradiction,
     "doc_blame": _tool_doc_blame,
     "doc_revert": _tool_doc_revert,
 }

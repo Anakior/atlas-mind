@@ -101,25 +101,31 @@ function positionTooltip(target) {
   });
 }
 
+function hideTooltip() {
+  tooltipEl.style.opacity = '0';
+  tooltipEl.style.transform = 'translateY(-50%) translateX(-4px)';
+}
+
 document.addEventListener('mouseover', (e) => {
-  const target = e.target.closest('[data-name]');
-
-  if (!target || !isTruncated(target)) {
-    tooltipEl.style.opacity = '0';
-    tooltipEl.style.transform = 'translateY(-50%) translateX(-4px)';
-
+  const target = e.target.closest('[data-name], [data-tip]');
+  // data-tip: an explicit tooltip string, shown as-is (and allowed to wrap). data-name:
+  // the full filename, shown only when the on-screen label is actually truncated.
+  const isTip = !!(target && target.dataset.tip);
+  const text = !target ? '' : (isTip ? target.dataset.tip
+    : (isTruncated(target) ? target.dataset.name : ''));
+  if (!text) {
+    hideTooltip();
     return;
   }
-
-  tooltipEl.textContent = target.dataset.name;
+  tooltipEl.style.whiteSpace = isTip ? 'normal' : 'nowrap';
+  tooltipEl.textContent = text;
   positionTooltip(target);
   tooltipEl.style.opacity = '1';
   tooltipEl.style.transform = 'translateY(-50%) translateX(0)';
 });
 document.addEventListener('mouseout', (e) => {
-  if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('[data-name]')) {
-    tooltipEl.style.opacity = '0';
-    tooltipEl.style.transform = 'translateY(-50%) translateX(-4px)';
+  if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('[data-name], [data-tip]')) {
+    hideTooltip();
   }
 });
 

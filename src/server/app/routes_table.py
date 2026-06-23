@@ -94,6 +94,7 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/todos", todos.create, _G.CSRF_BASE),       # per-member: own list
     router.Route(_RK.EXACT, "/api/notes", notes.create, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/revert", docs.revert, _G.CSRF_BASE),       # per-doc: needs edit
+    router.Route(_RK.EXACT, "/api/contradiction", docs.contradiction_verdict, _G.CSRF_BASE),  # 13c verdict: needs read both
     router.Route(_RK.EXACT, "/api/file/move", docs.move, _G.CSRF_BASE),      # per-doc: needs owner
     router.Route(_RK.EXACT, "/api/dir/rename", docs.dir_rename, _G.CSRF_BASE),  # per-folder: owner (can_manage)
     router.Route(_RK.PREFIX, "/api/v1/", apiv1.post, _G.BEARER),

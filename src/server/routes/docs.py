@@ -258,8 +258,44 @@ def contradictions(handler):
         handler._send_json(403, {"error": "forbidden"})
         return
     limit = _s.clamp_int(query.get("limit", [None])[0], 15, 1, 50)
-    items = _s._contradiction_candidates(None if ctx.superuser else ctx, limit)
+    include = query.get("include_dismissed", ["0"])[0] in ("1", "true")
+    items = _s._contradiction_candidates(None if ctx.superuser else ctx, limit, include)
     handler._send_json(200, {"candidates": items})
+
+
+def contradiction_verdict(handler):
+    """POST /api/contradiction — record a human verdict on a candidate pair (13c feedback
+    loop). Body {a, b, verdict, note?} with verdict ∈ {real, none}; 'none' = "pas une
+    contradiction" (the dismiss button). AUTH + CSRF (verb guard). The actor must be able to
+    read BOTH docs. Stores the content hashes so the verdict self-invalidates on any edit,
+    then commits the cache. No LLM — the human (or an MCP client) is the judge."""
+    data = handler._read_json()
+    a = (data.get("a") or "").strip()
+    b = (data.get("b") or "").strip()
+    verdict = (data.get("verdict") or "").strip()
+    if verdict not in _s.VERDICTS:
+        handler._send_json(400, {"error": "invalid verdict"})
+        return
+    ta, tb = _s._validate_doc_path(a), _s._validate_doc_path(b)
+    if ta is None or tb is None or a == b:
+        handler._send_json(400, {"error": "invalid pair"})
+        return
+    ctx = handler._viewer_ctx()
+    if not (_s.can_read(a, ctx) and _s.can_read(b, ctx)):
+        handler._send_json(403, {"error": "forbidden"})
+        return
+    try:  # utf-8-sig to match the hash computed over _doc_corpus in the candidates pass
+        ha = _s.doc_hash(ta.read_text(encoding="utf-8-sig"))
+        hb = _s.doc_hash(tb.read_text(encoding="utf-8-sig"))
+    except OSError:
+        handler._send_json(404, {"error": "doc unreadable"})
+        return
+    by = (handler._session() or {}).get("email") if _s.CONFIG.auth_enabled else "local"
+    path = _s.set_verdict(a, b, verdict, ha, hb, by or "local", data.get("note") or "")
+    _s.commit_change(ctx, f"contradiction {verdict}: "
+                     f"{posixpath.splitext(posixpath.basename(a))[0]} ⇄ "
+                     f"{posixpath.splitext(posixpath.basename(b))[0]}", path)
+    handler._send_json(200, {"ok": True, "verdict": verdict})
 
 
 def revert(handler):
