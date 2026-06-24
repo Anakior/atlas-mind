@@ -457,14 +457,20 @@
     const shown = _candExpanded ? cands : cands.slice(0, 8);
     let out = `<div class="text-xs text-ink-500 mb-2">${t('healthAskAi')}</div>`;
     out += shown.map((c) => {
-      const meta = [c.linked ? t('healthLinked') : '', c.shared_tags.length ? t('healthTags', esc(c.shared_tags.join(', '))) : ''].filter(Boolean).join(' · ');
+      // Value collisions carry the conflicting values + their lines; rare-anchor pairs only a shared term count.
+      const meta = c.kind === 'value-collision'
+        ? t('healthValueConflict', esc(c.subject || ''), esc(c.a_value || ''), esc(c.b_value || ''))
+        : t('healthSharedAnchor', esc(c.subject || ''), c.shared_count || 0);
+      const confPill = c.confidence === 'high'
+        ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#1d3a5b;color:#9ecbff" data-tip="${esc(t('healthConfHighHint'))}">${t('healthConfHigh')}</span>`
+        : `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#2a2a32;color:#9a9aa5" data-tip="${esc(t('healthConfLowHint'))}">${t('healthConfLow')}</span>`;
       return `<div class="py-1.5"><div class="flex items-center gap-2 text-sm">`
         + `<div class="flex items-center gap-2 min-w-0 flex-1">`
-        + (c.verdict === 'real' ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#5b1d1d;color:#ffb4b4">${t('healthReal')}</span>` : '')
+        + (c.verdict === 'real' ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#5b1d1d;color:#ffb4b4">${t('healthReal')}</span>` : confPill)
         + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${esc(c.a)}">${esc(docTitle(c.a))}</span>`
         + `<span class="text-ink-500 shrink-0">⇄</span>`
         + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${esc(c.b)}">${esc(docTitle(c.b))}</span></div>`
-        + `<button type="button" class="act-cdismiss shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-lg border subtle-border bg-navy-600 hover:bg-navy-500 text-ink-300 hover:text-ink-100 transition" data-a="${esc(c.a)}" data-b="${esc(c.b)}" data-tip="${esc(t('healthDismissHint'))}">✓ ${t('healthDismiss')}</button></div>`
+        + `<button type="button" class="act-cdismiss shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-lg border subtle-border bg-navy-600 hover:bg-navy-500 text-ink-300 hover:text-ink-100 transition" data-a="${esc(c.a)}" data-b="${esc(c.b)}" data-aline="${c.a_line || ''}" data-bline="${c.b_line || ''}" data-tip="${esc(t('healthDismissHint'))}">✓ ${t('healthDismiss')}</button></div>`
         + (meta ? `<div class="text-xs text-ink-500 mt-0.5 truncate">${meta}</div>` : '') + '</div>';
     }).join('');
     if (cands.length > 8) out += `<div class="text-right mt-1"><a class="act-csee text-sm text-accent hover:underline cursor-pointer">${_candExpanded ? t('actCollapse') : t('actSeeAllN', cands.length)}</a></div>`;
@@ -577,11 +583,16 @@
       if (cd) {
         // Human verdict "pas une contradiction" (13c) → POST none, drop the row. The global
         // fetch wrapper injects the CSRF token. The pair resurfaces only if a doc is edited.
-        const { a, b } = cd.dataset;
+        const { a, b, aline, bline } = cd.dataset;
         cd.disabled = true;
+        // Pass the judged line numbers (value collisions carry them) so the verdict is
+        // span-bound (F1): it survives edits ELSEWHERE in either doc, not just any edit.
+        const body = { a, b, verdict: 'none' };
+        if (aline) body.a_line = Number(aline);
+        if (bline) body.b_line = Number(bline);
         fetch('/api/contradiction', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ a, b, verdict: 'none' }),
+          body: JSON.stringify(body),
         }).then((r) => {
           if (r.ok) {
             _health.cands = _health.cands.filter((c) => !((c.a === a && c.b === b) || (c.a === b && c.b === a)));

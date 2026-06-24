@@ -219,8 +219,11 @@ from server.pure.queries import (  # noqa: F401  read-side corpus/feed queries
     _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
     _api_stale, _contradiction_candidates, _activity_events,
 )
+from server.pure.contradictions import (  # noqa: F401  13c typed/anchor generator (supersedes _contradiction_candidates)
+    find_contradictions,
+)
 from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
-    _soft_delete, _mcp_call_tool, _mcp_jsonrpc,
+    _soft_delete, _mcp_call_tool, _mcp_jsonrpc, _span_hash,
 )
 from server.extensions import load_server_extensions  # noqa: F401
 

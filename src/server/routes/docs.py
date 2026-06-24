@@ -250,8 +250,10 @@ def stale(handler):
 
 
 def contradictions(handler):
-    """GET /api/contradictions?limit= — candidate doc PAIRS (shared tags/links) for the AI
-    to judge (13c). Server pre-filter only; AUTH, never anonymous, ACL-scrubbed."""
+    """GET /api/contradictions?limit= — candidate contradiction PAIRS for the AI to judge
+    (13c): typed value collisions (high confidence, with the conflicting values + lines) and
+    rare-anchor pairs (low confidence). Deterministic server generator; AUTH, never anonymous,
+    ACL-scrubbed."""
     query = handler._query()
     ctx = handler._viewer_ctx()
     if not ctx.superuser and not ctx.primary:
@@ -259,16 +261,18 @@ def contradictions(handler):
         return
     limit = _s.clamp_int(query.get("limit", [None])[0], 15, 1, 50)
     include = query.get("include_dismissed", ["0"])[0] in ("1", "true")
-    items = _s._contradiction_candidates(None if ctx.superuser else ctx, limit, include)
+    items = _s.find_contradictions(None if ctx.superuser else ctx, limit, include)
     handler._send_json(200, {"candidates": items})
 
 
 def contradiction_verdict(handler):
     """POST /api/contradiction — record a human verdict on a candidate pair (13c feedback
-    loop). Body {a, b, verdict, note?} with verdict ∈ {real, none}; 'none' = "pas une
-    contradiction" (the dismiss button). AUTH + CSRF (verb guard). The actor must be able to
-    read BOTH docs. Stores the content hashes so the verdict self-invalidates on any edit,
-    then commits the cache. No LLM — the human (or an MCP client) is the judge."""
+    loop). Body {a, b, verdict, note?, a_line?, b_line?} with verdict ∈ {real, none}; 'none' =
+    "pas une contradiction" (the dismiss button). AUTH + CSRF (verb guard). The actor must be
+    able to read BOTH docs. Stores the doc hashes plus, when the judged line numbers are given,
+    their span hashes so the verdict survives edits ELSEWHERE in the doc (F1, span-bound); it
+    falls back to whole-doc binding otherwise. Then commits the cache. No LLM — the human (or an
+    MCP client) is the judge."""
     data = handler._read_json()
     a = (data.get("a") or "").strip()
     b = (data.get("b") or "").strip()
@@ -285,13 +289,17 @@ def contradiction_verdict(handler):
         handler._send_json(403, {"error": "forbidden"})
         return
     try:  # utf-8-sig to match the hash computed over _doc_corpus in the candidates pass
-        ha = _s.doc_hash(ta.read_text(encoding="utf-8-sig"))
-        hb = _s.doc_hash(tb.read_text(encoding="utf-8-sig"))
+        ta_text = ta.read_text(encoding="utf-8-sig")
+        tb_text = tb.read_text(encoding="utf-8-sig")
     except OSError:
         handler._send_json(404, {"error": "doc unreadable"})
         return
+    ha, hb = _s.doc_hash(ta_text), _s.doc_hash(tb_text)
+    sa = _s._span_hash(ta_text, _s.clamp_int(data.get("a_line"), 0, 0))
+    sb = _s._span_hash(tb_text, _s.clamp_int(data.get("b_line"), 0, 0))
     by = (handler._session() or {}).get("email") if _s.CONFIG.auth_enabled else "local"
-    path = _s.set_verdict(a, b, verdict, ha, hb, by or "local", data.get("note") or "")
+    path = _s.set_verdict(a, b, verdict, ha, hb, by or "local", data.get("note") or "",
+                          a_span=sa, b_span=sb)
     _s.commit_change(ctx, f"contradiction {verdict}: "
                      f"{posixpath.splitext(posixpath.basename(a))[0]} ⇄ "
                      f"{posixpath.splitext(posixpath.basename(b))[0]}", path)
