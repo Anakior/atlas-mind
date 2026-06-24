@@ -458,15 +458,45 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "a": { "type": "string", "description": "Relative path of the first doc of the pair." },
-        "b": { "type": "string", "description": "Relative path of the second doc of the pair." },
-        "a_line": { "type": "integer", "description": "Optional but recommended: 1-based line in doc a of the conflicting claim. Pass with b_line to bind the verdict to those exact lines (edits elsewhere then won't resurface the pair)." },
-        "b_line": { "type": "integer", "description": "Optional but recommended: 1-based line in doc b of the conflicting claim. See a_line." },
-        "verdict": { "type": "string", "enum": ["real", "none"], "description": "real = they conflict; none = not a contradiction." },
-        "note": { "type": "string", "description": "Optional one-line rationale, stored with the verdict." },
-        "ai": { "type": "string", "description": "REQUIRED. Your AI FAMILY in lowercase (e.g. 'claude', 'chatgpt', 'gemini'). Attributes the verdict." }
+        "a": {
+          "type": "string",
+          "description": "Relative path of the first doc of the pair."
+        },
+        "b": {
+          "type": "string",
+          "description": "Relative path of the second doc of the pair."
+        },
+        "a_line": {
+          "type": "integer",
+          "description": "Optional but recommended: 1-based line in doc a of the conflicting claim. Pass with b_line to bind the verdict to those exact lines (edits elsewhere then won't resurface the pair)."
+        },
+        "b_line": {
+          "type": "integer",
+          "description": "Optional but recommended: 1-based line in doc b of the conflicting claim. See a_line."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "real",
+            "none"
+          ],
+          "description": "real = they conflict; none = not a contradiction."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional one-line rationale, stored with the verdict."
+        },
+        "ai": {
+          "type": "string",
+          "description": "REQUIRED. Your AI FAMILY in lowercase (e.g. 'claude', 'chatgpt', 'gemini'). Attributes the verdict."
+        }
       },
-      "required": ["a", "b", "verdict", "ai"]
+      "required": [
+        "a",
+        "b",
+        "verdict",
+        "ai"
+      ]
     }
   },
   {

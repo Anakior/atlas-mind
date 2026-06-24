@@ -1,20 +1,18 @@
-"""Typed value parsing and comparison for contradiction detection.
+"""Typed value parsing and comparison for contradiction detection (pure stdlib).
 
-Parses a raw value string into a unit-canonical Value, then compare() tells
-"30 s" == "0.5 min" apart from "30 s" != "2 min" without re-deriving units.
-Pure stdlib; no CONFIG needed.
+Values are canonicalized to a base unit so compare() needn't re-derive units.
 """
 import math
 import re
 from collections import Counter, defaultdict
 from typing import NamedTuple, Optional
 
-import server as _s  # _normalize_text facade (lowercase + accent-fold)
+import server as _s  # _normalize_text (accent-fold + lowercase)
 
 
 SAME = "same"
 INCOMPATIBLE = "incompatible"  # comparable but divergent → a contradiction candidate
-UNRELATED = "unrelated"        # not comparable: different kind, dimension, or currency
+UNRELATED = "unrelated"        # not comparable (different kind, dimension, or currency)
 
 
 class Value(NamedTuple):
@@ -40,25 +38,23 @@ _DATA = {  # base: byte
 }
 _RATIO = {"%": 0.01, "pourcent": 0.01, "percent": 0.01}  # base: fraction
 _DIMENSIONS = (("time", _TIME, "s"), ("data", _DATA, "byte"), ("ratio", _RATIO, "ratio"))
-# Money has no cross-unit factor: keep the amount, canonicalize only the currency.
-# Symbols and common FR/EN names map to their ISO code; any uppercase 3-letter code is
-# taken as-is, so every ISO 4217 currency also works without a list (see _currency_code).
+# Money: no cross-unit factor — keep the amount, canonicalize the currency. Any uppercase
+# 3-letter token is taken as an ISO code, so all currencies work without a list to maintain.
 _CURRENCY_SYMBOL = {"€": "EUR", "$": "USD", "£": "GBP", "¥": "JPY"}
 _CURRENCY_NAME = {"euro": "EUR", "euros": "EUR", "dollar": "USD", "dollars": "USD"}
 
-# "1"/"0" stay out: they are numbers, not booleans.
-_TRUE = {"true", "vrai", "oui", "yes", "on"}
+_TRUE = {"true", "vrai", "oui", "yes", "on"}   # "1"/"0" stay out: numbers, not booleans
 _FALSE = {"false", "faux", "non", "no", "off"}
 
-# Permissive number: any whitespace (incl. nbsp) groups thousands, ./, separate decimals.
+# Thousands grouping may be any whitespace (incl. nbsp); ./, separate decimals.
 _NUMBER = r"-?\d[\d\s.,]*\d|-?\d"
 _NUM_RE = re.compile(_NUMBER)
 _QTY_RE = re.compile(r"(?P<num>" + _NUMBER + r")\s*(?P<unit>[%€$£¥]|[a-zµ]+)", re.I)
 
 
 def parse_number(raw: str) -> Optional[float]:
-    """Locale-tolerant magnitude. Spaces/nbsp group thousands; a lone comma is a
-    decimal point (FR); with both '.' and ',' present, the rightmost is decimal."""
+    """Locale rule: whitespace groups thousands; a lone comma is the decimal point;
+    with both '.' and ',' the rightmost is the decimal."""
     m = _NUM_RE.search(raw)
     if not m:
         return None
@@ -75,8 +71,7 @@ def parse_number(raw: str) -> Optional[float]:
 
 
 def _currency_code(token: str) -> Optional[str]:
-    """A currency symbol, common FR/EN name, or ISO 4217 code → canonical code, else
-    None. Any uppercase 3-letter code is accepted, so all currencies work without a list."""
+    """Currency symbol, FR/EN name, or uppercase ISO code → canonical code, else None."""
     if token in _CURRENCY_SYMBOL:
         return _CURRENCY_SYMBOL[token]
     if token.lower() in _CURRENCY_NAME:
@@ -87,8 +82,8 @@ def _currency_code(token: str) -> Optional[str]:
 
 
 def parse_quantity(raw: str) -> Optional[Value]:
-    """A number immediately followed by a known unit, normalized to its base unit.
-    None when no unit is recognized — a bare number is not a quantity."""
+    """A number followed by a known unit, normalized to its base. None if no unit —
+    a bare number is not a quantity."""
     m = _QTY_RE.match(raw.strip().lstrip("~≈ ").strip())
     if not m:
         return None
@@ -116,8 +111,7 @@ def parse_bool(raw: str) -> Optional[bool]:
 
 
 def parse_value(raw: str) -> Optional[Value]:
-    """Most specific typed reading: quantity > number > bool > text (a normalized
-    categorical fallback). None for empty input."""
+    """Most specific reading: quantity > number > bool > text. None for empty input."""
     if not raw or not raw.strip():
         return None
     s = raw.strip()
@@ -139,10 +133,8 @@ def _magnitudes_match(x: Optional[float], y: Optional[float], rel_tol: float, ab
 
 
 def compare(a: Optional[Value], b: Optional[Value], *, rel_tol: float = 1e-9, abs_tol: float = 1e-9) -> str:
-    """Verdict on two parsed values: SAME (equal after canonicalization),
-    INCOMPATIBLE (comparable but divergent — a contradiction candidate), or
-    UNRELATED (not comparable). Tolerances absorb formatting/rounding noise only,
-    so real divergences surface for the downstream judge."""
+    """SAME / INCOMPATIBLE / UNRELATED. Tolerances absorb formatting noise, not real
+    differences, so genuine divergences surface."""
     if a is None or b is None or a.kind != b.kind:
         return UNRELATED
     if a.kind in ("text", "bool"):
@@ -160,9 +152,8 @@ _ARTICLES = {"le", "la", "les", "l", "un", "une", "des", "du", "de", "the", "a",
 
 
 def subject_key(text: str) -> str:
-    """Canonical bucket key for a subject/entity phrase: accent-folded, lowercased,
-    emphasis/punctuation stripped, leading articles dropped — so 'Le Webhook' and
-    '**webhook**' bucket together. (No plural folding yet: add when a case needs it.)"""
+    """Bucket key for a subject phrase: accent-folded, lowercased, emphasis stripped,
+    leading articles dropped (so 'Le Webhook' and '**webhook**' match)."""
     words = re.findall(r"[a-z0-9]+", _s._normalize_text(text))
     while words and words[0] in _ARTICLES:
         words.pop(0)
@@ -185,14 +176,12 @@ class Claim(NamedTuple):
     subject: str   # subject_key of the anchor the value attaches to
     value: Value
     line: int
-    raw: str       # the value as written, for line-level evidence
+    raw: str       # the value as written, for evidence
 
 
 def _anchors(line: str) -> list:
     """Salient words of a line (non-stopword, non-unit), deduped in order — the
-    candidate subjects a value on that line could be about. Currency names live in
-    _UNIT_WORDS; symbols aren't word tokens; the inline unit of a value is removed
-    upstream by blanking its span (see extract_quantity_claims)."""
+    candidate subjects a value on that line could be about."""
     out, seen = [], set()
     for tok in re.findall(r"[^\W\d_]+", line):
         low = _s._normalize_text(tok)
@@ -204,17 +193,15 @@ def _anchors(line: str) -> list:
 
 
 def extract_quantity_claims(text: str) -> list:
-    """Quantities found in prose, each attached to the salient words on its line as
-    candidate subjects. Recall-first: a value is indexed under every plausible anchor,
-    so a shared anchor across two docs forms a comparison (the corpus stage filters by
-    rarity). Only number+unit values here — bare numbers (e.g. ports) are out of scope."""
+    """Prose quantities (number+unit; bare numbers excluded), each attached to the
+    salient words of its line as candidate subjects (recall-first)."""
     claims = []
     for i, line in enumerate(text.splitlines(), start=1):
         matches = list(_QTY_RE.finditer(line))
         if not matches:
             continue
-        # Anchors come from the line minus the number+unit spans, so a unit glued to a
-        # number ("EUR", "s") is never mistaken for a subject — an isolated "SSO" stays.
+        # Anchor on the line minus the number+unit spans, so a glued unit ("EUR", "s") is
+        # never taken as a subject — an isolated 3-letter word ("SSO") still is.
         blanked = line
         for m in matches:
             blanked = blanked[:m.start()] + " " * (m.end() - m.start()) + blanked[m.end():]
@@ -228,20 +215,17 @@ def extract_quantity_claims(text: str) -> list:
 
 
 def find_value_contradictions(ctx=None, limit: int = 50, corpus=None) -> list:
-    """Candidates from cross-doc collisions of typed values on a shared subject:
-    two docs asserting INCOMPATIBLE values under the same anchor. A new generator
-    beside the legacy topical one, recall-first (the AI judges). Bounded by subject
-    rarity (a subject in too many docs is generic noise) and a hard limit. Each
-    candidate carries the diverging values and their lines as evidence."""
+    """Cross-doc collisions of typed values on a shared subject: two docs with
+    INCOMPATIBLE values under the same anchor. Each candidate carries the values + lines."""
     if corpus is None:
-        from server.pure import queries  # corpus access; lazy import avoids a load cycle
+        from server.pure import queries  # lazy: avoids an import cycle at module load
         corpus = queries._doc_corpus(ctx)
     by_subject = {}  # subject -> {rel: first Claim in that doc}
     for rel, _name, text in corpus:
         for claim in extract_quantity_claims(text):
             by_subject.setdefault(claim.subject, {}).setdefault(rel, claim)
 
-    cap = max(3, len(corpus) // 2)  # drop ubiquitous anchors (low idf = generic noise)
+    cap = max(3, len(corpus) // 2)  # skip ubiquitous anchors (low idf = generic noise)
     out, seen = [], set()
     for subject, per_doc in by_subject.items():
         if not 2 <= len(per_doc) <= cap:
@@ -264,19 +248,16 @@ _MIN_SHARED_ANCHORS = 2  # one shared rare word is coincidence; two means "same 
 
 
 def _salient_tokens(text: str) -> set:
-    # Words only (a digit run like a port number is not a subject), >=3 chars, content words.
+    # Content words only — a digit run (e.g. a port) is not a subject.
     return {t for t in re.findall(r"[a-z][a-z0-9]{2,}", _s._normalize_text(text))
             if t not in _STOPWORDS and t not in _UNIT_WORDS}
 
 
 def find_shared_anchor_pairs(ctx=None, corpus=None) -> list:
-    """Low-confidence candidates: doc pairs that share a RARE term (high idf). No value
-    is extracted — this recovers the contradictions whose divergence is categorical/prose
-    (PostgreSQL vs MongoDB) and that the typed generator can't reach. A rare shared term
-    means 'same specific subject'; the AI judges whether they actually conflict. Far more
-    selective than tag-pairing: a term in many docs is dropped as generic."""
+    """Low-confidence pairs sharing rare terms (high idf): recovers categorical conflicts
+    (PostgreSQL vs MongoDB) the typed generator can't reach. The AI judges."""
     if corpus is None:
-        from server.pure import queries  # corpus access; lazy import avoids a load cycle
+        from server.pure import queries  # lazy: avoids an import cycle at module load
         corpus = queries._doc_corpus(ctx)
     df = Counter()
     doc_tokens = {}
@@ -290,7 +271,7 @@ def find_shared_anchor_pairs(ctx=None, corpus=None) -> list:
         for t in toks:
             if 2 <= df[t] <= cap:
                 token_docs[t].append(rel)
-    shared = defaultdict(list)  # (a, b) -> [(df, anchor), ...] of every rare term they share
+    shared = defaultdict(list)  # (a, b) -> [(df, anchor), ...]
     for t, docs in token_docs.items():
         docs.sort()
         for i, a in enumerate(docs):
@@ -304,16 +285,15 @@ def find_shared_anchor_pairs(ctx=None, corpus=None) -> list:
         d, anchor = terms[0]  # rarest shared term represents the pair
         out.append({"a": a, "b": b, "subject": anchor, "confidence": "low",
                     "kind": "shared-anchor", "shared_df": d, "shared_count": len(terms)})
-    out.sort(key=lambda c: (-c["shared_count"], c["shared_df"], c["a"], c["b"]))  # strongest first
+    out.sort(key=lambda c: (-c["shared_count"], c["shared_df"], c["a"], c["b"]))
     return out
 
 
 def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = False) -> list:
-    """The combined generator: high-confidence typed value collisions first, then
-    low-confidence rare-anchor pairs for what they don't already cover. Applies the
-    verdict cache — a pair dismissed 'none' is dropped (unless include_dismissed), a
-    'real' one annotated — so a judged contradiction stops resurfacing. Bounded by limit."""
-    from server.pure import queries  # corpus access; lazy import avoids a load cycle
+    """High-confidence typed collisions, then low-confidence rare-anchor pairs. Applies
+    the verdict cache: a pair dismissed 'none' is dropped (unless include_dismissed),
+    a 'real' one annotated."""
+    from server.pure import queries  # lazy: avoids an import cycle at module load
     corpus = queries._doc_corpus(ctx)
     high = find_value_contradictions(ctx, limit, corpus=corpus)
     high_pairs = {frozenset((h["a"], h["b"])) for h in high}

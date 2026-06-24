@@ -83,10 +83,9 @@ def set_verdict(a, b, verdict, a_hash, b_hash, by, note="", a_span="", b_span=""
 
 
 def verdict_holds(entry, a_doc_hash, b_doc_hash, a_line_hashes=frozenset(), b_line_hashes=frozenset()):
-    """The cached verdict if it still applies, else None. When the entry recorded the judged
-    spans, it holds as long as those line contents still exist in each doc — an edit ELSEWHERE
-    no longer resurfaces the pair; otherwise it falls back to whole-doc hash equality. The
-    caller passes the (a, b) doc data in the entry's normalized order (a < b)."""
+    """The cached verdict if it still applies, else None. With recorded spans it holds while
+    those line contents still exist in each doc (so edits elsewhere don't resurface the pair);
+    else it falls back to whole-doc hash equality. Caller passes (a, b) in normalized order."""
     if not entry:
         return None
     sa, sb = entry.get("a_span"), entry.get("b_span")
