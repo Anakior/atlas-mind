@@ -272,20 +272,27 @@ def find_value_contradictions(ctx=None, limit: int = 50, corpus=None) -> list:
             bucket.setdefault(rel, claim)
 
     cap = max(3, len(corpus) // 2)  # skip ubiquitous anchors (low idf = generic noise)
-    out, seen = [], set()
+    # A doc pair can collide on several anchors (e.g. "délai" AND "paiement"). Keep ONE row
+    # per pair so the UI doesn't list the same pair twice — the collision on the rarest
+    # subject (lowest corpus df, the same idf intuition the low-conf tier uses: a rare anchor
+    # is the most distinctive), ties broken alphabetically for determinism.
+    best = {}
     for subject, per_doc in pooled.items():
         if not 2 <= len(per_doc) <= cap:
             continue
         items = sorted(per_doc.items())
         for i, (ra, ca) in enumerate(items):
             for rb, cb in items[i + 1:]:
-                if compare(ca.value, cb.value) != INCOMPATIBLE or (subject, ra, rb) in seen:
+                if compare(ca.value, cb.value) != INCOMPATIBLE:
                     continue
-                seen.add((subject, ra, rb))
-                out.append({
-                    "a": ra, "b": rb, "subject": subject, "confidence": "high", "kind": "value-collision",
-                    "a_value": ca.raw, "b_value": cb.raw, "a_line": ca.line, "b_line": cb.line,
-                })
+                rank = (len(per_doc), subject)  # rarer subject (fewer docs) wins the pair
+                cur = best.get((ra, rb))
+                if cur is None or rank < cur[0]:
+                    best[(ra, rb)] = (rank, {
+                        "a": ra, "b": rb, "subject": subject, "confidence": "high", "kind": "value-collision",
+                        "a_value": ca.raw, "b_value": cb.raw, "a_line": ca.line, "b_line": cb.line,
+                    })
+    out = [v[1] for v in best.values()]
     out.sort(key=lambda c: (c["a"], c["b"], c["subject"]))
     return out[:limit]
 
