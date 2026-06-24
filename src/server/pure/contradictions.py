@@ -321,10 +321,12 @@ def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = Fal
            if frozenset((p["a"], p["b"])) not in high_pairs]
     vindex = _s.verdict_index()
     hashes = {rel: _s.doc_hash(text) for rel, _name, text in corpus}
+    lines = {rel: _s.line_hashes(text) for rel, _name, text in corpus}
     out = []
     for cand in high + low:
-        verdict = _s.valid_verdict(vindex.get((cand["a"], cand["b"])),
-                                   hashes.get(cand["a"], ""), hashes.get(cand["b"], ""))
+        a, b = cand["a"], cand["b"]
+        verdict = _s.verdict_holds(vindex.get((a, b)), hashes.get(a, ""), hashes.get(b, ""),
+                                   lines.get(a, frozenset()), lines.get(b, frozenset()))
         if verdict == "none" and not include_dismissed:
             continue
         cand["verdict"] = verdict

@@ -54,6 +54,24 @@ class TestVerdictCache(unittest.TestCase):
         self.assertTrue(match)
         self.assertTrue(all(x["verdict"] == "real" for x in match))
 
+    def _edit(self, rel, fn):
+        p = self.root / "content" / rel
+        p.write_text(fn(p.read_text(encoding="utf-8-sig")), encoding="utf-8", newline="")
+
+    def test_span_bound_verdict_survives_unrelated_edit_but_not_a_judged_edit(self):
+        # Dismiss the pair, bound to the timeout lines (the actual conflicting claim).
+        ha, hb = self._hashes()
+        sa = _s.doc_hash("Le timeout du webhook est de 30 s.")
+        sb = _s.doc_hash("Le timeout du webhook est de 60 s.")
+        _s.set_verdict("a.md", "b.md", "none", ha, hb, "claude", a_span=sa, b_span=sb)
+        self.assertNotIn(PAIR, self._pairs())                         # dismissed
+
+        self._edit("a.md", lambda t: t + "\nUne note ajoutée plus tard.\n")
+        self.assertNotIn(PAIR, self._pairs())                         # edit elsewhere -> STILL dismissed (the fix)
+
+        self._edit("a.md", lambda t: t.replace("30 s", "45 s"))
+        self.assertIn(PAIR, self._pairs())                            # judged line changed -> resurfaces
+
 
 if __name__ == "__main__":
     unittest.main()

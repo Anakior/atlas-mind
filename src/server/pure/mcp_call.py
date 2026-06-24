@@ -495,6 +495,12 @@ def _tool_contradictions(args, ctx):
     return text_result(json.dumps({"candidates": items}, ensure_ascii=False, indent=2))
 
 
+def _span_hash(text: str, line: int) -> str:
+    """Content hash of a 1-based line, to bind a verdict to the judged span (empty if out of range)."""
+    rows = text.splitlines()
+    return _s.doc_hash(rows[line - 1].strip()) if 1 <= line <= len(rows) else ""
+
+
 def _tool_judge_contradiction(args, ctx):
     """Record a verdict on a candidate pair (13c feedback loop): real | none. 'none' clears a
     false positive so it stops resurfacing. The verdict holds until either doc is edited (it
@@ -511,11 +517,15 @@ def _tool_judge_contradiction(args, ctx):
     if not (ta.exists() and tb.exists() and _visible(a, ctx) and _visible(b, ctx)):
         return text_result("one or both docs not found / not visible", is_error=True)
     try:
-        ha = _s.doc_hash(ta.read_text(encoding="utf-8-sig"))
-        hb = _s.doc_hash(tb.read_text(encoding="utf-8-sig"))
+        ta_text = ta.read_text(encoding="utf-8-sig")
+        tb_text = tb.read_text(encoding="utf-8-sig")
     except OSError:
         return text_result("doc unreadable", is_error=True)
-    path = _s.set_verdict(a, b, verdict, ha, hb, (args.get("ai") or "ai"), args.get("note") or "")
+    ha, hb = _s.doc_hash(ta_text), _s.doc_hash(tb_text)
+    sa = _span_hash(ta_text, clamp_int(args.get("a_line"), 0, 0))
+    sb = _span_hash(tb_text, clamp_int(args.get("b_line"), 0, 0))
+    path = _s.set_verdict(a, b, verdict, ha, hb, (args.get("ai") or "ai"),
+                          args.get("note") or "", a_span=sa, b_span=sb)
     _s.commit_change(ctx, f"contradiction {verdict}: {ta.stem} ⇄ {tb.stem}", path, ai=args.get("ai"))
     return text_result(f"Recorded verdict '{verdict}' for {a} ⇄ {b}. "
                        "It holds until either doc is edited.")

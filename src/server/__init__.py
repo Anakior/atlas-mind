@@ -92,6 +92,7 @@ from server.pure.todos_md import (  # noqa: F401
 from server.pure.notes_md import _notes_path, load_notes, save_notes  # noqa: F401
 from server.pure.contradictions_store import (  # noqa: F401  verdict cache (13c feedback)
     VERDICTS, doc_hash, load_verdicts, verdict_index, valid_verdict, set_verdict,
+    verdict_holds, line_hashes,
 )
 from server.pure.params import clamp_int  # noqa: F401  request-param clamp (routes + tools)
 from server.pure.auth import (  # noqa: F401  token/CSRF/share/bearer crypto + identity

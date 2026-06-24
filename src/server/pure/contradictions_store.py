@@ -56,15 +56,42 @@ def valid_verdict(entry: dict, a_hash: str, b_hash: str):
     return None
 
 
-def set_verdict(a, b, verdict, a_hash, b_hash, by, note=""):
+def line_hashes(text: str) -> set:
+    """Content hashes of the non-blank lines of a doc, for span-bound verdict checks."""
+    return {doc_hash(line.strip()) for line in text.splitlines() if line.strip()}
+
+
+def set_verdict(a, b, verdict, a_hash, b_hash, by, note="", a_span="", b_span=""):
     """Upsert a pair's verdict (keyed normalized) and persist. Returns the cache file path
-    so the caller can commit it. Stores hashes so the entry self-invalidates on doc edits."""
+    so the caller can commit it. Stores the doc hashes; if the judged line spans are given,
+    stores their content hashes too so the verdict survives edits ELSEWHERE in the doc."""
     na, nb = _pair(a, b)
-    ha, hb = (a_hash, b_hash) if a == na else (b_hash, a_hash)
+    if a == na:
+        ha, hb, sa, sb = a_hash, b_hash, a_span, b_span
+    else:
+        ha, hb, sa, sb = b_hash, a_hash, b_span, a_span
     entries = [e for e in load_verdicts() if _pair(e.get("a"), e.get("b")) != (na, nb)]
-    entries.append({"a": na, "b": nb, "verdict": verdict, "a_hash": ha, "b_hash": hb,
-                    "by": by, "note": (note or "")[:500], "at": int(time.time())})
+    entry = {"a": na, "b": nb, "verdict": verdict, "a_hash": ha, "b_hash": hb,
+             "by": by, "note": (note or "")[:500], "at": int(time.time())}
+    if sa and sb:
+        entry["a_span"], entry["b_span"] = sa, sb
+    entries.append(entry)
     _cache_path().write_text(
         json.dumps({"version": 1, "verdicts": entries}, ensure_ascii=False, indent=1),
         encoding="utf-8")
     return _cache_path()
+
+
+def verdict_holds(entry, a_doc_hash, b_doc_hash, a_line_hashes=frozenset(), b_line_hashes=frozenset()):
+    """The cached verdict if it still applies, else None. When the entry recorded the judged
+    spans, it holds as long as those line contents still exist in each doc — an edit ELSEWHERE
+    no longer resurfaces the pair; otherwise it falls back to whole-doc hash equality. The
+    caller passes the (a, b) doc data in the entry's normalized order (a < b)."""
+    if not entry:
+        return None
+    sa, sb = entry.get("a_span"), entry.get("b_span")
+    if sa and sb:
+        return entry.get("verdict") if sa in a_line_hashes and sb in b_line_hashes else None
+    if entry.get("a_hash") == a_doc_hash and entry.get("b_hash") == b_doc_hash:
+        return entry.get("verdict")
+    return None
