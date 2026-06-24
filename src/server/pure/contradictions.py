@@ -153,3 +153,16 @@ def compare(a: Optional[Value], b: Optional[Value], *, rel_tol: float = 1e-9, ab
             return UNRELATED  # different dimension, or different currency (no conversion)
         return SAME if _magnitudes_match(a.number, b.number, rel_tol, abs_tol) else INCOMPATIBLE
     return UNRELATED
+
+
+_ARTICLES = {"le", "la", "les", "l", "un", "une", "des", "du", "de", "the", "a", "an"}
+
+
+def subject_key(text: str) -> str:
+    """Canonical bucket key for a subject/entity phrase: accent-folded, lowercased,
+    emphasis/punctuation stripped, leading articles dropped — so 'Le Webhook' and
+    '**webhook**' bucket together. (No plural folding yet: add when a case needs it.)"""
+    words = re.findall(r"[a-z0-9]+", _s._normalize_text(text))
+    while words and words[0] in _ARTICLES:
+        words.pop(0)
+    return " ".join(words)
