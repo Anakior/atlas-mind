@@ -1,0 +1,5 @@
+# https://atlas-mind.anakior.app/robots.txt
+User-agent: *
+Allow: /
+
+Sitemap: https://atlas-mind.anakior.app/sitemap.xml
