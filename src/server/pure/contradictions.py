@@ -6,6 +6,7 @@ Pure stdlib; no CONFIG needed.
 """
 import math
 import re
+from collections import Counter, defaultdict
 from typing import NamedTuple, Optional
 
 import server as _s  # _normalize_text facade (lowercase + accent-fold)
@@ -252,8 +253,66 @@ def find_value_contradictions(ctx=None, limit: int = 50) -> list:
                     continue
                 seen.add((subject, ra, rb))
                 out.append({
-                    "a": ra, "b": rb, "subject": subject,
+                    "a": ra, "b": rb, "subject": subject, "confidence": "high", "kind": "value-collision",
                     "a_value": ca.raw, "b_value": cb.raw, "a_line": ca.line, "b_line": cb.line,
                 })
     out.sort(key=lambda c: (c["a"], c["b"], c["subject"]))
     return out[:limit]
+
+
+_MIN_SHARED_ANCHORS = 2  # one shared rare word is coincidence; two means "same subject"
+
+
+def _salient_tokens(text: str) -> set:
+    # Words only (a digit run like a port number is not a subject), >=3 chars, content words.
+    return {t for t in re.findall(r"[a-z][a-z0-9]{2,}", _s._normalize_text(text))
+            if t not in _STOPWORDS and t not in _UNIT_WORDS}
+
+
+def find_shared_anchor_pairs(ctx=None) -> list:
+    """Low-confidence candidates: doc pairs that share a RARE term (high idf). No value
+    is extracted — this recovers the contradictions whose divergence is categorical/prose
+    (PostgreSQL vs MongoDB) and that the typed generator can't reach. A rare shared term
+    means 'same specific subject'; the AI judges whether they actually conflict. Far more
+    selective than tag-pairing: a term in many docs is dropped as generic."""
+    from server.pure import queries  # corpus access; lazy import avoids a load cycle
+
+    corpus = queries._doc_corpus(ctx)
+    df = Counter()
+    doc_tokens = {}
+    for rel, _name, text in corpus:
+        toks = _salient_tokens(text)
+        doc_tokens[rel] = toks
+        df.update(toks)
+    cap = max(3, len(corpus) // 10)  # a rare anchor is shared by few docs (high idf)
+    token_docs = defaultdict(list)
+    for rel, toks in doc_tokens.items():
+        for t in toks:
+            if 2 <= df[t] <= cap:
+                token_docs[t].append(rel)
+    shared = defaultdict(list)  # (a, b) -> [(df, anchor), ...] of every rare term they share
+    for t, docs in token_docs.items():
+        docs.sort()
+        for i, a in enumerate(docs):
+            for b in docs[i + 1:]:
+                shared[(a, b)].append((df[t], t))
+    out = []
+    for (a, b), terms in shared.items():
+        if len(terms) < _MIN_SHARED_ANCHORS:
+            continue
+        terms.sort()
+        d, anchor = terms[0]  # rarest shared term represents the pair
+        out.append({"a": a, "b": b, "subject": anchor, "confidence": "low",
+                    "kind": "shared-anchor", "shared_df": d, "shared_count": len(terms)})
+    out.sort(key=lambda c: (-c["shared_count"], c["shared_df"], c["a"], c["b"]))  # strongest first
+    return out
+
+
+def find_contradictions(ctx=None, limit: int = 50) -> list:
+    """The combined generator: high-confidence typed value collisions first, then
+    low-confidence rare-anchor pairs for what they don't already cover, bounded by limit."""
+    high = find_value_contradictions(ctx, limit)
+    high_pairs = {frozenset((h["a"], h["b"])) for h in high}
+    low = [p for p in find_shared_anchor_pairs(ctx)
+           if frozenset((p["a"], p["b"])) not in high_pairs]
+    return (high + low)[:limit]

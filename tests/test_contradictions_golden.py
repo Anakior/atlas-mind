@@ -114,6 +114,41 @@ class TestValueGenerator(unittest.TestCase):
         self.assertEqual(self._run()[0], self._run()[0])
 
 
+class TestCombinedGenerator(unittest.TestCase):
+    """The full generator (typed collisions + rare-anchor pairs) vs the topical baseline."""
+
+    def _run(self):
+        _s.CONFIG = AtlasConfig.load(root=FIXTURE, env={})
+        return c.find_contradictions(None, 100)
+
+    def _scores(self):
+        cands = self._run()
+        pairs = {_pair((x["a"], x["b"])) for x in cands}
+        real = {_pair(e["docs"]) for e in _load_expected()["contradictions"] if len(e["docs"]) == 2}
+        found = pairs & real
+        return cands, len(found) / len(real), len(found) / len(pairs)
+
+    def test_beats_baseline_on_both_axes(self):
+        _, recall, precision = self._scores()
+        self.assertEqual(recall, 1.0)             # every cross-doc contradiction surfaced
+        self.assertGreater(precision, 0.33)       # baseline precision was 3/9
+        self.assertGreaterEqual(precision, 0.75)
+
+    def test_numeric_pairs_stay_high_confidence_with_values(self):
+        cands = self._run()
+        hc = {_pair((x["a"], x["b"])): x for x in cands if x["confidence"] == "high"}
+        self.assertIn(_pair(("pricing.md", "pricing-faq.md")), hc)
+        self.assertTrue(hc[_pair(("pricing.md", "pricing-faq.md"))]["a_value"])
+
+    def test_categorical_pairs_recovered_as_low_confidence(self):
+        low = {_pair((x["a"], x["b"])) for x in self._run() if x["confidence"] == "low"}
+        self.assertIn(_pair(("notes-archi.md", "notes-data.md")), low)
+        self.assertIn(_pair(("config/sso-spec.md", "config/sso-roadmap.md")), low)
+
+    def test_is_deterministic(self):
+        self.assertEqual(self._run(), self._run())
+
+
 def _report() -> None:
     m = measure()
     by_pair = {_pair((c["a"], c["b"])): c for c in _detect()}
