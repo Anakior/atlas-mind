@@ -637,16 +637,22 @@ def run() -> None:
     _CTX = AppContext.build(CONFIG, build_store(CONFIG))
 
     if CONFIG.auth_enabled:
-        # Set always (idempotent): a checkout restored from the volume may lack it.
-        git("config", "user.email", CONFIG.git_author_email)
-        git("config", "user.name", CONFIG.git_author_name)
-        if not freshly_cloned:
-            # Repo persisted on the volume: refresh now instead of waiting for the pull
-            # loop. Best-effort — a slow/offline remote must not block boot.
-            try:
-                git("pull", "--rebase", "--autostash", "--quiet", timeout=30)
-            except Exception as e:
-                print(f"[boot] git pull skipped: {e}", file=sys.stderr, flush=True)
+        if not CONFIG.dev_mode:
+            # Cloud only. The dev sandbox runs NO git op (commits/pull/push are all
+            # short-circuited to a rebuild in GitSync), and its throwaway mind is not
+            # its own repo — so a `git config`/`git pull` here, with cwd in a dir that
+            # has no .git, walks up and hits the ENCLOSING repo (the engine checkout):
+            # it would re-stamp the dev's identity and even rebase their working tree.
+            # Set always (idempotent): a checkout restored from the volume may lack it.
+            git("config", "user.email", CONFIG.git_author_email)
+            git("config", "user.name", CONFIG.git_author_name)
+            if not freshly_cloned:
+                # Repo persisted on the volume: refresh now instead of waiting for the pull
+                # loop. Best-effort — a slow/offline remote must not block boot.
+                try:
+                    git("pull", "--rebase", "--autostash", "--quiet", timeout=30)
+                except Exception as e:
+                    print(f"[boot] git pull skipped: {e}", file=sys.stderr, flush=True)
         _CTX.git_sync.build()
 
     # Mind's server extensions, loaded once at boot. A broken one is reported on

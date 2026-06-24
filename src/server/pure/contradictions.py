@@ -193,6 +193,13 @@ def _anchors(line: str) -> list:
     return out
 
 
+# Claims per line = matches × anchors. On prose that's a handful; on a minified-HTML or
+# base64 line (hundreds of "30ms"-like matches × ~1000 word tokens) it's millions — a single
+# such line blew the 256 MB box to 800 MB+. A line with this many distinct numbers or subjects
+# is machine data, not a prose claim, so capping both factors costs no real recall.
+_PER_LINE_CAP = 24
+
+
 def extract_quantity_claims(text: str) -> list:
     """Prose quantities (number+unit; bare numbers excluded), each attached to the
     salient words of its line as candidate subjects (recall-first)."""
@@ -206,8 +213,8 @@ def extract_quantity_claims(text: str) -> list:
         blanked = line
         for m in matches:
             blanked = blanked[:m.start()] + " " * (m.end() - m.start()) + blanked[m.end():]
-        anchors = _anchors(blanked)
-        for m in matches:
+        anchors = _anchors(blanked)[:_PER_LINE_CAP]
+        for m in matches[:_PER_LINE_CAP]:
             value = parse_quantity(m.group(0))
             if value is not None:
                 for anchor in anchors:
@@ -215,20 +222,33 @@ def extract_quantity_claims(text: str) -> list:
     return claims
 
 
-def _trigrams(word: str) -> set:
-    p = f"  {word}  "
-    return {p[i:i + 3] for i in range(len(p) - 2)}
+# Keys shorter than this aren't fuzzed: a one-char gap between short words is usually two
+# distinct words (port/sort), not a typo. Same threshold the trigram version used.
+_FUZZY_MIN_LEN = 5
+
+
+def _del1_keys(word: str):
+    """The word's own hash plus the hash of each single-character deletion. Two keys are
+    edit-distance-1 iff they share one of these — and the self-hash is mandatory so an
+    insertion pair whose lengths differ by 1 (delai/delais) still collides on the shorter
+    one's self-key against the longer one's deletion-key. Hash (not the substring) is stored
+    so the index holds ints, not L copies of every word — strings here OOM the 256 MB box."""
+    yield hash(word)
+    for i in range(len(word)):
+        yield hash(word[:i] + word[i + 1:])
 
 
 def _fuzzy_canon(keys) -> dict:
     """Map each subject to a canonical one, merging typo-variants (timeout/timeoout) so
-    their claims pool. Trigram-blocked then difflib-confirmed; keys under 5 chars aren't
-    merged (a one-char gap between short words is usually two words, not a typo)."""
-    grams = {k: _trigrams(k) for k in keys}
-    by_gram = defaultdict(list)
-    for k in keys:
-        for g in grams[k]:
-            by_gram[g].append(k)
+    their claims pool. Candidate pairs come from a SymSpell deletion-1 neighbourhood index,
+    then difflib confirms ratio >= 0.85; keys under 5 chars aren't merged.
+
+    The whole corpus vocabulary is fuzzed on every call. Trigram blocking degenerated here
+    (similar-shaped unrelated words crowd the same buckets → ~245k difflib calls, ~minutes):
+    the deletion index proposes only edit-distance-1 neighbours, so difflib runs on ~10k real
+    candidates and is near-linear in the vocabulary. The index stores word ids keyed by hash,
+    and union-find dedups merges in place, so there is no global pair set — memory is O(vocab)."""
+    keys = list(keys)
     parent = {k: k for k in keys}
 
     def root(x):
@@ -237,20 +257,34 @@ def _fuzzy_canon(keys) -> dict:
             x = parent[x]
         return x
 
-    seen = set()
-    for k in keys:
-        if len(k) < 5:
+    by_key = defaultdict(list)  # deletion-1 hash -> word ids sharing it
+    for idx, k in enumerate(keys):
+        if len(k) >= _FUZZY_MIN_LEN:
+            for h in _del1_keys(k):
+                by_key[h].append(idx)
+
+    # Words sharing a bucket are edit-distance-1 candidates. A pair can recur across buckets,
+    # but the root check skips already-merged ones before difflib — cheaper than a global
+    # seen-set the cloud box can't afford (re-seen pairs add a handful of confirms, not a blow-up).
+    for ids in by_key.values():
+        if len(ids) < 2:
             continue
-        for c in {c for g in grams[k] for c in by_gram[g] if len(c) >= 5 and c != k}:
-            pair = (k, c) if k < c else (c, k)
-            if pair in seen:
-                continue
-            seen.add(pair)
-            if difflib.SequenceMatcher(None, k, c).ratio() >= 0.85:
-                ra, rb = root(k), root(c)
-                if ra != rb:
+        for i in range(len(ids)):
+            a = keys[ids[i]]
+            for j in range(i + 1, len(ids)):
+                b = keys[ids[j]]
+                ra, rb = root(a), root(b)
+                if ra != rb and difflib.SequenceMatcher(None, a, b).ratio() >= 0.85:
                     parent[max(ra, rb)] = min(ra, rb)  # smaller key = stable representative
     return {k: root(k) for k in keys}
+
+
+def _prose_corpus(corpus) -> list:
+    """An .html doc reaches the engine as raw markup; its CSS/script/base64 is not prose and
+    only bloats the tokenizers (it doubled the vocab and was the 256 MB OOM's fuel). Strip to
+    visible text — the same text the viewer renders — so contradictions see prose only."""
+    return [(rel, name, _s._html_to_text(text) if rel.lower().endswith(".html") else text)
+            for rel, name, text in corpus]
 
 
 def find_value_contradictions(ctx=None, limit: int = 50, corpus=None) -> list:
@@ -258,7 +292,7 @@ def find_value_contradictions(ctx=None, limit: int = 50, corpus=None) -> list:
     INCOMPATIBLE values under the same anchor. Each candidate carries the values + lines."""
     if corpus is None:
         from server.pure import queries  # lazy: avoids an import cycle at module load
-        corpus = queries._doc_corpus(ctx)
+        corpus = _prose_corpus(queries._doc_corpus(ctx))
     by_subject = {}  # subject -> {rel: first Claim in that doc}
     for rel, _name, text in corpus:
         for claim in extract_quantity_claims(text):
@@ -311,7 +345,7 @@ def find_shared_anchor_pairs(ctx=None, corpus=None) -> list:
     (PostgreSQL vs MongoDB) the typed generator can't reach. The AI judges."""
     if corpus is None:
         from server.pure import queries  # lazy: avoids an import cycle at module load
-        corpus = queries._doc_corpus(ctx)
+        corpus = _prose_corpus(queries._doc_corpus(ctx))
     doc_tokens = {rel: _salient_tokens(text) for rel, _name, text in corpus}
     canon = _fuzzy_canon({t for toks in doc_tokens.values() for t in toks})  # fold typo-variants
     doc_tokens = {rel: {canon[t] for t in toks} for rel, toks in doc_tokens.items()}
@@ -348,11 +382,13 @@ def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = Fal
     a 'real' one annotated."""
     from server.pure import queries  # lazy: avoids an import cycle at module load
     corpus = queries._doc_corpus(ctx)
-    high = find_value_contradictions(ctx, limit, corpus=corpus)
+    prose = _prose_corpus(corpus)  # strip HTML once; both generators tokenize prose only
+    high = find_value_contradictions(ctx, limit, corpus=prose)
     high_pairs = {frozenset((h["a"], h["b"])) for h in high}
-    low = [p for p in find_shared_anchor_pairs(ctx, corpus=corpus)
+    low = [p for p in find_shared_anchor_pairs(ctx, corpus=prose)
            if frozenset((p["a"], p["b"])) not in high_pairs]
     vindex = _s.verdict_index()
+    # Verdict cache keys on the raw doc (what the user edits), not the stripped prose.
     hashes = {rel: _s.doc_hash(text) for rel, _name, text in corpus}
     lines = {rel: _s.line_hashes(text) for rel, _name, text in corpus}
     out = []
