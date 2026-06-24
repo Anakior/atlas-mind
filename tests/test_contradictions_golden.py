@@ -14,9 +14,10 @@ REPO_SRC = str(Path(__file__).resolve().parent.parent / "src")
 if REPO_SRC not in sys.path:
     sys.path.insert(0, REPO_SRC)
 
-import server as _s              # noqa: E402
-from config import AtlasConfig   # noqa: E402
-from server.pure import queries  # noqa: E402
+import server as _s                       # noqa: E402
+from config import AtlasConfig            # noqa: E402
+from server.pure import queries           # noqa: E402
+from server.pure import contradictions as c  # noqa: E402
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "contradictions_kb"
 
@@ -77,6 +78,40 @@ class TestGoldenCorpus(unittest.TestCase):
     def test_baseline_precision_is_poor(self):
         # < 50 %: most emitted pairs are not contradictions — the noise the redesign fixes.
         self.assertLess(measure()["precision"], 0.5)
+
+
+class TestValueGenerator(unittest.TestCase):
+    """The new value-collision generator vs the topical baseline, on the same corpus."""
+
+    def _run(self):
+        _s.CONFIG = AtlasConfig.load(root=FIXTURE, env={})
+        cands = c.find_value_contradictions(None, 100)
+        return cands, {_pair((x["a"], x["b"])) for x in cands}
+
+    def test_emits_only_real_contradictions_on_this_corpus(self):
+        # Numeric collisions are high-precision: no false positive here (baseline had 6).
+        cands, pairs = self._run()
+        real = {_pair(c2["docs"]) for c2 in _load_expected()["contradictions"] if len(c2["docs"]) == 2}
+        self.assertTrue(pairs)
+        self.assertEqual(pairs - real, set())
+
+    def test_catches_the_numeric_pairs_baseline_only_reached_via_tags(self):
+        _, pairs = self._run()
+        self.assertIn(_pair(("infra/deploy-prod.md", "infra/deploy-staging.md")), pairs)
+        self.assertIn(_pair(("pricing.md", "pricing-faq.md")), pairs)
+
+    def test_categorical_pairs_are_still_missed_pending_next_level(self):
+        # PostgreSQL/MongoDB and SSO obligatoire/optionnel are textual, not numeric.
+        _, pairs = self._run()
+        self.assertNotIn(_pair(("notes-archi.md", "notes-data.md")), pairs)
+
+    def test_every_candidate_carries_line_evidence(self):
+        cands, _ = self._run()
+        for x in cands:
+            self.assertTrue(x["a_value"] and x["b_value"] and x["a_line"] and x["b_line"])
+
+    def test_generator_is_deterministic(self):
+        self.assertEqual(self._run()[0], self._run()[0])
 
 
 def _report() -> None:

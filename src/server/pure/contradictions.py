@@ -166,3 +166,94 @@ def subject_key(text: str) -> str:
     while words and words[0] in _ARTICLES:
         words.pop(0)
     return " ".join(words)
+
+
+# Bounded FR/EN function words, dropped from anchors so buckets aren't dominated by "le/of/est".
+_STOPWORDS = set(
+    "le la les l un une de des du au aux et ou ni mais donc car ce cet cette ces son sa ses "
+    "leur leurs il elle ils elles on nous vous je tu se y en a dans sur sous par pour avec sans "
+    "vers chez entre est sont etre ete suis es ont ai as avons avez que qui quoi dont ou ne pas "
+    "plus tres si comme aussi the an of to in on at by for with from as is are be been was were "
+    "has have had do does did this that these those it its they we you i and or but not no so if "
+    "then than too very".split()
+)
+_UNIT_WORDS = set(_TIME) | set(_DATA) | set(_RATIO) | set(_CURRENCY_NAME)
+
+
+class Claim(NamedTuple):
+    subject: str   # subject_key of the anchor the value attaches to
+    value: Value
+    line: int
+    raw: str       # the value as written, for line-level evidence
+
+
+def _anchors(line: str) -> list:
+    """Salient words of a line (non-stopword, non-unit), deduped in order — the
+    candidate subjects a value on that line could be about. Currency names live in
+    _UNIT_WORDS; symbols aren't word tokens; the inline unit of a value is removed
+    upstream by blanking its span (see extract_quantity_claims)."""
+    out, seen = [], set()
+    for tok in re.findall(r"[^\W\d_]+", line):
+        low = _s._normalize_text(tok)
+        if len(low) < 3 or low in _STOPWORDS or low in _UNIT_WORDS or low in seen:
+            continue
+        seen.add(low)
+        out.append(low)
+    return out
+
+
+def extract_quantity_claims(text: str) -> list:
+    """Quantities found in prose, each attached to the salient words on its line as
+    candidate subjects. Recall-first: a value is indexed under every plausible anchor,
+    so a shared anchor across two docs forms a comparison (the corpus stage filters by
+    rarity). Only number+unit values here — bare numbers (e.g. ports) are out of scope."""
+    claims = []
+    for i, line in enumerate(text.splitlines(), start=1):
+        matches = list(_QTY_RE.finditer(line))
+        if not matches:
+            continue
+        # Anchors come from the line minus the number+unit spans, so a unit glued to a
+        # number ("EUR", "s") is never mistaken for a subject — an isolated "SSO" stays.
+        blanked = line
+        for m in matches:
+            blanked = blanked[:m.start()] + " " * (m.end() - m.start()) + blanked[m.end():]
+        anchors = _anchors(blanked)
+        for m in matches:
+            value = parse_quantity(m.group(0))
+            if value is not None:
+                for anchor in anchors:
+                    claims.append(Claim(anchor, value, i, m.group(0).strip()))
+    return claims
+
+
+def find_value_contradictions(ctx=None, limit: int = 50) -> list:
+    """Candidates from cross-doc collisions of typed values on a shared subject:
+    two docs asserting INCOMPATIBLE values under the same anchor. A new generator
+    beside the legacy topical one, recall-first (the AI judges). Bounded by subject
+    rarity (a subject in too many docs is generic noise) and a hard limit. Each
+    candidate carries the diverging values and their lines as evidence."""
+    from server.pure import queries  # corpus access; lazy import avoids a load cycle
+
+    corpus = queries._doc_corpus(ctx)
+    by_subject = {}  # subject -> {rel: first Claim in that doc}
+    for rel, _name, text in corpus:
+        for claim in extract_quantity_claims(text):
+            by_subject.setdefault(claim.subject, {}).setdefault(rel, claim)
+
+    cap = max(3, len(corpus) // 2)  # drop ubiquitous anchors (low idf = generic noise)
+    out, seen = [], set()
+    for subject, per_doc in by_subject.items():
+        if not 2 <= len(per_doc) <= cap:
+            continue
+        items = sorted(per_doc.items())
+        for i, (ra, ca) in enumerate(items):
+            for rb, cb in items[i + 1:]:
+                if compare(ca.value, cb.value) != INCOMPATIBLE or (subject, ra, rb) in seen:
+                    continue
+                seen.add((subject, ra, rb))
+                out.append({
+                    "a": ra, "b": rb, "subject": subject,
+                    "a_value": ca.raw, "b_value": cb.raw, "a_line": ca.line, "b_line": cb.line,
+                })
+    out.sort(key=lambda c: (c["a"], c["b"], c["subject"]))
+    return out[:limit]
