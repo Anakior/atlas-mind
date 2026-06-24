@@ -434,7 +434,7 @@
   },
   {
     "name": "contradictions",
-    "description": "Contradiction pre-filter (13c): candidate document PAIRS that share frontmatter tags or are wikilinked — same topic, so they MIGHT disagree. Deterministic shortlist only; YOU then judge each pair by reading both docs (read_doc / doc_diff). When you conclude, persist the verdict with judge_contradiction so the pair stops resurfacing. Each candidate carries `verdict` (real | none | null=unjudged) from the cache when still valid (both docs unchanged since the judgment). Pairs dismissed `none` are hidden unless include_dismissed. Returns { candidates: [{a, b, shared_tags, linked, score, verdict}] }.",
+    "description": "Contradiction finder (13c): candidate document PAIRS that likely disagree, from two signals. HIGH confidence — the same subject carries INCOMPATIBLE typed values across two docs (e.g. timeout 30 s vs 60 s, 29 EUR vs 39 EUR), with the diverging values and lines as evidence. LOW confidence — two docs share a RARE term (same specific subject) with no extractable value, e.g. a categorical conflict (PostgreSQL vs MongoDB); read both to judge. Deterministic shortlist only; YOU judge each pair (read_doc / doc_diff), then persist the verdict with judge_contradiction so it stops resurfacing. Each candidate carries `verdict` (real | none | null=unjudged) from the cache while both docs are unchanged. Pairs dismissed `none` are hidden unless include_dismissed. Returns { candidates: [{a, b, subject, confidence, kind, verdict, ...}] } — high-confidence items add a_value/b_value/a_line/b_line, low-confidence add shared_count.",
     "inputSchema": {
       "type": "object",
       "properties": {

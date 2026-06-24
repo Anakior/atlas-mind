@@ -227,15 +227,15 @@ def extract_quantity_claims(text: str) -> list:
     return claims
 
 
-def find_value_contradictions(ctx=None, limit: int = 50) -> list:
+def find_value_contradictions(ctx=None, limit: int = 50, corpus=None) -> list:
     """Candidates from cross-doc collisions of typed values on a shared subject:
     two docs asserting INCOMPATIBLE values under the same anchor. A new generator
     beside the legacy topical one, recall-first (the AI judges). Bounded by subject
     rarity (a subject in too many docs is generic noise) and a hard limit. Each
     candidate carries the diverging values and their lines as evidence."""
-    from server.pure import queries  # corpus access; lazy import avoids a load cycle
-
-    corpus = queries._doc_corpus(ctx)
+    if corpus is None:
+        from server.pure import queries  # corpus access; lazy import avoids a load cycle
+        corpus = queries._doc_corpus(ctx)
     by_subject = {}  # subject -> {rel: first Claim in that doc}
     for rel, _name, text in corpus:
         for claim in extract_quantity_claims(text):
@@ -269,15 +269,15 @@ def _salient_tokens(text: str) -> set:
             if t not in _STOPWORDS and t not in _UNIT_WORDS}
 
 
-def find_shared_anchor_pairs(ctx=None) -> list:
+def find_shared_anchor_pairs(ctx=None, corpus=None) -> list:
     """Low-confidence candidates: doc pairs that share a RARE term (high idf). No value
     is extracted — this recovers the contradictions whose divergence is categorical/prose
     (PostgreSQL vs MongoDB) and that the typed generator can't reach. A rare shared term
     means 'same specific subject'; the AI judges whether they actually conflict. Far more
     selective than tag-pairing: a term in many docs is dropped as generic."""
-    from server.pure import queries  # corpus access; lazy import avoids a load cycle
-
-    corpus = queries._doc_corpus(ctx)
+    if corpus is None:
+        from server.pure import queries  # corpus access; lazy import avoids a load cycle
+        corpus = queries._doc_corpus(ctx)
     df = Counter()
     doc_tokens = {}
     for rel, _name, text in corpus:
@@ -308,11 +308,25 @@ def find_shared_anchor_pairs(ctx=None) -> list:
     return out
 
 
-def find_contradictions(ctx=None, limit: int = 50) -> list:
+def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = False) -> list:
     """The combined generator: high-confidence typed value collisions first, then
-    low-confidence rare-anchor pairs for what they don't already cover, bounded by limit."""
-    high = find_value_contradictions(ctx, limit)
+    low-confidence rare-anchor pairs for what they don't already cover. Applies the
+    verdict cache — a pair dismissed 'none' is dropped (unless include_dismissed), a
+    'real' one annotated — so a judged contradiction stops resurfacing. Bounded by limit."""
+    from server.pure import queries  # corpus access; lazy import avoids a load cycle
+    corpus = queries._doc_corpus(ctx)
+    high = find_value_contradictions(ctx, limit, corpus=corpus)
     high_pairs = {frozenset((h["a"], h["b"])) for h in high}
-    low = [p for p in find_shared_anchor_pairs(ctx)
+    low = [p for p in find_shared_anchor_pairs(ctx, corpus=corpus)
            if frozenset((p["a"], p["b"])) not in high_pairs]
-    return (high + low)[:limit]
+    vindex = _s.verdict_index()
+    hashes = {rel: _s.doc_hash(text) for rel, _name, text in corpus}
+    out = []
+    for cand in high + low:
+        verdict = _s.valid_verdict(vindex.get((cand["a"], cand["b"])),
+                                   hashes.get(cand["a"], ""), hashes.get(cand["b"], ""))
+        if verdict == "none" and not include_dismissed:
+            continue
+        cand["verdict"] = verdict
+        out.append(cand)
+    return out[:limit]

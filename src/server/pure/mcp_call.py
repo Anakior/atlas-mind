@@ -7,8 +7,9 @@ from pathlib import Path
 import server as _s
 from server.pure.queries import (
     _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
-    _api_stale, _contradiction_candidates, _activity_events,
+    _api_stale, _activity_events,
 )
+from server.pure import contradictions
 from server.pure.git_history import (
     _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
     _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
@@ -488,9 +489,9 @@ def _tool_stale(args, ctx):
 
 def _tool_contradictions(args, ctx):
     limit = clamp_int(args.get("limit"), 15, 1, 50)
-    items = _contradiction_candidates(ctx, limit)
+    items = contradictions.find_contradictions(ctx, limit, bool(args.get("include_dismissed")))
     if not items:
-        return text_result("No contradiction candidates (no docs share tags or links)")
+        return text_result("No contradiction candidates found.")
     return text_result(json.dumps({"candidates": items}, ensure_ascii=False, indent=2))
 
 
