@@ -157,9 +157,9 @@
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5"><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
           <div class="flex items-center gap-1.5 text-sm mt-0.5">
-            ${iconSvg(e.type, 14)}
-            <span style="color:${ty.color};font-weight:600">${verbPhrase(e.type)}</span>
-            <span class="text-ink-300 truncate">${esc(e.title)}</span>
+            <span class="shrink-0" style="line-height:0">${iconSvg(e.type, 14)}</span>
+            <span class="shrink-0" style="color:${ty.color};font-weight:600;white-space:nowrap">${verbPhrase(e.type)}</span>
+            <span class="text-ink-300 truncate min-w-0">${esc(e.title)}</span>
             ${e.count > 1 ? `<span class="text-ink-500 text-xs shrink-0">×${e.count}</span>` : ''}
           </div>
         </div>
