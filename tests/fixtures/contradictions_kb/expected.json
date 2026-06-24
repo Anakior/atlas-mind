@@ -36,6 +36,12 @@
       "kind": "numeric",
       "pairable_by": "none",
       "detail": "delai de paiement 30 j vs 60 j ; ancre typotee (delais/paiment), aucun token exact commun -> exige le fuzzy"
+    },
+    {
+      "docs": ["auth-a.md", "auth-b.md"],
+      "kind": "categorical",
+      "pairable_by": "none",
+      "detail": "strategie d'authentification OAuth vs SAML ; ancres typotees (straegie/authentificaton) -> exige le fuzzy categoriel"
     }
   ],
   "traps": [

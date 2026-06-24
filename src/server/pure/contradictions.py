@@ -305,11 +305,11 @@ def find_shared_anchor_pairs(ctx=None, corpus=None) -> list:
     if corpus is None:
         from server.pure import queries  # lazy: avoids an import cycle at module load
         corpus = queries._doc_corpus(ctx)
+    doc_tokens = {rel: _salient_tokens(text) for rel, _name, text in corpus}
+    canon = _fuzzy_canon({t for toks in doc_tokens.values() for t in toks})  # fold typo-variants
+    doc_tokens = {rel: {canon[t] for t in toks} for rel, toks in doc_tokens.items()}
     df = Counter()
-    doc_tokens = {}
-    for rel, _name, text in corpus:
-        toks = _salient_tokens(text)
-        doc_tokens[rel] = toks
+    for toks in doc_tokens.values():
         df.update(toks)
     cap = max(3, len(corpus) // 10)  # a rare anchor is shared by few docs (high idf)
     token_docs = defaultdict(list)

@@ -35,7 +35,8 @@ class TestFuzzyEndToEnd(unittest.TestCase):
         # delai-a / delai-b share no exact token (delai/delais, paiement/paiment) — only fuzzy finds it.
         _s.CONFIG = AtlasConfig.load(root=FIXTURE, env={})
         pairs = {frozenset((x["a"], x["b"])) for x in c.find_contradictions(None, 100)}
-        self.assertIn(frozenset(("delai-a.md", "delai-b.md")), pairs)
+        self.assertIn(frozenset(("delai-a.md", "delai-b.md")), pairs)        # numeric tier
+        self.assertIn(frozenset(("auth-a.md", "auth-b.md")), pairs)          # categorical tier
 
 
 if __name__ == "__main__":
