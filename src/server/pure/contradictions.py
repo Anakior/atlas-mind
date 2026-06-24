@@ -2,6 +2,7 @@
 
 Values are canonicalized to a base unit so compare() needn't re-derive units.
 """
+import difflib
 import math
 import re
 from collections import Counter, defaultdict
@@ -214,6 +215,44 @@ def extract_quantity_claims(text: str) -> list:
     return claims
 
 
+def _trigrams(word: str) -> set:
+    p = f"  {word}  "
+    return {p[i:i + 3] for i in range(len(p) - 2)}
+
+
+def _fuzzy_canon(keys) -> dict:
+    """Map each subject to a canonical one, merging typo-variants (timeout/timeoout) so
+    their claims pool. Trigram-blocked then difflib-confirmed; keys under 5 chars aren't
+    merged (a one-char gap between short words is usually two words, not a typo)."""
+    grams = {k: _trigrams(k) for k in keys}
+    by_gram = defaultdict(list)
+    for k in keys:
+        for g in grams[k]:
+            by_gram[g].append(k)
+    parent = {k: k for k in keys}
+
+    def root(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    seen = set()
+    for k in keys:
+        if len(k) < 5:
+            continue
+        for c in {c for g in grams[k] for c in by_gram[g] if len(c) >= 5 and c != k}:
+            pair = (k, c) if k < c else (c, k)
+            if pair in seen:
+                continue
+            seen.add(pair)
+            if difflib.SequenceMatcher(None, k, c).ratio() >= 0.85:
+                ra, rb = root(k), root(c)
+                if ra != rb:
+                    parent[max(ra, rb)] = min(ra, rb)  # smaller key = stable representative
+    return {k: root(k) for k in keys}
+
+
 def find_value_contradictions(ctx=None, limit: int = 50, corpus=None) -> list:
     """Cross-doc collisions of typed values on a shared subject: two docs with
     INCOMPATIBLE values under the same anchor. Each candidate carries the values + lines."""
@@ -225,9 +264,16 @@ def find_value_contradictions(ctx=None, limit: int = 50, corpus=None) -> list:
         for claim in extract_quantity_claims(text):
             by_subject.setdefault(claim.subject, {}).setdefault(rel, claim)
 
+    canon = _fuzzy_canon(list(by_subject))  # pool typo-variant anchors before colliding
+    pooled = {}
+    for subject, per_doc in by_subject.items():
+        bucket = pooled.setdefault(canon[subject], {})
+        for rel, claim in per_doc.items():
+            bucket.setdefault(rel, claim)
+
     cap = max(3, len(corpus) // 2)  # skip ubiquitous anchors (low idf = generic noise)
     out, seen = [], set()
-    for subject, per_doc in by_subject.items():
+    for subject, per_doc in pooled.items():
         if not 2 <= len(per_doc) <= cap:
             continue
         items = sorted(per_doc.items())

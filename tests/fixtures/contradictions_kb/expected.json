@@ -30,6 +30,12 @@
       "kind": "intra-doc",
       "pairable_by": "none",
       "detail": "budget 15 j (estimation) vs 20 j (annexe), meme document"
+    },
+    {
+      "docs": ["delai-a.md", "delai-b.md"],
+      "kind": "numeric",
+      "pairable_by": "none",
+      "detail": "delai de paiement 30 j vs 60 j ; ancre typotee (delais/paiment), aucun token exact commun -> exige le fuzzy"
     }
   ],
   "traps": [
