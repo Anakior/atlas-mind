@@ -49,16 +49,19 @@ class TestParseQuantity(unittest.TestCase):
         self.assertEqual((v.number, v.unit, v.dimension), (29.0, "EUR", "money"))
         self.assertEqual(c.parse_quantity("39 EUR").number, 39.0)
 
-    def test_currency_works_for_any_iso_code_or_symbol(self):
+    def test_currency_by_symbol_code_or_fr_en_name(self):
         self.assertEqual(c.parse_quantity("100 CHF").unit, "CHF")   # ISO code, no list needed
         self.assertEqual(c.parse_quantity("100 CHF").dimension, "money")
         self.assertEqual(c.parse_quantity("29 £").unit, "GBP")      # symbol → ISO code
-        self.assertIsNone(c.parse_quantity("29 euros"))             # spelled-out name: out of scope
+        self.assertEqual(c.parse_quantity("29 euros").unit, "EUR")  # FR name → ISO code
+        self.assertIsNone(c.parse_quantity("29 bananes"))           # not a currency
 
-    def test_units_are_abbreviations_not_spelled_words(self):
-        self.assertEqual(c.parse_quantity("3 h").number, 10800.0)   # abbreviation
-        self.assertIsNone(c.parse_quantity("3 heures"))             # spelled word: out of scope
-        self.assertIsNone(c.parse_quantity("200 octets"))           # idem
+    def test_units_accept_abbreviations_and_fr_en_words(self):
+        self.assertEqual(c.parse_quantity("3 h").number, 10800.0)        # abbreviation
+        self.assertEqual(c.parse_quantity("3 heures").number, 10800.0)   # FR word
+        self.assertEqual(c.parse_quantity("3 hours").number, 10800.0)    # EN word
+        self.assertEqual(c.parse_quantity("200 octets").number, 200.0)   # FR word
+        self.assertIsNone(c.parse_quantity("3 fortnights"))             # outside the bounded set
 
     def test_bare_number_or_text_is_not_a_quantity(self):
         self.assertIsNone(c.parse_quantity("8799"))
