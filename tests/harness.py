@@ -290,7 +290,8 @@ class AtlasServer:
         """git in the test mind (machine config neutralized)."""
         return subprocess.run(
             ["git", *args], cwd=str(self.root), env=self._git_env(),
-            capture_output=True, text=True, timeout=30, check=check,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=30, check=check,
         )
 
     def _init_git(self) -> None:

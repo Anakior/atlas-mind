@@ -63,7 +63,7 @@ btnMoreMenu.addEventListener('click', async (e) => {
       setStatus(t('docDeleted'), 'ok');
       await refreshTreeOrReload();
     } catch (e) {
-      alert(t('err', e.message));
+      notifyError('err', e.message);
     }
   }
 });
@@ -209,6 +209,47 @@ function confirmDialog(opts) {
     confirmBackdrop.addEventListener('click', onBackdrop);
     document.addEventListener('keydown', onKey);
   });
+}
+
+// ── Alert popup (replaces the native alert()) ────────────────────────────────
+// A single-button notice reusing the confirm dialog's chrome, so it matches every
+// other modal. Fire-and-forget: callers don't await it.
+function alertDialog(opts) {
+  const o = typeof opts === 'string' ? { message: opts } : (opts || {});
+  return new Promise((resolve) => {
+    confirmTitle.textContent = o.title || t('errorTitle');
+    confirmMessage.textContent = o.message || '';
+    confirmOk.textContent = o.okLabel || t('ok');
+    confirmOk.className = 'px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium';
+    confirmCancel.classList.add('hidden');   // alert = one OK button only
+    confirmBackdrop.classList.remove('hidden');
+    setTimeout(() => confirmOk.focus(), 50);
+    const cleanup = () => {
+      confirmBackdrop.classList.add('hidden');
+      confirmCancel.classList.remove('hidden');   // restore for confirmDialog
+      confirmOk.removeEventListener('click', done);
+      confirmBackdrop.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+    };
+    const done = () => { cleanup(); resolve(); };
+    const onBackdrop = (e) => { if (e.target === confirmBackdrop) done(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); done(); }
+    };
+    confirmOk.addEventListener('click', done);
+    confirmBackdrop.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+// Error notice. In an OFFLINE build every server-backed action is disabled, so we
+// always show one clear "disabled offline" message (in the UI language) rather
+// than leaking a raw network error; online we show the specific message for `key`.
+function notifyError(key, ...args) {
+  if (IS_OFFLINE_BUILD) {
+    return alertDialog({ title: t('offlineTitle'), message: t('offlineDisabled') });
+  }
+  return alertDialog({ title: t('errorTitle'), message: t(key, ...args) });
 }
 
 // Input modal (replaces the native prompt, banned from the viewer). Resolves the

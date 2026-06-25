@@ -133,6 +133,24 @@ class TestBrandingConfig(unittest.TestCase):
             self._config({"lang": "de"})
         self.assertIn("lang", str(ctx.exception))
 
+    def test_site_section_parsed(self):
+        cfg = self._config({"site": {
+            "url": "https://atlas-mind.anakior.app/demo/",
+            "description": "Demo description.",
+            "og_image": "https://atlas-mind.anakior.app/assets/card.jpg"}})
+        self.assertEqual(cfg.site_url, "https://atlas-mind.anakior.app/demo/")
+        self.assertEqual(cfg.site_description, "Demo description.")
+        self.assertEqual(cfg.og_image,
+                         "https://atlas-mind.anakior.app/assets/card.jpg")
+
+    def test_site_defaults_empty(self):
+        # No [site] → a private instance: empty url/description/og_image, so the
+        # build emits no canonical/OG.
+        cfg = self._config({})
+        self.assertEqual(cfg.site_url, "")
+        self.assertEqual(cfg.site_description, "")
+        self.assertEqual(cfg.og_image, "")
+
 
 HOSTILE_PREFIX = "`${alert(1)}\"'</script><svg onload=evil()>"
 
@@ -206,9 +224,16 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
         # Without a prefix, the styled wordmark stays alone in the H1 (the prefix
         # span is empty) and the viewer's JS constant is the empty string.
         self.assertIn('const SITE_PREFIX = "";', text)
+        # The default mind has no [site].url → only a <meta description> from
+        # the tagline, no canonical/OG it has no public URL to back.
+        self.assertIn(
+            '<meta name="description" content="Personal knowledge base.">', text)
+        self.assertNotIn('property="og:', text)
+        self.assertNotIn('rel="canonical"', text)
         # All identity placeholders were consumed by build.py.
         for placeholder in ("__SITE_NAME__", "__SITE_SHORT_NAME__",
-                            "__SITE_PREFIX__", "__TAGLINE__", "__LANG__"):
+                            "__SITE_PREFIX__", "__TAGLINE__", "__LANG__",
+                            "__HEAD_META__"):
             self.assertNotIn(placeholder, text)
         # The engine itself (template + service worker) is de-personalized: no
         # proper name nor a PWA cache under a personal name anymore.
@@ -332,6 +357,97 @@ class TestBrandingLoginPage(unittest.TestCase):
         # /vendor/fonts.css, no more fonts.googleapis request).
         self.assertIn('href="/vendor/fonts.css"', resp.text)
         self.assertNotIn("fonts.googleapis.com", resp.text)
+
+
+class TestHeadMetaSEO(unittest.TestCase):
+    """The viewer <head>'s description / canonical / Open Graph block, driven by
+    the optional [site] config. The description is ALWAYS emitted (falls back to
+    the tagline); canonical + OG/Twitter appear ONLY when [site].url is set, so a
+    private, per-user instance never advertises a canonical URL it doesn't have."""
+
+    def _render(self, **site) -> str:
+        return build.render_template(
+            tree={"name": "content", "path": "", "dirs": [], "files": []},
+            embed_content=None, embed_backlinks=None, embed_notes=None,
+            build_ts="2026-01-01T00:00:00Z", tagline="My tagline.", lang="en",
+            **site)
+
+    def test_description_always_emitted_from_tagline(self):
+        html = self._render()
+        self.assertIn('<meta name="description" content="My tagline.">', html)
+        self.assertNotIn("__HEAD_META__", html)
+
+    def test_no_canonical_or_og_without_url(self):
+        html = self._render()
+        self.assertNotIn('property="og:', html)
+        self.assertNotIn('rel="canonical"', html)
+        self.assertNotIn('name="twitter:', html)
+
+    def test_explicit_description_overrides_tagline(self):
+        html = self._render(site_description="Custom SEO description.")
+        self.assertIn(
+            '<meta name="description" content="Custom SEO description.">', html)
+
+    def test_url_emits_canonical_and_large_og_card(self):
+        html = self._render(site_url="https://example.com/demo/",
+                            og_image="https://example.com/card.jpg")
+        self.assertIn('<link rel="canonical" href="https://example.com/demo/">',
+                      html)
+        self.assertIn('<meta property="og:type" content="website">', html)
+        self.assertIn(
+            '<meta property="og:url" content="https://example.com/demo/">', html)
+        self.assertIn(
+            '<meta property="og:image" content="https://example.com/card.jpg">',
+            html)
+        self.assertIn(
+            '<meta name="twitter:card" content="summary_large_image">', html)
+
+    def test_url_without_image_is_a_summary_card(self):
+        html = self._render(site_url="https://example.com/")
+        self.assertIn('<meta name="twitter:card" content="summary">', html)
+        self.assertNotIn("og:image", html)
+
+    def test_og_locale_follows_lang(self):
+        html = build.render_template(
+            tree={"name": "content", "path": "", "dirs": [], "files": []},
+            embed_content=None, embed_backlinks=None, embed_notes=None,
+            build_ts="2026-01-01T00:00:00Z", tagline="x", lang="fr",
+            site_url="https://example.com/")
+        self.assertIn('<meta property="og:locale" content="fr_FR">', html)
+
+    def test_hostile_site_values_are_escaped(self):
+        # A description with quotes/markup would break out of the content
+        # attribute and inject a tag: it must only exist escaped.
+        html = self._render(site_url="https://example.com/",
+                            site_description='"><script>alert(1)</script>')
+        self.assertNotIn("<script>alert(1)", html)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
+
+
+class TestEmbedActivity(unittest.TestCase):
+    """The offline activity-layer snapshot embed (__EMBED_ACTIVITY__): null online
+    (the home fetches /api/activity), or the inlined {events, stale,
+    contradictions} snapshot offline so the static demo shows the activity home."""
+
+    def _render(self, embed_activity):
+        return build.render_template(
+            tree={"name": "content", "path": "", "dirs": [], "files": []},
+            embed_content=None, embed_backlinks=None, embed_notes=None,
+            embed_activity=embed_activity,
+            build_ts="2026-01-01T00:00:00Z", tagline="x", lang="en")
+
+    def test_null_when_not_embedded(self):
+        # Online build (and any build without a snapshot): the JS constant is null
+        # so the viewer falls back to the live /api/activity fetch.
+        self.assertIn("const EMBED_ACTIVITY = null;", self._render(None))
+
+    def test_snapshot_inlined_when_embedded(self):
+        snap = {"events": [{"sha": "abc123", "type": "edit", "ai": "claude"}],
+                "stale": [], "contradictions": []}
+        html = self._render(snap)
+        self.assertNotIn("const EMBED_ACTIVITY = null;", html)
+        self.assertIn('"events"', html)
+        self.assertIn('"sha": "abc123"', html)
 
 
 if __name__ == "__main__":

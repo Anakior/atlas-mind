@@ -389,7 +389,7 @@ async function enterEditMode() {
   try {
     content = await loadContent(currentFile);
   } catch (e) {
-    alert(t('cantLoadDoc', e.message));
+    notifyError('cantLoadDoc', e.message);
 
     return;
   }
@@ -514,7 +514,7 @@ async function saveEdit() {
   if (!editMode || !currentFile) return;
 
   if (!isServerMode) {
-    alert(t('fileModeNoEdit'));
+    notifyError('fileModeNoEdit');
 
     return;
   }
@@ -543,7 +543,7 @@ async function saveEdit() {
     _selfSaveUntil[currentFile.path] = Date.now() + 6000;
     exitEditMode(true);
   } catch (e) {
-    alert(t('err', e.message));
+    notifyError('err', e.message);
   } finally {
     btnSave.disabled = false;
     btnSave.textContent = t('saveBtn');

@@ -802,7 +802,11 @@ if (EMBED_MIND) {
 }
 
 // To-do widget
-const isServerMode = location.protocol === 'http:' || location.protocol === 'https:';
+// A static OFFLINE build (EMBED_CONTENT inlined) is NEVER in server mode, even when
+// hosted over http(s) — e.g. the GitHub Pages /demo/. Keying this on the protocol
+// alone made such a build hit /api/* endpoints and a service worker that don't exist
+// there → 404s and a home stuck on skeletons. Offline = read from the embed.
+const isServerMode = (location.protocol === 'http:' || location.protocol === 'https:') && !IS_OFFLINE_BUILD;
 const todoWidget = document.getElementById('todo-widget');
 const todoHeader = document.getElementById('todo-header');
 const todoBody = document.getElementById('todo-body');

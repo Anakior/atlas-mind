@@ -1,5 +1,5 @@
 {
-    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "name": "app.anakior/atlas-mind",
     "description": "Self-hosted git-native knowledge base with an MCP endpoint your AI reads, writes and rewinds",
     "version": "0.8.6",
@@ -8,23 +8,18 @@
         "url": "https://github.com/Anakior/atlas-mind",
         "source": "github"
     },
-    "packages": [
+    "remotes": [
         {
-            "registry_type": "pypi",
-            "identifier": "atlas-mind",
-            "version": "0.8.6",
-            "transport": {
-                "type": "streamable-http",
-                "url": "{ATLAS_MCP_URL}"
-            },
-            "environment_variables": [
-                {
-                    "name": "ATLAS_MCP_URL",
-                    "description": "MCP URL of your running Atlas Mind instance, minted in Settings → Tokens in the web UI (or `atlas token create` locally), e.g. https://your-atlas/mcp/<token>",
-                    "is_required": true,
-                    "is_secret": true
+            "type": "streamable-http",
+            "url": "https://{ATLAS_MCP_URL}",
+            "variables": {
+                "ATLAS_MCP_URL": {
+                    "description": "Host + path (including the token) of your running Atlas Mind instance's MCP endpoint, WITHOUT the leading https:// - minted in Settings -> Tokens in the web UI (or `atlas token create` locally). Example: your-atlas.example.com/mcp/<token>",
+                    "isRequired": true,
+                    "isSecret": true,
+                    "format": "string"
                 }
-            ]
+            }
         }
     ]
 }

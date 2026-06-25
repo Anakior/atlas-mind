@@ -51,7 +51,11 @@
     `<img src="/icon.svg" width="${size}" height="${size}" alt="Atlas" style="display:block">`;
 
   const avatar = (e, size) => {
-    if (e.bot) return botAvatar(size);
+    // The bot shows the app logo, served at /icon.svg. That URL 404s in a
+    // single-file OFFLINE build (the img src is built at runtime, so the offline
+    // inliner can't rewrite it), so there we fall back to a constellation glyph
+    // rather than a broken image.
+    if (e.bot && !IS_OFFLINE_BUILD) return botAvatar(size);
     try {
       return constellationSvg(avatarSeed(e.first, e.last, e.email), size);
     } catch (_) {
@@ -119,7 +123,12 @@
   const shownItems = () => (_aiOnly ? _items.filter((i) => i.ai) : _items);
 
   async function load() {
-    if (IS_OFFLINE_BUILD || !location.protocol.startsWith('http')) return null;
+    // Offline build: read the activity snapshot frozen into the page at build
+    // time (public minds only) instead of hitting /api/activity.
+    if (IS_OFFLINE_BUILD) {
+      return EMBED_ACTIVITY ? EMBED_ACTIVITY.events.map(toItem) : null;
+    }
+    if (!location.protocol.startsWith('http')) return null;
     try {
       const r = await fetch('/api/activity?since=60&limit=200');
       if (!r.ok) return null;
@@ -411,14 +420,21 @@
   // serveur ; l'IA juge via MCP). Les clics sur un doc rouvrent son historique.
   async function loadHealth(h) {
     let stale = [], cands = [];
-    try {
-      const [rs, rc] = await Promise.all([
-        fetch('/api/stale?months=6&limit=40'),
-        fetch('/api/contradictions?limit=50'),
-      ]);
-      if (rs.ok) stale = (await rs.json()).stale || [];
-      if (rc.ok) cands = (await rc.json()).candidates || [];
-    } catch (_) {}
+    if (IS_OFFLINE_BUILD) {
+      // Offline: from the embedded snapshot (same shape as /api/stale and the
+      // /api/contradictions candidates), no network.
+      stale = (EMBED_ACTIVITY && EMBED_ACTIVITY.stale) || [];
+      cands = (EMBED_ACTIVITY && EMBED_ACTIVITY.contradictions) || [];
+    } else {
+      try {
+        const [rs, rc] = await Promise.all([
+          fetch('/api/stale?months=6&limit=40'),
+          fetch('/api/contradictions?limit=50'),
+        ]);
+        if (rs.ok) stale = (await rs.json()).stale || [];
+        if (rc.ok) cands = (await rc.json()).candidates || [];
+      } catch (_) {}
+    }
     _health = { stale, cands };
     h.innerHTML = healthHtml();
   }

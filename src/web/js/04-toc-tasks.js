@@ -64,7 +64,7 @@ function wireTaskCheckboxes(file, fullContent) {
 
           if (currentFile && currentFile.path === file.path) currentFile.content = prev;
           box.checked = !desired;
-          alert(t('err', e.message));
+          notifyError('err', e.message);
         });
 
       _taskWrites.add(write);

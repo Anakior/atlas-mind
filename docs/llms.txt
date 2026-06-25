@@ -1,0 +1,20 @@
+# Atlas Mind
+
+> A self-hostable, git-native knowledge base and an AI memory over MCP. Your notes stay plain Markdown files in your own private git repository, served by a single Python standard-library server — no database, no third-party network calls. AGPL-3.0.
+
+Atlas Mind is a self-hosted wiki / knowledge-base engine and an external brain you share with your AI over the Model Context Protocol (MCP). It is a Notion / Obsidian-Publish alternative built on three ideas: own the data (plain files in your own git repo), own the engine (a small Python server you can read line by line), and own the mind (an AI memory you can read and edit by hand, not an opaque vector store). If the engine vanished, your mind still opens in any text editor.
+
+## Key pages
+- [Homepage](https://atlas-mind.anakior.app/): what Atlas Mind is — the problem (rented minds), the three pillars, and the MCP "superpowers".
+- [Live demo](https://atlas-mind.anakior.app/demo/): the real viewer running entirely in your browser (offline build) — browse the guides and features, the force-directed Mind graph, and the activity layer. No signup.
+
+## Project
+- [GitHub repository](https://github.com/Anakior/atlas-mind): source (Python, standard library only), install and self-hosting documentation, AGPL-3.0.
+- [PyPI package](https://pypi.org/project/atlas-mind/): install with `uv tool install atlas-mind` or `pipx install atlas-mind`, then `atlas serve ~/my-mind`.
+- [MCP server](https://registry.modelcontextprotocol.io/): published as `app.anakior/atlas-mind` — 22 tools to read, write, map, rewind and audit a knowledge base over MCP.
+
+## What it does
+- Multi-format: Markdown is first-class (rendered, linked, searched); standalone HTML decks, PDF and Word `.docx` are previewed inline, converted in the browser.
+- AI-native: an MCP endpoint exposes 22 tools across five groups — read, write (with backlink fixups), graph traversal, time-travel over git history, and an activity/attribution layer (who changed what, AI-authored detection, stale docs, same-topic contradictions). It is a persistent, local, read-and-write memory for an AI.
+- Lightweight and self-contained: one Python HTTP server on the standard library, no database (accounts and share links are plain JSON on disk), vendored fonts and libraries, zero third-party network calls — your mind never leaves your disk.
+- Collaboration: per-document access control in cloud mode, plus a pull-based "Hive Mind" that mirrors a slice of another instance's content as read-only nodes.

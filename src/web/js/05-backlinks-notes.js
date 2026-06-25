@@ -512,7 +512,7 @@ async function saveNewNote(text) {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (e) {
-    alert(t('noteSaveFailed', e.message));
+    notifyError('noteSaveFailed', e.message);
 
     return;
   }
@@ -542,7 +542,7 @@ async function saveEditNote(note, text) {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (e) {
-    alert(t('actionFailed', e.message));
+    notifyError('actionFailed', e.message);
 
     return;
   }
@@ -573,7 +573,7 @@ async function deleteNote(note) {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (e) {
-    alert(t('actionFailed', e.message));
+    notifyError('actionFailed', e.message);
 
     return;
   }

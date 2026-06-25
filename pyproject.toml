@@ -5,19 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "atlas-mind"
 dynamic = ["version"]
-description = "Self-hostable, AI-native knowledge base engine — an external brain you share with your AI."
+description = "Self-hostable, git-native knowledge base & AI memory (MCP) — your notes stay plain files in your own git repo. No database."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "The Atlas Mind authors" }]
-keywords = ["knowledge-base", "wiki", "markdown", "self-hosted", "mcp", "ai", "notes"]
+keywords = [
+    "knowledge-base", "wiki", "markdown", "self-hosted", "mcp", "mcp-server",
+    "model-context-protocol", "ai", "notes", "note-taking", "pkm", "zettelkasten",
+    "second-brain", "digital-garden", "knowledge-management", "knowledge-graph",
+    "notion-alternative", "obsidian-alternative", "git",
+]
 classifiers = [
+    "Development Status :: 4 - Beta",
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
     "Environment :: Web Environment",
     "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
     "Topic :: Documentation",
     "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Office/Business :: Groupware",
+    "Natural Language :: English",
+    "Natural Language :: French",
 ]
 # The engine is pure standard library. bcrypt is an OPTIONAL extra, used only to
 # verify legacy "$2…" password hashes (the native scheme is scrypt, stdlib).
@@ -33,9 +48,11 @@ atlas = "atlas_mind.cli:main"
 atlas-mind = "atlas_mind.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Anakior/atlas-mind"
+Homepage = "https://atlas-mind.anakior.app/"
+Demo = "https://atlas-mind.anakior.app/demo/"
 Repository = "https://github.com/Anakior/atlas-mind"
 Issues = "https://github.com/Anakior/atlas-mind/issues"
+Changelog = "https://github.com/Anakior/atlas-mind/releases"
 
 # The engine lives under src/ and is published as the `atlas_mind` package. The
 # viewer assets (src/web) and document skeletons (src/templates) live INSIDE the

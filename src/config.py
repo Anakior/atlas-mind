@@ -49,6 +49,13 @@ atlas.toml format (all keys optional):
 
     [build]
     excluded_names = ["drafts", "quick.md"]
+
+    [site]                        # PUBLIC SEO/social metadata (all optional)
+    url = "https://example.com/"  # public base URL → <link canonical> + Open
+                                  # Graph/Twitter card. Unset = private instance
+                                  # (only a <meta name=description> is emitted).
+    description = "..."           # meta/OG description (default: the tagline)
+    og_image = "https://example.com/card.jpg"  # social-card image (absolute URL)
 """
 from pathlib import Path
 import difflib
@@ -110,6 +117,7 @@ _KNOWN_TOML_KEYS = {
     "git": frozenset({"author_name", "author_email", "repo_url"}),
     "todo": frozenset({"file", "categories"}),
     "build": frozenset({"excluded_names"}),
+    "site": frozenset({"url", "description", "og_image"}),
 }
 _KNOWN_TOML_TOP_LEVEL = (frozenset({"prefix", "tagline", "lang"})
                          | frozenset(_KNOWN_TOML_KEYS))
@@ -452,6 +460,16 @@ class AtlasConfig:
         excluded = _toml_str_list(build, "build", "excluded_names")
         self.excluded_names = (set(excluded) if excluded is not None
                                else set(DEFAULT_EXCLUDED_NAMES))
+
+        # ── site (public SEO/social metadata, opt-in) ──────────────────────
+        # All optional. url empty (default) = a private/per-user instance: the
+        # build emits only <meta name=description> (from the tagline), never a
+        # canonical or Open Graph URL it has no business advertising. Set url on
+        # a PUBLIC mind (the demo, a published garden) to get canonical + OG.
+        site = _table(data, "site")
+        self.site_url = _toml_str(site, "site", "url", "").strip()
+        self.site_description = _toml_str(site, "site", "description", "").strip()
+        self.og_image = _toml_str(site, "site", "og_image", "").strip()
 
     @property
     def site_name(self) -> str:

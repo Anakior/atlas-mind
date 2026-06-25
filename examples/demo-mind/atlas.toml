@@ -7,6 +7,12 @@ prefix = ""
 tagline = "A live, in-browser demo — your knowledge, your engine, your mind."
 lang = "en"
 
+[site]
+# PUBLIC demo on GitHub Pages → emit canonical + Open Graph/Twitter card.
+url = "https://atlas-mind.anakior.app/demo/"
+description = "Live, in-browser demo of Atlas Mind — a self-hosted, git-native knowledge base and Notion / Obsidian Publish alternative, with an AI memory over MCP."
+og_image = "https://atlas-mind.anakior.app/assets/og-card.jpg"
+
 [build]
 # Nothing to hide in the demo; the whole tree is meant to be browsed.
 excluded_names = []
