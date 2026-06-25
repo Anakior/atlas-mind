@@ -71,6 +71,7 @@ EVENTS = [
     (54, "theo", None, "w", "features/ai-native.md"),
     (47, "sasha", None, "w", "guides/install-and-setup.md"),
     (47, "theo", None, "w", "guides/markdown-showcase.md"),
+    (47, "theo", None, "w", "notes/atlas-by-the-numbers.md"),  # the "22 tools" note (goes stale)
     (47, "sasha", "claude", "w", "features/ai-native.md"),
     (41, "sasha", None, "w", "guides/wikilinks-and-backlinks.md"),
     (41, "theo", None, "w", "features/collaboration.md"),
@@ -87,6 +88,7 @@ EVENTS = [
     (6, "sasha", "claude", "w", "features/own-your-data.md"),
     (6, "bot", None, "w", "remotes/mira-garden/zettelkasten.md"),
     (6, "theo", None, "w", "features/collaboration.md"),
+    (6, "sasha", None, "w", "guides/whats-inside.md"),  # newer "24 tools": contradicts the note
     (2, "sasha", None, "w", "features/the-mind-graph.md"),
 ]
 
@@ -183,9 +185,10 @@ def build_history(repo: Path):
 
 
 def trim_contradictions(html_path: Path, keep: int = 5):
-    """The corpus yields ~50 contradiction CANDIDATES (every shared-tag pair). For
-    the demo, keep only the few highest-overlap ones so Health/contradictions reads
-    as a curated shortlist, not a wall. Rewrites the single EMBED_ACTIVITY line."""
+    """Cap the embedded contradictions to a short list so Health/contradictions reads as a
+    curated shortlist, not a wall. The solid_only snapshot already yields a handful (the
+    "22 vs 24 tools" table-drift here), so this is just a safety cap. Rewrites the single
+    EMBED_ACTIVITY line."""
     prefix = "const EMBED_ACTIVITY = "
     lines = html_path.read_text(encoding="utf-8").splitlines(keepends=True)
     for i, line in enumerate(lines):

@@ -17,10 +17,20 @@ highlights, not every commit — and versioning tracks the PyPI package.
   serves live instead of an empty one.
 
 ### Changed
+- Contradiction detection reworked. The old typed-value collision finder (which
+  flagged dozens of non-issues) gives way to topical tf-idf cosine clusters plus
+  three precise deterministic detectors (aligned table-row drift, polarity/negation,
+  intra-doc status). The Health card now shows only the solid signals: a value
+  divergence between two aligned tables, or a pair your AI has confirmed. The broader
+  same-topic clusters stay the AI's on-demand material via the `contradictions` MCP
+  tool, so the card surfaces a handful instead of dozens.
 - Errors now surface as a styled in-app popup instead of the native `alert()`;
   in an offline build every server-backed action shows a single localized
   "feature disabled offline" notice.
 
 ### Fixed
+- The contradiction scan is now Unicode-aware (non-latin scripts such as Cyrillic
+  or CJK no longer silently return nothing) and provably memory-bounded, so a large
+  or markup-heavy mind can no longer run the scan out of memory.
 - Git output is decoded as UTF-8 on every platform — accented author names in the
   activity feed and the `→` in move subjects no longer mojibake on Windows.

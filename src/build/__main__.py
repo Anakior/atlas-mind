@@ -128,7 +128,10 @@ def _snapshot_activity(cfg):
     return {
         "events": events,
         "stale": _s._api_stale(6, 40, None),               # months, limit, no ACL
-        "contradictions": _s.find_contradictions(None, 50, False),
+        # solid_only mirrors the /api/contradictions route the live viewer hits, so the
+        # offline card shows the same feed (high-confidence detectors + confirmed pairs),
+        # not the raw cosine clusters that are the AI's on-demand material via MCP.
+        "contradictions": _s.find_contradictions(None, 50, False, solid_only=True),
     }
 
 
