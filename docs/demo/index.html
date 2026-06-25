@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build:2026-06-25T06:04:25Z -->
+<!-- build:2026-06-25T06:58:35Z -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2216,7 +2216,7 @@ return He}()
       </a>
     </div>
     <div class="px-5 py-3 border-t subtle-border text-xs text-ink-500">
-      <span class="font-mono text-ink-400">v0.8.3</span> &middot; Build&nbsp;: <code class="bg-black/40 text-ink-300 px-1.5 py-0.5 rounded font-mono">2026-06-25T06:04:25Z</code>
+      <span class="font-mono text-ink-400">v0.8.3</span> &middot; Build&nbsp;: <code class="bg-black/40 text-ink-300 px-1.5 py-0.5 rounded font-mono">2026-06-25T06:58:35Z</code>
     </div>
   </aside>
   <main class="flex-1 overflow-y-auto scrollbar-thin bg-navy-700">
@@ -10386,7 +10386,11 @@ if (EMBED_MIND) {
 }
 
 // To-do widget
-const isServerMode = location.protocol === 'http:' || location.protocol === 'https:';
+// A static OFFLINE build (EMBED_CONTENT inlined) is NEVER in server mode, even when
+// hosted over http(s) — e.g. the GitHub Pages /demo/. Keying this on the protocol
+// alone made such a build hit /api/* endpoints and a service worker that don't exist
+// there → 404s and a home stuck on skeletons. Offline = read from the embed.
+const isServerMode = (location.protocol === 'http:' || location.protocol === 'https:') && !IS_OFFLINE_BUILD;
 const todoWidget = document.getElementById('todo-widget');
 const todoHeader = document.getElementById('todo-header');
 const todoBody = document.getElementById('todo-body');
