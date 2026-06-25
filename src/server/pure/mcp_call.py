@@ -512,8 +512,8 @@ def _tool_judge_contradiction(args, ctx):
     if verdict not in _s.VERDICTS:
         return text_result(f"verdict must be one of {list(_s.VERDICTS)}", is_error=True)
     ta, tb = _s._validate_doc_path(a), _s._validate_doc_path(b)
-    if ta is None or tb is None or a == b:
-        return text_result("invalid pair (need two distinct existing docs)", is_error=True)
+    if ta is None or tb is None or (a == b and clamp_int(args.get("a_line"), 0, 0) == clamp_int(args.get("b_line"), 0, 0)):
+        return text_result("invalid pair (need two distinct docs, or one doc with distinct lines)", is_error=True)
     if not (ta.exists() and tb.exists() and _visible(a, ctx) and _visible(b, ctx)):
         return text_result("one or both docs not found / not visible", is_error=True)
     try:

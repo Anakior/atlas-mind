@@ -434,7 +434,7 @@
   },
   {
     "name": "contradictions",
-    "description": "Contradiction finder (13c): candidate document PAIRS that likely disagree, from two signals. HIGH confidence — the same subject carries INCOMPATIBLE typed values across two docs (e.g. timeout 30 s vs 60 s, 29 EUR vs 39 EUR), with the diverging values and lines as evidence. LOW confidence — two docs share a RARE term (same specific subject) with no extractable value, e.g. a categorical conflict (PostgreSQL vs MongoDB); read both to judge. Deterministic shortlist only; YOU judge each pair (read_doc / doc_diff), then persist the verdict with judge_contradiction so it stops resurfacing. Each candidate carries `verdict` (real | none | null=unjudged) from the cache while both docs are unchanged. Pairs dismissed `none` are hidden unless include_dismissed. Returns { candidates: [{a, b, subject, confidence, kind, verdict, ...}] } — high-confidence items add a_value/b_value/a_line/b_line, low-confidence add shared_count.",
+    "description": "Same-subject document pairs that may hide a conflict: topical clusters (mutual relative tf-idf cosine) plus deterministic detectors: aligned table-row drift (confidence 'high', precise) and polarity/negation + intra-doc status leads (confidence 'review', à vérifier). The engine asserts nothing; each candidate is a lead to read and judge. Returns `{candidates:[{a,b,kind,subject,confidence,score,cluster_id,cluster_size,evidence,verdict,...}]}`; detectors add `a_line/b_line/a_value/b_value`. Evidence lines are framed 'à vérifier'. `none` pairs hidden unless include_dismissed.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -454,7 +454,7 @@
   },
   {
     "name": "judge_contradiction",
-    "description": "Persist your verdict on a candidate PAIR (13c feedback loop), after reading both docs. verdict='real' (they genuinely conflict) or 'none' (not a contradiction — clears the false positive so it stops resurfacing). Content-bound: pass a_line/b_line (the conflicting lines you judged) and the verdict binds to THOSE lines, so edits elsewhere in the docs don't resurface the pair — it only resurfaces when the judged lines change; without them it binds to the whole doc. NOTE: 'one doc is outdated' is NOT a verdict here — that is the stale tool's axis; judge only whether the two docs conflict.",
+    "description": "Persist your verdict on a candidate PAIR (13c feedback loop), after reading both docs. verdict='real' (they genuinely conflict) or 'none' (not a contradiction, which clears the false positive so it stops resurfacing). Content-bound: pass a_line/b_line (the conflicting lines you judged) and the verdict binds to THOSE lines, so edits elsewhere in the docs don't resurface the pair; it only resurfaces when the judged lines change. Without them it binds to the whole doc. a==b is allowed for an intra-doc status conflict (the two conflicting claims live in the same file); it then requires distinct a_line/b_line. NOTE: 'one doc is outdated' is NOT a verdict here, that is the stale tool's axis; judge only whether the two docs conflict.",
     "inputSchema": {
       "type": "object",
       "properties": {

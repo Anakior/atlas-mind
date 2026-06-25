@@ -14,9 +14,14 @@ import server as _s              # noqa: E402
 from config import AtlasConfig   # noqa: E402
 from server.pure import contradictions as c  # noqa: E402
 
+# Two docs sharing >=2 rare content tokens (webhook / timeout / retry / idempotence) so they
+# form a cosine cluster pair the engine emits. The deleted value tower's 30 s/60 s docs would
+# never surface now. The verdict-cache behaviour below is what is under test, not the detector.
 DOCS = {
-    "a.md": "# A\n\nLe timeout du webhook est de 30 s.\n",
-    "b.md": "# B\n\nLe timeout du webhook est de 60 s.\n",
+    "a.md": ("# A\n\nLe webhook gère le timeout et la retry idempotence.\n"
+             "Configuration idempotence du timeout webhook documentée.\n"),
+    "b.md": ("# B\n\nLe timeout webhook déclenche une retry.\n"
+             "Idempotence du webhook: la retry respecte le timeout.\n"),
 }
 PAIR = frozenset(("a.md", "b.md"))
 
@@ -59,17 +64,19 @@ class TestVerdictCache(unittest.TestCase):
         p.write_text(fn(p.read_text(encoding="utf-8-sig")), encoding="utf-8", newline="")
 
     def test_span_bound_verdict_survives_unrelated_edit_but_not_a_judged_edit(self):
-        # Dismiss the pair, bound to the timeout lines (the actual conflicting claim).
+        # Dismiss the pair, bound to the webhook lines (the actual judged claim).
         ha, hb = self._hashes()
-        sa = _s.doc_hash("Le timeout du webhook est de 30 s.")
-        sb = _s.doc_hash("Le timeout du webhook est de 60 s.")
+        sa = _s.doc_hash("Le webhook gère le timeout et la retry idempotence.")
+        sb = _s.doc_hash("Le timeout webhook déclenche une retry.")
         _s.set_verdict("a.md", "b.md", "none", ha, hb, "claude", a_span=sa, b_span=sb)
         self.assertNotIn(PAIR, self._pairs())                         # dismissed
 
-        self._edit("a.md", lambda t: t + "\nUne note ajoutée plus tard.\n")
+        self._edit("a.md", lambda t: t + "Une note ajoutée plus tard.\n")
         self.assertNotIn(PAIR, self._pairs())                         # edit elsewhere -> STILL dismissed (the fix)
 
-        self._edit("a.md", lambda t: t.replace("30 s", "45 s"))
+        # Touch the judged line (keeping the rare-token overlap so it still clusters) -> resurfaces.
+        self._edit("a.md", lambda t: t.replace("Le webhook gère le timeout",
+                                               "Le webhook pilote le timeout"))
         self.assertIn(PAIR, self._pairs())                            # judged line changed -> resurfaces
 
 

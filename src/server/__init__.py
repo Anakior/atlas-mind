@@ -217,9 +217,9 @@ from server.pure.hive import (  # noqa: F401  federation node links / mirror / f
 )
 from server.pure.queries import (  # noqa: F401  read-side corpus/feed queries
     _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
-    _api_stale, _contradiction_candidates, _activity_events,
+    _api_stale, _activity_events,
 )
-from server.pure.contradictions import (  # noqa: F401  13c typed/anchor generator (supersedes _contradiction_candidates)
+from server.pure.contradictions import (  # noqa: F401  13c same-subject pair generator
     find_contradictions,
 )
 from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch

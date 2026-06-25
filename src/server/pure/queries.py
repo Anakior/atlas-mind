@@ -189,54 +189,6 @@ def _api_stale(months: int, limit: int, ctx=None) -> list:
     return items[:limit]
 
 
-def _contradiction_candidates(ctx=None, limit: int = 15, include_dismissed: bool = False) -> list:
-    """Candidate doc PAIRS to review for contradiction (13c): docs that share a frontmatter
-    tag or are wikilinked — i.e. topical overlap that *could* hide a contradiction. This is
-    only a deterministic PRE-FILTER (zero LLM); the AI judges via read_doc/doc_diff. Folder
-    tags are ignored (they'd pair every doc in a folder); ubiquitous tags (>12 docs) are
-    skipped as noise. ACL-scrubbed per ctx.
-
-    Each pair carries its cached `verdict` (real/none) when one is still valid — i.e. both
-    docs unchanged since the judgment (content hash match); a doc edit invalidates it and the
-    pair resurfaces as unjudged. Pairs dismissed `none` are dropped unless include_dismissed."""
-    build = _s._import_build()
-    tag_map = {}
-    known = set()
-    hash_by_rel = {}
-    for rel, _name, text in _doc_corpus(ctx):
-        known.add(rel)
-        hash_by_rel[rel] = _s.doc_hash(text)
-        ft, _ = build._parse_frontmatter(text)
-        for tg in (ft or []):
-            tag_map.setdefault(tg, []).append(rel)
-    cand = {}
-    for tg, docs in tag_map.items():
-        if not (2 <= len(docs) <= 12):
-            continue
-        for i, a in enumerate(docs):
-            for b in docs[i + 1:]:
-                key = (a, b) if a < b else (b, a)
-                cand.setdefault(key, {"shared": set(), "linked": False})["shared"].add(tg)
-    for rel, edges in _links_graph(ctx).items():
-        for tgt in edges.get("out", []):
-            if tgt == rel or tgt not in known:  # skip self-links + dangling wikilinks
-                continue
-            key = (rel, tgt) if rel < tgt else (tgt, rel)
-            cand.setdefault(key, {"shared": set(), "linked": False})["linked"] = True
-    vindex = _s.verdict_index()
-    out = []
-    for (a, b), info in cand.items():
-        verdict = _s.valid_verdict(vindex.get((a, b)), hash_by_rel.get(a, ""), hash_by_rel.get(b, ""))
-        if verdict == "none" and not include_dismissed:
-            continue  # human/LLM said "not a contradiction" and both docs unchanged
-        out.append({
-            "a": a, "b": b, "shared_tags": sorted(info["shared"]), "linked": info["linked"],
-            "score": len(info["shared"]) + (2 if info["linked"] else 0), "verdict": verdict,
-        })
-    out.sort(key=lambda x: -x["score"])
-    return out[:limit]
-
-
 # Read side of the attribution layer (the timeline / brick 13a): map a commit to one
 # normalized event TYPE. The targeted subject prefix is the richest signal (it tells
 # check from edit, revert/folder-move from a plain M/R); git status is the fallback for

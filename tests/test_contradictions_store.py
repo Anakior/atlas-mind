@@ -40,5 +40,22 @@ class TestLineHashes(unittest.TestCase):
         self.assertEqual(h, {store.doc_hash("foo"), store.doc_hash("bar")})
 
 
+class TestIntraDocPair(unittest.TestCase):
+    def test_rel_rel_with_distinct_spans_round_trips(self):
+        # An intra-doc (a==b) verdict binds on the two span hashes; _pair(rel,rel)=(rel,rel)
+        # and verdict_holds returns it only while BOTH judged lines still exist.
+        rel = "roadmap.md"
+        dh = store.doc_hash("whole doc")
+        sa, sb = store.doc_hash("table row livré"), store.doc_hash("body line à trancher")
+        self.assertNotEqual(sa, sb)
+        entry = {"a": rel, "b": rel, "verdict": "real", "a_hash": dh, "b_hash": dh,
+                 "a_span": sa, "b_span": sb}
+        idx = store.verdict_index([entry])
+        self.assertEqual(store._pair(rel, rel), (rel, rel))
+        self.assertIn((rel, rel), idx)
+        self.assertEqual(store.verdict_holds(idx[(rel, rel)], dh, dh, {sa, "x"}, {sb, "y"}), "real")
+        self.assertIsNone(store.verdict_holds(idx[(rel, rel)], dh, dh, {sa}, {"gone"}))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -457,13 +457,14 @@
     const shown = _candExpanded ? cands : cands.slice(0, 8);
     let out = `<div class="text-xs text-ink-500 mb-2">${t('healthAskAi')}</div>`;
     out += shown.map((c) => {
-      // Value collisions carry the conflicting values + their lines; rare-anchor pairs only a shared term count.
-      const meta = c.kind === 'value-collision'
-        ? t('healthValueConflict', esc(c.subject || ''), esc(c.a_value || ''), esc(c.b_value || ''))
-        : t('healthSharedAnchor', esc(c.subject || ''), c.shared_count || 0);
+      // Detector rows carry the conflicting values + their lines; cluster rows show the first
+      // "à vérifier" evidence line if any, else the shared subject.
+      const meta = c.kind === 'cluster'
+        ? esc((c.evidence && c.evidence.length && c.evidence[0].text) || c.subject || '')
+        : t('healthValueConflict', esc(c.subject || ''), esc(c.a_value || ''), esc(c.b_value || ''));
       const confPill = c.confidence === 'high'
         ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#1d3a5b;color:#9ecbff" data-tip="${esc(t('healthConfHighHint'))}">${t('healthConfHigh')}</span>`
-        : `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#2a2a32;color:#9a9aa5" data-tip="${esc(t('healthConfLowHint'))}">${t('healthConfLow')}</span>`;
+        : `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#2a2a32;color:#9a9aa5" data-tip="${esc(t('healthReviewHint'))}">${t('healthReview')}</span>`;
       return `<div class="py-1.5"><div class="flex items-center gap-2 text-sm">`
         + `<div class="flex items-center gap-2 min-w-0 flex-1">`
         + (c.verdict === 'real' ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#5b1d1d;color:#ffb4b4">${t('healthReal')}</span>` : confPill)

@@ -250,10 +250,10 @@ def stale(handler):
 
 
 def contradictions(handler):
-    """GET /api/contradictions?limit= — candidate contradiction PAIRS for the AI to judge
-    (13c): typed value collisions (high confidence, with the conflicting values + lines) and
-    rare-anchor pairs (low confidence). Deterministic server generator; AUTH, never anonymous,
-    ACL-scrubbed."""
+    """GET /api/contradictions?limit=. Candidate contradictions for the HUMAN viewer (13c):
+    the precise table-row drift detector plus any cluster already confirmed 'real'. Raw cosine
+    clusters and the polarity / intra-doc-status leads are NOT a permanent feed here; they are
+    the AI's on-demand substrate via the MCP `contradictions` tool. AUTH, ACL-scrubbed."""
     query = handler._query()
     ctx = handler._viewer_ctx()
     if not ctx.superuser and not ctx.primary:
@@ -261,7 +261,8 @@ def contradictions(handler):
         return
     limit = _s.clamp_int(query.get("limit", [None])[0], 15, 1, 50)
     include = query.get("include_dismissed", ["0"])[0] in ("1", "true")
-    items = _s.find_contradictions(None if ctx.superuser else ctx, limit, include)
+    items = _s.find_contradictions(None if ctx.superuser else ctx, limit, include,
+                                   solid_only=True)
     handler._send_json(200, {"candidates": items})
 
 
@@ -281,7 +282,7 @@ def contradiction_verdict(handler):
         handler._send_json(400, {"error": "invalid verdict"})
         return
     ta, tb = _s._validate_doc_path(a), _s._validate_doc_path(b)
-    if ta is None or tb is None or a == b:
+    if ta is None or tb is None or (a == b and _s.clamp_int(data.get("a_line"), 0, 0) == _s.clamp_int(data.get("b_line"), 0, 0)):
         handler._send_json(400, {"error": "invalid pair"})
         return
     ctx = handler._viewer_ctx()
