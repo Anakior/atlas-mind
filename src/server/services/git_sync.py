@@ -25,6 +25,9 @@ class GitSync:
         self._push_lock = threading.Lock()   # guards the coalescing-push flag + handle
         self._push_pending = False
         self._pusher = None
+        self._dev_lock = threading.Lock()    # coalesces the dev live-rebuild (single-flight)
+        self._dev_building = False
+        self._dev_dirty = False
 
     def run(self, *args, cwd=None, check=False, timeout=60):
         """Run a git command in the mind repo. GIT_TERMINAL_PROMPT=0 so a bad/unset
@@ -67,6 +70,30 @@ class GitSync:
             timeout=timeout,
         )
 
+    def _dev_rebuild(self) -> None:
+        """Coalesced dev live-rebuild: at most ONE build runs at a time; a burst of writes
+        (e.g. an agent streaming inbox items) collapses to a single rebuild, plus one more if
+        changes landed mid-build. Replaces the old thread-per-commit, which piled up N concurrent
+        KB builds and could thrash the box."""
+        with self._dev_lock:
+            self._dev_dirty = True
+            if self._dev_building:
+                return
+            self._dev_building = True
+        threading.Thread(target=self._dev_build_loop, daemon=True).start()
+
+    def _dev_build_loop(self) -> None:
+        while True:
+            with self._dev_lock:
+                if not self._dev_dirty:
+                    self._dev_building = False
+                    return
+                self._dev_dirty = False
+            try:
+                self.build()
+            except Exception as e:
+                print(f"[dev rebuild] {e}", file=sys.stderr, flush=True)
+
     # --- attributed inline commit + coalesced push ------------------------
 
     def commit_change(self, subject, paths, *, author=None, trailers=()) -> None:
@@ -75,7 +102,7 @@ class GitSync:
         relinked/repointed side effects) so the commit isn't split with the backstop.
         `author` is (name, email) or None; `trailers` are raw lines. dev: rebuild only."""
         if self._config.dev_mode:
-            threading.Thread(target=self.build, daemon=True).start()
+            self._dev_rebuild()
             return
         with self._lock:
             self._commit_one(subject, [str(p) for p in paths], author, tuple(trailers))
@@ -157,7 +184,7 @@ class GitSync:
         """Anonymous commit + push for sites not (yet) attributed (todos local-only,
         admin mirrors). Background thread; dev: rebuild only."""
         if self._config.dev_mode:
-            threading.Thread(target=self.build, daemon=True).start()
+            self._dev_rebuild()
             return
 
         def _sync():

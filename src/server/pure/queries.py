@@ -189,6 +189,66 @@ def _api_stale(months: int, limit: int, ctx=None) -> list:
     return items[:limit]
 
 
+def _api_inbox_list(limit: int = 50, ctx=None) -> list:
+    """Pending inbox items (the agents' on-ramp), highest confidence first.
+
+    The inbox is sealed from the corpus (iter_doc_files skips it), so this rglobs inbox/
+    DIRECTLY instead of going through _iter_doc_files. ACL-scrubbed per ctx; the inbox is
+    private, so the route gates on primary/superuser before calling. Trashed items and
+    snoozed items not yet due are hidden. A malformed item is skipped, never crashes the
+    list. Dates come from the last git commit (mtime fallback), like _api_stale."""
+    root = _s.CONFIG.content_root / "inbox"
+    if not root.is_dir():
+        return []
+    build = _s._import_build()
+    dates = build._git_commit_dates(_s.CONFIG.root)
+    today = time.strftime("%Y-%m-%d", time.localtime())
+    items = []
+    for path in sorted(root.rglob("*.md")):
+        rel = path.relative_to(_s.CONFIG.content_root).as_posix()
+        if not _visible(rel, ctx):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        meta = build._inbox_meta(text)
+        if meta.get("inbox_status") == "trashed":
+            continue
+        snooze = str(meta.get("snooze_until") or "")[:10]
+        if snooze and snooze > today:
+            continue
+        ts = dates.get(rel)
+        if ts is None:
+            try:
+                ts = int(path.stat().st_mtime)
+            except OSError:
+                ts = 0
+        _tags, body = build._parse_frontmatter(text)
+        blines = body.strip().splitlines()
+        title, rest = path.stem, blines
+        for i, ln in enumerate(blines):
+            if ln.startswith("# "):  # the first H1 is the title; the preview is the prose after it
+                title, rest = ln[2:].strip(), blines[i + 1:]
+                break
+        parts = rel.split("/")
+        items.append({
+            "path": rel, "title": title,
+            "preview": " ".join(" ".join(rest).split())[:240],
+            # source from the frontmatter; fallback to the immediate parent folder (inbox/<user>/
+            # <source>/file or the legacy inbox/<source>/file -> parts[-2] is the source either way)
+            "source": meta.get("source") or (parts[-2] if len(parts) >= 3 else "manual"),
+            "confidence": meta.get("confidence", 0.0),
+            "suggest_dest": meta.get("suggest_dest", ""),
+            "suggest_tags": meta.get("suggest_tags", []),
+            "neighbors": meta.get("neighbors", []),
+            "status": meta.get("inbox_status", "pending"),
+            "captured_at": int(ts),
+        })
+    items.sort(key=lambda h: (-h["confidence"], -h["captured_at"]))
+    return items[:limit]
+
+
 # Read side of the attribution layer (the timeline / brick 13a): map a commit to one
 # normalized event TYPE. The targeted subject prefix is the richest signal (it tells
 # check from edit, revert/folder-move from a plain M/R); git status is the fallback for

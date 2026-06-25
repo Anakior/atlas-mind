@@ -97,6 +97,46 @@
     }
   },
   {
+    "name": "create_inbox_item",
+    "description": "Drop an item into your inbox lane (the agents' on-ramp to the mind). Use this — NOT create_doc — when you are surfacing something for the human to triage: an email worth keeping, a Sentry/alert ticket, a scraped finding, a reminder. The item lands in inbox/<your-source>/ where the source is derived from YOUR token (you cannot set it, no impersonation) and stays SEALED from search/topology/contradictions until the human keeps it. The human triages it later: Keep promotes it into the graph, Trash, or Snooze. Reformulate the content in your own words (not a raw dump); set an honest confidence.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Short headline of the item (becomes the H1 title and the file slug)."
+        },
+        "content": {
+          "type": "string",
+          "description": "The item body in markdown, reformulated by you. Concise and self-contained."
+        },
+        "confidence": {
+          "type": "number",
+          "description": "Your honest 0.0 to 1.0 confidence that this deserves the human's attention. Display-only, never treated as an authority."
+        },
+        "suggest_dest": {
+          "type": "string",
+          "description": "Optional folder you suggest filing it under on Keep (e.g. ops/, projects/alpha/). A folder, not a file."
+        },
+        "suggest_tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional tags you suggest for the item."
+        },
+        "dedupe_key": {
+          "type": "string",
+          "description": "Optional stable id (e.g. an email message-id) so re-running you does not duplicate the item."
+        }
+      },
+      "required": [
+        "title",
+        "content"
+      ]
+    }
+  },
+  {
     "name": "edit_doc",
     "description": "Edit an EXISTING document (.md OR .html). Two mutually exclusive modes:\n1. Targeted replacement: pass 'old_string' + 'new_string'. 'old_string' must appear exactly once in the document (otherwise an error) — add surrounding context to make it unique. Token-efficient, preferred on large docs (and .html, often big).\n2. Full rewrite: pass 'content' (replaces the whole file).\nAt least one of the two modes is required. The document must already exist (use create_doc to create a new one). Read the doc with read_doc before editing.",
     "inputSchema": {

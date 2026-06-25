@@ -38,9 +38,10 @@ class ViewerCtx:
     - ``is_admin``: bypasses the ACL entirely (sees/owns everything).
     - ``primary``: the principal stamped as ``owner`` on create (or None).
     """
-    __slots__ = ("principals", "is_admin", "primary", "superuser", "api")
+    __slots__ = ("principals", "is_admin", "primary", "superuser", "api", "source")
 
-    def __init__(self, principals, is_admin, primary, superuser=False, api=False):
+    def __init__(self, principals, is_admin, primary, superuser=False, api=False,
+                 source=None):
         self.principals = frozenset(principals)
         # is_admin: curates the COMMONS (owner-level on ownerless paths) but is
         # NOT special inside another user's private space.
@@ -52,6 +53,10 @@ class ViewerCtx:
         # api: an API/MCP token — full write on the commons; private spaces still
         # require the bound human (acts_as). Distinct from is_admin (no admin routes).
         self.api = api
+        # source: for an API/MCP token, the slug of its label (the <slug>@… identity).
+        # Routes its inbox drops into inbox/<source>/. Derived from the token, NEVER a
+        # tool argument, so an agent cannot impersonate another source. None for humans.
+        self.source = source
 
 
 # Anonymous caller (no session, no token): no principals → only share-links and
@@ -89,13 +94,17 @@ def viewer_ctx(identity, store=None):
     role = identity.get("role")
     email = identity.get("email")
     if role == _s.API_ROLE:
+        # The token's inbox lane: the slug of its identity email (<slug>@<hash>.api.local),
+        # i.e. slugify_token_label(label). Carried on ctx so create_inbox_item routes to
+        # inbox/<source>/ from the token alone (never a spoofable argument).
+        source = email.split("@")[0] if email else None
         acts_as = identity.get("acts_as")
         if acts_as:
             human = store.get_user_by_email(acts_as)
             if human:
                 # Bound: act as the human (private space + grants) + commons write.
                 h = _ctx_for_human(human, store)
-                return ViewerCtx(h.principals, h.is_admin, h.primary, api=True)
+                return ViewerCtx(h.principals, h.is_admin, h.primary, api=True, source=source)
         # Unbound: writes the commons (api=True) but never admin and never in a
         # private space — owned docs stay hidden until the token is bound to a human
         # via acts_as. (Single-user: bind the token to yourself to see everything.)
@@ -103,7 +112,7 @@ def viewer_ctx(identity, store=None):
         if email:
             principals.add("user:" + email)
         return ViewerCtx(principals, False, ("user:" + email) if email else None,
-                         api=True)
+                         api=True, source=source)
     return _ctx_for_human(identity, store)
 
 

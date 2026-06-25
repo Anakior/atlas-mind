@@ -38,9 +38,12 @@ def iter_doc_files(content_root, excluded):
             continue
         if path.name in excluded:
             continue
-        # Skip skill/tools/__pycache__ (consistent with build.py)
+        # Skip reserved folders: skill/tools/__pycache__ (consistent with build.py) and
+        # inbox/ (the agents' on-ramp: sealed from search/topology/contradictions until an
+        # item is promoted out of it). Activity still sees inbox via _history_path_included,
+        # which deliberately does NOT skip it (the ROI digest needs it).
         parts = path.relative_to(content_root).parts
-        if parts and parts[0] in ("skill", "tools", "__pycache__"):
+        if parts and parts[0] in ("skill", "tools", "__pycache__", "inbox"):
             continue
         yield path.relative_to(content_root).as_posix(), path
 

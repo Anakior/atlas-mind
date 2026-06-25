@@ -384,12 +384,12 @@ class TestBrowseDiskState(unittest.TestCase):
     def test_uncommitted_file_appears_in_tree_with_stat_mtime(self):
         # /api/tree reads the disk live: a doc written outside the server (never
         # committed) appears immediately, mtime = st_mtime (no git date).
-        target = self.srv.path("inbox/brouillon.md")
+        target = self.srv.path("notes/brouillon.md")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("# Brouillon\n\nNon committé.\n", encoding="utf-8")
         files = _collect_files(self.srv.get("/api/tree").json())
-        self.assertIn("inbox/brouillon.md", files)
-        self.assertEqual(files["inbox/brouillon.md"]["mtime"],
+        self.assertIn("notes/brouillon.md", files)
+        self.assertEqual(files["notes/brouillon.md"]["mtime"],
                          int(target.stat().st_mtime))
 
     def test_tree_uses_git_commit_date_but_search_uses_stat_mtime(self):

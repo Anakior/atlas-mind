@@ -125,6 +125,11 @@ def _snapshot_activity(cfg):
     events = _s._activity_events(60, 200, None, None, None)  # days, limit, no filter
     if events is None:
         return None
+    # Seal the inbox from this embedded, public-facing snapshot (ctx=None does not ACL-filter):
+    # drop inbox/ paths, and any event left with no path (its subject could name an inbox doc).
+    for e in events:
+        e["paths"] = [p for p in e.get("paths", []) if p.split("/")[0] != "inbox"]
+    events = [e for e in events if e["paths"]]
     return {
         "events": events,
         "stale": _s._api_stale(6, 40, None),               # months, limit, no ACL

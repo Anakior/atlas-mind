@@ -201,6 +201,68 @@ def _repoint_doc(frm, to):
         print(f"[move repoint] {e}", file=sys.stderr)
 
 
+def _promote_inbox_item(src_rel, dest, ctx, tags=None, ai=None):
+    """Keep: promote an inbox item into the graph. Strips the triage envelope (keeping the
+    user tags + a `promoted_from` breadcrumb), moves it out of inbox/ to `dest` (a folder),
+    repoints the ACL, all in ONE attributed commit. Promotion is the instant the doc enters
+    search/topology/contradictions. Returns (ok: bool, dst_rel_or_error)."""
+    if not src_rel.startswith("inbox/"):
+        return False, "Not an inbox item."
+    src = _validate_doc_path(src_rel)
+    if not src or not src.exists():
+        return False, f"Item not found: {src_rel}"
+    if ctx is not None and not can_write(src_rel, ctx, "owner"):
+        return False, "Insufficient permission (need owner to keep this item)."
+    stem = re.sub(r"\.md$", "", src_rel.rsplit("/", 1)[-1], flags=re.I)
+    stem = re.sub(r"^\d{4}-\d{2}-\d{2}-", "", stem)  # drop the inbox date prefix
+    dest = (dest or "").strip().strip("/")
+    dst_rel = f"{dest}/{stem}.md" if dest else f"{stem}.md"
+    if ctx is not None and not can_create(dst_rel, ctx):
+        return False, "Insufficient permission for that destination."
+    # Strip the triage envelope on the source BEFORE the move (the rename carries the body).
+    # No `promoted_from` breadcrumb in the frontmatter: it would leak the inbox source path
+    # (inbox/<user>/<source>/...) to anyone who can read the promoted doc. Git records the move.
+    build = _import_build()
+    parsed_tags, body = build._parse_frontmatter(src.read_text(encoding="utf-8"))
+    # The kept doc carries the tags the boss confirmed in the focus card (`tags`, the edited
+    # suggest_tags); fall back to whatever the item itself declared under `tags`.
+    final_tags = tags if tags is not None else parsed_tags
+    if final_tags:
+        clean = [str(t).strip().lstrip("#") for t in final_tags if str(t).strip()]
+        new_text = "---\ntags: [" + ", ".join(clean) + "]\n---\n" + body.lstrip("\n") if clean \
+            else body.lstrip("\n")
+    else:
+        new_text = body.lstrip("\n")
+    src.write_text(new_text, encoding="utf-8")
+    status, payload = _move_md_with_relink(src_rel, dst_rel)
+    if status != "ok":
+        return False, payload
+    _repoint_doc(payload["from"], payload["to"])  # privacy travels BEFORE the git sync
+    touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
+    commit_change(ctx, f"kept: {stem} -> {dest or '/'}",
+                  *(CONFIG.content_root / p for p in touched), ai=ai)
+    return True, dst_rel
+
+
+def _set_inbox_status(src_rel, updates, ctx, subject, ai=None):
+    """Trash / Snooze / un-trash: flip the inbox frontmatter fields in `updates` (a None
+    value deletes the key) in place, in one attributed commit. The item stays in inbox/ (no
+    move, no hard delete): a Trash is reversible by writing inbox_status back to pending.
+    ACL: the caller must own the item. Returns (ok: bool, message)."""
+    if not src_rel.startswith("inbox/"):
+        return False, "Not an inbox item."
+    src = _validate_doc_path(src_rel)
+    if not src or not src.exists():
+        return False, f"Item not found: {src_rel}"
+    if ctx is not None and not can_write(src_rel, ctx, "owner"):
+        return False, "Insufficient permission."
+    build = _import_build()
+    src.write_text(build._rewrite_inbox_fm(src.read_text(encoding="utf-8"), updates),
+                   encoding="utf-8")
+    commit_change(ctx, subject, src, ai=ai)
+    return True, src_rel
+
+
 def registry_503(handler, context, e):
     """Map a registry/store failure to the uniform fail-closed 503, logging
     `context` + the exception. One home for the payload so the store-op handlers
@@ -217,10 +279,10 @@ from server.pure.hive import (  # noqa: F401  federation node links / mirror / f
 )
 from server.pure.queries import (  # noqa: F401  read-side corpus/feed queries
     _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
-    _api_stale, _activity_events,
+    _api_stale, _api_inbox_list, _activity_events,
 )
 from server.pure.contradictions import (  # noqa: F401  13c same-subject pair generator
-    find_contradictions,
+    find_contradictions, find_doc_neighbors,
 )
 from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
     _soft_delete, _mcp_call_tool, _mcp_jsonrpc, _span_hash,

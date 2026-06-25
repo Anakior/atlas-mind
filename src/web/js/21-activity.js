@@ -66,7 +66,7 @@
   function rel(min) {
     const en = LANG === 'en';
     if (min < 1) return en ? 'just now' : "à l'instant";
-    if (min < 60) return min + ' min';
+    if (min < 60) return Math.round(min) + ' min';
     const h = Math.round(min / 60);
     if (h < 24) return h + ' h';
     const d = Math.round(min / 1440);
@@ -525,13 +525,15 @@
               <button type="button" data-view="journal" class="${segClass(true)}">${t('actJournal')}</button>
               <button type="button" data-view="orrery" class="${segClass(false)}">${t('actConstellation')}</button>
               <button type="button" data-view="health" class="${segClass(false)}">${t('actHealth')}</button>
+              ${IS_OFFLINE_BUILD ? '' : `<button type="button" data-view="inbox" class="${segClass(false)}">${t('actInbox')} <span id="inbox-badge" class="act-ibadge hidden"></span></button>`}
             </div>
           </div>
         </div>
-        ${digestHtml()}
+        <div id="activity-digest">${digestHtml()}</div>
         <div id="activity-journal">${journalHtml()}</div>
         <div id="activity-orrery" class="hidden"></div>
         <div id="activity-health" class="hidden"></div>
+        <div id="activity-inbox" class="hidden"></div>
       </div>`
     );
   }
@@ -540,16 +542,23 @@
     const j = card.querySelector('#activity-journal');
     const o = card.querySelector('#activity-orrery');
     const h = card.querySelector('#activity-health');
+    const ib = card.querySelector('#activity-inbox');
+    const dg = card.querySelector('#activity-digest');  // the weekly digest belongs to Journal only
+    if (dg) dg.classList.toggle('hidden', v !== 'journal');
     if (v === 'orrery') {
       if (!o.dataset.rendered) { o.innerHTML = orreryHtml(); o.dataset.rendered = '1'; wireOrreryHover(o); wireSun(o); }
       // clear leftover one-shot animation classes so re-showing the tab never replays them
       o.querySelectorAll('.act-spin,.act-sun,.act-egg').forEach((el) => el.classList.remove('spinning', 'pop', 'show'));
     } else if (v === 'health' && !h.dataset.rendered) {
       h.dataset.rendered = '1'; h.innerHTML = healthHtml(); loadHealth(h);
+    } else if (v === 'inbox' && ib && !ib.dataset.rendered && window.AtlasInbox) {
+      ib.dataset.rendered = '1'; AtlasInbox.mount(ib);  // the Inbox is its own module (22-inbox.js)
     }
     j.classList.toggle('hidden', v !== 'journal');
     o.classList.toggle('hidden', v !== 'orrery');
     h.classList.toggle('hidden', v !== 'health');
+    if (ib) ib.classList.toggle('hidden', v !== 'inbox');
+    if (window.AtlasInbox) { if (v === 'inbox') AtlasInbox.show(); else AtlasInbox.hide(); }
     card.querySelectorAll('[data-view]').forEach((b) => { b.className = segClass(b.dataset.view === v); });
     if (persist) { try { localStorage.setItem('atlas:activityView', v); } catch (_) {} }
   }
@@ -558,7 +567,8 @@
     let saved = 'journal';
     try { saved = localStorage.getItem('atlas:activityView') || 'journal'; } catch (_) {}
     const q = new URLSearchParams(location.search).get('view');
-    if (q === 'journal' || q === 'orrery' || q === 'health') saved = q;
+    if (q === 'journal' || q === 'orrery' || q === 'health' || q === 'inbox') saved = q;
+    if (saved === 'inbox' && IS_OFFLINE_BUILD) saved = 'journal';  // inbox tab is online-only
     setView(card, saved, false);
     card.querySelectorAll('[data-view]').forEach((b) =>
       b.addEventListener('click', () => setView(card, b.dataset.view, true)));
@@ -642,56 +652,32 @@
     m.innerHTML = cardHtml();
     wire(m.querySelector('#home-activity-card'));
   };
+
+  // Live-reload (SSE / periodic) refresh that does NOT re-mount the card. Only the tab ON SCREEN is
+  // refreshed in place; the dormant tabs and the self-managing Inbox (its poll + any open folder/tag
+  // editor) are left untouched. softReload() calls this instead of re-rendering the whole home, so a
+  // reload never destroys what the active tab is doing.
+  window.refreshActivityData = async function () {
+    const card = document.getElementById('home-activity-card');
+    if (!card) return;
+    const inbox = card.querySelector('#activity-inbox');
+    if (inbox && !inbox.classList.contains('hidden')) return;  // Inbox active: it manages itself
+    const raw = await load();
+    if (!raw) return;
+    _items = aggregate(raw);
+    _digest = computeDigest(raw);
+    const journal = card.querySelector('#activity-journal');
+    if (journal && !journal.classList.contains('hidden')) {
+      journal.innerHTML = journalHtml();
+      const dg = card.querySelector('#activity-digest');
+      if (dg && !dg.classList.contains('hidden')) dg.innerHTML = digestHtml();
+      return;
+    }
+    const orrery = card.querySelector('#activity-orrery');
+    if (orrery && !orrery.classList.contains('hidden') && orrery.dataset.rendered) {
+      orrery.innerHTML = orreryHtml(); wireOrreryHover(orrery); wireSun(orrery);
+    }
+  };
   window.mountActivity();
 
-  const st = document.createElement('style');
-  st.textContent = [
-    '.activity-badge{position:absolute;right:-3px;bottom:-3px;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:999px;background:#1a181e;border:1px solid rgba(232,148,28,.6)}',
-    '.act-row{padding:7px 8px;margin:0 -8px;border-radius:8px;cursor:pointer;transition:background .12s}',
-    '.act-row:hover{background:rgba(255,255,255,.035)}',
-    '.act-skel{background:rgba(255,255,255,.06);border-radius:5px}',
-    '.activity-seg{cursor:pointer;transition:color .12s,background .12s}',
-    '.activity-seg:not(.is-active):hover{color:#d1d2d3}',
-    '.act-node{cursor:pointer}',
-    '.act-node-inner{transform-box:fill-box;transform-origin:center;transition:transform .12s}',
-    '.act-node:hover .act-node-inner,.act-node:focus .act-node-inner{transform:scale(1.22)}',
-    '.act-node:focus{outline:none}',
-    '.act-pop{position:absolute;transform:translate(-50%,-100%);width:280px;padding:11px 13px;border-radius:14px;pointer-events:none;z-index:20}',
-    '.act-pop.hidden{display:none}',
-    '.act-legend{display:flex;flex-direction:column;gap:7px;flex-shrink:0;align-self:center}',
-    '.act-legend-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(255,255,255,.03);font-size:11px;color:#b0b1b5}',
-    '.act-sun{transform-box:view-box;transform-origin:360px 265px}',
-    '.act-sun-pulse{transform-box:view-box;transform-origin:360px 265px}',
-    '.act-spin{transform-box:view-box;transform-origin:360px 265px}',
-    '.act-egg{position:absolute;left:50%;top:calc(50% + 52px);transform:translate(-50%,0);font-size:13px;font-weight:600;color:#f3bd6a;opacity:0;pointer-events:none;white-space:nowrap;text-shadow:0 1px 6px rgba(0,0,0,.7)}',
-    '@media (prefers-reduced-motion: no-preference){',
-    '.act-spin.spinning{animation:act-orbit 1.1s cubic-bezier(.34,.1,.2,1)}',
-    '@keyframes act-orbit{to{transform:rotate(360deg)}}',
-    '.act-sun.pop{animation:act-sunpop .5s ease}',
-    '@keyframes act-sunpop{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}',
-    '.act-sun-pulse{animation:act-pulse 4s ease-in-out infinite}',
-    '@keyframes act-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}',
-    '.act-glow{animation:act-glowpulse 4s ease-in-out infinite}',
-    '@keyframes act-glowpulse{0%,100%{opacity:.5}50%{opacity:1}}',
-    '.act-egg.show{animation:act-egg 1.9s ease forwards}',
-    '@keyframes act-egg{0%{opacity:0;transform:translate(-50%,8px)}15%{opacity:1;transform:translate(-50%,0)}72%{opacity:1}100%{opacity:0;transform:translate(-50%,-12px)}}',
-    '.act-skel{animation:act-skel 1.3s ease-in-out infinite}',
-    '@keyframes act-skel{0%,100%{opacity:.4}50%{opacity:.85}}',
-    '}',
-    '@media (max-width:767px){',
-    '.act-digest-when{display:none}',
-    '.act-orrery{flex-direction:column;gap:10px}',
-    '.act-legend{flex-direction:row;flex-wrap:wrap;justify-content:center;align-self:stretch}',
-    '.act-pop{position:fixed;left:8px;right:8px;bottom:8px;top:auto;width:auto;transform:none;z-index:50}',
-    // Header tabs overflow on narrow screens. Flatten the controls wrapper
-    // (display:contents) so the title, the AI filter and the segmented control are
-    // siblings of one wrapping row: title + "IA seulement" stay on the first line
-    // (justify-between), the tabs drop full-width onto the next.
-    '.act-card-head{flex-wrap:wrap}',
-    '.act-card-controls{display:contents}',
-    '.act-seg-group{flex:0 0 100%}',
-    '.act-seg-group>button{flex:1 1 0;padding-left:0;padding-right:0;text-align:center}',
-    '}',
-  ].join('');
-  document.head.appendChild(st);
 })();

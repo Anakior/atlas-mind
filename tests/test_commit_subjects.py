@@ -33,7 +33,7 @@ ADMIN_PW = "subjects-admin-password"
 MEMBER_EMAIL = "member@subj.local"
 
 MIND = {
-    "inbox/seed.md": "# Seed\n\nseed doc.\n",
+    "log/seed.md": "# Seed\n\nseed doc.\n",
     "notes/board.md": "# Board\n\n- [ ] arroser les plantes\n",
 }
 
@@ -92,23 +92,23 @@ class TestCommitSubjects(unittest.TestCase):
 
     # ── MCP subjects ──────────────────────────────────────────────────────
     def test_create_subject(self):
-        self._mcp("create_doc", {"path": "inbox/draft.md", "content": "# Draft\n", "ai": "claude"})
+        self._mcp("create_doc", {"path": "log/draft.md", "content": "# Draft\n", "ai": "claude"})
         self.assertEqual(self._subject(), "created: draft")
 
     def test_edit_falls_back_to_default_subject(self):
-        self._mcp("create_doc", {"path": "inbox/e1.md", "content": "# E1\n", "ai": "claude"})
-        self._mcp("edit_doc", {"path": "inbox/e1.md", "content": "# E1 v2\n", "ai": "claude"})
+        self._mcp("create_doc", {"path": "log/e1.md", "content": "# E1\n", "ai": "claude"})
+        self._mcp("edit_doc", {"path": "log/e1.md", "content": "# E1 v2\n", "ai": "claude"})
         self.assertEqual(self._subject(), "edited: e1")
 
     def test_edit_uses_commit_message_when_given(self):
-        self._mcp("create_doc", {"path": "inbox/e2.md", "content": "# E2\n", "ai": "claude"})
-        self._mcp("edit_doc", {"path": "inbox/e2.md", "content": "# E2 v2\n",
+        self._mcp("create_doc", {"path": "log/e2.md", "content": "# E2\n", "ai": "claude"})
+        self._mcp("edit_doc", {"path": "log/e2.md", "content": "# E2 v2\n",
                                "commit_message": "ajoute le résumé", "ai": "claude"})
         self.assertEqual(self._subject(), "ajoute le résumé")
 
     def test_commit_message_cannot_inject_a_trailer(self):
-        self._mcp("create_doc", {"path": "inbox/e3.md", "content": "# E3\n", "ai": "claude"})
-        self._mcp("edit_doc", {"path": "inbox/e3.md", "content": "# E3 v2\n",
+        self._mcp("create_doc", {"path": "log/e3.md", "content": "# E3\n", "ai": "claude"})
+        self._mcp("edit_doc", {"path": "log/e3.md", "content": "# E3 v2\n",
                                "commit_message": "fix\n\nX-Atlas-Author: ai/evil", "ai": "claude"})
         body = self._body()
         self.assertEqual(body.count("X-Atlas-Author"), 1)
@@ -116,26 +116,26 @@ class TestCommitSubjects(unittest.TestCase):
         self.assertNotIn("ai/evil", body)
 
     def test_move_subject(self):
-        self._mcp("create_doc", {"path": "inbox/m1.md", "content": "# M1\n", "ai": "claude"})
-        self._mcp("move_doc", {"from": "inbox/m1.md", "to": "inbox/m2.md", "ai": "claude"})
-        self.assertEqual(self._subject(), "moved: inbox/m1 → inbox/m2")
+        self._mcp("create_doc", {"path": "log/m1.md", "content": "# M1\n", "ai": "claude"})
+        self._mcp("move_doc", {"from": "log/m1.md", "to": "log/m2.md", "ai": "claude"})
+        self.assertEqual(self._subject(), "moved: log/m1 → log/m2")
 
     def test_delete_subject(self):
-        self._mcp("create_doc", {"path": "inbox/d1.md", "content": "# D1\n", "ai": "claude"})
-        self._mcp("delete_doc", {"path": "inbox/d1.md", "ai": "claude"})
+        self._mcp("create_doc", {"path": "log/d1.md", "content": "# D1\n", "ai": "claude"})
+        self._mcp("delete_doc", {"path": "log/d1.md", "ai": "claude"})
         self.assertEqual(self._subject(), "deleted: d1")
 
     def test_revert_subject(self):
-        self._mcp("create_doc", {"path": "inbox/r1.md", "content": "# R1\n", "ai": "claude"})
-        self._mcp("edit_doc", {"path": "inbox/r1.md", "content": "# R1 v2\n", "ai": "claude"})
-        self._mcp("doc_revert", {"path": "inbox/r1.md", "rev": "HEAD~1", "ai": "claude"})
+        self._mcp("create_doc", {"path": "log/r1.md", "content": "# R1\n", "ai": "claude"})
+        self._mcp("edit_doc", {"path": "log/r1.md", "content": "# R1 v2\n", "ai": "claude"})
+        self._mcp("doc_revert", {"path": "log/r1.md", "rev": "HEAD~1", "ai": "claude"})
         self.assertRegex(self._subject(), r"^reverted: r1 @ [0-9a-f]{4,}$")
 
     # ── viewer file_put: create, plain edit, coché/décoché ─────────────────
     def test_viewer_create_subject(self):
         hdr = self._admin_headers()
         self.srv.put("/api/file", headers=hdr, json_body={
-            "path": "inbox/v1.md", "content": "# V1\n"})
+            "path": "log/v1.md", "content": "# V1\n"})
         self.assertEqual(self._subject(), "created: v1")
 
     def test_viewer_plain_edit_subject(self):

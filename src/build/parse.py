@@ -54,6 +54,68 @@ def _parse_tags(block: str) -> list[str]:
     return out
 
 
+# Inbox triage envelope keys (cf. CDC inbox). Scalar whitelist, no YAML dependency.
+_INBOX_KEYS = ("origin", "source", "captured_at", "confidence", "suggest_dest",
+               "suggest_tags", "inbox_status", "snooze_until", "neighbors",
+               "dedupe_key", "promoted_from", "supersedes")
+_INBOX_LIST_KEYS = ("suggest_tags", "neighbors")
+_INBOX_KEY_RE = re.compile(r"^([a-z_]+)[ \t]*:[ \t]*(.*)$", re.I)
+
+
+def _inbox_meta(text: str) -> dict:
+    """The inbox triage envelope read from a doc's frontmatter (defensive, whitelist only).
+
+    Reads the leading --- block line by line, keeps known keys, defaults the rest
+    (status -> 'pending', confidence -> 0.0). List values ([a, b] or a, b) split on
+    commas. Unknown/malformed lines are ignored. Pure; no YAML dependency."""
+    out: dict = {"inbox_status": "pending", "confidence": 0.0}
+    m = _FM_RE.match(text)
+    if not m:
+        return out
+    for line in m.group(1).splitlines():
+        km = _INBOX_KEY_RE.match(line)
+        if not km:
+            continue
+        key, val = km.group(1).lower(), km.group(2).strip()
+        if key not in _INBOX_KEYS:
+            continue
+        if key in _INBOX_LIST_KEYS:
+            out[key] = [x.strip().strip("'\"") for x in val.strip("[]").split(",") if x.strip()]
+        elif key == "confidence":
+            try:
+                out[key] = float(val)
+            except ValueError:
+                out[key] = 0.0
+        else:
+            out[key] = val.strip("'\"")
+    return out
+
+
+def _rewrite_inbox_fm(text: str, updates: dict) -> str:
+    """Return `text` with the frontmatter scalar keys in `updates` applied (a value of None
+    deletes the key) in the leading --- block; a block is created if absent. Only the listed
+    keys are touched, every other line is preserved verbatim. Used by Trash/Snooze, which
+    flip inbox_status / snooze_until without rebuilding the doc. Pure."""
+    m = _FM_RE.match(text)
+    body = text[m.end():] if m else ("\n" + text if text else text)
+    lines = m.group(1).splitlines() if m else []
+    remaining = dict(updates)
+    out = []
+    for line in lines:
+        km = _INBOX_KEY_RE.match(line)
+        key = km.group(1).lower() if km else None
+        if key in remaining:
+            val = remaining.pop(key)
+            if val is not None:
+                out.append(f"{key}: {val}")
+        else:
+            out.append(line)
+    for key, val in remaining.items():
+        if val is not None:
+            out.append(f"{key}: {val}")
+    return "---\n" + "\n".join(out) + "\n---" + body
+
+
 def _folder_tags(rel: str) -> list[str]:
     """Tags derived from parent folders (fallback when no explicit tag).
 

@@ -2,9 +2,11 @@
 import json
 import posixpath
 import sys
+import time
 from pathlib import Path
 
 import server as _s
+from store import slugify_token_label
 from server.pure.queries import (
     _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
     _api_stale, _activity_events,
@@ -100,9 +102,9 @@ def _tool_recent_docs(args, ctx):
     return text_result(json.dumps(hits, ensure_ascii=False, indent=2))
 
 
-def _tool_create_doc(args, ctx):
-    rel = (args.get("path") or "").strip()
-    content = args.get("content", "")
+def _create_doc_impl(rel, content, ai, ctx):
+    """Write + ACL-stamp + commit a new doc. The shared core of create_doc and
+    create_inbox_item (the inbox guard lives in the public create_doc wrapper, not here)."""
     target = _s._validate_doc_path(rel)
     if not target:
         return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
@@ -124,8 +126,105 @@ def _tool_create_doc(args, ctx):
             _s._stamp_new_doc(rel, ctx)
         except Exception as e:
             print(f"[create_doc owner] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"created: {target.stem}", target, ai=args.get("ai"))
+    _s.commit_change(ctx, f"created: {target.stem}", target, ai=ai)
     return text_result(f"Document created: {rel}")
+
+
+def _tool_create_doc(args, ctx):
+    rel = (args.get("path") or "").strip()
+    # The inbox is managed (per-person, owned lanes): it must be filled via create_inbox_item,
+    # never planted directly here. A direct create under inbox/ would stamp NO owner (api =>
+    # commons), leaving the item readable by every authenticated user via the activity feed.
+    if posixpath.normpath(rel).split("/")[0] == "inbox":
+        return text_result("The inbox is managed: use create_inbox_item, not create_doc, to drop "
+                           "an item there.", is_error=True)
+    return _create_doc_impl(rel, args.get("content", ""), args.get("ai"), ctx)
+
+
+def _tool_create_inbox_item(args, ctx):
+    """Drop an item into your USER's inbox (the on-ramp to the mind).
+
+    Multi-user: the item lands in inbox/<user>/<source>/ where <user> is the PERSON the token
+    acts for (acts_as) and <source> is the token's own label. Both come from the token, never an
+    argument, so an agent can neither pick another person's inbox nor impersonate another source.
+    The owning person triages it later (Keep/Trash/Snooze); it stays sealed from the corpus
+    (search/topology/contradictions) until kept. A token NOT bound to a person has no inbox.
+    Reuses create_doc for path validation, ACL and the attributed commit.
+
+    args: title (required), content, confidence?, suggest_dest?, suggest_tags?, dedupe_key?."""
+    title = (args.get("title") or "").strip()
+    if not title:
+        return text_result("'title' is required", is_error=True)
+    content = args.get("content", "")
+    if not isinstance(content, str):
+        return text_result("'content' must be a string", is_error=True)
+    # The owning person = the acts_as principal. An unbound API token carries only its own
+    # <slug>@<hash>.api.local identity (no person), so it has no inbox.
+    owner = getattr(ctx, "primary", None)
+    email = owner[5:] if owner and owner.startswith("user:") else ""
+    domain = email.rsplit("@", 1)[-1] if "@" in email else ""
+    is_token_identity = domain == "api.local" or domain.endswith(".api.local")  # not a real person
+    if ctx is not None and ctx.api and (not email or is_token_identity):
+        return text_result("This token is not bound to a person, so it has no inbox. Create it "
+                           "with `atlas token create --acts-as <email>`.", is_error=True)
+    try:
+        user = slugify_token_label(email) if email else "shared"
+    except ValueError:
+        user = "shared"
+    source = getattr(ctx, "source", None) or "manual"
+    try:
+        source = slugify_token_label(source)
+    except ValueError:
+        source = "agent"
+    try:
+        slug = slugify_token_label(title)[:60].strip("-.") or "note"
+    except ValueError:
+        slug = "note"
+    try:
+        conf = max(0.0, min(1.0, float(args.get("confidence"))))
+    except (TypeError, ValueError):
+        conf = 0.5
+    lines = ["---", "origin: inbox", f"source: {source}",
+             f"captured_at: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+             f"confidence: {conf}"]
+    dest = (args.get("suggest_dest") or "").strip()
+    if dest:
+        lines.append(f"suggest_dest: {dest}")
+    tags = args.get("suggest_tags")
+    if isinstance(tags, list):
+        clean = [str(t).strip() for t in tags if str(t).strip()]
+        if clean:
+            lines.append("suggest_tags: [" + ", ".join(clean) + "]")
+    dk = (args.get("dedupe_key") or "").strip()
+    if dk:
+        lines.append(f"dedupe_key: {dk}")
+    lines.append("inbox_status: pending")
+    stamp = time.strftime("%Y-%m-%d", time.gmtime())
+    folder = f"inbox/{user}"
+    rel = f"{folder}/{source}/{stamp}-{slug}.md"
+    n = 2
+    while (_s.CONFIG.content_root / rel).exists():
+        rel = f"{folder}/{source}/{stamp}-{slug}-{n}.md"
+        n += 1
+    # Pre-compute same-subject neighbors ONCE at ingestion (the agent pays the O(corpus); the
+    # owner's triage then reads them O(1) from the frontmatter). Best-effort: never fail the drop.
+    try:
+        rels = [nb["rel"] for nb in _s.find_doc_neighbors(rel, f"# {title}\n{content}", ctx, top=3)]
+        if rels:
+            lines.append("neighbors: [" + ", ".join(rels) + "]")
+    except Exception as e:
+        print(f"[create_inbox_item neighbors] {e}", file=sys.stderr)
+    lines += ["---", "", f"# {title}", "", content]
+    # Fail-closed multi-user privacy: own the person's lane BEFORE writing the item, so it is
+    # never even momentarily commons (no race window), and ABORT if the ACL cannot be set (never
+    # an unprotected drop). set_owner is idempotent and keeps grants, so re-running per drop is safe.
+    if email:
+        try:
+            _s.get_store().set_owner(folder, owner)  # "user:<email>" -> lane private to that person
+        except Exception as e:
+            print(f"[create_inbox_item owner] {e}", file=sys.stderr)
+            return text_result("Could not secure your inbox lane; nothing was created.", is_error=True)
+    return _create_doc_impl(rel, "\n".join(lines), args.get("ai"), ctx)
 
 
 def _tool_edit_doc(args, ctx):
@@ -592,6 +691,7 @@ _TOOLS = {
     "list_tree": _tool_list_tree,
     "recent_docs": _tool_recent_docs,
     "create_doc": _tool_create_doc,
+    "create_inbox_item": _tool_create_inbox_item,
     "edit_doc": _tool_edit_doc,
     "move_doc": _tool_move_doc,
     "get_links": _tool_get_links,

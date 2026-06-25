@@ -61,6 +61,9 @@ if (isServerMode) {
     .catch(() => {});
 
   refresh();
+  // Live-reload heartbeat. softReload() is now non-destructive on the home (it refreshes only the
+  // active activity tab in place, never re-mounting the card), so this no longer wipes an open inbox
+  // editor; see the refreshActivityData() branch in softReload().
   setInterval(refresh, 10000);
 
   // Soft reload: fetch /api/tree and patch the DOM in place instead of location.reload().
@@ -149,11 +152,16 @@ if (isServerMode) {
         } else {
           currentFile = newFile;
         }
+      } else if (document.getElementById('home-activity-mount') && window.refreshActivityData) {
+        // Home already on screen: do NOT re-render it. Re-rendering re-mounts the activity card and
+        // wipes whatever its active tab is doing (an open inbox folder/tag editor, the inbox poll).
+        // The tree above is already patched; refresh only the active activity tab's data in place.
+        window.refreshActivityData();
       } else {
-        // No doc open: (re-)route from the URL hash now that fileMap reflects the
-        // viewer's accessible docs — so a link to a doc they can't see lands on the
-        // clean not-found page instead of silently bouncing home. Preserve scroll so a
-        // live re-render of the home (SSE/periodic) doesn't jump to the top under you.
+        // No doc open and the home isn't up yet (first load), or we're on the not-found page:
+        // (re-)route from the URL hash now that fileMap reflects the viewer's accessible docs, so a
+        // link to a doc they can't see lands on the clean not-found page instead of bouncing home.
+        // Preserve scroll so a live re-render doesn't jump to the top under you.
         const sp = document.querySelector('main').scrollTop;
         routeFromHash();
         document.querySelector('main').scrollTop = sp;
@@ -170,7 +178,7 @@ if (isServerMode) {
     const es = new EventSource('/api/events');
 
     es.addEventListener('message', (e) => {
-      if (e.data === 'reload') softReload();
+       if (e.data === 'reload') softReload();
     });
     es.addEventListener('error', () => {});
   } catch (e) {}

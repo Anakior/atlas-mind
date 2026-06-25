@@ -60,6 +60,7 @@ GET_ROUTES = [
     router.Route(_RK.EXACT_NOQUERY, "/api/diff", docs.diff, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/activity", docs.activity, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/stale", docs.stale, _G.AUTH),
+    router.Route(_RK.EXACT_NOQUERY, "/api/inbox", docs.inbox_list, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/contradictions", docs.contradictions, _G.AUTH),
     router.Route(_RK.EXACT, "/api/account/profile", account.profile_get, _G.AUTH),
     router.Route(_RK.EXACT, "/api/events", system.events, _G.AUTH),
@@ -96,6 +97,7 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/revert", docs.revert, _G.CSRF_BASE),       # per-doc: needs edit
     router.Route(_RK.EXACT, "/api/contradiction", docs.contradiction_verdict, _G.CSRF_BASE),  # 13c verdict: needs read both
     router.Route(_RK.EXACT, "/api/file/move", docs.move, _G.CSRF_BASE),      # per-doc: needs owner
+    router.Route(_RK.EXACT, "/api/inbox/action", docs.inbox_action, _G.CSRF_BASE),  # inbox triage: owner-gated
     router.Route(_RK.EXACT, "/api/dir/rename", docs.dir_rename, _G.CSRF_BASE),  # per-folder: owner (can_manage)
     router.Route(_RK.PREFIX, "/api/v1/", apiv1.post, _G.BEARER),
     router.Route(_RK.PREFIX, "/mcp/", mcp.handle, _G.BEARER),

@@ -26,8 +26,8 @@ from build.paths import (  # noqa: F401  (re-exported as build.*)
     DEFAULT_TODO_CATEGORIES,
 )
 from build.parse import (  # noqa: F401
-    _parse_frontmatter, _folder_tags, _resolve_wikilink, _WIKILINK_RE,
-    build_links_index, build_tasks_index,
+    _parse_frontmatter, _inbox_meta, _rewrite_inbox_fm, _folder_tags, _resolve_wikilink,
+    _WIKILINK_RE, build_links_index, build_tasks_index,
 )
 from build.assets import (  # noqa: F401
     load_all_notes, load_doc_templates, load_extension_assets,
@@ -128,6 +128,11 @@ def walk(path: Path, *, content_root: Path | None = None,
         if child.name in excluded_names:
             continue
         if any(child.name.startswith(p) for p in excluded_prefixes):
+            continue
+        # The inbox is sealed from the build (tree, search, backlinks, embed, activity), just like
+        # the runtime corpus skips it in iter_doc_files. So an inbox write never changes the static
+        # site -> the dev live-reload (md5 of dist/index.html) does not fire on every dropped item.
+        if path == content_root and child.is_dir() and child.name == "inbox":
             continue
         entries.append(child)
     entries.sort(key=lambda p: (not p.is_dir(), p.name.lower()))

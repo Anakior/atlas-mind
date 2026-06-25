@@ -249,6 +249,52 @@ def stale(handler):
     handler._send_json(200, {"months": months, "stale": items})
 
 
+def inbox_list(handler):
+    """GET /api/inbox?limit= — pending inbox items (the agents' on-ramp), highest
+    confidence first. AUTH and private: only the boss (primary/superuser) sees the inbox,
+    so a non-primary viewer gets 403 (never a leak)."""
+    query = handler._query()
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser and not ctx.primary:
+        handler._send_json(403, {"error": "forbidden"})
+        return
+    limit = _s.clamp_int(query.get("limit", [None])[0], 50, 1, 200)
+    items = _s._api_inbox_list(limit, None if ctx.superuser else ctx)
+    handler._send_json(200, {"inbox": items})
+
+
+def inbox_action(handler):
+    """POST /api/inbox/action — triage an inbox item. Owner-gated (the inbox is private,
+    so only the boss acts), one attributed commit per action. Body:
+    {action: keep|trash|untrash|snooze, path, dest?, until?}. Keep promotes into the graph;
+    Trash/Snooze flip the frontmatter in place (reversible, no hard delete)."""
+    data = handler._read_json()
+    action = (data.get("action") or "").strip()
+    src_rel = (data.get("path") or "").strip()
+    ctx = handler._viewer_ctx()
+    if action == "keep":
+        tags = data.get("tags") if isinstance(data.get("tags"), list) else None
+        ok, res = _s._promote_inbox_item(src_rel, data.get("dest") or "", ctx, tags=tags)
+    elif action == "trash":
+        ok, res = _s._set_inbox_status(src_rel, {"inbox_status": "trashed"}, ctx,
+                                       f"trashed: {src_rel}")
+    elif action == "untrash":
+        ok, res = _s._set_inbox_status(src_rel, {"inbox_status": "pending", "snooze_until": None},
+                                       ctx, f"restored: {src_rel}")
+    elif action == "snooze":
+        until = (data.get("until") or "").strip()
+        ok, res = _s._set_inbox_status(src_rel, {"inbox_status": "snoozed", "snooze_until": until},
+                                       ctx, f"snoozed: {src_rel}")
+    else:
+        handler._send_json(400, {"error": "unknown action"})
+        return
+    if not ok:
+        code = 404 if "not found" in res.lower() else 403 if "permission" in res.lower() else 400
+        handler._send_json(code, {"error": res})
+        return
+    handler._send_json(200, {"ok": True, "result": res})
+
+
 def contradictions(handler):
     """GET /api/contradictions?limit=. Candidate contradictions for the HUMAN viewer (13c):
     the precise table-row drift detector plus any cluster already confirmed 'real'. Raw cosine

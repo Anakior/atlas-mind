@@ -27,7 +27,7 @@ CLOUD_ENV = {
 ADMIN_EMAIL = "admin@act.local"
 ADMIN_PW = "activity-admin-password"
 MEMBER_EMAIL = "member@act.local"
-MIND = {"inbox/seed.md": "# Seed\n\nseed.\n"}
+MIND = {"log/seed.md": "# Seed\n\nseed.\n"}
 
 
 @unittest.skipUnless(shutil.which("git"), "git not available")
@@ -44,11 +44,11 @@ class TestActivity(unittest.TestCase):
         meta, cls.token = fs.create_api_identity("act-bot")
         fs.upsert_user(meta["email"], {"acts_as": MEMBER_EMAIL})
         # Generate attributed history through the real write path.
-        cls._mcp("create_doc", {"path": "inbox/alpha.md", "content": "# A\n", "ai": "claude"})
-        cls._mcp("create_doc", {"path": "inbox/beta.md", "content": "# B\n", "ai": "chatgpt"})
-        cls._mcp("edit_doc", {"path": "inbox/alpha.md", "content": "# A v2\n", "ai": "claude"})
-        cls._mcp("move_doc", {"from": "inbox/alpha.md", "to": "inbox/alpha2.md", "ai": "claude"})
-        cls._mcp("delete_doc", {"path": "inbox/beta.md", "ai": "chatgpt"})
+        cls._mcp("create_doc", {"path": "log/alpha.md", "content": "# A\n", "ai": "claude"})
+        cls._mcp("create_doc", {"path": "log/beta.md", "content": "# B\n", "ai": "chatgpt"})
+        cls._mcp("edit_doc", {"path": "log/alpha.md", "content": "# A v2\n", "ai": "claude"})
+        cls._mcp("move_doc", {"from": "log/alpha.md", "to": "log/alpha2.md", "ai": "claude"})
+        cls._mcp("delete_doc", {"path": "log/beta.md", "ai": "chatgpt"})
 
     @classmethod
     def tearDownClass(cls):
@@ -102,7 +102,7 @@ class TestActivity(unittest.TestCase):
         cookie = self._admin_cookie()
         csrf = self.srv.get("/api/me", headers={"Cookie": cookie}).json()["csrf_token"]
         self.srv.put("/api/file", headers={"Cookie": cookie, "X-CSRF-Token": csrf},
-                     json_body={"path": "inbox/human.md", "content": "# Human\n"})
+                     json_body={"path": "log/human.md", "content": "# Human\n"})
         ev = next(e for e in self._events() if e["title"] == "human")
         self.assertIsNone(ev["ai"])
         self.assertEqual(ev["type"], "create")

@@ -1488,6 +1488,28 @@ def cmd_token_revoke_all(args) -> int:
     return 0
 
 
+# ─── inbox ─────────────────────────────────────────────────────────────────────
+
+
+def cmd_inbox_claim(args) -> int:
+    """Pre-own a person's inbox lane (inbox/<user>/), keeping their agents' drops private to
+    them. Multi-user: each person has their own inbox. This is optional — the lane is owned
+    automatically on the first drop — but lets an admin provision it ahead of time. Idempotent."""
+    mind = _require_mind(args.dir)
+    file_store = _file_store(_load_config(mind))
+    email = _normalize_email(args.email)
+    human = file_store.get_user_by_email(email)
+    if human is None or human.get("role") not in ("admin", "viewer"):
+        raise CliError(
+            f"{email}: no human (admin/viewer) account with that email. "
+            "Create it first with `atlas user add`.")
+    slug = store.slugify_token_label(email)
+    file_store.set_owner(f"inbox/{slug}", "user:" + email)
+    print(f"inbox/{slug}/ is now owned by {email} (their private inbox). Agents bound to that "
+          "account (token --acts-as) drop into it; only they triage it.")
+    return 0
+
+
 # ─── share ─────────────────────────────────────────────────────────────────────
 
 
@@ -1757,6 +1779,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_share_revoke.add_argument("--id", required=True, dest="id",
                                 help="Link id (see `atlas share list`).")
     p_share_revoke.set_defaults(func=cmd_share_revoke)
+
+    p_inbox = subparsers.add_parser(
+        "inbox", help="The agents' inbox (the on-ramp to the mind).")
+    inbox_sub = p_inbox.add_subparsers(dest="action", metavar="<action>", required=True)
+    p_inbox_claim = inbox_sub.add_parser(
+        "claim", help="Make a human the owner of inbox/ (keeps the queue private).")
+    p_inbox_claim.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
+    p_inbox_claim.add_argument("--email", required=True, metavar="EMAIL",
+                               help="The boss who owns the inbox and triages it.")
+    p_inbox_claim.set_defaults(func=cmd_inbox_claim)
 
     p_doctor = subparsers.add_parser(
         "doctor",

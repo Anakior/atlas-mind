@@ -133,9 +133,21 @@ def _tokenize(text):
     return out
 
 
+# Single most-recent corpus, memoized: {fingerprint: (vectors, df, N)}. The heavy tokenize + tf-idf
+# over the WHOLE corpus is the cost the CDC flagged (re-run on every /api/contradictions poll AND
+# every inbox neighbour lookup, both on the same corpus). The fingerprint (cheap content hash) keys
+# on the exact corpus state, so it recomputes only when a doc actually changed. One entry = bounded.
+_VEC_CACHE = {}
+
+
 def _corpus_vectors(clean):
-    """tf-idf vectors (sublinear tf, smoothed idf, L2-normalized), capped to _VEC_CAP terms
-    per doc keeping the highest-idf (rarest) terms so the subject token is never evicted."""
+    """tf-idf vectors (sublinear tf, smoothed idf, L2-normalized), capped to _VEC_CAP terms per doc
+    keeping the highest-idf (rarest) terms so the subject token is never evicted. Memoized on a
+    cheap content fingerprint: identical corpus -> identical result, computed once."""
+    fp = hash(tuple(sorted((rel, hash(text)) for rel, _name, text in clean)))
+    cached = _VEC_CACHE.get(fp)
+    if cached is not None:
+        return cached
     tf = {}
     df = Counter()
     for rel, _name, text in clean:
@@ -152,7 +164,10 @@ def _corpus_vectors(clean):
             v = dict(keep)
         norm = math.sqrt(sum(w * w for w in v.values())) or 1.0
         vectors[rel] = {t: w / norm for t, w in v.items()}
-    return vectors, df, N
+    result = (vectors, df, N)
+    _VEC_CACHE.clear()   # keep only the latest corpus state (single entry, bounded memory)
+    _VEC_CACHE[fp] = result
+    return result
 
 
 def _candidate_pairs(vectors, df, N):
@@ -279,6 +294,57 @@ def _rarest_shared_term(a, b, vectors, df):
     if not shared:
         return ""
     return min(shared, key=lambda t: (df[t], t))
+
+
+def _vectorize_one(text, df, N):
+    """tf-idf vector of ONE text against an EXISTING corpus df/N (the idf the corpus was built
+    with), sublinear tf + smoothed idf, capped and L2-normalized exactly like _corpus_vectors.
+    NET-NEW: scores a doc that is NOT in the corpus (an inbox item) without rebuilding it. A term
+    absent from the corpus gets df 0 -> max idf (a novel word IS rare). df.get, never df[]."""
+    c = Counter(_tokenize(text))
+    v = {t: (1 + math.log(f)) * (math.log((N + 1) / (df.get(t, 0) + 1)) + 1.0) for t, f in c.items()}
+    if len(v) > _VEC_CAP:
+        v = dict(heapq.nlargest(_VEC_CAP, v.items(), key=lambda kv: kv[1]))
+    norm = math.sqrt(sum(w * w for w in v.values())) or 1.0
+    return {t: w / norm for t, w in v.items()}
+
+
+def find_doc_neighbors(rel, text, ctx=None, top=5):
+    """Same-subject neighbors of ONE doc (typically an inbox item) against the live corpus, which
+    already excludes inbox via the folder skip. The item is vectorized and scored AGAINST the
+    corpus, never added to it (rel != self filtered). Returns [{rel, score, subject}] sorted by
+    cosine desc (>= _COS_FLOOR), top-K. Deterministic, ACL-scrubbed per ctx. Duplicates ~12 lines
+    of the engine on purpose (it is OOM-sensitive and under golden tests; simple > clever). Used
+    to suggest where to file a kept item and to flag a potential supersession before triage."""
+    from server.pure import queries  # lazy: avoids the import cycle (see find_contradictions)
+    clean = [(r, n, _strip_noise(r, t)) for r, n, t in queries._doc_corpus(ctx) if r != rel]
+    if not clean:
+        return []
+    vectors, df, N = _corpus_vectors(clean)
+    iv = _vectorize_one(_strip_noise(rel, text), df, N)
+    if not iv:
+        return []
+    cap_frac = max(_DF_FRAC_FLOOR, int(N * _DF_FRAC))
+    # Floor is 1, not _DF_MIN: unlike intra-corpus pairing, here the item is a virtual 2nd doc,
+    # so a term in a SINGLE corpus doc IS shared (corpus df 1 + the item = 2). Still skip ubiquitous
+    # terms above cap_frac (they are not a subject).
+    postings = defaultdict(list)
+    for r, v in vectors.items():
+        for t in v:
+            if 1 <= df[t] <= cap_frac:
+                postings[t].append(r)
+    cand = {r for t in iv if 1 <= df.get(t, 0) <= cap_frac for r in postings.get(t, ())}
+    out = []
+    for r in cand:
+        vb = vectors[r]
+        small, big = (iv, vb) if len(iv) <= len(vb) else (vb, iv)
+        dot = sum(w * big.get(t, 0.0) for t, w in small.items())  # unit vectors -> exact cosine
+        if dot >= _COS_FLOOR:
+            shared = set(iv) & set(vb)
+            subject = min(shared, key=lambda t: (df.get(t, 0), t)) if shared else ""
+            out.append({"rel": r, "score": round(dot, 4), "subject": subject})
+    out.sort(key=lambda c: (-c["score"], c["rel"]))
+    return out[:top]
 
 
 def _cluster_candidates(vectors, df, N):
