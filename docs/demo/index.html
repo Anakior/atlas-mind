@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build:2026-06-25T05:34:42Z -->
+<!-- build:2026-06-25T05:47:24Z -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2216,7 +2216,7 @@ return He}()
       </a>
     </div>
     <div class="px-5 py-3 border-t subtle-border text-xs text-ink-500">
-      <span class="font-mono text-ink-400">v0.8.3</span> &middot; Build&nbsp;: <code class="bg-black/40 text-ink-300 px-1.5 py-0.5 rounded font-mono">2026-06-25T05:34:42Z</code>
+      <span class="font-mono text-ink-400">v0.8.3</span> &middot; Build&nbsp;: <code class="bg-black/40 text-ink-300 px-1.5 py-0.5 rounded font-mono">2026-06-25T05:47:24Z</code>
     </div>
   </aside>
   <main class="flex-1 overflow-y-auto scrollbar-thin bg-navy-700">
@@ -3148,6 +3148,10 @@ const STRINGS = {
     // Génériques
     cancel: 'Annuler',
     confirm: 'Confirmer',
+    ok: 'OK',
+    errorTitle: 'Erreur',
+    offlineTitle: 'Mode hors-ligne',
+    offlineDisabled: 'Cette fonctionnalité est désactivée.',
     save: 'Enregistrer',
     close: 'Fermer',
     del: 'Supprimer',
@@ -3682,6 +3686,10 @@ const STRINGS = {
     // Generic
     cancel: 'Cancel',
     confirm: 'Confirm',
+    ok: 'OK',
+    errorTitle: 'Error',
+    offlineTitle: 'Offline mode',
+    offlineDisabled: 'This feature is disabled.',
     save: 'Save',
     close: 'Close',
     del: 'Delete',
@@ -5162,7 +5170,7 @@ function wireTaskCheckboxes(file, fullContent) {
 
           if (currentFile && currentFile.path === file.path) currentFile.content = prev;
           box.checked = !desired;
-          alert(t('err', e.message));
+          notifyError('err', e.message);
         });
 
       _taskWrites.add(write);
@@ -5746,7 +5754,7 @@ async function saveNewNote(text) {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (e) {
-    alert(t('noteSaveFailed', e.message));
+    notifyError('noteSaveFailed', e.message);
 
     return;
   }
@@ -5776,7 +5784,7 @@ async function saveEditNote(note, text) {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (e) {
-    alert(t('actionFailed', e.message));
+    notifyError('actionFailed', e.message);
 
     return;
   }
@@ -5807,7 +5815,7 @@ async function deleteNote(note) {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (e) {
-    alert(t('actionFailed', e.message));
+    notifyError('actionFailed', e.message);
 
     return;
   }
@@ -6944,7 +6952,7 @@ async function persistTags(file, customTags) {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (err) {
-    alert(t('tagSaveFailed', err.message));
+    notifyError('tagSaveFailed', err.message);
 
     return false;
   }
@@ -7641,7 +7649,7 @@ async function enterEditMode() {
   try {
     content = await loadContent(currentFile);
   } catch (e) {
-    alert(t('cantLoadDoc', e.message));
+    notifyError('cantLoadDoc', e.message);
 
     return;
   }
@@ -7766,7 +7774,7 @@ async function saveEdit() {
   if (!editMode || !currentFile) return;
 
   if (!isServerMode) {
-    alert(t('fileModeNoEdit'));
+    notifyError('fileModeNoEdit');
 
     return;
   }
@@ -7795,7 +7803,7 @@ async function saveEdit() {
     _selfSaveUntil[currentFile.path] = Date.now() + 6000;
     exitEditMode(true);
   } catch (e) {
-    alert(t('err', e.message));
+    notifyError('err', e.message);
   } finally {
     btnSave.disabled = false;
     btnSave.textContent = t('saveBtn');
@@ -8705,7 +8713,7 @@ document.getElementById('btn-download').addEventListener('click', async () => {
   try {
     content = await loadContent(currentFile);
   } catch (e) {
-    alert(t('cantLoadDoc', e.message));
+    notifyError('cantLoadDoc', e.message);
 
     return;
   }
@@ -11094,7 +11102,7 @@ btnMoreMenu.addEventListener('click', async (e) => {
       setStatus(t('docDeleted'), 'ok');
       await refreshTreeOrReload();
     } catch (e) {
-      alert(t('err', e.message));
+      notifyError('err', e.message);
     }
   }
 });
@@ -11240,6 +11248,47 @@ function confirmDialog(opts) {
     confirmBackdrop.addEventListener('click', onBackdrop);
     document.addEventListener('keydown', onKey);
   });
+}
+
+// ── Alert popup (replaces the native alert()) ────────────────────────────────
+// A single-button notice reusing the confirm dialog's chrome, so it matches every
+// other modal. Fire-and-forget: callers don't await it.
+function alertDialog(opts) {
+  const o = typeof opts === 'string' ? { message: opts } : (opts || {});
+  return new Promise((resolve) => {
+    confirmTitle.textContent = o.title || t('errorTitle');
+    confirmMessage.textContent = o.message || '';
+    confirmOk.textContent = o.okLabel || t('ok');
+    confirmOk.className = 'px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium';
+    confirmCancel.classList.add('hidden');   // alert = one OK button only
+    confirmBackdrop.classList.remove('hidden');
+    setTimeout(() => confirmOk.focus(), 50);
+    const cleanup = () => {
+      confirmBackdrop.classList.add('hidden');
+      confirmCancel.classList.remove('hidden');   // restore for confirmDialog
+      confirmOk.removeEventListener('click', done);
+      confirmBackdrop.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+    };
+    const done = () => { cleanup(); resolve(); };
+    const onBackdrop = (e) => { if (e.target === confirmBackdrop) done(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); done(); }
+    };
+    confirmOk.addEventListener('click', done);
+    confirmBackdrop.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+// Error notice. In an OFFLINE build every server-backed action is disabled, so we
+// always show one clear "disabled offline" message (in the UI language) rather
+// than leaking a raw network error; online we show the specific message for `key`.
+function notifyError(key, ...args) {
+  if (IS_OFFLINE_BUILD) {
+    return alertDialog({ title: t('offlineTitle'), message: t('offlineDisabled') });
+  }
+  return alertDialog({ title: t('errorTitle'), message: t(key, ...args) });
 }
 
 // Input modal (replaces the native prompt, banned from the viewer). Resolves the

@@ -646,7 +646,7 @@ document.getElementById('btn-download').addEventListener('click', async () => {
   try {
     content = await loadContent(currentFile);
   } catch (e) {
-    alert(t('cantLoadDoc', e.message));
+    notifyError('cantLoadDoc', e.message);
 
     return;
   }

@@ -116,7 +116,7 @@ async function persistTags(file, customTags) {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (err) {
-    alert(t('tagSaveFailed', err.message));
+    notifyError('tagSaveFailed', err.message);
 
     return false;
   }

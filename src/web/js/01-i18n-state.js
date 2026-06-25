@@ -4,6 +4,10 @@ const STRINGS = {
     // Génériques
     cancel: 'Annuler',
     confirm: 'Confirmer',
+    ok: 'OK',
+    errorTitle: 'Erreur',
+    offlineTitle: 'Mode hors-ligne',
+    offlineDisabled: 'Cette fonctionnalité est désactivée.',
     save: 'Enregistrer',
     close: 'Fermer',
     del: 'Supprimer',
@@ -538,6 +542,10 @@ const STRINGS = {
     // Generic
     cancel: 'Cancel',
     confirm: 'Confirm',
+    ok: 'OK',
+    errorTitle: 'Error',
+    offlineTitle: 'Offline mode',
+    offlineDisabled: 'This feature is disabled.',
     save: 'Save',
     close: 'Close',
     del: 'Delete',
