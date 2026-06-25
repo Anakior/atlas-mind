@@ -33,7 +33,14 @@ class GitSync:
             ["git", *args],
             cwd=str(cwd or self._config.root),
             capture_output=True,
+            # Git stores/emits UTF-8; decode it as such on EVERY platform. Without
+            # this, text=True falls back to the locale encoding (cp1252 on Windows)
+            # and mojibakes any non-ASCII in git output — accented author names in
+            # the activity feed, the "→" in a move subject, etc. errors="replace"
+            # keeps a stray non-UTF-8 byte from crashing a whole read.
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=check,
             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},

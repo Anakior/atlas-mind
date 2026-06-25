@@ -17,9 +17,22 @@ fonts and JS embedded — no server, no network). Regenerate it after changing
 `examples/demo-mind/`:
 
 ```bash
-python3 src/cli.py build examples/demo-mind --offline
-cp examples/demo-mind/dist/index-offline.html docs/demo/index.html
+python3 examples/demo-mind/build-demo.py
 ```
+
+This does NOT build `examples/demo-mind/` in place: that directory is a sub-folder
+of the engine repo, so its real git history is thin and one-author — the **activity
+layer** (Journal / Constellation / Health) would render empty. Instead the script
+replays the content into a throwaway git repo (content/ at its root, like a real
+mind) with a curated, multi-author, back-dated history (some commits AI-attributed),
+then runs the offline build against it so the activity home is populated. The final
+document content is identical to `examples/demo-mind/content/`; only the synthetic
+authorship timeline differs. To tweak the demo's activity (contributors, dates, AI
+edits), edit the `EVENTS` table at the top of `build-demo.py`.
+
+A plain `python3 src/cli.py build examples/demo-mind --offline` still works for a
+quick content-only preview, but ships an empty activity layer — use it only when
+the activity home isn't what you're checking.
 
 The viewer uses client-side hash routing, so it works unchanged from the
 `/demo/` subpath. The landing's CTAs link to `./demo/`.

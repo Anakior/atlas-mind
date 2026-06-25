@@ -6,6 +6,9 @@ const EMBED_CONTENT = __EMBED_CONTENT__;
 const EMBED_BACKLINKS = __EMBED_BACKLINKS__;
 const EMBED_NOTES = __EMBED_NOTES__;
 const EMBED_TASKS = __EMBED_TASKS__;
+// Frozen activity-layer snapshot {events, stale, contradictions} for the offline
+// build (public minds); null online → the home fetches /api/activity live.
+const EMBED_ACTIVITY = __EMBED_ACTIVITY__;
 // New-document skeletons {label: markdown}, label = file name without extension.
 // Engine templates/ merged with <mind>/templates/ (mind overrides).
 const DOC_TEMPLATES = __TEMPLATES__;

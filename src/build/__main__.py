@@ -17,6 +17,8 @@ The viewer.html template defines the placeholders:
   __DATA__              : tree JSON (metadata)
   __EMBED_CONTENT__     : null (online) | {path: content} (offline)
   __EMBED_BACKLINKS__   : null (online) | backlinks index (offline)
+  __EMBED_ACTIVITY__    : null (online) | {events, stale, contradictions} (offline,
+                          public mind only) — the frozen activity-layer snapshot
   __BUILD_TS__          : ISO timestamp
   __SITE_NAME__         : full name "<prefix> Atlas" (raw <title> text)
   __SITE_PREFIX__       : the prefix alone, HTML-escaped (sidebar H1 span)
@@ -25,6 +27,8 @@ The viewer.html template defines the placeholders:
   __TAGLINE__           : home-page baseline, HTML-escaped
   __TAGLINE_JSON__      : the same, JSON-encoded (viewer JS constant)
   __LANG__              : interface language (<html lang>), "fr" or "en"
+  __HEAD_META__         : SEO/social <head> block — a meta description always,
+                          canonical + Open Graph/Twitter only if [site].url set
   __TEMPLATES__         : new-document skeletons {label: md content} — see
                           load_doc_templates.
   __EXTENSIONS_CSS__    : the mind's extension CSS, inlined in a <style> (both
@@ -100,6 +104,34 @@ def _offline_keep(cfg, as_email):
     return lambda rel: not acl.in_private_space(rel, fs)
 
 
+def _snapshot_activity(cfg):
+    """Freeze the activity layer (journal + obsolescence + contradiction
+    candidates) at build time so the OFFLINE viewer renders the same home the
+    server serves live — from the embedded snapshot instead of /api/*.
+
+    Reuses the server's read functions VERBATIM (one source of truth, no
+    divergence) by standing up a minimal, listener-less context over the same
+    mind, exactly as _offline_keep reaches into server.pure for the ACL. It runs
+    only in the `python -m build` subprocess, so setting the module globals
+    cannot collide with a live server. Returns None on git failure (the viewer
+    then simply omits the activity card, just like online with no history)."""
+    if str(SRC_DIR) not in sys.path:
+        sys.path.insert(0, str(SRC_DIR))
+    import server as _s
+    import store as _store
+    from server.context import AppContext
+    _s.CONFIG = cfg
+    _s._CTX = AppContext.build(cfg, _store.FileStore(cfg.store_dir))
+    events = _s._activity_events(60, 200, None, None, None)  # days, limit, no filter
+    if events is None:
+        return None
+    return {
+        "events": events,
+        "stale": _s._api_stale(6, 40, None),               # months, limit, no ACL
+        "contradictions": _s.find_contradictions(None, 50, False),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--offline", action="store_true",
@@ -117,6 +149,8 @@ def main() -> int:
     template_path = cfg.web_dir / "viewer.html"
     excluded_names = cfg.excluded_names
     site_prefix, tagline, lang = cfg.prefix, cfg.tagline, cfg.lang
+    site_url, site_description, og_image = (cfg.site_url, cfg.site_description,
+                                            cfg.og_image)
     extensions_dir, web_dir = cfg.extensions_dir, cfg.web_dir
     todo_cats = [{"cat": c, "label": cfg.todo_cat_headers.get(c, c.capitalize())}
                  for c in cfg.todo_categories]
@@ -155,17 +189,26 @@ def main() -> int:
         notes = load_all_notes(notes_dir)
         if keep is not None:
             notes = {rel: ns for rel, ns in notes.items() if keep(rel)}
+        # Activity snapshot embedded ONLY for a fully-public mind (no ACL): a
+        # filtered export (common socle / --as <email>) would need the activity
+        # scrubbed to the same visible set, so we keep it online-only there
+        # rather than risk leaking a private doc's history into a static file.
+        embed_activity = _snapshot_activity(cfg) if keep is None else None
         html = render_template(
             tree=tree,
             embed_content=embed_content,
             embed_backlinks=backlinks,
             embed_notes=notes,
             embed_tasks=build_tasks_index(accum["md_files"]),
+            embed_activity=embed_activity,
             build_ts=build_ts,
             template_path=template_path,
             site_prefix=site_prefix,
             tagline=tagline,
             lang=lang,
+            site_url=site_url,
+            site_description=site_description,
+            og_image=og_image,
             todo_categories=todo_cats,
             doc_templates=doc_templates,
             extensions_css=extensions_css,
@@ -200,6 +243,9 @@ def main() -> int:
         site_prefix=site_prefix,
         tagline=tagline,
         lang=lang,
+        site_url=site_url,
+        site_description=site_description,
+        og_image=og_image,
         todo_categories=todo_cats,
         doc_templates=doc_templates,
         extensions_css=extensions_css,

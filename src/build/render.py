@@ -48,13 +48,58 @@ def _engine_version() -> str:
     return ""
 
 
+# og:locale wants a territory, not just a bare language code.
+_OG_LOCALE = {"en": "en_US", "fr": "fr_FR"}
+
+
+def _head_meta(*, site_name: str, description: str, site_url: str,
+               og_image: str, lang: str) -> str:
+    """The viewer <head>'s SEO/social block, assembled here (not in the template)
+    so the conditional half stays in Python.
+
+    A `<meta name="description">` is ALWAYS emitted (search snippet + link
+    preview), falling back to the tagline. The canonical link and the Open
+    Graph / Twitter card are emitted ONLY when the mind declares a public URL
+    ([site].url): a private, per-user instance has no canonical URL and must not
+    advertise one — so the default (no url) keeps the historical bare head, zero
+    lock-in. Every value is HTML-escaped here and injected verbatim."""
+    def esc(value: str) -> str:
+        return _html.escape(value, quote=True)
+    lines = [f'<meta name="description" content="{esc(description)}">']
+    if site_url:
+        url, name, desc = esc(site_url), esc(site_name), esc(description)
+        locale = _OG_LOCALE.get(lang, "en_US")
+        card = "summary_large_image" if og_image else "summary"
+        lines += [
+            f'<link rel="canonical" href="{url}">',
+            '<meta property="og:type" content="website">',
+            f'<meta property="og:site_name" content="{name}">',
+            f'<meta property="og:title" content="{name}">',
+            f'<meta property="og:description" content="{desc}">',
+            f'<meta property="og:url" content="{url}">',
+            f'<meta property="og:locale" content="{locale}">',
+            f'<meta name="twitter:card" content="{card}">',
+            f'<meta name="twitter:title" content="{name}">',
+            f'<meta name="twitter:description" content="{desc}">',
+        ]
+        if og_image:
+            img = esc(og_image)
+            lines += [f'<meta property="og:image" content="{img}">',
+                      f'<meta name="twitter:image" content="{img}">']
+    return "\n".join(lines)
+
+
 def render_template(*, tree: dict, embed_content: dict | None,
                     embed_backlinks: dict | None, embed_notes: dict | None,
                     embed_tasks=None,
+                    embed_activity=None,
                     build_ts: str, template_path: Path | None = None,
                     site_prefix: str = DEFAULT_SITE_PREFIX,
                     tagline: str = DEFAULT_TAGLINE,
                     lang: str = DEFAULT_LANG,
+                    site_url: str = "",
+                    site_description: str = "",
+                    og_image: str = "",
                     todo_categories: list | None = None,
                     doc_templates: dict | None = None,
                     extensions_css: str = "",
@@ -74,6 +119,12 @@ def render_template(*, tree: dict, embed_content: dict | None,
     # prefix and tagline as JSON-encoded constants — no text placeholder lands in
     # a template literal, so a backtick or ${…} from atlas.toml can't break out.
     site_name = _derive_site_name(site_prefix)
+    # SEO/social <head> block (see _head_meta): a meta description always,
+    # canonical + Open Graph/Twitter only when the mind set [site].url. The
+    # description falls back to the tagline.
+    head_meta = _head_meta(site_name=site_name,
+                           description=site_description or tagline,
+                           site_url=site_url, og_image=og_image, lang=lang)
     replacements = {
         "__BUILD_TS__": build_ts,
         "__VERSION__": _html.escape(_engine_version(), quote=True),
@@ -84,6 +135,8 @@ def render_template(*, tree: dict, embed_content: dict | None,
         "__TAGLINE_JSON__": _enc(tagline),
         "__TAGLINE__": _html.escape(tagline, quote=True),
         "__LANG__": _html.escape(lang, quote=True),
+        # Already fully HTML-escaped inside _head_meta — injected verbatim.
+        "__HEAD_META__": head_meta,
         "__TODO_CATEGORIES_JSON__": _enc(
             todo_categories if todo_categories is not None else DEFAULT_TODO_CATEGORIES),
         "__DATA__": _enc(tree),
@@ -91,6 +144,9 @@ def render_template(*, tree: dict, embed_content: dict | None,
         "__EMBED_BACKLINKS__": _enc(embed_backlinks) if embed_backlinks is not None else "null",
         "__EMBED_NOTES__": _enc(embed_notes) if embed_notes is not None else "null",
         "__EMBED_TASKS__": _enc(embed_tasks) if embed_tasks is not None else "null",
+        # Frozen activity-layer snapshot (offline, public minds only); null online
+        # → the viewer fetches /api/activity instead.
+        "__EMBED_ACTIVITY__": _enc(embed_activity) if embed_activity is not None else "null",
         "__TEMPLATES__": _enc(doc_templates if doc_templates is not None else {}),
         # Extension code injected AS-IS into a <style>/<script>; the container's
         # closing tag is neutralized so it can't escape, and `</head` too: the
