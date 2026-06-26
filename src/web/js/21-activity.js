@@ -1,4 +1,4 @@
-// Activity card (home) — Journal / Constellation / Santé views over the attributed git history.
+// Activity card (home): Journal / Constellation / Santé views over the attributed git history.
 // Reads GET /api/activity (the read side of the attribution layer); reuses the real
 // constellation avatars. Hidden offline / when there is nothing to show.
 (function () {
@@ -104,7 +104,7 @@
     };
   }
 
-  // Show the doc's history overlay in place ("voir les modifications") — no navigation,
+  // Show the doc's history overlay in place ("voir les modifications"), no navigation,
   // the activity feed stays put. No-ops if the doc no longer exists (deleted/moved).
   function openDocHistory(path) {
     if (!path || typeof fileMap === 'undefined' || typeof openHistory !== 'function') return;
@@ -140,7 +140,7 @@
   }
 
   // Collapse a run of consecutive events on the SAME doc by the same actor + type into
-  // one entry with a count — a burst of edits to one doc shouldn't read as N identical
+  // one entry with a count: a burst of edits to one doc shouldn't read as N identical
   // lines (CDC §9). Events arrive newest-first, so the kept time is the most recent.
   function aggregate(items) {
     const out = [];
@@ -194,7 +194,7 @@
       }
       out += row(e);
     });
-    // Toggle in place — no extra view to navigate to, the feed just unfolds.
+    // Toggle in place, no extra view to navigate to, the feed just unfolds.
     if (all.length > JOURNAL_PREVIEW) {
       out += `<div class="text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${_expanded ? t('actCollapse') : t('actSeeAll')}</a></div>`;
     }
@@ -368,13 +368,13 @@
   // ── Card shell + view switch ──────────────────────────────────────────
   const segClass = (active) =>
     'activity-seg px-3 py-1 text-xs font-medium ' + (active ? 'is-active bg-accent text-white' : 'text-ink-300');
-  // A checkbox-style filter (small box + label), not a button — reads as "filter the feed".
+  // A checkbox-style filter (small box + label), not a button, reads as "filter the feed".
   const aiFilterHtml = () =>
     `<button type="button" data-ai-filter class="flex items-center gap-1.5 text-xs transition ${_aiOnly ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" title="${t('actAiOnly')}">` +
     `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ${_aiOnly ? '#1d9bd1' : '#5e6066'};background:${_aiOnly ? '#1d9bd1' : 'transparent'}">${_aiOnly ? '✓' : ''}</span>` +
     `${t('actAiOnly')}</button>`;
 
-  // 13b — factual digest over the last 7 days (deterministic, derived from the events;
+  // 13b: factual digest over the last 7 days (deterministic, derived from the events;
   // the narrative side is the AI via the existing `activity` MCP tool, on demand).
   function computeDigest(items) {
     const WIN = 7 * 24 * 60; // minutes in 7 days
@@ -416,7 +416,7 @@
     );
   }
 
-  // 13c — Santé : obsolescence (déterministe serveur) + candidats de contradiction (pré-filtre
+  // 13c: Santé, obsolescence (déterministe serveur) + candidats de contradiction (pré-filtre
   // serveur ; l'IA juge via MCP). Les clics sur un doc rouvrent son historique.
   async function loadHealth(h) {
     let stale = [], cands = [];
@@ -639,7 +639,7 @@
     const m = document.getElementById('home-activity-mount');
     if (!m) return;
     // Re-fetch on every mount: the feed must reflect edits made since the home was
-    // last shown (e.g. a task toggle) — no caching, or it stays stale until reload.
+    // last shown (e.g. a task toggle), no caching, or it stays stale until reload.
     _expanded = false;
     // Don't leave the card slot blank while /api/activity fetches: cached card
     // instantly on re-visit, a skeleton on the very first load.
@@ -651,17 +651,17 @@
     if (!_items || !_items.length) { m.innerHTML = ''; return; }  // offline / nothing → no card
     m.innerHTML = cardHtml();
     wire(m.querySelector('#home-activity-card'));
+    if (!IS_OFFLINE_BUILD && window.AtlasInbox) AtlasInbox.refreshBadge();  // light count without opening the tab
   };
 
-  // Live-reload (SSE / periodic) refresh that does NOT re-mount the card. Only the tab ON SCREEN is
-  // refreshed in place; the dormant tabs and the self-managing Inbox (its poll + any open folder/tag
-  // editor) are left untouched. softReload() calls this instead of re-rendering the whole home, so a
-  // reload never destroys what the active tab is doing.
+  // Live-reload refresh that does NOT re-mount the card: softReload() calls this so only the active
+  // tab updates in place. Dormant tabs and the self-managing Inbox are left untouched.
   window.refreshActivityData = async function () {
     const card = document.getElementById('home-activity-card');
     if (!card) return;
     const inbox = card.querySelector('#activity-inbox');
     if (inbox && !inbox.classList.contains('hidden')) return;  // Inbox active: it manages itself
+    if (!IS_OFFLINE_BUILD && window.AtlasInbox) AtlasInbox.refreshBadge();  // keep the home badge live
     const raw = await load();
     if (!raw) return;
     _items = aggregate(raw);

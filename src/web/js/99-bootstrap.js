@@ -1,6 +1,6 @@
 if (isServerMode) {
   // Boot skeleton: in server mode the sidebar tree + content render only AFTER /api/me +
-  // /api/tree (the baked tree is the owner's full view, never shown — privacy). Until
+  // /api/tree (the baked tree is the owner's full view, never shown, privacy). Until
   // then, show a shimmer skeleton instead of a flash of empty menu/home. softReload()
   // (called once /api/tree lands) replaces it with the real tree + route.
   treeEl.innerHTML = Array.from({ length: 7 }, (_, i) =>
@@ -32,17 +32,14 @@ if (isServerMode) {
       }
 
       if (data.authenticated && data.role && data.role !== 'admin') {
-        // Member (non-admin): may write its OWN docs — the server enforces per
-        // document. We KEEP the `viewer-mode` class (CSS now hides only the
-        // still-global Todos widget) but do NOT set the __viewerMode flag, so the
-        // write affordances (create/edit/delete/move/share/rename) are available;
-        // disallowed actions fail with a clean 403/404 from the backend. Notes
-        // (comment level) stay admin-only via the class check.
+        // Member (non-admin): keep the viewer-mode class (the CSS hides only the global Todos widget)
+        // but NOT the __viewerMode flag, so the write affordances stay; per-doc authorization is
+        // enforced server-side (a disallowed action just gets a clean 403/404).
         document.body.classList.add('viewer-mode');
         window.__isMember = true;
       }
 
-      // Settings gear: cloud admins only — account/token management is moot
+      // Settings gear: cloud admins only; account/token management is moot
       // without active auth, and the local simulated admin has no one to manage.
       if (data.cloud && data.authenticated && data.role === 'admin') {
         document.body.classList.add('admin-cloud');
@@ -58,45 +55,45 @@ if (isServerMode) {
       // build-time view and is intentionally not shown in server mode).
       softReload();
     })
-    .catch(() => {});
+    .catch((e) => {
+      // Don't strand the boot skeleton on a transient /api/me blip: log it and load the tree anyway,
+      // so the user gets content instead of a frozen shimmer forever.
+      console.warn('boot /api/me failed:', e);
+      softReload();
+    });
 
   refresh();
-  // Live-reload heartbeat. softReload() is now non-destructive on the home (it refreshes only the
-  // active activity tab in place, never re-mounting the card), so this no longer wipes an open inbox
-  // editor; see the refreshActivityData() branch in softReload().
+  // Poll the todos widget every 10s. The content/tree live-reload is the SSE below (no fallback poll).
   setInterval(refresh, 10000);
+
+  // Bail conditions for a live-reload: anything the user is mid-action on that a DOM rebuild would
+  // clobber. Checked BOTH before the fetch AND again after the await: the SSE 'reload' fires exactly
+  // when a doc changed, so an Edit started during the network RTT must still abort the stale reload
+  // (the TOCTOU that let showMarkdown overwrite a freshly-opened editor).
+  function shouldAbortReload() {
+    if (editMode) return true;
+    if (document.querySelector('.todo-edit')) return true;
+    if (!newFileBackdrop.classList.contains('hidden')) return true;
+    if (!qcBackdrop.classList.contains('hidden')) return true;
+    if (!shareBackdrop.classList.contains('hidden')) return true;
+    if (!dirRenameBackdrop.classList.contains('hidden')) return true;
+    // Extension modals ([data-atlas-modal]): same consideration as the native ones.
+    if (document.querySelector('[data-atlas-modal]:not(.hidden)')) return true;
+    // Echo of an edit we just made ourselves (checkbox toggle): skip to avoid a flash.
+    if (currentFile && _selfSaveUntil[currentFile.path] && Date.now() < _selfSaveUntil[currentFile.path]) return true;
+    return false;
+  }
 
   // Soft reload: fetch /api/tree and patch the DOM in place instead of location.reload().
   async function softReload() {
-    if (editMode) return;
-
-    if (document.querySelector('.todo-edit')) return;
-
-    if (!newFileBackdrop.classList.contains('hidden')) return;
-
-    if (!qcBackdrop.classList.contains('hidden')) return;
-
-    if (!shareBackdrop.classList.contains('hidden')) return;
-
-    if (!dirRenameBackdrop.classList.contains('hidden')) return;
-
-    // Extension modals ([data-atlas-modal]): same consideration as the native ones.
-    if (document.querySelector('[data-atlas-modal]:not(.hidden)')) return;
-
-    // Skip the echo of an edit we just made ourselves (checkbox toggle) to avoid a
-    // flash; the window extends on each toggle, then live-reload resumes.
-    if (
-      currentFile &&
-      _selfSaveUntil[currentFile.path] &&
-      Date.now() < _selfSaveUntil[currentFile.path]
-    )
-      return;
+    if (shouldAbortReload()) return;
 
     try {
       const res = await fetch('/api/tree');
 
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const newTree = await res.json();
+      if (shouldAbortReload()) return;  // re-check post-await: the user may have started editing during the RTT
 
       TREE.children = newTree.children;
       TREE.name = newTree.name;
@@ -108,19 +105,17 @@ if (isServerMode) {
       statsEl.textContent = t('statsLine', mdCount, otherCount);
       const openDirs = new Set();
 
-      treeEl.querySelectorAll('button').forEach((b) => {
-        const nameEl = b.querySelector('[data-name]');
-
-        if (nameEl && b.querySelector('.caret.open')) openDirs.add(nameEl.dataset.name);
+      // Key the open/closed state on the full dir path, not the basename, so two same-named folders
+      // under different parents don't share it (opening one would re-open the other after a reload).
+      treeEl.querySelectorAll('button[data-dir-path]').forEach((b) => {
+        if (b.querySelector('.caret.open')) openDirs.add(b.dataset.dirPath);
       });
       treeEl.innerHTML = '';
       treeEl.appendChild(renderTree(TREE));
       decorateTreeBadges();
       decorateRemoteOrigins();
-      treeEl.querySelectorAll('button').forEach((b) => {
-        const nameEl = b.querySelector('[data-name]');
-
-        if (nameEl && openDirs.has(nameEl.dataset.name)) {
+      treeEl.querySelectorAll('button[data-dir-path]').forEach((b) => {
+        if (openDirs.has(b.dataset.dirPath)) {
           b.querySelector('.caret').classList.add('open');
           const ul = b.parentElement.querySelector('ul');
 
@@ -167,8 +162,10 @@ if (isServerMode) {
         document.querySelector('main').scrollTop = sp;
       }
     } catch (e) {
-      console.warn('softReload failed, fallback to location.reload', e);
-      location.reload();
+      // A transient /api/tree fetch/parse hiccup must NOT nuke the page: the SSE fires right when the
+      // server is busy writing, so a blip here would destroy the very state this soft path protects
+      // (an open editor, the inbox focus + poll). Skip this cycle; the next SSE event / reconnect retries.
+      console.warn('softReload skipped (transient):', e);
     }
   }
 
@@ -178,10 +175,9 @@ if (isServerMode) {
     const es = new EventSource('/api/events');
 
     es.addEventListener('message', (e) => {
-       if (e.data === 'reload') softReload();
+      if (e.data === 'reload') softReload();
     });
-    es.addEventListener('error', () => {});
-  } catch (e) {}
+  } catch (e) { console.warn('SSE live-reload unavailable:', e); }
 
   // Service worker (offline + instant loading PWA, cf. /sw.js). On deploy the new
   // SW takes control → reload ONCE to pick up fresh assets (no manual unregister).

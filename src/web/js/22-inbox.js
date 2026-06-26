@@ -1,15 +1,14 @@
-// Inbox triage: the home Activity card's "Inbox" tab, as its OWN module.
+// Inbox triage: the home Activity card's "Inbox" tab, as its own module.
 //
 // Agents pre-triage upstream and drop ready-to-file items into a per-person inbox lane via the MCP;
-// the boss keeps / trashes / snoozes them here. The Activity card (21-activity.js) owns only the tab
-// button, the #inbox-badge and the empty #activity-inbox slot, and calls AtlasInbox.{mount,show,hide}.
-// Everything inside the slot is this module's. The CSS lives in styles/10-inbox.css, NOT injected here.
+// you keep / trash / snooze them here. The Activity card (21-activity.js) owns only the tab button,
+// the #inbox-badge and the empty #activity-inbox slot, and calls AtlasInbox.{mount,show,hide}.
+// CSS lives in styles/10-inbox.css.
 //
-// Rendering is component-based, not a re-render-the-world string blob. The focus card and each queue
-// row are stable DOM nodes:
-//   - the live poll only APPENDS new rows to #ibx-next and bumps the counter; it never touches the
-//     focus card, so reading or editing it is never disturbed;
-//   - the focus card is rebuilt ONLY on a real selection change (click a row, Keep/Trash/Snooze, Next).
+// Component-based, not a re-render-the-world blob: the focus card and each queue row are stable DOM
+// nodes. The poll only appends rows to the list; the focus card is rebuilt only on a real selection
+// change (click a row, Keep/Trash/Snooze, Next). This split is the whole reason an open editor or the
+// scroll position survives a live update.
 (function () {
   if (typeof escapeHtml !== 'function') return;  // viewer core absent (some headless shells)
   const esc = escapeHtml;
@@ -19,7 +18,7 @@
   let _total = 0;          // baseline queue length, for the "X / Y traités" progress
   let _filter = null;      // Set of enabled source keys (null = all sources on)
   let _session = { kept: 0, trashed: 0, snoozed: 0 };
-  let _overrides = {};     // path -> {dest, tags}: the boss's edits, re-applied across any reload
+  let _overrides = {};     // path -> {dest, tags}: your edits, re-applied across any reload
   let _focusPath = null;   // animate the focus card only when it actually changes
   let _leaving = false;    // an action is mid-flight (swipe-out animation guard)
   let _poll = null;        // live-poll interval while the tab is open
@@ -46,7 +45,7 @@
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>';
 
   // ---- small helpers ----
-  // Relative time (own copy: the activity card has one in its own scope; a shared dep is not worth it).
+  // Relative time (own copy; the activity card's is in a separate scope).
   function rel(min) {
     const en = LANG === 'en';
     if (min < 1) return en ? 'just now' : "à l'instant";
@@ -69,24 +68,26 @@
   const tierLabel = (c) => (c >= 0.75 ? t('inboxConfHigh') : c >= 0.4 ? t('inboxConfMed') : t('inboxConfLow'));
   const ago = (it) => rel(it.captured_at ? Math.max(0, (Date.now() / 1000 - it.captured_at) / 60) : 0);
 
-  // Destination Keep promotes to: the boss's edited override, else the agent's suggest_dest, else the
-  // FOLDER of the top same-subject neighbour. Editable (to file privately): the promoted doc inherits
-  // the chosen folder's ACL, so a private folder stays private.
+  // Destination Keep promotes to: your edited override, else the agent's suggest_dest, else the FOLDER
+  // of the top same-subject neighbour. Editable, and the promoted doc inherits the chosen folder's ACL
+  // (so filing into a private folder keeps it private).
   function suggestDest(it) {
     if (it._dest != null) return it._dest;
     if (it.suggest_dest) return it.suggest_dest;
     const nb = it.neighbors && it.neighbors[0];
-    if (nb && nb.indexOf('/') >= 0) return nb.replace(/\/[^/]*$/, '') + '/';
-    return nb || '';
+    // The folder of the top neighbour, or '' (root) if it sits at the root: a bare filename is not a
+    // destination folder.
+    return nb && nb.indexOf('/') >= 0 ? nb.replace(/\/[^/]*$/, '') + '/' : '';
   }
   const tags = (it) => (it._tags != null ? it._tags : (it.suggest_tags || []));
   const storeOverride = (it) => { _overrides[it.path] = { dest: it._dest, tags: it._tags }; };
-  // Tags the destination folder auto-derives (so the boss does not re-add them: the folder IS a tag).
+  // Tags the destination folder auto-derives, so they aren't offered again (the folder IS a tag).
   function folderTags(it) {
     const d = suggestDest(it);
     return d && typeof folderTagsOf === 'function' ? folderTagsOf(d.replace(/\/+$/, '') + '/_.md') : [];
   }
-  // doc-tag chips (folder ones greyed, custom ones with a ×, a + to add); same look as the doc view.
+  // Tags as doc-tag chips (the doc view's component), inline in the focus row: folder tags greyed,
+  // custom tags removable, a + to add.
   function tagsHtml(it) {
     const fset = new Set(folderTags(it));
     const custom = tags(it).filter((tg) => !fset.has(tg));
@@ -208,8 +209,7 @@
     renderList();
     updateBadge();
   }
-  // Selection changed (click a row / Keep / Trash / Snooze / Next / filter): rebuild the focus card
-  // and the list. Never called by the poll.
+  // Selection changed: rebuild the focus card + the list. Never called by the poll.
   function renderFocusAndList() {
     if (!_box) return;
     const q = queue();
@@ -245,14 +245,13 @@
     h.style.display = n > 0 ? '' : 'none';
   }
   // The poll's ONLY structural change: append one new queue row. Surgical: leaves the focus card and
-  // every existing row untouched. Returns false if there is no list yet (caller does a full render).
+  // every existing row untouched.
   function addRow(it) {
     const rows = _box && _box.querySelector('#ibx-next-rows');
-    if (!rows) return false;
-    if (_filter && !_filter.has(it.source)) return true;  // filtered out: counted, not shown
+    if (!rows) return;
+    if (_filter && !_filter.has(it.source)) return;  // filtered out: counted, not shown
     rows.insertAdjacentHTML('beforeend', qRowHtml(it));
     setNextHeader(rows.children.length);
-    return true;
   }
   function updateProgress() {
     if (!_box) return;
@@ -278,9 +277,9 @@
 
   // ---- data + live poll ----
   async function load(force) {
-    // A re-mount (e.g. an SSE soft-reload after a Keep promotes a doc into the corpus) must NOT
-    // re-fetch and re-sort: that would yank the focus to the highest-confidence item under the boss.
-    // Reuse the already-loaded state (order, focus, edits); the poll brings new items into the list.
+    // A re-mount (e.g. an SSE soft-reload after a Keep enters the corpus) must NOT re-fetch and
+    // re-sort: that would yank the focus card away to the highest-confidence item. Reuse the loaded
+    // state (order, focus, edits); the poll brings new items into the list.
     if (_inbox && !force) { renderShell(); return; }
     let inbox = [];
     try {
@@ -297,8 +296,8 @@
     _filter = null;
     renderShell();
   }
-  // Detect new items and grow ONLY the list. The focus card is never re-rendered here, so what the
-  // boss is reading or editing is never disturbed.
+  // Detect new items and grow ONLY the list; the focus card is never re-rendered here, so an open
+  // editor or the scroll position is never disturbed.
   function poll() {
     if (!_box || _box.classList.contains('hidden') || !_inbox) return;
     fetch('/api/inbox?limit=200').then((r) => (r.ok ? r.json() : null)).then((d) => {
@@ -313,10 +312,9 @@
       _inbox = _inbox.concat(fresh);  // to the BACK: the focus item never moves
       _total += fresh.length;
       if (!_box.querySelector('#ibx-focus')) { renderShell(); return; }  // was empty/zero -> first card
-      // UP NEXT sits BELOW the focus card, so appending rows never shifts the card. The progress bar
-      // and source chips sit ABOVE it: touching them while an inline edit is open would slide the
-      // focus card down, move the input, and detach / close the fixed-position combobox popup (its
-      // blur then commits the field). So while editing, grow ONLY the list; defer the rest one tick.
+      // UP NEXT is BELOW the focus card, so appending rows never shifts it. The progress bar + chips
+      // are ABOVE it: refreshing them mid-edit would slide the input and detach the combobox popup, so
+      // while an edit is open they are left alone and recomputed on commit (editEnd).
       fresh.forEach(addRow);
       updateBadge();  // in the card header, never shifts the inbox body
       if (!editing()) {
@@ -354,13 +352,15 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then((r) => {
-      _leaving = false;
+      // Hold _leaving up for the WHOLE swipe-out: the next item is already at queue()[0] but not yet
+      // rendered, so releasing the guard now would let a second K/X/S act on it blind (Keep = file a
+      // doc unseen). Release only after the card has actually rendered.
       if (r.ok) {
         _inbox = _inbox.filter((x) => x.path !== it.path);  // optimistic drop
         delete _overrides[it.path];
         if (_SKEY[kind]) _session[_SKEY[kind]]++;
-        setTimeout(() => renderFocusAndList(), fc ? 180 : 0);
-      } else if (fc) { fc.classList.remove('ibx-leaving'); }
+        setTimeout(() => { renderFocusAndList(); _leaving = false; }, fc ? 180 : 0);
+      } else { _leaving = false; if (fc) fc.classList.remove('ibx-leaving'); }
     }).catch(() => { _leaving = false; if (fc) fc.classList.remove('ibx-leaving'); });
   }
   function select(path) {
@@ -375,6 +375,11 @@
     renderFocusAndList();
   }
 
+  // After an inline edit ends (commit or cancel): re-render the focus card AND recompute progress +
+  // chips, which the poll left stale while the editor was open (it can't touch the area above the
+  // input without shifting it).
+  function editEnd() { renderFocus(); updateProgress(); renderChips(); }
+
   // ---- inline editors (folder combobox, tag field) ----
   function openDestEditor() {
     const it = queue()[0];
@@ -385,12 +390,14 @@
       + `<input class="ibx-destedit" value="${esc(suggestDest(it))}" autocomplete="off" `
       + `placeholder="${en ? 'pick or type a folder' : 'choisis ou tape un dossier'}" />`;
     const inp = wrap.querySelector('input');
-    const commit = (v) => { it._dest = (v != null ? v : inp.value).trim(); storeOverride(it); renderFocus(); };
+    let cb = null;  // the combobox appends a popup to <body> + exposes destroy(): tear it down, or it leaks
+    const close = () => { if (cb) { cb.destroy(); cb = null; } editEnd(); };
+    const commit = (v) => { it._dest = (v != null ? v : inp.value).trim(); storeOverride(it); close(); };
     if (window.AtlasCombobox && typeof getAllDirs === 'function') {
-      AtlasCombobox(inp, { source: getAllDirs, creatable: true, onSelect: (v) => commit(v) });
+      cb = AtlasCombobox(inp, { source: getAllDirs, creatable: true, onSelect: (v) => commit(v) });
     }
     inp.focus(); inp.select();
-    inp.addEventListener('keydown', (e2) => { if (e2.key === 'Escape') { e2.preventDefault(); renderFocus(); } });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
     inp.addEventListener('blur', () => setTimeout(() => { if (_box.querySelector('.ibx-destedit')) commit(); }, 180));
   }
   function openTagAdd(addBtn) {
@@ -406,11 +413,11 @@
       const cur = tags(it);
       it._tags = tg && cur.indexOf(tg) < 0 ? cur.concat([tg]) : cur.slice();
       storeOverride(it);
-      renderFocus();
+      editEnd();
     };
-    inp.addEventListener('keydown', (e2) => {
-      if (e2.key === 'Enter') { e2.preventDefault(); commit(); }
-      else if (e2.key === 'Escape') { e2.preventDefault(); renderFocus(); }  // only Escape cancels
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); editEnd(); }  // only Escape cancels
     });
     inp.addEventListener('blur', () => setTimeout(() => { if (_box.querySelector('.ibx-tagedit-input')) commit(); }, 150));
   }
@@ -419,7 +426,7 @@
   function onClick(ev) {
     if (ev.target.closest('.ibx-destchip')) { openDestEditor(); return; }
     const rm = ev.target.closest('.ibx-rmtag');
-    if (rm) { const it = queue()[0]; if (it) { it._tags = tags(it).filter((x) => x !== rm.dataset.tag); storeOverride(it); renderFocus(); } return; }
+    if (rm) { const it = queue()[0]; if (it) { it._tags = tags(it).filter((x) => x !== rm.dataset.tag); storeOverride(it); editEnd(); } return; }
     const add = ev.target.closest('.ibx-addtag');
     if (add) { openTagAdd(add); return; }
     const ibtn = ev.target.closest('.ibx-btn');
@@ -455,5 +462,23 @@
     },
     show() { startPoll(); },   // tab activated
     hide() { stopPoll(); },    // tab left
+    // Keep the header count live without opening the tab (the point of the feature: signal staged
+    // items). If the tab is on screen the poll owns the badge, so skip (don't refetch and clobber the
+    // open queue). Seeds _inbox so a later open is instant. No-op offline (the fetch just fails).
+    async refreshBadge() {
+      const live = document.querySelector('#activity-inbox');
+      if (live && !live.classList.contains('hidden')) return;
+      try {
+        const r = await fetch('/api/inbox?limit=200');
+        if (!r.ok) return;
+        const fresh = (await r.json()).inbox || [];
+        fresh.forEach((it) => {
+          const o = _overrides[it.path];
+          if (o) { if (o.dest != null) it._dest = o.dest; if (o.tags != null) it._tags = o.tags; }
+        });
+        _inbox = fresh; _total = fresh.length;
+        updateBadge();
+      } catch (_) {}
+    },
   };
 })();

@@ -219,12 +219,17 @@ def _promote_inbox_item(src_rel, dest, ctx, tags=None, ai=None):
     dst_rel = f"{dest}/{stem}.md" if dest else f"{stem}.md"
     if ctx is not None and not can_create(dst_rel, ctx):
         return False, "Insufficient permission for that destination."
-    # Strip the triage envelope on the source BEFORE the move (the rename carries the body).
-    # No `promoted_from` breadcrumb in the frontmatter: it would leak the inbox source path
+    # Move the still-enveloped source FIRST. If the destination exists or the rename fails, the inbox
+    # item is left untouched: no half-stripped zombie that would re-surface as a pending item with the
+    # wrong metadata. Only once the move succeeds do we strip the triage envelope, on the moved file at
+    # its new path. No `promoted_from` breadcrumb: it would leak the inbox source path
     # (inbox/<user>/<source>/...) to anyone who can read the promoted doc. Git records the move.
     build = _import_build()
     parsed_tags, body = build._parse_frontmatter(src.read_text(encoding="utf-8"))
-    # The kept doc carries the tags the boss confirmed in the focus card (`tags`, the edited
+    status, payload = _move_md_with_relink(src_rel, dst_rel)
+    if status != "ok":
+        return False, payload
+    # The kept doc carries the tags confirmed in the focus card (`tags`, the edited
     # suggest_tags); fall back to whatever the item itself declared under `tags`.
     final_tags = tags if tags is not None else parsed_tags
     if final_tags:
@@ -233,10 +238,7 @@ def _promote_inbox_item(src_rel, dest, ctx, tags=None, ai=None):
             else body.lstrip("\n")
     else:
         new_text = body.lstrip("\n")
-    src.write_text(new_text, encoding="utf-8")
-    status, payload = _move_md_with_relink(src_rel, dst_rel)
-    if status != "ok":
-        return False, payload
+    (CONFIG.content_root / payload["to"]).write_text(new_text, encoding="utf-8")
     _repoint_doc(payload["from"], payload["to"])  # privacy travels BEFORE the git sync
     touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
     commit_change(ctx, f"kept: {stem} -> {dest or '/'}",

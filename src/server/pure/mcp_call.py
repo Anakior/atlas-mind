@@ -141,6 +141,27 @@ def _tool_create_doc(args, ctx):
     return _create_doc_impl(rel, args.get("content", ""), args.get("ai"), ctx)
 
 
+def _inbox_dupe(user, dk):
+    """First non-trashed item in inbox/<user>/ already carrying this dedupe_key, or None. Best-effort
+    (a scan failure must never block a drop): honours the idempotency the tool promises agents, so a
+    re-run with the same key returns the existing item instead of creating a duplicate."""
+    try:
+        base = _s.CONFIG.content_root / "inbox" / user
+        if not base.is_dir():
+            return None
+        inbox_meta = _s._import_build()._inbox_meta
+        for p in base.rglob("*.md"):
+            try:
+                m = inbox_meta(p.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                continue
+            if m.get("dedupe_key") == dk and m.get("inbox_status") != "trashed":
+                return p.relative_to(_s.CONFIG.content_root).as_posix()
+    except Exception:
+        pass
+    return None
+
+
 def _tool_create_inbox_item(args, ctx):
     """Drop an item into your USER's inbox (the on-ramp to the mind).
 
@@ -197,6 +218,9 @@ def _tool_create_inbox_item(args, ctx):
             lines.append("suggest_tags: [" + ", ".join(clean) + "]")
     dk = (args.get("dedupe_key") or "").strip()
     if dk:
+        existing = _inbox_dupe(user, dk)  # idempotent: a re-run with the same key returns the existing item
+        if existing:
+            return text_result(f"Already in your inbox (dedupe_key match): {existing}")
         lines.append(f"dedupe_key: {dk}")
     lines.append("inbox_status: pending")
     stamp = time.strftime("%Y-%m-%d", time.gmtime())
@@ -206,8 +230,8 @@ def _tool_create_inbox_item(args, ctx):
     while (_s.CONFIG.content_root / rel).exists():
         rel = f"{folder}/{source}/{stamp}-{slug}-{n}.md"
         n += 1
-    # Pre-compute same-subject neighbors ONCE at ingestion (the agent pays the O(corpus); the
-    # owner's triage then reads them O(1) from the frontmatter). Best-effort: never fail the drop.
+    # Pre-compute same-subject neighbors at ingestion and freeze them in the frontmatter, so triage
+    # reads them without re-scanning the corpus. Best-effort: never fail the drop on a scan error.
     try:
         rels = [nb["rel"] for nb in _s.find_doc_neighbors(rel, f"# {title}\n{content}", ctx, top=3)]
         if rels:

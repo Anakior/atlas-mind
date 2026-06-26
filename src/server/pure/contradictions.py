@@ -133,11 +133,13 @@ def _tokenize(text):
     return out
 
 
-# Single most-recent corpus, memoized: {fingerprint: (vectors, df, N)}. The heavy tokenize + tf-idf
-# over the WHOLE corpus is the cost the CDC flagged (re-run on every /api/contradictions poll AND
-# every inbox neighbour lookup, both on the same corpus). The fingerprint (cheap content hash) keys
-# on the exact corpus state, so it recomputes only when a doc actually changed. One entry = bounded.
+# Memoized tf-idf vectors keyed on a content fingerprint: {fp: (vectors, df, N)}. Tokenize + tf-idf
+# over the whole corpus is the cost; the fingerprint recomputes only when a doc actually changed.
+# Distinct ACL-scrubbed corpora (superuser None vs a per-user ctx) hash to distinct keys, so a few
+# entries are kept (not one) to stop multi-viewer alternation from thrashing the slot. NB: the corpus
+# read + _strip_noise still run per call; this memoizes only the vectorization, not that I/O.
 _VEC_CACHE = {}
+_VEC_CACHE_CAP = 4
 
 
 def _corpus_vectors(clean):
@@ -165,7 +167,8 @@ def _corpus_vectors(clean):
         norm = math.sqrt(sum(w * w for w in v.values())) or 1.0
         vectors[rel] = {t: w / norm for t, w in v.items()}
     result = (vectors, df, N)
-    _VEC_CACHE.clear()   # keep only the latest corpus state (single entry, bounded memory)
+    if len(_VEC_CACHE) >= _VEC_CACHE_CAP:
+        _VEC_CACHE.pop(next(iter(_VEC_CACHE)))  # FIFO evict the oldest (dict preserves insertion order)
     _VEC_CACHE[fp] = result
     return result
 
@@ -297,10 +300,10 @@ def _rarest_shared_term(a, b, vectors, df):
 
 
 def _vectorize_one(text, df, N):
-    """tf-idf vector of ONE text against an EXISTING corpus df/N (the idf the corpus was built
-    with), sublinear tf + smoothed idf, capped and L2-normalized exactly like _corpus_vectors.
-    NET-NEW: scores a doc that is NOT in the corpus (an inbox item) without rebuilding it. A term
-    absent from the corpus gets df 0 -> max idf (a novel word IS rare). df.get, never df[]."""
+    """tf-idf vector of one text against an existing corpus df/N (the idf the corpus was built with),
+    sublinear tf + smoothed idf, capped and L2-normalized like _corpus_vectors. Scores a doc not in
+    the corpus (an inbox item) without rebuilding it; a term absent from the corpus gets df 0 -> max
+    idf (a novel word is rare). df.get, never df[]."""
     c = Counter(_tokenize(text))
     v = {t: (1 + math.log(f)) * (math.log((N + 1) / (df.get(t, 0) + 1)) + 1.0) for t, f in c.items()}
     if len(v) > _VEC_CAP:
@@ -310,12 +313,10 @@ def _vectorize_one(text, df, N):
 
 
 def find_doc_neighbors(rel, text, ctx=None, top=5):
-    """Same-subject neighbors of ONE doc (typically an inbox item) against the live corpus, which
-    already excludes inbox via the folder skip. The item is vectorized and scored AGAINST the
-    corpus, never added to it (rel != self filtered). Returns [{rel, score, subject}] sorted by
-    cosine desc (>= _COS_FLOOR), top-K. Deterministic, ACL-scrubbed per ctx. Duplicates ~12 lines
-    of the engine on purpose (it is OOM-sensitive and under golden tests; simple > clever). Used
-    to suggest where to file a kept item and to flag a potential supersession before triage."""
+    """Same-subject neighbors of ONE doc (typically an inbox item) against the live corpus (which
+    already excludes inbox). The item is scored against the corpus, never added to it. Returns
+    [{rel, score, subject}] sorted by cosine desc (>= _COS_FLOOR), top-K, ACL-scrubbed per ctx. Used
+    to suggest where to file a kept item."""
     from server.pure import queries  # lazy: avoids the import cycle (see find_contradictions)
     clean = [(r, n, _strip_noise(r, t)) for r, n, t in queries._doc_corpus(ctx) if r != rel]
     if not clean:

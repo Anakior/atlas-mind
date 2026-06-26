@@ -15,7 +15,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(__file__))
 
 from harness import AtlasServer, DEFAULT_MIND  # noqa: E402
-from test_cloud_filestore import cloud_env, API_EMAIL, ADMIN_EMAIL, file_store_of  # noqa: E402
+from test_cloud_filestore import (  # noqa: E402
+    cloud_env, API_EMAIL, ADMIN_EMAIL, file_store_of,
+    VIEWER_EMAIL, VIEWER_PASSWORD, session_cookie, auth_headers, seed_default_users,
+)
 from test_mcp_tools import _seed_api_token, _call  # noqa: E402
 
 
@@ -66,7 +69,7 @@ LOW = f"inbox/{ALICE}/sentry/2026-06-25-low.md"
 
 
 class TestInboxRead(unittest.TestCase):
-    """Listing + sealing — read-only, so one shared server (local mode -> superuser sees all)."""
+    """Listing + sealing, read-only: one shared server (local mode -> superuser sees all)."""
 
     @classmethod
     def setUpClass(cls):
@@ -139,7 +142,18 @@ class TestInboxTriage(unittest.TestCase):
         self.assertEqual(self._action(action="snooze", path=LOW, until="2099-01-01").status, 200)
         self.assertTrue(self.srv.path(LOW).exists())
         paths = [i["path"] for i in self.srv.get("/api/inbox").json()["inbox"]]
-        self.assertNotIn(LOW, paths)
+        self.assertNotIn(LOW, paths)  # future snooze: hidden
+        # ...but once the date is in the past the item RESURFACES (the actual "until due" promise)
+        self.assertEqual(self._action(action="snooze", path=LOW, until="2000-01-01").status, 200)
+        paths = [i["path"] for i in self.srv.get("/api/inbox").json()["inbox"]]
+        self.assertIn(LOW, paths)
+
+    def test_snooze_rejects_non_date(self):
+        # a non-ISO 'until' must be refused, not persisted (else it hides the item forever)
+        self.assertEqual(self._action(action="snooze", path=LOW, until="tomorrow").status, 400)
+        self.assertEqual(self._action(action="snooze", path=LOW, until="").status, 400)
+        paths = [i["path"] for i in self.srv.get("/api/inbox").json()["inbox"]]
+        self.assertIn(LOW, paths)  # untouched, still visible
 
     def test_keep_rejects_non_inbox_path(self):
         self.assertEqual(self._action(action="keep", path="ops/oncall.md", dest="notes").status, 400)
@@ -197,6 +211,18 @@ class TestInboxMcp(unittest.TestCase):
         self.assertIn("create_inbox_item", str(msg).lower())
         self.assertFalse((self.srv.content_root / "inbox" / "sneaky.md").exists())
 
+    def test_dedupe_key_makes_recreate_idempotent(self):
+        # The tool advertises dedupe_key as "re-running you does not duplicate the item": a second
+        # drop with the same key must return the existing one, not create a twin.
+        args = {"title": "Astreinte weekend", "content": "x", "dedupe_key": "astreinte-2026-w26"}
+        err1, _ = _call(self.srv, self.token, "create_inbox_item", args)
+        err2, _ = _call(self.srv, self.token, "create_inbox_item", dict(args, content="reworded"))
+        self.assertFalse(err1)
+        self.assertFalse(err2)
+        same = [p for p in self.srv.content_root.glob(f"inbox/{USER_SLUG}/{TOKEN_SOURCE}/*.md")
+                if "dedupe_key: astreinte-2026-w26" in p.read_text(encoding="utf-8")]
+        self.assertEqual(len(same), 1, "a repeated dedupe_key must not create a duplicate")
+
     def test_unbound_token_has_no_inbox(self):
         tok = secrets.token_hex(32)
         file_store_of(self.srv).upsert_user("loose@api.local", {
@@ -204,6 +230,43 @@ class TestInboxMcp(unittest.TestCase):
         err, msg = _call(self.srv, tok, "create_inbox_item", {"title": "x", "content": "y"})
         self.assertTrue(err)
         self.assertIn("not bound", str(msg).lower())
+
+
+class TestInboxIsolation(unittest.TestCase):
+    """The headline privacy property: a person's inbox lane is theirs alone. Another logged-in user
+    can neither list nor triage an item an agent dropped into someone else's lane. (The generic
+    /api/file + /api/acl isolation is covered in test_cloud_filestore; this exercises the inbox
+    routes specifically, in cloud mode where the ACL is actually enforced.)"""
+
+    def setUp(self):
+        self.srv = AtlasServer(mind=_inbox_mind(), extra_env=cloud_env())
+        self.srv.start()
+        seed_default_users(file_store_of(self.srv))  # admin + viewer, with passwords
+        self.token = _seed_api_token(self.srv)       # API token acts_as the admin
+
+    def tearDown(self):
+        self.srv.stop()
+
+    def test_other_user_cannot_see_or_triage_a_lane(self):
+        # The admin's agent drops an owned item; the viewer (a different person) must not reach it.
+        err, _ = _call(self.srv, self.token, "create_inbox_item",
+                       {"title": "Secret astreinte", "content": "x", "confidence": 0.7})
+        self.assertFalse(err)
+        item = list(self.srv.content_root.glob(f"inbox/{USER_SLUG}/{TOKEN_SOURCE}/*.md"))[0]
+        rel = item.relative_to(self.srv.content_root).as_posix()
+        cookie = session_cookie(self.srv, VIEWER_EMAIL, VIEWER_PASSWORD)
+        # (1) the viewer's listing never leaks the admin's item (empty/scrubbed, or gated out entirely)
+        b = self.srv.get("/api/inbox", headers={"Cookie": cookie})
+        if b.status == 200:
+            self.assertNotIn(rel, [i["path"] for i in b.json().get("inbox", [])])
+        else:
+            self.assertIn(b.status, (401, 403))
+        # (2) the viewer cannot keep / trash / snooze the admin's item
+        for action, extra in (("keep", {"dest": "ops"}), ("trash", {}), ("snooze", {"until": "2099-01-01"})):
+            r = self.srv.post("/api/inbox/action", json_body={"action": action, "path": rel, **extra},
+                              headers=auth_headers(self.srv, cookie))
+            self.assertIn(r.status, (403, 404), f"{action} on another user's item must be refused, got {r.status}")
+        self.assertTrue(item.exists())  # untouched
 
 
 if __name__ == "__main__":

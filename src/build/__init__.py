@@ -129,9 +129,9 @@ def walk(path: Path, *, content_root: Path | None = None,
             continue
         if any(child.name.startswith(p) for p in excluded_prefixes):
             continue
-        # The inbox is sealed from the build (tree, search, backlinks, embed, activity), just like
-        # the runtime corpus skips it in iter_doc_files. So an inbox write never changes the static
-        # site -> the dev live-reload (md5 of dist/index.html) does not fire on every dropped item.
+        # Seal the inbox from the build tree (search, backlinks, embed), like iter_doc_files at runtime,
+        # so an inbox write never changes the static site (the dev md5 live-reload won't fire on it).
+        # The build's activity snapshot is sealed separately; the runtime activity feed keeps inbox.
         if path == content_root and child.is_dir() and child.name == "inbox":
             continue
         entries.append(child)

@@ -8,6 +8,8 @@ rest read config/git/build through the `server` facade (`_s`) and are re-exporte
 """
 import re
 import sys
+import unicodedata
+from functools import lru_cache
 
 import server as _s
 
@@ -203,8 +205,12 @@ def _live_tasks_index():
     return build.build_tasks_index(md_files)
 
 
+# Accent-fold + lowercase. Memoized: the contradiction detectors re-normalize the same lines and
+# tokens hundreds of thousands of times over a scan, and NFD + per-char category is not free. The
+# inputs are tokens/lines/cells (and the occasional whole doc, evicted by LRU); bounded so a long
+# server never grows it without limit.
+@lru_cache(maxsize=131072)
 def _normalize_text(s: str) -> str:
-    import unicodedata
     return "".join(c for c in unicodedata.normalize("NFD", s.lower()) if unicodedata.category(c) != "Mn")
 
 

@@ -1787,7 +1787,7 @@ def build_parser() -> argparse.ArgumentParser:
         "claim", help="Make a human the owner of inbox/ (keeps the queue private).")
     p_inbox_claim.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
     p_inbox_claim.add_argument("--email", required=True, metavar="EMAIL",
-                               help="The boss who owns the inbox and triages it.")
+                               help="The person who owns the inbox and triages it.")
     p_inbox_claim.set_defaults(func=cmd_inbox_claim)
 
     p_doctor = subparsers.add_parser(

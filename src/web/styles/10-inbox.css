@@ -1,5 +1,5 @@
-/* Inbox triage tab (home Activity card). Owned by src/web/js/22-inbox.js. Ported from the inbox
-   POC; ibx- prefixed to avoid collisions. The container is positioned for the "N new" toast. */
+/* Inbox triage tab (home Activity card). Owned by src/web/js/22-inbox.js; ibx- prefixed. The
+   container is positioned for the "N new" toast. */
 #activity-inbox { position: relative; }
 
 /* progress + source filter row */
@@ -49,7 +49,7 @@
 .ibx-destchip.empty { color: #868a90; font-style: italic; }
 .ibx-destchip.editable { cursor: pointer; }
 .ibx-destchip.editable:hover { border-color: rgba(54, 197, 240, .6); background: rgba(54, 197, 240, .2); }
-.ibx-destchip svg:last-child { width: 13px; height: 13px; opacity: .95; margin-left: 3px; }
+.ibx-destchip svg:last-child { opacity: .95; margin-left: 3px; }
 .ibx-destchip.editable:hover svg:last-child { color: #fff; }
 .ibx-destedit { font: inherit; font-size: 12.5px; font-family: ui-monospace, monospace; color: #cdeafb; background: #1a181e; border: 1px solid rgba(54, 197, 240, .45); border-radius: .35rem; padding: 4px 9px; outline: none; min-width: 220px; }
 .ibx-tagedit-input { font: inherit; font-size: 12px; color: #cdeafb; background: #1a181e; border: 1px solid rgba(29, 155, 209, .4); border-radius: 999px; padding: 2px 10px; outline: none; width: 110px; }
@@ -101,3 +101,9 @@
 .ibx-skelrow { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
 .ibx-skel { background: rgba(255, 255, 255, .06); border-radius: 5px; animation: ibx-skel 1.3s ease-in-out infinite; }
 @keyframes ibx-skel { 0%, 100% { opacity: .4; } 50% { opacity: .85; } }
+
+/* Respect the OS "reduce motion" preference (vestibular a11y), like every other animated stylesheet. */
+@media (prefers-reduced-motion: reduce) {
+  .ibx-focus, .ibx-focus.ibx-entering, .ibx-toast, .ibx-skel { animation: none; transition: none; }
+  .ibx-progress .fill { transition: none; }
+}

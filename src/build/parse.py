@@ -56,8 +56,7 @@ def _parse_tags(block: str) -> list[str]:
 
 # Inbox triage envelope keys (cf. CDC inbox). Scalar whitelist, no YAML dependency.
 _INBOX_KEYS = ("origin", "source", "captured_at", "confidence", "suggest_dest",
-               "suggest_tags", "inbox_status", "snooze_until", "neighbors",
-               "dedupe_key", "promoted_from", "supersedes")
+               "suggest_tags", "inbox_status", "snooze_until", "neighbors", "dedupe_key")
 _INBOX_LIST_KEYS = ("suggest_tags", "neighbors")
 _INBOX_KEY_RE = re.compile(r"^([a-z_]+)[ \t]*:[ \t]*(.*)$", re.I)
 
@@ -96,6 +95,8 @@ def _rewrite_inbox_fm(text: str, updates: dict) -> str:
     deletes the key) in the leading --- block; a block is created if absent. Only the listed
     keys are touched, every other line is preserved verbatim. Used by Trash/Snooze, which
     flip inbox_status / snooze_until without rebuilding the doc. Pure."""
+    def _fm_safe(v):  # scalars are written raw into the block; neutralize newlines so an agent-supplied
+        return str(v).replace("\r", " ").replace("\n", " ")  # value can't inject extra frontmatter lines
     m = _FM_RE.match(text)
     body = text[m.end():] if m else ("\n" + text if text else text)
     lines = m.group(1).splitlines() if m else []
@@ -107,12 +108,12 @@ def _rewrite_inbox_fm(text: str, updates: dict) -> str:
         if key in remaining:
             val = remaining.pop(key)
             if val is not None:
-                out.append(f"{key}: {val}")
+                out.append(f"{key}: {_fm_safe(val)}")
         else:
             out.append(line)
     for key, val in remaining.items():
         if val is not None:
-            out.append(f"{key}: {val}")
+            out.append(f"{key}: {_fm_safe(val)}")
     return "---\n" + "\n".join(out) + "\n---" + body
 
 

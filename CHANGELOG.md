@@ -9,6 +9,13 @@ highlights, not every commit — and versioning tracks the PyPI package.
 ## [Unreleased]
 
 ### Added
+- **Inbox triage.** Point your agents at upstream noise (mail, alerts, a competitor's
+  move, a CI webhook) and they pre-sort it: each item lands as a ready-to-file card
+  in a per-person inbox via the new `create_inbox_item` MCP tool, with a suggested
+  folder, tags, and the same-subject doc it echoes. You keep / trash / snooze from a
+  focused card on the home (keyboard K / X / S / J); Keep files it into your mind with
+  the chosen folder and tags. Each person owns their own lane, and the inbox is sealed
+  from the build, the tree and the search index.
 - Opt-in `[site]` config (`url` / `description` / `og_image`): the build emits a
   `<meta name="description">`, a canonical link and an Open Graph / Twitter card
   when a public URL is set — so a self-hosted mind shares cleanly.

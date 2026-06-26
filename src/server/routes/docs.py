@@ -5,6 +5,7 @@ All mutating routes are guarded ADMIN_CSRF (PUT/DELETE keep the guard at the ver
 level, so the functions here are pure bodies); the read endpoints are AUTH.
 """
 import posixpath
+import re
 import sys
 import time
 
@@ -250,8 +251,8 @@ def stale(handler):
 
 
 def inbox_list(handler):
-    """GET /api/inbox?limit= — pending inbox items (the agents' on-ramp), highest
-    confidence first. AUTH and private: only the boss (primary/superuser) sees the inbox,
+    """GET /api/inbox?limit=: pending inbox items (the agents' on-ramp), highest
+    confidence first. AUTH and private: only the owner (primary/superuser) sees the inbox,
     so a non-primary viewer gets 403 (never a leak)."""
     query = handler._query()
     ctx = handler._viewer_ctx()
@@ -264,8 +265,8 @@ def inbox_list(handler):
 
 
 def inbox_action(handler):
-    """POST /api/inbox/action — triage an inbox item. Owner-gated (the inbox is private,
-    so only the boss acts), one attributed commit per action. Body:
+    """POST /api/inbox/action: triage an inbox item. Owner-gated (the inbox is private,
+    so only the owner acts), one attributed commit per action. Body:
     {action: keep|trash|untrash|snooze, path, dest?, until?}. Keep promotes into the graph;
     Trash/Snooze flip the frontmatter in place (reversible, no hard delete)."""
     data = handler._read_json()
@@ -283,6 +284,12 @@ def inbox_action(handler):
                                        ctx, f"restored: {src_rel}")
     elif action == "snooze":
         until = (data.get("until") or "").strip()
+        # Must be a real ISO date: the list filter compares snooze_until as a STRING, so a non-date
+        # ("tomorrow") sorts above any YYYY-... and would hide the item forever, while "" is a silent
+        # no-op (snoozed flag set but the item stays visible).
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", until):
+            handler._send_json(400, {"error": "snooze requires a valid YYYY-MM-DD date"})
+            return
         ok, res = _s._set_inbox_status(src_rel, {"inbox_status": "snoozed", "snooze_until": until},
                                        ctx, f"snoozed: {src_rel}")
     else:

@@ -228,7 +228,7 @@ def _api_inbox_list(limit: int = 50, ctx=None) -> list:
         blines = body.strip().splitlines()
         title, rest = path.stem, blines
         for i, ln in enumerate(blines):
-            if ln.startswith("# "):  # the first H1 is the title; the preview is the prose after it
+            if ln.startswith("# "):
                 title, rest = ln[2:].strip(), blines[i + 1:]
                 break
         parts = rel.split("/")

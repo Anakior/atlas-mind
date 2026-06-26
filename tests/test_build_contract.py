@@ -78,5 +78,36 @@ class TestExcludedNamesMonkeyPatch(unittest.TestCase):
             build.EXCLUDED_NAMES = original
 
 
+class TestInboxSeal(unittest.TestCase):
+    """The inbox is sealed from the STATIC build: walk() must drop inbox/ from the tree, the
+    search/backlinks accumulator AND the embedded content, mirroring iter_doc_files at runtime. It is
+    a second, independent seal (build vs runtime), so it gets its own guard against silent divergence:
+    if someone changes one rule, the other must not quietly start leaking inbox items into the export."""
+
+    def test_walk_excludes_the_inbox(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            content = Path(tmp) / "content"
+            (content / "notes").mkdir(parents=True)
+            (content / "notes" / "keep.md").write_text("# Keep\nvisible.\n", encoding="utf-8")
+            lane = content / "inbox" / "alice" / "gmail"
+            lane.mkdir(parents=True)
+            (lane / "2026-06-25-x.md").write_text(
+                "---\norigin: inbox\n---\n# Secret item\nzarbitoken_seal\n", encoding="utf-8")
+            accum = {"md_files": [], "git_dates": {}}
+            tree = build.walk(content, embed_content=True, _accum=accum)
+            self.assertIn("keep.md", _all_node_names(tree))
+            self.assertNotIn("inbox", {c["name"] for c in tree["children"]})  # no inbox node
+            self.assertFalse([f for f in accum["md_files"] if f["path"].startswith("inbox/")])  # not indexed
+            self.assertFalse([f for f in accum["md_files"]                                       # not embedded
+                              if "zarbitoken_seal" in f.get("content", "")])
+
+
+def _all_node_names(node):
+    names = {node.get("name")}
+    for c in node.get("children", []):
+        names |= _all_node_names(c)
+    return names
+
+
 if __name__ == "__main__":
     unittest.main()
