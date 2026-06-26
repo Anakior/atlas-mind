@@ -33,7 +33,7 @@ module.exports = {
     // newly-used utility (e.g. rounded-2xl) never lands in the precompiled CSS.
     path.join(__dirname, '..', 'partials', '**', '*.html'),
     path.join(__dirname, '..', 'pages', '**', '*.html'),
-    path.join(__dirname, '..', 'js', '**', '*.js'),
+    path.join(__dirname, '..', 'js', '**', '*.{js,ts}'),
     path.join(__dirname, '..', '..', 'examples', 'extensions', '**', '*.{js,css,py}'),
   ],
   safelist,

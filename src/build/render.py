@@ -16,7 +16,7 @@ from build.assets import (
 )
 from build.paths import (
     SITE_WORDMARK, DEFAULT_SITE_PREFIX, DEFAULT_TAGLINE, DEFAULT_LANG,
-    DEFAULT_TODO_CATEGORIES, TEMPLATE, STYLES_DIR, PARTIALS_DIR, JS_DIR,
+    DEFAULT_TODO_CATEGORIES, TEMPLATE, STYLES_DIR, PARTIALS_DIR, WEB_DIR,
 )
 
 
@@ -89,6 +89,19 @@ def _head_meta(*, site_name: str, description: str, site_url: str,
     return "\n".join(lines)
 
 
+def _read_app_bundle() -> str:
+    """The viewer JS, read from the esbuild artifact web/vendor/app.bundle.js (built by
+    web/ts/build.mjs, committed). Closing tags neutralised like the other inlined sources.
+    Missing is fatal: `atlas build`/`atlas dev` regenerate it when the node toolchain is
+    present, else run `npm run build` in web/ts."""
+    bundle = WEB_DIR / "vendor" / "app.bundle.js"
+    if not bundle.is_file():
+        raise SystemExit(
+            f"FATAL: {bundle} is missing. Run `npm run build` in web/ts (or `atlas "
+            "build`, which regenerates it when the node toolchain is present).")
+    return _escape_closing_tag(bundle.read_text(encoding="utf-8-sig"), _CLOSING_SCRIPT_RE)
+
+
 def render_template(*, tree: dict, embed_content: dict | None,
                     embed_backlinks: dict | None, embed_notes: dict | None,
                     embed_tasks=None,
@@ -111,7 +124,7 @@ def render_template(*, tree: dict, embed_content: dict | None,
     # unextracted concern's dir is absent (concat_sources → "") → no-op.
     template = template.replace("__STYLES__", concat_sources(STYLES_DIR, (".css",)))
     template = template.replace("__BODY__", concat_sources(PARTIALS_DIR, (".html",)))
-    template = template.replace("__APP_JS__", concat_sources(JS_DIR, (".js",)))
+    template = template.replace("__APP_JS__", _read_app_bundle())
     # Phase 2 — JSON encode and protect </script> termination.
     def _enc(obj) -> str:
         return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")

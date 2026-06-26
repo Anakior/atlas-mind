@@ -49,6 +49,8 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import shutil
+import subprocess
 import sys
 
 from build import (
@@ -140,6 +142,18 @@ def _snapshot_activity(cfg):
     }
 
 
+def _rebuild_js_bundle(web_dir) -> None:
+    """Regenerate web/vendor/app.bundle.js from web/js/*.{js,ts} via esbuild
+    (web/ts/build.mjs, transform-concat). Dev/CI only: skipped when the node toolchain
+    is absent, so the Python-only runtime never shells out to node and serves the
+    committed bundle as-is. A failed compile aborts the build."""
+    ts_dir = web_dir / "ts"
+    if shutil.which("node") is None or not (ts_dir / "node_modules").is_dir():
+        return
+    if subprocess.run(["node", "build.mjs"], cwd=str(ts_dir)).returncode != 0:
+        sys.exit("FATAL: esbuild bundle build failed (web/ts/build.mjs)")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--offline", action="store_true",
@@ -160,6 +174,7 @@ def main() -> int:
     site_url, site_description, og_image = (cfg.site_url, cfg.site_description,
                                             cfg.og_image)
     extensions_dir, web_dir = cfg.extensions_dir, cfg.web_dir
+    _rebuild_js_bundle(web_dir)
     todo_cats = [{"cat": c, "label": cfg.todo_cat_headers.get(c, c.capitalize())}
                  for c in cfg.todo_categories]
     out_online = dist_dir / "index.html"

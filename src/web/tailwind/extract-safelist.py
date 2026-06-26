@@ -29,6 +29,7 @@ SOURCES = [
     # modules under web/js/ (not viewer.html's old inline <script>) — scan them
     # too, otherwise the safelist comes out empty.
     *sorted((REPO_ROOT / "web" / "js").glob("*.js")),
+    *sorted((REPO_ROOT / "web" / "js").glob("*.ts")),
     *sorted((REPO_ROOT / "examples" / "extensions").rglob("*.js")),
 ]
 OUT = HERE / "safelist.txt"

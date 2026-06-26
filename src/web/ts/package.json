@@ -1,0 +1,14 @@
+{
+  "name": "atlas-ts-build",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dev-only toolchain that compiles web/js/*.{js,ts} into web/vendor/app.bundle.js (esbuild transform-concat, shared global scope preserved). tsc type-checks. NOT shipped: the Atlas runtime is Python stdlib only. Install once (npm install), then `npm run build` after editing the viewer sources.",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2",
+    "typescript": "5.7.3"
+  }
+}
