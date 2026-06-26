@@ -47,14 +47,13 @@
   // ---- small helpers ----
   // Relative time (own copy; the activity card's is in a separate scope).
   function rel(min) {
-    const en = LANG === 'en';
-    if (min < 1) return en ? 'just now' : "à l'instant";
+    if (min < 1) return t('relJustNow');
     if (min < 60) return Math.round(min) + ' min';
     const h = Math.round(min / 60);
     if (h < 24) return h + ' h';
     const d = Math.round(min / 1440);
-    if (d === 1) return en ? 'yesterday' : 'hier';
-    return en ? d + 'd ago' : 'il y a ' + d + ' j';
+    if (d === 1) return t('relYesterday');
+    return t('relDaysAgo', d);
   }
   function srcMeta(src) {
     const s = _ISRC[src];
@@ -114,18 +113,17 @@
 
   // ---- component HTML ----
   function focusHtml(it) {
-    const en = LANG === 'en';
     const tr = tier(it.confidence);
     const sd = suggestDest(it);
     const nb = it.neighbors && it.neighbors[0];
     const sig = nb
       ? `<div class="ibx-signal"><span class="sic">${_isvg(_ILINK)}</span><div><b>`
-        + `${en ? 'Same subject as a filed doc:' : "Même sujet qu'un doc déjà classé :"}</b> `
+        + `${t('inboxSameSubject')}</b> `
         + `<span class="doc">${esc(nb)}</span></div></div>` : '';
     const destChip = sd
       ? `<span class="ibx-destchip editable" data-act="editdest">${_isvg(_IDOC)}${esc(sd)}${_isvg(_IPENCIL)}</span>`
-      : `<span class="ibx-destchip editable empty" data-act="editdest">${en ? 'choose a folder' : 'choisir un dossier'}${_isvg(_IPENCIL)}</span>`;
-    const dest = `<span class="ibx-lbl">${en ? 'file under' : 'classer dans'}</span>${destChip}`;
+      : `<span class="ibx-destchip editable empty" data-act="editdest">${t('inboxChooseFolder')}${_isvg(_IPENCIL)}</span>`;
+    const dest = `<span class="ibx-lbl">${t('inboxFileUnder')}</span>${destChip}`;
     const animate = it.path !== _focusPath;  // only a NEW focus pops in
     _focusPath = it.path;
     return `<div class="ibx-focus${animate ? ' ibx-entering' : ''}" id="ibx-focus">`
@@ -138,10 +136,10 @@
       + `<div class="ibx-dest">${dest}<span class="ibx-lbl">tags</span>`
       + `<span class="ibx-tags">${tagsHtml(it)}</span></div>`
       + `<div class="ibx-actions">`
-      + `<button type="button" class="ibx-btn keep${sd ? '' : ' disabled'}" data-act="keep"${sd ? '' : ' disabled title="' + (en ? 'pick a folder first' : "choisis d'abord un dossier") + '"'}>${_isvg(_ICHECK)}${t('inboxKeep')} <span class="k">K</span></button>`
+      + `<button type="button" class="ibx-btn keep${sd ? '' : ' disabled'}" data-act="keep"${sd ? '' : ' disabled title="' + t('inboxPickFolderFirst') + '"'}>${_isvg(_ICHECK)}${t('inboxKeep')} <span class="k">K</span></button>`
       + `<button type="button" class="ibx-btn trash" data-act="trash">${_isvg(_ITRASH)}${t('inboxTrash')} <span class="k">X</span></button>`
       + `<button type="button" class="ibx-btn snooze" data-act="snooze">${_isvg(_ISNOOZE)}${t('inboxSnooze')} <span class="k">S</span></button>`
-      + `<span class="ibx-spacer"></span><button type="button" class="ibx-btn ghost" data-act="next">${en ? 'Next' : 'Suivant'} <span class="k">J</span></button>`
+      + `<span class="ibx-spacer"></span><button type="button" class="ibx-btn ghost" data-act="next">${t('inboxNext')} <span class="k">J</span></button>`
       + `</div></div>`;
   }
   function qRowHtml(it) {
@@ -163,26 +161,23 @@
     return c + '</div>';
   }
   function subInner() {
-    const en = LANG === 'en';
     const done = Math.max(0, _total - _inbox.length);
     const pct = _total ? Math.round(done / _total * 100) : 0;
-    return `<div class="ibx-progress"><b id="ibx-done">${done}</b> / <span id="ibx-total">${_total}</span> ${en ? 'done' : 'traités'}`
+    return `<div class="ibx-progress"><b id="ibx-done">${done}</b> / <span id="ibx-total">${_total}</span> ${t('inboxDone')}`
       + `<span class="track"><span class="fill" id="ibx-fill" style="width:${pct}%"></span></span></div>`
       + `<div id="ibx-chips-wrap">${chipsHtml()}</div>`;
   }
   function zeroHtml() {
-    const en = LANG === 'en';
     const s = _session;
     const total = s.kept + s.trashed + s.snoozed;
     const dp = (d, n, l, col) => `<span class="ibx-dpill"><span style="color:${col}">${_isvg(d)}</span><b>${n}</b> ${l}</span>`;
     return `<div class="ibx-zero"><div class="ibx-mark">${_isvg(_ICHECK)}</div>`
-      + `<h3>${en ? 'Inbox zero' : 'Inbox zéro'}</h3>`
-      + `<p>${en ? 'Your agents do the research for you. You just kept what matters.'
-                 : "Tes agents font les recherches à ta place. Tu viens de garder l'essentiel."}</p>`
+      + `<h3>${t('inboxZeroTitle')}</h3>`
+      + `<p>${t('inboxZeroSub')}</p>`
       + (total ? `<div class="ibx-digest">`
-        + dp(_ICHECK, s.kept, en ? 'kept → graph' : 'gardés → graphe', '#5fd0a6')
-        + dp(_ITRASH, s.trashed, en ? 'trashed' : 'jetés', '#868a90')
-        + dp(_ISNOOZE, s.snoozed, en ? 'snoozed' : 'snoozés', '#e8941c')
+        + dp(_ICHECK, s.kept, t('inboxKept'), '#5fd0a6')
+        + dp(_ITRASH, s.trashed, t('inboxTrashed'), '#868a90')
+        + dp(_ISNOOZE, s.snoozed, t('inboxSnoozed'), '#e8941c')
         + `</div>` : '')
       + `</div>`;
   }
@@ -240,8 +235,7 @@
   function setNextHeader(n) {
     const h = _box && _box.querySelector('#ibx-next-h');
     if (!h) return;
-    const en = LANG === 'en';
-    h.textContent = n > 0 ? (en ? 'Up next · ' : 'À suivre · ') + n : '';
+    h.textContent = n > 0 ? t('inboxUpNext') + ' · ' + n : '';
     h.style.display = n > 0 ? '' : 'none';
   }
   // The poll's ONLY structural change: append one new queue row. Surgical: leaves the focus card and
@@ -266,10 +260,9 @@
   }
   function toast(n) {
     if (!_box) return;
-    const en = LANG === 'en';
     let el = _box.querySelector('#ibx-toast');
     if (!el) { el = document.createElement('div'); el.id = 'ibx-toast'; el.className = 'ibx-toast'; _box.appendChild(el); }
-    el.textContent = n === 1 ? (en ? '1 new item' : '1 nouveau') : `${n} ${en ? 'new items' : 'nouveaux'}`;
+    el.textContent = t('inboxNew', n);
     el.classList.add('show');
     clearTimeout(el._t);
     el._t = setTimeout(() => el.classList.remove('show'), 3200);
@@ -385,10 +378,9 @@
     const it = queue()[0];
     const wrap = _box.querySelector('#ibx-focus .ibx-dest');
     if (!it || !wrap) return;
-    const en = LANG === 'en';
-    wrap.innerHTML = `<span class="ibx-lbl">${en ? 'file under' : 'classer dans'}</span>`
+    wrap.innerHTML = `<span class="ibx-lbl">${t('inboxFileUnder')}</span>`
       + `<input class="ibx-destedit" value="${esc(suggestDest(it))}" autocomplete="off" `
-      + `placeholder="${en ? 'pick or type a folder' : 'choisis ou tape un dossier'}" />`;
+      + `placeholder="${t('inboxPickOrType')}" />`;
     const inp = wrap.querySelector('input');
     let cb = null;  // the combobox appends a popup to <body> + exposes destroy(): tear it down, or it leaks
     const close = () => { if (cb) { cb.destroy(); cb = null; } editEnd(); };
@@ -405,7 +397,7 @@
     if (!it) return;
     const inp = document.createElement('input');
     inp.className = 'ibx-tagedit-input'; inp.autocomplete = 'off';
-    inp.placeholder = LANG === 'en' ? 'new tag' : 'nouveau tag';
+    inp.placeholder = t('inboxNewTag');
     addBtn.replaceWith(inp);
     inp.focus();
     const commit = () => {  // Enter OR clicking away both add the typed tag (like the folder field)
