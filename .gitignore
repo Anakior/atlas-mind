@@ -25,4 +25,11 @@ content/
 # ground truth — versioned despite the content/ rule above.
 !tests/fixtures/contradictions_kb/content/
 !tests/fixtures/contradictions_kb/content/**
+# Throwaway mind + artifacts for the Playwright e2e goldens (src/web/ts/e2e).
+.e2e-mind/
+src/web/ts/e2e/.auth/
+src/web/ts/e2e/.artifacts/
+src/web/ts/test-results/
+src/web/ts/playwright-report/
+
 key.pem

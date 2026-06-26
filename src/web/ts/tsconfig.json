@@ -15,7 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "types": [],
-    "isolatedModules": false,
-    "include": ["../js/**/*.ts", "../js/**/*.js", "globals.d.ts", "vendor.d.ts"]
-  }
+    "isolatedModules": false
+  },
+  "include": ["../js/**/*.ts", "../js/**/*.js", "globals.d.ts", "vendor.d.ts"]
 }
