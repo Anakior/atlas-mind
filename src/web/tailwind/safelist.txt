@@ -473,6 +473,7 @@ d2
 d2,
 dans
 dashed
+data
 data-ai-filter
 days
 daysAgo

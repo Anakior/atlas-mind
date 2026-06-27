@@ -9942,91 +9942,344 @@ async function saveAccountProfile(e) {
 // version 6/7).
 // On encoding failure (improbably long URI) the caller falls back to the plaintext secret.
 
-const QR = (function () {
-  // GF(256) tables (primitive 0x11d).
-  const EXP = new Array(512),
-    LOG = new Array(256);
-
-  (function () {
-    let x = 1;
-
-    for (let i = 0; i < 255; i++) {
-      EXP[i] = x;
-      LOG[x] = i;
-      x <<= 1;
-
-      if (x & 0x100) x ^= 0x11d;
-    }
-
-    for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
-  })();
-
-  function gfMul(a, b) {
-    return a === 0 || b === 0 ? 0 : EXP[LOG[a] + LOG[b]];
-  }
-
-  function rsGenPoly(n) {
-    let poly = [1];
-
-    for (let i = 0; i < n; i++) {
-      const next = new Array(poly.length + 1).fill(0);
-
-      for (let j = 0; j < poly.length; j++) {
-        next[j] ^= poly[j];
-        next[j + 1] ^= gfMul(poly[j], EXP[i]);
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+(function(root) {
+  "use strict";
+  class Gf256 {
+    // length 256
+    constructor() {
+      __publicField(this, "exp");
+      // antilog, length 512 (doubled so log[a]+log[b] never overflows)
+      __publicField(this, "log");
+      this.exp = new Array(512);
+      this.log = new Array(256);
+      let x = 1;
+      for (let i = 0; i < 255; i++) {
+        this.exp[i] = x;
+        this.log[x] = i;
+        x <<= 1;
+        if (x & 256) x ^= 285;
       }
-
-      poly = next;
+      for (let i = 255; i < 512; i++) this.exp[i] = this.exp[i - 255];
     }
-
-    return poly;
-  }
-
-  function rsEncode(data, ecLen) {
-    // GF(256) polynomial division of (data + ecLen zeros) by the generator;
-    // the remainder is the ecLen correction bytes.
-    const gen = rsGenPoly(ecLen); // length ecLen+1, gen[0] === 1
-    const buf = data.concat(new Array(ecLen).fill(0));
-
-    for (let i = 0; i < data.length; i++) {
-      const coef = buf[i];
-
-      if (coef === 0) continue;
-
-      for (let j = 1; j < gen.length; j++) buf[i + j] ^= gfMul(gen[j], coef);
+    mul(a, b) {
+      return a === 0 || b === 0 ? 0 : this.exp[this.log[a] + this.log[b]];
     }
-
-    return buf.slice(data.length);
-  }
-
-  // EC level L. [version, totalCodewords, ecPerBlock, blocks, maxPayloadBytes].
-  // Exact ISO/IEC 18004 values. WARNING: from v6 on the data is split into
-  // MULTIPLE RS blocks (ecPerBlock ≠ total ec) then interleaved — treating it as
-  // a single block produces an unreadable QR.
-  // maxPayloadBytes = dataCodewords − header overhead (mode + counter, ~2 bytes up to v9).
-  const VERSIONS = [
-    [1, 26, 7, 1, 17],
-    [2, 44, 10, 1, 32],
-    [3, 70, 15, 1, 53],
-    [4, 100, 20, 1, 78],
-    [5, 134, 26, 1, 106],
-    [6, 172, 18, 2, 134],
-    [7, 196, 20, 2, 154],
-    [8, 242, 24, 2, 192],
-    [9, 292, 30, 2, 230],
-    [10, 346, 18, 4, 271],
-  ];
-
-  function pickVersion(len) {
-    for (const v of VERSIONS) {
-      if (len <= v[4]) return v;
+    // EC codewords for `data`: the remainder of the GF polynomial division by the
+    // degree-ecLen generator.
+    rsEncode(data, ecLen) {
+      const gen = this.genPoly(ecLen);
+      const buf = data.concat(new Array(ecLen).fill(0));
+      for (let i = 0; i < data.length; i++) {
+        const coef = buf[i];
+        if (coef === 0) continue;
+        for (let j = 1; j < gen.length; j++) buf[i + j] ^= this.mul(gen[j], coef);
+      }
+      return buf.slice(data.length);
     }
-
-    return null;
+    genPoly(n) {
+      let poly = [1];
+      for (let i = 0; i < n; i++) {
+        const next = new Array(poly.length + 1).fill(0);
+        for (let j = 0; j < poly.length; j++) {
+          next[j] ^= poly[j];
+          next[j + 1] ^= this.mul(poly[j], this.exp[i]);
+        }
+        poly = next;
+      }
+      return poly;
+    }
   }
-
-  // Alignment pattern centers per version.
-  const ALIGN = {
+  const _QrCode = class _QrCode {
+    constructor(text) {
+      // The encoded module matrix (0/1), or null if the text exceeds v10 capacity.
+      __publicField(this, "matrix");
+      __publicField(this, "size", 0);
+      __publicField(this, "m", []);
+      __publicField(this, "reserved", []);
+      const bytes = _QrCode.toBytes(text);
+      const spec = _QrCode.pickVersion(bytes.length);
+      this.matrix = spec ? this.build(bytes, spec) : null;
+    }
+    // text -> UTF-8 bytes.
+    static toBytes(text) {
+      const bytes = [];
+      for (let i = 0; i < text.length; i++) {
+        const cp = text.charCodeAt(i);
+        if (cp < 128) bytes.push(cp);
+        else if (cp < 2048) bytes.push(192 | cp >> 6, 128 | cp & 63);
+        else bytes.push(224 | cp >> 12, 128 | cp >> 6 & 63, 128 | cp & 63);
+      }
+      return bytes;
+    }
+    // Smallest version whose payload capacity fits `len` bytes.
+    static pickVersion(len) {
+      for (const v of _QrCode.VERSIONS) if (len <= v.maxPayloadBytes) return v;
+      return null;
+    }
+    build(bytes, spec) {
+      const codewords = this.assembleCodewords(bytes, spec);
+      this.buildMatrix(spec, codewords);
+      return this.selectMask();
+    }
+    // Byte mode bitstream (mode + count + data + terminator + pad) split into RS blocks,
+    // each EC-encoded, then data + EC interleaved into the final codeword sequence.
+    assembleCodewords(bytes, spec) {
+      const countBits = spec.version <= 9 ? 8 : 16;
+      const bits = [];
+      const push = (val, n) => {
+        for (let i = n - 1; i >= 0; i--) bits.push(val >> i & 1);
+      };
+      push(4, 4);
+      push(bytes.length, countBits);
+      for (const b of bytes) push(b, 8);
+      const dataCw = spec.totalCodewords - spec.ecPerBlock * spec.blocks;
+      const maxBits = dataCw * 8;
+      for (let i = 0; i < 4 && bits.length < maxBits; i++) bits.push(0);
+      while (bits.length % 8 !== 0) bits.push(0);
+      const dataBytes = [];
+      for (let i = 0; i < bits.length; i += 8) {
+        let b = 0;
+        for (let j = 0; j < 8; j++) b = b << 1 | bits[i + j];
+        dataBytes.push(b);
+      }
+      const pads = [236, 17];
+      let pi = 0;
+      while (dataBytes.length < dataCw) dataBytes.push(pads[pi++ & 1]);
+      const perBlock = Math.floor(dataCw / spec.blocks);
+      const remainder = dataCw - perBlock * spec.blocks;
+      const dataBlocks = [];
+      const ecBlocks = [];
+      let off = 0;
+      for (let bI = 0; bI < spec.blocks; bI++) {
+        const sz = perBlock + (bI >= spec.blocks - remainder ? 1 : 0);
+        const chunk = dataBytes.slice(off, off + sz);
+        off += sz;
+        dataBlocks.push(chunk);
+        ecBlocks.push(_QrCode.gf.rsEncode(chunk, spec.ecPerBlock));
+      }
+      const finalCw = [];
+      const maxData = Math.max(...dataBlocks.map((b) => b.length));
+      for (let i = 0; i < maxData; i++)
+        for (const blk of dataBlocks) if (i < blk.length) finalCw.push(blk[i]);
+      for (let i = 0; i < spec.ecPerBlock; i++) for (const blk of ecBlocks) finalCw.push(blk[i]);
+      return finalCw;
+    }
+    // ── matrix construction (fills this.m / this.reserved / this.size) ──
+    buildMatrix(spec, codewords) {
+      this.size = 17 + spec.version * 4;
+      this.m = [];
+      this.reserved = [];
+      for (let r = 0; r < this.size; r++) {
+        this.m.push(new Array(this.size).fill(null));
+        this.reserved.push(new Array(this.size).fill(false));
+      }
+      this.finders();
+      this.timing();
+      this.setF(this.size - 8, 8, 1);
+      this.alignment(spec);
+      this.versionInfo(spec);
+      this.reserveFormatArea();
+      this.placeData(codewords);
+    }
+    setF(r, c, v) {
+      this.m[r][c] = v ? 1 : 0;
+      this.reserved[r][c] = true;
+    }
+    finders() {
+      const finder = (r, c) => {
+        for (let i = -1; i <= 7; i++)
+          for (let j = -1; j <= 7; j++) {
+            const rr = r + i, cc = c + j;
+            if (rr < 0 || cc < 0 || rr >= this.size || cc >= this.size) continue;
+            const inRing = i >= 0 && i <= 6 && (j === 0 || j === 6) || j >= 0 && j <= 6 && (i === 0 || i === 6);
+            const inCore = i >= 2 && i <= 4 && j >= 2 && j <= 4;
+            this.setF(rr, cc, inRing || inCore ? 1 : 0);
+          }
+      };
+      finder(0, 0);
+      finder(0, this.size - 7);
+      finder(this.size - 7, 0);
+    }
+    timing() {
+      for (let i = 8; i < this.size - 8; i++) {
+        this.setF(6, i, i % 2 === 0 ? 1 : 0);
+        this.setF(i, 6, i % 2 === 0 ? 1 : 0);
+      }
+    }
+    alignment(spec) {
+      const ac = _QrCode.ALIGN[spec.version];
+      for (const r of ac)
+        for (const c of ac) {
+          if (r <= 7 && c <= 7 || r <= 7 && c >= this.size - 8 || r >= this.size - 8 && c <= 7) continue;
+          for (let i = -2; i <= 2; i++)
+            for (let j = -2; j <= 2; j++) {
+              const ring = Math.max(Math.abs(i), Math.abs(j));
+              this.setF(r + i, c + j, ring === 2 || ring === 0 ? 1 : 0);
+            }
+        }
+    }
+    // Version information (mandatory from v7): 6 version bits + 12 BCH(18,6) bits
+    // (generator 0x1f25), placed in two 6x3 blocks.
+    versionInfo(spec) {
+      if (spec.version < 7) return;
+      let vbits = spec.version << 12;
+      const vg = 7973;
+      for (let i = 5; i >= 0; i--) if (vbits >> i + 12 & 1) vbits ^= vg << i;
+      const vfull = spec.version << 12 | vbits;
+      for (let i = 0; i < 18; i++) {
+        const bit = vfull >> i & 1;
+        const r = Math.floor(i / 3);
+        const c = i % 3;
+        this.setF(this.size - 11 + c, r, bit);
+        this.setF(r, this.size - 11 + c, bit);
+      }
+    }
+    // Reserve EXACTLY the format-info modules (same cells placeFormat writes).
+    reserveFormatArea() {
+      for (let i = 0; i <= 8; i++) {
+        this.reserved[8][i] = true;
+        this.reserved[i][8] = true;
+      }
+      for (let i = 0; i < 7; i++) this.reserved[this.size - 1 - i][8] = true;
+      for (let i = 0; i < 8; i++) this.reserved[8][this.size - 1 - i] = true;
+    }
+    // Place the data bits in the upward/downward zigzag over the free modules.
+    placeData(codewords) {
+      let bitIdx = 0;
+      const totalBits = codewords.length * 8;
+      const bitAt = (i) => i < totalBits ? codewords[i >> 3] >> 7 - (i & 7) & 1 : 0;
+      let dir = -1;
+      for (let col = this.size - 1; col > 0; col -= 2) {
+        if (col === 6) col--;
+        for (let n = 0; n < this.size; n++) {
+          const row = dir < 0 ? this.size - 1 - n : n;
+          for (let k = 0; k < 2; k++) {
+            const cc = col - k;
+            if (this.reserved[row][cc]) continue;
+            this.m[row][cc] = bitAt(bitIdx++);
+          }
+        }
+        dir = -dir;
+      }
+    }
+    // ── mask selection ──
+    selectMask() {
+      let best = null;
+      let bestPen = Infinity;
+      for (let mask = 0; mask < 8; mask++) {
+        const masked = this.applyMask(mask);
+        this.placeFormat(masked, mask);
+        const pen = this.penalty(masked);
+        if (pen < bestPen) {
+          bestPen = pen;
+          best = masked;
+        }
+      }
+      return best;
+    }
+    // Fresh copy of this.m with the mask pattern XORed over the non-reserved modules.
+    applyMask(mask) {
+      const out = [];
+      for (let r = 0; r < this.size; r++) out.push(this.m[r].slice());
+      for (let r = 0; r < this.size; r++)
+        for (let c = 0; c < this.size; c++) {
+          if (this.reserved[r][c]) continue;
+          let flip = false;
+          switch (mask) {
+            case 0:
+              flip = (r + c) % 2 === 0;
+              break;
+            case 1:
+              flip = r % 2 === 0;
+              break;
+            case 2:
+              flip = c % 3 === 0;
+              break;
+            case 3:
+              flip = (r + c) % 3 === 0;
+              break;
+            case 4:
+              flip = (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0;
+              break;
+            case 5:
+              flip = r * c % 2 + r * c % 3 === 0;
+              break;
+            case 6:
+              flip = (r * c % 2 + r * c % 3) % 2 === 0;
+              break;
+            case 7:
+              flip = ((r + c) % 2 + r * c % 3) % 2 === 0;
+              break;
+          }
+          if (flip) out[r][c] ^= 1;
+        }
+      return out;
+    }
+    // ECC level L = 01. Format bits = BCH(15,5) then XOR 0x5412, placed in the two
+    // ISO/IEC 18004 copies around the finders. Mutates the given matrix.
+    placeFormat(m, mask) {
+      const data = 1 << 3 | mask;
+      let bits = data << 10;
+      const g = 1335;
+      for (let i = 4; i >= 0; i--) if (bits >> i + 10 & 1) bits ^= g << i;
+      const fmt = (data << 10 | bits) ^ 21522;
+      for (let i = 0; i < 15; i++) {
+        const bit = fmt >> i & 1;
+        let vr;
+        if (i < 6) vr = i;
+        else if (i < 8) vr = i + 1;
+        else vr = this.size - 15 + i;
+        m[vr][8] = bit;
+        let hc;
+        if (i < 8) hc = this.size - i - 1;
+        else if (i < 9) hc = 15 - i;
+        else hc = 15 - i - 1;
+        m[8][hc] = bit;
+      }
+    }
+    // Mask-penalty score (Rule 1: same-colour runs >= 5, rows + columns).
+    penalty(m) {
+      let p = 0;
+      for (let r = 0; r < this.size; r++)
+        for (const horiz of [true, false]) {
+          let run = 1;
+          let prev = -1;
+          for (let c = 0; c < this.size; c++) {
+            const v = horiz ? m[r][c] : m[c][r];
+            if (v === prev) {
+              run++;
+              if (run === 5) p += 3;
+              else if (run > 5) p += 1;
+            } else {
+              run = 1;
+              prev = v;
+            }
+          }
+        }
+      return p;
+    }
+  };
+  __publicField(_QrCode, "gf", new Gf256());
+  // Exact ISO/IEC 18004 capacity rows (level L). From v6 on the data is split into
+  // MULTIPLE RS blocks then interleaved — treating it as one block is unreadable.
+  // maxPayloadBytes = dataCodewords − header overhead (mode + counter).
+  __publicField(_QrCode, "VERSIONS", [
+    { version: 1, totalCodewords: 26, ecPerBlock: 7, blocks: 1, maxPayloadBytes: 17 },
+    { version: 2, totalCodewords: 44, ecPerBlock: 10, blocks: 1, maxPayloadBytes: 32 },
+    { version: 3, totalCodewords: 70, ecPerBlock: 15, blocks: 1, maxPayloadBytes: 53 },
+    { version: 4, totalCodewords: 100, ecPerBlock: 20, blocks: 1, maxPayloadBytes: 78 },
+    { version: 5, totalCodewords: 134, ecPerBlock: 26, blocks: 1, maxPayloadBytes: 106 },
+    { version: 6, totalCodewords: 172, ecPerBlock: 18, blocks: 2, maxPayloadBytes: 134 },
+    { version: 7, totalCodewords: 196, ecPerBlock: 20, blocks: 2, maxPayloadBytes: 154 },
+    { version: 8, totalCodewords: 242, ecPerBlock: 24, blocks: 2, maxPayloadBytes: 192 },
+    { version: 9, totalCodewords: 292, ecPerBlock: 30, blocks: 2, maxPayloadBytes: 230 },
+    { version: 10, totalCodewords: 346, ecPerBlock: 18, blocks: 4, maxPayloadBytes: 271 }
+  ]);
+  // Alignment-pattern center coordinates per version.
+  __publicField(_QrCode, "ALIGN", {
     1: [],
     2: [6, 18],
     3: [6, 22],
@@ -10036,370 +10289,49 @@ const QR = (function () {
     7: [6, 22, 38],
     8: [6, 24, 42],
     9: [6, 26, 46],
-    10: [6, 28, 50],
-  };
+    10: [6, 28, 50]
+  });
+  let QrCode = _QrCode;
+  root.QrCode = QrCode;
+})(typeof window !== "undefined" ? window : globalThis);
 
-  function buildMatrix(version, codewords) {
-    const size = 17 + version * 4;
-    const m = [];
-    const reserved = [];
+// QR-to-canvas bridge + Security/2FA (TOTP) modal wiring. Split out of the old 17-qr.js:
+// the pure codec now lives in 17-qr.ts (the QrCode class); this is the DOM side. Stays
+// .js (migrated later). Sorts after 17-qr.ts and before 18-totp.js, which finishes the
+// 2FA flow and is the sole caller of renderQrCode (via the enable handler).
 
-    for (let r = 0; r < size; r++) {
-      m.push(new Array(size).fill(null));
-      reserved.push(new Array(size).fill(false));
+// Renders an encoded QR into a container via a crisp <canvas> (square pixels).
+function renderQrCode(container, text, sizePx) {
+  const matrix = new QrCode(text).matrix;
+
+  if (!matrix) return false;
+  const n = matrix.length,
+    quiet = 4,
+    total = n + quiet * 2;
+  const scale = Math.max(2, Math.floor((sizePx || 180) / total));
+  const px = total * scale;
+  const canvas = document.createElement('canvas');
+
+  canvas.width = px;
+  canvas.height = px;
+  canvas.style.width = px + 'px';
+  canvas.style.height = px + 'px';
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, px, px);
+  ctx.fillStyle = '#000';
+
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) {
+      if (matrix[r][c]) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
     }
 
-    function setF(r, c, v) {
-      m[r][c] = v ? 1 : 0;
-      reserved[r][c] = true;
-    }
-
-    // Finder patterns + separators.
-    function finder(r, c) {
-      for (let i = -1; i <= 7; i++)
-        for (let j = -1; j <= 7; j++) {
-          const rr = r + i,
-            cc = c + j;
-
-          if (rr < 0 || cc < 0 || rr >= size || cc >= size) continue;
-          const inRing =
-            (i >= 0 && i <= 6 && (j === 0 || j === 6)) ||
-            (j >= 0 && j <= 6 && (i === 0 || i === 6));
-          const inCore = i >= 2 && i <= 4 && j >= 2 && j <= 4;
-
-          setF(rr, cc, inRing || inCore ? 1 : 0);
-        }
-    }
-
-    finder(0, 0);
-    finder(0, size - 7);
-    finder(size - 7, 0);
-
-    // Timing patterns.
-    for (let i = 8; i < size - 8; i++) {
-      setF(6, i, i % 2 === 0 ? 1 : 0);
-      setF(i, 6, i % 2 === 0 ? 1 : 0);
-    }
-
-    // Dark module.
-    setF(size - 8, 8, 1);
-    // Alignment patterns.
-    const ac = ALIGN[version];
-
-    for (const r of ac)
-      for (const c of ac) {
-        if ((r <= 7 && c <= 7) || (r <= 7 && c >= size - 8) || (r >= size - 8 && c <= 7)) continue;
-
-        for (let i = -2; i <= 2; i++)
-          for (let j = -2; j <= 2; j++) {
-            const ring = Math.max(Math.abs(i), Math.abs(j));
-
-            setF(r + i, c + j, ring === 2 || ring === 0 ? 1 : 0);
-          }
-      }
-
-    // Version information (mandatory from v7 on): 18 bits = 6 version bits +
-    // 12 BCH(18,6) bits (generator 0x1f25), placed in two 6×3 blocks (left of
-    // the top-right finder and above the bottom-left finder).
-    if (version >= 7) {
-      let vbits = version << 12;
-      const vg = 0x1f25;
-
-      for (let i = 5; i >= 0; i--) if ((vbits >> (i + 12)) & 1) vbits ^= vg << i;
-      const vfull = (version << 12) | vbits;
-
-      for (let i = 0; i < 18; i++) {
-        const bit = (vfull >> i) & 1;
-        const r = Math.floor(i / 3);
-        const c = i % 3;
-
-        // Bottom-left block: rows size-11..size-9, columns 0..5.
-        setF(size - 11 + c, r, bit);
-        // Top-right block: rows 0..5, columns size-11..size-9 (transposed).
-        setF(r, size - 11 + c, bit);
-      }
-    }
-
-    // Reserve EXACTLY the format-info modules (same cells as placeFormat).
-    // Over-reserving (dark module, neighboring data cells) would shift data
-    // placement → unreadable QR.
-    for (let i = 0; i <= 8; i++) {
-      reserved[8][i] = true;
-      reserved[i][8] = true;
-    }
-
-    for (let i = 0; i < 7; i++) reserved[size - 1 - i][8] = true; // col 8, rows size-1..size-7
-
-    for (let i = 0; i < 8; i++) reserved[8][size - 1 - i] = true; // row 8, cols size-1..size-8
-    // Places the data bits in zigzag.
-    let bitIdx = 0;
-    const totalBits = codewords.length * 8;
-
-    function bitAt(i) {
-      return i < totalBits ? (codewords[i >> 3] >> (7 - (i & 7))) & 1 : 0;
-    }
-
-    let dir = -1;
-
-    for (let col = size - 1; col > 0; col -= 2) {
-      if (col === 6) col--;
-
-      for (let n = 0; n < size; n++) {
-        const row = dir < 0 ? size - 1 - n : n;
-
-        for (let k = 0; k < 2; k++) {
-          const cc = col - k;
-
-          if (reserved[row][cc]) continue;
-          m[row][cc] = bitAt(bitIdx++);
-        }
-      }
-
-      dir = -dir;
-    }
-
-    return { m, reserved, size };
-  }
-
-  function applyMask(m, reserved, size, mask) {
-    const out = [];
-
-    for (let r = 0; r < size; r++) out.push(m[r].slice());
-
-    for (let r = 0; r < size; r++)
-      for (let c = 0; c < size; c++) {
-        if (reserved[r][c]) continue;
-        let flip = false;
-
-        switch (mask) {
-          case 0:
-            flip = (r + c) % 2 === 0;
-            break;
-          case 1:
-            flip = r % 2 === 0;
-            break;
-          case 2:
-            flip = c % 3 === 0;
-            break;
-          case 3:
-            flip = (r + c) % 3 === 0;
-            break;
-          case 4:
-            flip = (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0;
-            break;
-          case 5:
-            flip = ((r * c) % 2) + ((r * c) % 3) === 0;
-            break;
-          case 6:
-            flip = (((r * c) % 2) + ((r * c) % 3)) % 2 === 0;
-            break;
-          case 7:
-            flip = (((r + c) % 2) + ((r * c) % 3)) % 2 === 0;
-            break;
-        }
-
-        if (flip) out[r][c] ^= 1;
-      }
-
-    return out;
-  }
-
-  function placeFormat(m, size, mask) {
-    // ECC level L = 01. Format bits = BCH(15,5) then XOR mask 0x5412.
-    // Placement per ISO/IEC 18004: each bit i (LSB→MSB) appears in TWO copies
-    // (around the top-left finder + spread over the top-right/bottom-left
-    // finders), exactly like the reference implementation.
-    const lvl = 1; // L
-    const data = (lvl << 3) | mask;
-    let bits = data << 10;
-    const g = 0x537;
-
-    for (let i = 4; i >= 0; i--) if ((bits >> (i + 10)) & 1) bits ^= g << i;
-    const fmt = ((data << 10) | bits) ^ 0x5412;
-
-    // For each bit i (LSB→MSB), two copies at the ISO/IEC 18004 positions.
-    // Strip A: around the top-left finder, on row 8 (and its corner);
-    // Strip B: on column 8 (top-left/bottom-left/top-right finders).
-    for (let i = 0; i < 15; i++) {
-      const bit = (fmt >> i) & 1;
-      // Vertical strip (column 8): top-left finder (i<8) then bottom-left.
-      let vr;
-
-      if (i < 6) vr = i;
-      else if (i < 8) vr = i + 1;
-      else vr = size - 15 + i;
-      m[vr][8] = bit;
-      // Horizontal strip (row 8): copy spread over row 8 (top-right i<8) then
-      // around the top-left finder.
-      let hc;
-
-      if (i < 8) hc = size - i - 1;
-      else if (i < 9) hc = 15 - i;
-      else hc = 15 - i - 1;
-      m[8][hc] = bit;
-    }
-  }
-
-  function penalty(m, size) {
-    let p = 0;
-
-    // Rule 1: runs >=5 of the same color (rows + columns).
-    for (let r = 0; r < size; r++)
-      for (const horiz of [true, false]) {
-        let run = 1,
-          prev = -1;
-
-        for (let c = 0; c < size; c++) {
-          const v = horiz ? m[r][c] : m[c][r];
-
-          if (v === prev) {
-            run++;
-
-            if (run === 5) p += 3;
-            else if (run > 5) p += 1;
-          } else {
-            run = 1;
-            prev = v;
-          }
-        }
-      }
-
-    // Rule 3: finder-like pattern (approximation good enough to pick a mask).
-    return p;
-  }
-
-  // Encodes an ASCII/UTF-8 string → boolean matrix.
-  function encode(text) {
-    const bytes = [];
-
-    for (let i = 0; i < text.length; i++) {
-      const cp = text.charCodeAt(i);
-
-      if (cp < 0x80) bytes.push(cp);
-      else if (cp < 0x800) {
-        bytes.push(0xc0 | (cp >> 6), 0x80 | (cp & 0x3f));
-      } else {
-        bytes.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
-      }
-    }
-
-    const ver = pickVersion(bytes.length);
-
-    if (!ver) return null;
-    const [version, total, ecLen, blocks, cap] = ver;
-    const countBits = version <= 9 ? 8 : 16;
-    // Bitstream: mode 0100, count, data, terminator, pad.
-    let bits = [];
-
-    function push(val, n) {
-      for (let i = n - 1; i >= 0; i--) bits.push((val >> i) & 1);
-    }
-
-    push(0b0100, 4);
-    push(bytes.length, countBits);
-
-    for (const b of bytes) push(b, 8);
-    const dataCw = total - ecLen * blocks;
-    const maxBits = dataCw * 8;
-
-    for (let i = 0; i < 4 && bits.length < maxBits; i++) bits.push(0); // terminator
-
-    while (bits.length % 8 !== 0) bits.push(0);
-    const dataBytes = [];
-
-    for (let i = 0; i < bits.length; i += 8) {
-      let b = 0;
-
-      for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
-      dataBytes.push(b);
-    }
-
-    const pads = [0xec, 0x11];
-    let pi = 0;
-
-    while (dataBytes.length < dataCw) {
-      dataBytes.push(pads[pi & 1]);
-      pi++;
-    }
-
-    // Splitting into blocks + EC, then interleaving.
-    const perBlock = Math.floor(dataCw / blocks);
-    const remainder = dataCw - perBlock * blocks;
-    const dataBlocks = [],
-      ecBlocks = [];
-    let off = 0;
-
-    for (let bI = 0; bI < blocks; bI++) {
-      const sz = perBlock + (bI >= blocks - remainder ? 1 : 0);
-      const chunk = dataBytes.slice(off, off + sz);
-
-      off += sz;
-      dataBlocks.push(chunk);
-      ecBlocks.push(rsEncode(chunk, ecLen));
-    }
-
-    const finalCw = [];
-    const maxData = Math.max(...dataBlocks.map((b) => b.length));
-
-    for (let i = 0; i < maxData; i++)
-      for (const blk of dataBlocks) if (i < blk.length) finalCw.push(blk[i]);
-
-    for (let i = 0; i < ecLen; i++) for (const blk of ecBlocks) finalCw.push(blk[i]);
-    const { m, reserved, size } = buildMatrix(version, finalCw);
-    // Pick the mask with the minimal penalty.
-    let best = null,
-      bestPen = Infinity;
-
-    for (let mask = 0; mask < 8; mask++) {
-      const masked = applyMask(m, reserved, size, mask);
-
-      placeFormat(masked, size, mask);
-      const pen = penalty(masked, size);
-
-      if (pen < bestPen) {
-        bestPen = pen;
-        best = masked;
-      }
-    }
-
-    return best;
-  }
-
-  // Renders the matrix into a container via a crisp <canvas> (square pixels).
-  function render(container, text, sizePx) {
-    const matrix = encode(text);
-
-    if (!matrix) return false;
-    const n = matrix.length,
-      quiet = 4,
-      total = n + quiet * 2;
-    const scale = Math.max(2, Math.floor((sizePx || 180) / total));
-    const px = total * scale;
-    const canvas = document.createElement('canvas');
-
-    canvas.width = px;
-    canvas.height = px;
-    canvas.style.width = px + 'px';
-    canvas.style.height = px + 'px';
-    const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, px, px);
-    ctx.fillStyle = '#000';
-
-    for (let r = 0; r < n; r++)
-      for (let c = 0; c < n; c++) {
-        if (matrix[r][c]) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
-      }
-
-    container.innerHTML = '';
-    container.appendChild(canvas);
-
-    return true;
-  }
-
-  return { render: render, encode: encode };
-})();
+  container.innerHTML = '';
+  container.appendChild(canvas);
+
+  return true;
+}
 
 // ── Security: 2FA (TOTP) + sessions ──────────────────────────────────────────
 const securityTotpStatus = document.getElementById('security-totp-status');
@@ -10495,7 +10427,7 @@ securityTotpEnableBtn.addEventListener('click', async () => {
     // QR rendered client-side; silent fallback to the plaintext secret if the
     // URI is too long for our encoder.
     totpQr.innerHTML = '';
-    const ok = data.otpauth_uri && QR.render(totpQr, data.otpauth_uri, 184);
+    const ok = data.otpauth_uri && renderQrCode(totpQr, data.otpauth_uri, 184);
 
     totpQr.classList.toggle('hidden', !ok);
     openTotpModal('enroll');

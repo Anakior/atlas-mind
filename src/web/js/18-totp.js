@@ -23,7 +23,7 @@ securityTotpEnableBtn.addEventListener('click', async () => {
     // QR rendered client-side; silent fallback to the plaintext secret if the
     // URI is too long for our encoder.
     totpQr.innerHTML = '';
-    const ok = data.otpauth_uri && QR.render(totpQr, data.otpauth_uri, 184);
+    const ok = data.otpauth_uri && renderQrCode(totpQr, data.otpauth_uri, 184);
 
     totpQr.classList.toggle('hidden', !ok);
     openTotpModal('enroll');
