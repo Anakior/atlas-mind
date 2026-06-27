@@ -9,7 +9,7 @@
 let tocHasLinks = false;
 let tocHasNotes = false;
 
-let currentFile: string | null = null;
+let currentFile: FileNode | null = null;
 let editMode = false;
 let editTextarea: HTMLTextAreaElement | null = null;
 

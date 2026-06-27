@@ -790,7 +790,7 @@ class TestAdminUiPanel(unittest.TestCase):
             "if (IS_OFFLINE_BUILD) {\n  index(TREE);",
             self.index)
         # softReload still rebuilds fileMap from the FILTERED /api/tree.
-        self.assertIn("const res = await fetch('/api/tree');", self.index)
+        self.assertRegex(self.index, r"await fetch\([\"']/api/tree[\"']\)")  # quote-agnostic: esbuild re-quotes the .ts literal
 
     def test_settings_panel_markup_present(self):
         # Panel container + its three tabs + the gear entry point.
@@ -833,10 +833,10 @@ class TestAdminUiPanel(unittest.TestCase):
         # reserved for the admin (body.admin-cloud).
         self.assertIn('id="settings-btn"', self.index)
         self.assertIn("body.cloud-authed #settings-btn", self.index)
-        self.assertIn("classList.add('cloud-authed')", self.index)
+        self.assertRegex(self.index, r"classList\.add\([\"']cloud-authed[\"']\)")
         # body.admin-cloud stays set to manage the visibility of admin tabs.
-        self.assertIn("classList.add('admin-cloud')", self.index)
-        self.assertIn("data.role === 'admin'", self.index)
+        self.assertRegex(self.index, r"classList\.add\([\"']admin-cloud[\"']\)")
+        self.assertRegex(self.index, r"data\.role === [\"']admin[\"']")
         # Admin-only tabs stay hidden outside admin-cloud — a member must not see a tab
         # it cannot use (e.g. Groups, whose /api/admin/groups is admin-gated).
         for tab in ("users", "nodes", "groups", "shares"):

@@ -48,6 +48,7 @@ acl-path
 acl-status
 acl-value
 acl-value-wrap
+aclBtnTitle
 aclCommons
 aclCreatedBy
 aclEveryone
@@ -188,6 +189,7 @@ b.x,
 b.y
 b.y,
 back
+background-color:
 background:
 badge
 bar.
@@ -281,7 +283,6 @@ buildFavicon(count)
 buildTodoFilterTabs()
 button
 button[data-action]
-button[data-dir-path]
 bx
 bx)
 bx,
@@ -311,6 +312,7 @@ canvas
 cappedSuffix
 capture
 car.
+caret
 carry
 cat
 catch
@@ -477,11 +479,15 @@ cy)
 d,
 d2
 d2,
+d:
 dans
 dashed
 data
 data-ai-filter
+data-dir-path
 data-ipath
+data-name
+data-path
 days
 daysAgo
 de
@@ -528,13 +534,16 @@ digestDocs
 digestViaAi
 dim
 dir
+dir-access-btn
 dir-rename-backdrop
+dir-rename-btn
 dir-rename-cancel
 dir-rename-close
 dir-rename-current
 dir-rename-error
 dir-rename-form
 dir-rename-input
+dir-share-btn
 disable
 disabled
 disabled.
@@ -699,7 +708,10 @@ fichier(s)).
 fichiers
 file
 file(s)).
+file-access-btn
 file-name
+file-rename-btn
+file-share-btn
 fileExists
 fileExistsAt
 fileModeNoEdit
@@ -1089,6 +1101,7 @@ kept
 key
 keyboard
 keydown
+l:
 la
 label
 labeled
@@ -1147,7 +1160,6 @@ live-reload
 lives.
 lo
 load
-load),
 loadError
 loadingDoc
 local
@@ -1581,7 +1593,6 @@ random
 rapide
 rare
 raw,
-re-publish
 re-seed
 re-settle
 re-settle,
@@ -1638,6 +1649,8 @@ rename-form
 rename-name
 rename-title
 renameDocTitle
+renameFile
+renameFolder
 renamed
 render(view(state),
 renderTaskText(s)
@@ -1696,9 +1709,12 @@ revoked
 rgba(0,0,0,0.6),0
 rgba(16,185,129,0.10)
 rgba(244,63,94,0.10)
+rgba(251,191,36,.85)
 rgba(29,155,209,0.18)
 rgba(29,155,209,0.36)
 rgba(29,155,209,0.6)
+rgba(52,211,153,.9)
+rgba(56,189,248,.85)
 rien
 right-2
 rights
@@ -1714,6 +1730,7 @@ rootLabel
 rotate(180deg)
 rounded
 rounded-b-md
+rounded-full
 rounded-lg
 rounded-md
 rounded-t-md
@@ -1898,6 +1915,7 @@ share-path
 share-step1
 share-step2
 share-url
+shareAsNode
 shareBroken
 shareReactivate
 shareReactivateMsg
@@ -2254,6 +2272,7 @@ travels
 tree
 tree)
 tree-action-btn
+tree-action-btn--share
 tree-item
 tree-remote
 tree-remote-origin
@@ -2287,7 +2306,6 @@ unique
 unknown
 unpin
 unsanitized
-up
 updateGraphModeUI()
 updateHomeTodoStat()
 updateTabBadge()
@@ -2319,6 +2337,9 @@ view
 view.
 viewer-mode
 virgules)
+visGranted
+visPrivate
+visShared
 visent
 visibilitychange
 visible
@@ -2337,7 +2358,6 @@ w-px
 walks
 want
 was
-we
 weak
 week
 went
@@ -2376,7 +2396,6 @@ y,
 y:
 year)
 yesterday
-yet
 yet.
 you
 you.

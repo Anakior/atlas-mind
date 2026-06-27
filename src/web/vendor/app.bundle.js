@@ -1703,374 +1703,265 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   root.avatarSeed = Avatar.seed;
 })(typeof window !== "undefined" ? window : globalThis);
 
-const contentCache = new Map();
-
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const contentCache = /* @__PURE__ */ new Map();
 async function loadContent(file) {
   if (file.content != null) return file.content;
-
-  if (contentCache.has(file.path)) {
-    file.content = contentCache.get(file.path);
-
-    return file.content;
+  const cached = contentCache.get(file.path);
+  if (cached != null) {
+    file.content = cached;
+    return cached;
   }
-
   if (IS_OFFLINE_BUILD) {
     const c = EMBED_CONTENT[file.path];
-
-    if (c == null) throw new Error(t('offlineMissing'));
+    if (c == null) throw new Error(t("offlineMissing"));
     contentCache.set(file.path, c);
     file.content = c;
-
     return c;
   }
-
-  // Versioned by mtime for cache busting.
-  const url =
-    '/' +
-    file.path.split('/').map(encodeURIComponent).join('/') +
-    (file.mtime ? '?v=' + file.mtime : '');
+  const url = "/" + file.path.split("/").map(encodeURIComponent).join("/") + (file.mtime ? "?v=" + file.mtime : "");
   const res = await fetch(url);
-
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  if (!res.ok) throw new Error("HTTP " + res.status);
   const text = await res.text();
-
   contentCache.set(file.path, text);
   file.content = text;
-
   return text;
 }
-
-// Shared between todo widget and showWelcome; declared early to avoid TDZ.
 let todos = [];
-// Notes index {path: count} for tree badges. Declared early: decorateTreeBadges()
-// runs at top-level right after the tree renders, before the annotations section
-// (otherwise TDZ → ReferenceError, badges missing on first render).
 let notesIndex = null;
-
-const ICONS = {
-  '.md':
-    '<svg class="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
-  '.pdf':
-    '<svg class="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>',
-  '.pptx':
-    '<svg class="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>',
-  '.html':
-    '<svg class="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>',
-  '.docx':
-    '<svg class="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
-};
-const FOLDER_ICON =
-  '<svg class="w-4 h-4 text-[#fbc678] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>';
-// « Mental nodes » umbrella icon: teal network node, distinct from the yellow folder.
-const REMOTE_FOLDER_ICON =
-  '<svg class="w-4 h-4 text-[#59d0cf] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z"/></svg>';
-// « Share as node » icon (Heroicons link) shown on hover over folders/docs.
-const LINK_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg>';
-// « Rename » icon (Heroicons pencil).
-const PENCIL_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Z"/></svg>';
-const FILE_ICON =
-  '<svg class="w-4 h-4 text-ink-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>';
-
-function iconFor(ext) {
-  return ICONS[ext] || FILE_ICON;
-}
-
-function renderTree(node, depth = 0, prefix = '') {
-  const ul = document.createElement('ul');
-
-  ul.className =
-    depth === 0 ? 'space-y-0.5' : 'ml-3 border-l border-navy-600 pl-2 space-y-0.5 mt-0.5';
-
-  // At the root, the « Nœuds mentaux » (remotes/) umbrella is pushed to the very
-  // bottom and visually fenced off (cf. .tree-section--remotes): it holds mirrors
-  // of OTHER atlases, not your own content, so it shouldn't sit amid your folders.
-  let children = node.children || [];
-
-  if (depth === 0) {
-    const own = [],
-      remotes = [];
-
-    for (const c of children) {
-      (c.type === 'dir' && c.name === 'remotes' ? remotes : own).push(c);
-    }
-    children = own.concat(remotes);
-  }
-
-  for (const child of children) {
-    const li = document.createElement('li');
-
-    if (child.type === 'dir') {
-      const childPath = prefix ? prefix + '/' + child.name : child.name;
-      // remotes/ = mirrors of remote nodes: read-only (rename hidden by .tree-remote CSS).
-      const isRemoteRoot = childPath === 'remotes';
-      if (isRemoteRoot) li.className = 'tree-section--remotes';
-      const isRemote = isRemoteRoot || childPath.startsWith('remotes/');
-      const btn = document.createElement('button');
-
-      btn.className =
-        'tree-item group w-full text-left px-2 py-1.5 rounded flex items-center gap-2 font-semibold text-ink-100' +
-        (isRemote ? ' tree-remote' : '');
-      btn.dataset.dirPath = childPath;
-      // remotes/ umbrella → label « Mental nodes »; children keep their name
-      // and get their origin via decorateRemoteOrigins().
-      const dirLabel = isRemoteRoot ? t('remotesLabel') : child.name;
-      // « Share as node » on hover, not on mirrors (don't re-publish another atlas's content).
-      const dirShareBtn = isRemote
-        ? ''
-        : `<span class="dir-share-btn tree-action-btn tree-action-btn--share" title="${t('shareAsNode')}">${LINK_ICON}</span>`;
-      // Manage the folder's ACL (model B): cascades to children by inheritance.
-      const dirAccessBtn = isRemote
-        ? ''
-        : `<span class="dir-access-btn tree-action-btn" title="${t('aclBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/></svg></span>`;
-
-      btn.innerHTML = `<span class="caret text-xs text-ink-400">&#9656;</span>${isRemoteRoot ? REMOTE_FOLDER_ICON : FOLDER_ICON}<span class="truncate min-w-0 flex-1" data-name="${escapeHtml(child.name)}">${escapeHtml(dirLabel)}</span>${dirAccessBtn}<span class="dir-rename-btn tree-action-btn" title="${t('renameFolder')}">${PENCIL_ICON}</span>${dirShareBtn}`;
-      const sub = renderTree(child, depth + 1, childPath);
-
-      sub.classList.add('hidden');
-      btn.addEventListener('click', (e) => {
-        if (e.target.closest('.dir-access-btn')) {
-          e.stopPropagation();
-          if (window.openAccessFor) window.openAccessFor(childPath);
-
-          return;
-        }
-
-        if (e.target.closest('.dir-share-btn')) {
-          e.stopPropagation();
-          openPublishNode(childPath);
-
-          return;
-        }
-
-        if (e.target.closest('.dir-rename-btn')) {
-          e.stopPropagation();
-          openDirRenameModal(childPath);
-
-          return;
-        }
-
-        sub.classList.toggle('hidden');
-        btn.querySelector('.caret').classList.toggle('open');
-      });
-
-      if (depth === 0) {
-        sub.classList.remove('hidden');
-        btn.querySelector('.caret').classList.add('open');
-      }
-
-      li.appendChild(btn);
-      li.appendChild(sub);
-    } else {
-      const isRemoteFile = child.path.startsWith('remotes/');
-      const a = document.createElement('a');
-
-      a.className =
-        'tree-item group w-full px-2 py-1.5 rounded flex items-start gap-2 cursor-pointer text-ink-200' +
-        (isRemoteFile ? ' tree-remote' : '');
-      a.dataset.path = child.path;
-      const nameHtml = `<span class="truncate min-w-0 flex-1 leading-snug" data-name="${escapeHtml(child.name)}">${escapeHtml(child.name)}</span>`;
-      // Sharing-state dot: private = amber, shared-by-me = sky,
-      // shared-with-me (granted) = emerald, commons = none.
-      const visBadge =
-        child.vis === 'private'
-          ? `<span class="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style="background-color:rgba(251,191,36,.85)" title="${t('visPrivate')}"></span>`
-          : child.vis === 'shared'
-            ? `<span class="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style="background-color:rgba(56,189,248,.85)" title="${t('visShared')}"></span>`
-            : child.vis === 'granted'
-              ? `<span class="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style="background-color:rgba(52,211,153,.9)" title="${t('visGranted')}"></span>`
-              : '';
-      // Buttons on hover over your own document (.md/.html): rename + share.
-      const fileActionable = !isRemoteFile && (child.ext === '.md' || child.ext === '.html');
-      const fileRenameBtn = fileActionable
-        ? `<span class="file-rename-btn tree-action-btn" title="${t('renameFile')}">${PENCIL_ICON}</span>`
-        : '';
-      const fileShareBtn = fileActionable
-        ? `<span class="file-share-btn tree-action-btn tree-action-btn--share" title="${t('shareAsNode')}">${LINK_ICON}</span>`
-        : '';
-      // Manage the file's ACL (model B) — mirror of the folder's access button.
-      const fileAccessBtn = fileActionable
-        ? `<span class="file-access-btn tree-action-btn" title="${t('aclBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/></svg></span>`
-        : '';
-
-      a.innerHTML = `${iconFor(child.ext)}${nameHtml}${visBadge}${fileAccessBtn}${fileRenameBtn}${fileShareBtn}`;
-
-      if (
-        child.ext === '.md' ||
-        child.ext === '.html' ||
-        child.ext === '.pdf' ||
-        child.ext === '.docx'
-      ) {
-        // showMarkdown dispatches: .md → marked, .html → iframe, .pdf → native, .docx → mammoth.
-        a.addEventListener('click', (e) => {
-          if (e.target.closest('.file-access-btn')) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.openAccessFor) window.openAccessFor(child.path);
-
-            return;
-          }
-
-          if (e.target.closest('.file-share-btn')) {
-            e.preventDefault();
-            e.stopPropagation();
-            openPublishNode(child.path);
-
-            return;
-          }
-
-          if (e.target.closest('.file-rename-btn')) {
-            e.preventDefault();
-            e.stopPropagation();
-            showMarkdown(child);
-            openRenameModal('rename');
-
-            return;
-          }
-
-          e.preventDefault();
-          showMarkdown(child);
-          history.replaceState(null, '', '#' + encodeURIComponent(child.path));
-        });
-      } else {
-        a.href = encodeURI(child.path);
-      }
-
-      li.appendChild(a);
-    }
-
-    ul.appendChild(li);
-  }
-
-  return ul;
-}
-
-// Under each mirror (remotes/<name>), show which atlas it comes from — useful
-// when following several sources. Admin-only data → silent best-effort.
-async function decorateRemoteOrigins() {
-  let remotes;
-
-  try {
-    const resp = await fetch('/api/admin/remotes', { headers: { Accept: 'application/json' } });
-
-    if (!resp.ok) return;
-    remotes = await resp.json();
-  } catch (_) {
-    return;
-  }
-
-  if (!Array.isArray(remotes)) return;
-
-  for (const r of remotes) {
-    const host = (r.url || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-
-    if (!host) continue;
-    const sel =
-      'button[data-dir-path="remotes/' +
-      (window.CSS && CSS.escape ? CSS.escape(r.name) : r.name) +
-      '"]';
-    const btn = treeEl.querySelector(sel);
-
-    if (!btn || btn.querySelector('.tree-remote-origin')) continue;
-    const span = document.createElement('span');
-
-    span.className = 'tree-remote-origin';
-    span.textContent = host;
-    span.title = r.url || '';
-    btn.insertBefore(span, btn.querySelector('.dir-rename-btn'));
-  }
-}
-
-// In SERVER mode the baked tree is the FULL build-time view (generated as the
-// owner). Never render it — a viewer would see private names in the menu. The
-// bootstrap fetches /api/tree (filtered per account) on init via softReload().
-// Only the offline build renders the embedded tree directly. Gated on
-// IS_OFFLINE_BUILD, NOT the protocol: GitHub Pages serves the offline build over
-// https, so a file:// check would leave the demo with an empty tree.
-if (IS_OFFLINE_BUILD) {
-  treeEl.appendChild(renderTree(TREE));
-  decorateTreeBadges();
-  decorateRemoteOrigins();
-}
-
-// Toolbar button: expand or collapse every folder of the tree in one click.
-// Stateless toggle — flips on each press; operates on whatever is currently
-// rendered, so it keeps working after a softReload re-renders the tree.
-(function () {
-  const btn = document.getElementById('tree-toggle-all');
-
-  if (!btn) return;
-  // One static label for both directions (the global [data-tip] hover, like
-  // "Voir les modifications" — not the native title). aria mirrors it.
-  btn.dataset.tip = t('expandAllFolders');
-  btn.setAttribute('aria-label', t('expandAllFolders'));
-
-  btn.addEventListener('click', () => {
-    const dirs = treeEl.querySelectorAll('button[data-dir-path]');
-    // Derive the action from the actual tree, not a remembered flag: if anything is
-    // open, collapse everything; only expand when all folders are already closed.
-    const expand = ![...dirs].some((b) => b.querySelector('.caret')?.classList.contains('open'));
-
-    dirs.forEach((b) => {
-      const caret = b.querySelector('.caret');
-      const sub = b.parentElement.querySelector('ul');
-
-      if (!caret || !sub) return;
-      caret.classList.toggle('open', expand);
-      sub.classList.toggle('hidden', !expand);
-    });
-  });
-})();
-
 marked.setOptions({ gfm: true, breaks: false });
-// marked ≥ v5 removed the `highlight` setOptions option (silently ignored by the
-// vendored v15), so we highlight in a custom `code` renderer instead. The hljs
-// output survives DOMPurify; the `hljs` class enables the vendored github-dark theme.
 marked.use({
   renderer: {
     code({ text, lang }) {
-      const language = (lang || '').trim().split(/\s+/)[0];
+      const language = (lang || "").trim().split(/\s+/)[0];
       let html;
-
       try {
-        html =
-          language && hljs.getLanguage(language)
-            ? hljs.highlight(text, { language }).value
-            : hljs.highlightAuto(text).value;
+        html = language && hljs.getLanguage(language) ? hljs.highlight(text, { language }).value : hljs.highlightAuto(text).value;
       } catch (e) {
         html = escapeHtml(text);
       }
-
-      const cls = language ? ' language-' + escapeHtml(language) : '';
-
-      return '<pre><code class="hljs' + cls + '">' + html + '</code></pre>\n';
-    },
-  },
+      const cls = language ? " language-" + escapeHtml(language) : "";
+      return '<pre><code class="hljs' + cls + '">' + html + "</code></pre>\n";
+    }
+  }
 });
-
-// ─── Wikilinks [[doc]] ─────────────────────────────────────────────────────────
-// Target → path resolution (same logic as the build): direct path, else stem.
-// Maps built once over fileMap. Any openable doc is a valid target, not just .md.
-const WL_TARGET_EXTS = ['.md', '.html', '.pdf', '.docx'];
+const WL_TARGET_EXTS = [".md", ".html", ".pdf", ".docx"];
 let _wlMaps = null;
-
 function wlMaps() {
   if (_wlMaps) return _wlMaps;
-  const byPath = {},
-    byStem = {};
-
+  const byPath = {};
+  const byStem = {};
   for (const f of Object.values(fileMap)) {
     if (!WL_TARGET_EXTS.includes(f.ext)) continue;
     byPath[f.path.toLowerCase()] = f.path;
-    const stem = f.name.replace(/\.[^.]+$/, '').toLowerCase();
-
+    const stem = f.name.replace(/\.[^.]+$/, "").toLowerCase();
     if (!(stem in byStem)) byStem[stem] = f.path;
   }
-
   _wlMaps = { byPath, byStem };
-
   return _wlMaps;
+}
+const _ContentTree = class _ContentTree {
+  constructor() {
+    // Open folders, keyed on the FULL dir path (homonym independence). Top-level dirs are seeded
+    // open on every reload (force-open after an SSE rebuild); a plain rerender keeps a user's closes.
+    __publicField(this, "openDirs", /* @__PURE__ */ new Set());
+  }
+  iconFor(ext) {
+    return _ContentTree.ICONS[ext] || _ContentTree.FILE_ICON;
+  }
+  // Reload (boot / SSE rebuild): force the top-level dirs open, then render — a user's nested
+  // toggles in openDirs are preserved.
+  reload() {
+    const children = TREE.type === "dir" ? TREE.children : [];
+    for (const c of children) if (c.type === "dir") this.openDirs.add(c.name);
+    this.rerender();
+  }
+  rerender() {
+    render(this.treeView(TREE, 0, ""), treeEl);
+  }
+  treeView(node, depth, prefix) {
+    const cls = depth === 0 ? "space-y-0.5" : "ml-3 border-l border-navy-600 pl-2 space-y-0.5 mt-0.5";
+    let children = node.type === "dir" ? node.children : [];
+    if (depth === 0) {
+      const own = [];
+      const remotes = [];
+      for (const c of children) (c.type === "dir" && c.name === "remotes" ? remotes : own).push(c);
+      children = own.concat(remotes);
+    }
+    return h("ul", { class: cls }, children.map((c) => c.type === "dir" ? this.dirView(c, depth, prefix) : this.fileView(c)));
+  }
+  dirView(child, depth, prefix) {
+    const childPath = prefix ? prefix + "/" + child.name : child.name;
+    const isRemoteRoot = childPath === "remotes";
+    const isRemote = isRemoteRoot || childPath.startsWith("remotes/");
+    const open = this.openDirs.has(childPath) || !!(currentFile && currentFile.path.startsWith(childPath + "/"));
+    const dirLabel = isRemoteRoot ? t("remotesLabel") : child.name;
+    const btnChildren = [
+      h("span", { class: "caret text-xs text-ink-400" + (open ? " open" : "") }, raw("&#9656;")),
+      raw(isRemoteRoot ? _ContentTree.REMOTE_FOLDER_ICON : _ContentTree.FOLDER_ICON),
+      h("span", { class: "truncate min-w-0 flex-1", "data-name": child.name }, dirLabel)
+    ];
+    if (!isRemote) {
+      btnChildren.push(
+        h("span", { class: "dir-access-btn tree-action-btn", title: t("aclBtnTitle"), onClick: (e) => {
+          e.stopPropagation();
+          if (window.openAccessFor) window.openAccessFor(childPath);
+        } }, raw(_ContentTree.ACL_ICON))
+      );
+    }
+    btnChildren.push(
+      h("span", { class: "dir-rename-btn tree-action-btn", title: t("renameFolder"), onClick: (e) => {
+        e.stopPropagation();
+        openDirRenameModal(childPath);
+      } }, raw(_ContentTree.PENCIL_ICON))
+    );
+    if (!isRemote) {
+      btnChildren.push(
+        h("span", { class: "dir-share-btn tree-action-btn tree-action-btn--share", title: t("shareAsNode"), onClick: (e) => {
+          e.stopPropagation();
+          openPublishNode(childPath);
+        } }, raw(_ContentTree.LINK_ICON))
+      );
+    }
+    const btn = h("button", {
+      class: "tree-item group w-full text-left px-2 py-1.5 rounded flex items-center gap-2 font-semibold text-ink-100" + (isRemote ? " tree-remote" : ""),
+      "data-dir-path": childPath,
+      onClick: () => this.toggleDir(childPath)
+    }, btnChildren);
+    const sub = this.treeView(child, depth + 1, childPath);
+    if (!open) sub.props.class += " hidden";
+    return h("li", { key: "d:" + childPath, class: isRemoteRoot ? "tree-section--remotes" : null }, btn, sub);
+  }
+  fileView(child) {
+    const isRemoteFile = child.path.startsWith("remotes/");
+    const openable = child.ext === ".md" || child.ext === ".html" || child.ext === ".pdf" || child.ext === ".docx";
+    const fileActionable = !isRemoteFile && (child.ext === ".md" || child.ext === ".html");
+    const aChildren = [
+      raw(this.iconFor(child.ext)),
+      h("span", { class: "truncate min-w-0 flex-1 leading-snug", "data-name": child.name }, child.name),
+      this.visBadge(child)
+    ];
+    if (fileActionable) {
+      aChildren.push(
+        h("span", { class: "file-access-btn tree-action-btn", title: t("aclBtnTitle"), onClick: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (window.openAccessFor) window.openAccessFor(child.path);
+        } }, raw(_ContentTree.ACL_ICON)),
+        h("span", { class: "file-rename-btn tree-action-btn", title: t("renameFile"), onClick: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          showMarkdown(child);
+          openRenameModal("rename");
+        } }, raw(_ContentTree.PENCIL_ICON)),
+        h("span", { class: "file-share-btn tree-action-btn tree-action-btn--share", title: t("shareAsNode"), onClick: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openPublishNode(child.path);
+        } }, raw(_ContentTree.LINK_ICON))
+      );
+    }
+    const props = {
+      key: "f:" + child.path,
+      class: "tree-item group w-full px-2 py-1.5 rounded flex items-start gap-2 cursor-pointer text-ink-200" + (isRemoteFile ? " tree-remote" : ""),
+      "data-path": child.path
+    };
+    if (currentFile && child.path === currentFile.path) props.class += " active";
+    if (openable) {
+      props.onClick = (e) => {
+        e.preventDefault();
+        showMarkdown(child);
+        history.replaceState(null, "", "#" + encodeURIComponent(child.path));
+      };
+    } else {
+      props.href = encodeURI(child.path);
+    }
+    return h("li", { key: "l:" + child.path }, h("a", props, aChildren));
+  }
+  visBadge(child) {
+    const color = child.vis === "private" ? "rgba(251,191,36,.85)" : child.vis === "shared" ? "rgba(56,189,248,.85)" : child.vis === "granted" ? "rgba(52,211,153,.9)" : null;
+    if (!color) return null;
+    const titleKey = child.vis === "private" ? "visPrivate" : child.vis === "shared" ? "visShared" : "visGranted";
+    return h("span", { class: "flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full", style: "background-color:" + color, title: t(titleKey) });
+  }
+  toggleDir(path) {
+    if (this.openDirs.has(path)) this.openDirs.delete(path);
+    else this.openDirs.add(path);
+    this.rerender();
+  }
+  // Toolbar #tree-toggle-all: collapse everything if anything is open, else expand all.
+  toggleAll() {
+    if (this.openDirs.size === 0) {
+      const all = [];
+      const walk = (node, prefix) => {
+        const children = node.type === "dir" ? node.children : [];
+        for (const c of children) {
+          if (c.type !== "dir") continue;
+          const p = prefix ? prefix + "/" + c.name : c.name;
+          all.push(p);
+          walk(c, p);
+        }
+      };
+      walk(TREE, "");
+      this.openDirs = new Set(all);
+    } else {
+      this.openDirs.clear();
+    }
+    this.rerender();
+  }
+  // Under each mirror (remotes/<name>), show which atlas it comes from. Admin-only → silent.
+  async decorateRemoteOrigins() {
+    let remotes;
+    try {
+      const resp = await fetch("/api/admin/remotes", { headers: { Accept: "application/json" } });
+      if (!resp.ok) return;
+      remotes = await resp.json();
+    } catch (_) {
+      return;
+    }
+    if (!Array.isArray(remotes)) return;
+    for (const r of remotes) {
+      const host = (r.url || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      if (!host) continue;
+      const sel = 'button[data-dir-path="remotes/' + (window.CSS && CSS.escape ? CSS.escape(r.name) : r.name) + '"]';
+      const btn = treeEl.querySelector(sel);
+      if (!btn || btn.querySelector(".tree-remote-origin")) continue;
+      const span = document.createElement("span");
+      span.className = "tree-remote-origin";
+      span.textContent = host;
+      span.title = r.url || "";
+      btn.insertBefore(span, btn.querySelector(".dir-rename-btn"));
+    }
+  }
+};
+__publicField(_ContentTree, "ICONS", {
+  ".md": '<svg class="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+  ".pdf": '<svg class="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>',
+  ".pptx": '<svg class="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>',
+  ".html": '<svg class="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>',
+  ".docx": '<svg class="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
+});
+__publicField(_ContentTree, "FOLDER_ICON", '<svg class="w-4 h-4 text-[#fbc678] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>');
+__publicField(_ContentTree, "REMOTE_FOLDER_ICON", '<svg class="w-4 h-4 text-[#59d0cf] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z"/></svg>');
+__publicField(_ContentTree, "LINK_ICON", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg>');
+__publicField(_ContentTree, "PENCIL_ICON", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Z"/></svg>');
+__publicField(_ContentTree, "FILE_ICON", '<svg class="w-4 h-4 text-ink-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>');
+__publicField(_ContentTree, "ACL_ICON", '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>');
+let ContentTree = _ContentTree;
+const contentTree = new ContentTree();
+(function() {
+  const btn = document.getElementById("tree-toggle-all");
+  if (!btn) return;
+  btn.dataset.tip = t("expandAllFolders");
+  btn.setAttribute("aria-label", t("expandAllFolders"));
+  btn.addEventListener("click", () => contentTree.toggleAll());
+})();
+if (IS_OFFLINE_BUILD) {
+  contentTree.reload();
+  decorateTreeBadges();
+  contentTree.decorateRemoteOrigins();
 }
 
 function resolveWikilink(target) {
@@ -12656,233 +12547,162 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   window.AtlasInbox = new Inbox();
 })();
 
-if (isServerMode) {
-  // Boot skeleton: in server mode the sidebar tree + content render only AFTER /api/me +
-  // /api/tree (the baked tree is the owner's full view, never shown, privacy). Until
-  // then, show a shimmer skeleton instead of a flash of empty menu/home. softReload()
-  // (called once /api/tree lands) replaces it with the real tree + route.
-  treeEl.innerHTML = Array.from({ length: 7 }, (_, i) =>
-    `<div class="skeleton" style="height:1rem;margin:.55rem .5rem;width:${55 + ((i * 17) % 40)}%"></div>`).join('');
-  contentEl.innerHTML =
-    '<div class="not-prose" style="max-width:46rem;margin:0 auto;padding-top:2.5rem">' +
-    '<div class="skeleton-title" style="height:2.2rem;width:55%;margin-bottom:1.6rem"></div>' +
-    Array.from({ length: 6 }, (_, i) =>
-      `<div class="skeleton" style="height:.9rem;margin:.7rem 0;width:${70 + ((i * 13) % 26)}%"></div>`).join('') +
-    '</div>';
-
-  fetch('/api/me')
-    .then((r) => r.json())
-    .then((data) => {
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class Boot {
+  constructor() {
+    __publicField(this, "swReloading", false);
+    __publicField(this, "swUpdatePending", false);
+    __publicField(this, "swReg", null);
+    __publicField(this, "hadController", false);
+  }
+  start() {
+    if (isServerMode) this.serverBoot();
+    else this.fileBoot();
+  }
+  serverBoot() {
+    treeEl.innerHTML = Array.from({ length: 7 }, (_, i) => `<div class="skeleton" style="height:1rem;margin:.55rem .5rem;width:${55 + i * 17 % 40}%"></div>`).join("");
+    contentEl.innerHTML = '<div class="not-prose" style="max-width:46rem;margin:0 auto;padding-top:2.5rem"><div class="skeleton-title" style="height:2.2rem;width:55%;margin-bottom:1.6rem"></div>' + Array.from({ length: 6 }, (_, i) => `<div class="skeleton" style="height:.9rem;margin:.7rem 0;width:${70 + i * 13 % 26}%"></div>`).join("") + "</div>";
+    fetch("/api/me").then((r) => r.json()).then((data) => {
       meState = data;
-
-      // Authoritative CSRF token for all mutating requests (cf. fetch wrapper).
-      if (data.csrf_token) setCsrfToken(data.csrf_token);
-
-      if (typeof data.totp_enabled === 'boolean') totpEnabled = data.totp_enabled;
-
-      if (data.cloud && data.authenticated && data.email) {
-        const bar = document.getElementById('user-bar');
-
-        document.getElementById('user-email').textContent = data.name || data.email;
-        const avatar = document.getElementById('user-avatar');
-        if (avatar) avatar.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 30);
-        bar.classList.remove('hidden');
+      if (data.authenticated) {
+        if (data.csrf_token) setCsrfToken(data.csrf_token);
+        if (typeof data.totp_enabled === "boolean") totpEnabled = data.totp_enabled;
+        if (data.cloud && data.email) {
+          document.getElementById("user-email").textContent = data.name || data.email;
+          const avatar = document.getElementById("user-avatar");
+          if (avatar) avatar.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 30);
+          document.getElementById("user-bar").classList.remove("hidden");
+        }
+        if (data.role && data.role !== "admin") document.body.classList.add("viewer-mode");
+        if (data.cloud && data.role === "admin") document.body.classList.add("admin-cloud");
+        if (data.cloud) {
+          document.body.classList.add("cloud-authed");
+          refreshSecurityState();
+        }
       }
-
-      if (data.authenticated && data.role && data.role !== 'admin') {
-        // Member (non-admin): keep the viewer-mode class (the CSS hides only the global Todos widget)
-        // but NOT the __viewerMode flag, so the write affordances stay; per-doc authorization is
-        // enforced server-side (a disallowed action just gets a clean 403/404).
-        document.body.classList.add('viewer-mode');
-        window.__isMember = true;
-      }
-
-      // Settings gear: cloud admins only; account/token management is moot
-      // without active auth, and the local simulated admin has no one to manage.
-      if (data.cloud && data.authenticated && data.role === 'admin') {
-        document.body.classList.add('admin-cloud');
-      }
-
-      // Security tab (2FA + sessions): any authenticated cloud account, admin OR viewer.
-      if (data.cloud && data.authenticated) {
-        document.body.classList.add('cloud-authed');
-        refreshSecurityState();
-      }
-
-      // Render the per-account FILTERED tree (the baked tree is the full
-      // build-time view and is intentionally not shown in server mode).
-      softReload();
-    })
-    .catch((e) => {
-      // Don't strand the boot skeleton on a transient /api/me blip: log it and load the tree anyway,
-      // so the user gets content instead of a frozen shimmer forever.
-      console.warn('boot /api/me failed:', e);
-      softReload();
+      this.softReload();
+    }).catch((e) => {
+      console.warn("boot /api/me failed:", e);
+      this.softReload();
     });
-
-  refresh();
-  // Poll the todos widget every 10s. The content/tree live-reload is the SSE below (no fallback poll).
-  setInterval(refresh, 10000);
-
-  // Bail conditions for a live-reload: anything the user is mid-action on that a DOM rebuild would
-  // clobber. Checked BOTH before the fetch AND again after the await: the SSE 'reload' fires exactly
-  // when a doc changed, so an Edit started during the network RTT must still abort the stale reload
-  // (the TOCTOU that let showMarkdown overwrite a freshly-opened editor).
-  function shouldAbortReload() {
+    refresh();
+    setInterval(refresh, 1e4);
+    window.softReload = () => this.softReload();
+    this.setupSse();
+    this.setupServiceWorker();
+  }
+  fileBoot() {
+    todoList.innerHTML = '<li class="px-3 py-4 text-center text-xs text-slate-500">' + t("fileModeTodosHtml") + "</li>";
+    todoInput.disabled = true;
+    todoForm.querySelector("button").disabled = true;
+    setStatus(t("serverRequired"), "err");
+    newFileBtn.classList.add("hidden");
+    qcBtn.classList.add("hidden");
+  }
+  // Bail conditions for a live-reload: anything the user is mid-action on that a re-render would
+  // clobber. Pure business POLICY (no DOM-destruction crutch — the runtime handles that). Checked
+  // BOTH before the fetch AND after the await (the SSE 'reload' fires exactly when a doc changed,
+  // so an Edit started during the network RTT must still abort the stale reload).
+  shouldAbortReload() {
     if (editMode) return true;
-    if (document.querySelector('.todo-edit')) return true;
-    if (!newFileBackdrop.classList.contains('hidden')) return true;
-    if (!qcBackdrop.classList.contains('hidden')) return true;
-    if (!shareBackdrop.classList.contains('hidden')) return true;
-    if (!dirRenameBackdrop.classList.contains('hidden')) return true;
-    // Extension modals ([data-atlas-modal]): same consideration as the native ones.
-    if (document.querySelector('[data-atlas-modal]:not(.hidden)')) return true;
-    // Echo of an edit we just made ourselves (checkbox toggle): skip to avoid a flash.
-    if (currentFile && _selfSaveUntil[currentFile.path] && Date.now() < _selfSaveUntil[currentFile.path]) return true;
+    if (document.querySelector(".todo-edit")) return true;
+    if (!newFileBackdrop.classList.contains("hidden")) return true;
+    if (!qcBackdrop.classList.contains("hidden")) return true;
+    if (!shareBackdrop.classList.contains("hidden")) return true;
+    if (!dirRenameBackdrop.classList.contains("hidden")) return true;
+    if (document.querySelector("[data-atlas-modal]:not(.hidden)")) return true;
+    const selfSave = _selfSaveUntil;
+    if (currentFile && selfSave[currentFile.path] && Date.now() < selfSave[currentFile.path]) return true;
     return false;
   }
-
-  // Soft reload: fetch /api/tree and patch the DOM in place instead of location.reload().
-  async function softReload() {
-    if (shouldAbortReload()) return;
-
+  async softReload() {
+    if (this.shouldAbortReload()) return;
     try {
-      const res = await fetch('/api/tree');
-
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const res = await fetch("/api/tree");
+      if (!res.ok) throw new Error("HTTP " + res.status);
       const newTree = await res.json();
-      if (shouldAbortReload()) return;  // re-check post-await: the user may have started editing during the RTT
-
+      if (this.shouldAbortReload()) return;
       TREE.children = newTree.children;
       TREE.name = newTree.name;
-
       for (const k in fileMap) delete fileMap[k];
       mdCount = 0;
       otherCount = 0;
       index(TREE);
-      statsEl.textContent = t('statsLine', mdCount, otherCount);
-      const openDirs = new Set();
-
-      // Key the open/closed state on the full dir path, not the basename, so two same-named folders
-      // under different parents don't share it (opening one would re-open the other after a reload).
-      treeEl.querySelectorAll('button[data-dir-path]').forEach((b) => {
-        if (b.querySelector('.caret.open')) openDirs.add(b.dataset.dirPath);
-      });
-      treeEl.innerHTML = '';
-      treeEl.appendChild(renderTree(TREE));
+      statsEl.textContent = t("statsLine", mdCount, otherCount);
+      contentTree.reload();
       decorateTreeBadges();
-      decorateRemoteOrigins();
-      treeEl.querySelectorAll('button[data-dir-path]').forEach((b) => {
-        if (openDirs.has(b.dataset.dirPath)) {
-          b.querySelector('.caret').classList.add('open');
-          const ul = b.parentElement.querySelector('ul');
-
-          if (ul) ul.classList.remove('hidden');
-        }
-      });
+      contentTree.decorateRemoteOrigins();
       renderRecent();
-      // Invalidate the lazy indexes: the content / backlinks may have changed.
       backlinksIndex = null;
       backlinksLoading = null;
       miniSearch = null;
       searchInitPromise = null;
-
-      // If a file is open, re-fetch its content if the mtime changed.
+      _wlMaps = null;
       if (currentFile) {
         const newFile = fileMap[currentFile.path];
-
         if (!newFile) {
-          // The open doc is no longer in the viewer's filtered tree → no access /
-          // gone. Show the clean not-found page, not a silent bounce to home.
           showNotFound(currentFile.path);
         } else if (newFile.mtime !== currentFile.mtime) {
           contentCache.delete(newFile.path);
-          newFile.content = null;
-          const scrollPos = document.querySelector('main').scrollTop;
-
+          newFile.content = void 0;
+          const main = document.querySelector("main");
+          const scrollPos = main.scrollTop;
           await showMarkdown(newFile);
-          document.querySelector('main').scrollTop = scrollPos;
+          main.scrollTop = scrollPos;
         } else {
           currentFile = newFile;
         }
-      } else if (document.getElementById('home-activity-mount') && window.refreshActivityData) {
-        // Home already on screen: do NOT re-render it. Re-rendering re-mounts the activity card and
-        // wipes whatever its active tab is doing (an open inbox folder/tag editor, the inbox poll).
-        // The tree above is already patched; refresh only the active activity tab's data in place.
+      } else if (document.getElementById("home-activity-mount") && window.refreshActivityData) {
         window.refreshActivityData();
       } else {
-        // No doc open and the home isn't up yet (first load), or we're on the not-found page:
-        // (re-)route from the URL hash now that fileMap reflects the viewer's accessible docs, so a
-        // link to a doc they can't see lands on the clean not-found page instead of bouncing home.
-        // Preserve scroll so a live re-render doesn't jump to the top under you.
-        const sp = document.querySelector('main').scrollTop;
+        const main = document.querySelector("main");
+        const sp = main.scrollTop;
         routeFromHash();
-        document.querySelector('main').scrollTop = sp;
+        main.scrollTop = sp;
       }
     } catch (e) {
-      // A transient /api/tree fetch/parse hiccup must NOT nuke the page: the SSE fires right when the
-      // server is busy writing, so a blip here would destroy the very state this soft path protects
-      // (an open editor, the inbox focus + poll). Skip this cycle; the next SSE event / reconnect retries.
-      console.warn('softReload skipped (transient):', e);
+      console.warn("softReload skipped (transient):", e);
     }
   }
-
-  window.softReload = softReload;
-
-  try {
-    const es = new EventSource('/api/events');
-
-    es.addEventListener('message', (e) => {
-      if (e.data === 'reload') softReload();
+  setupSse() {
+    try {
+      const es = new EventSource("/api/events");
+      es.addEventListener("message", (e) => {
+        if (e.data === "reload") this.softReload();
+      });
+    } catch (e) {
+      console.warn("SSE live-reload unavailable:", e);
+    }
+  }
+  // Service worker (offline + instant-loading PWA). On deploy the new SW takes control → reload ONCE
+  // for fresh assets. Skip the first install, never clobber an open editor (deferred update retried
+  // when the tab regains focus).
+  setupServiceWorker() {
+    if (!("serviceWorker" in navigator) || !location.protocol.startsWith("http")) return;
+    this.hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!this.hadController) return;
+      this.swUpdatePending = true;
+      this.reloadForUpdate();
     });
-  } catch (e) { console.warn('SSE live-reload unavailable:', e); }
-
-  // Service worker (offline + instant loading PWA, cf. /sw.js). On deploy the new
-  // SW takes control → reload ONCE to pick up fresh assets (no manual unregister).
-  // Skip the first-ever install, never clobber an open editor (deferred update
-  // retried when the tab regains focus).
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    let _swReloading = false,
-      _swUpdatePending = false,
-      _swReg = null;
-    const _hadController = !!navigator.serviceWorker.controller;
-    const _reloadForUpdate = () => {
-      if (_swReloading || document.getElementById('md-editor')) return; // never interrupt an edit
-      _swReloading = true;
-      location.reload();
-    };
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!_hadController) return; // first install: nothing to refresh
-      _swUpdatePending = true;
-      _reloadForUpdate();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      if (this.swUpdatePending) this.reloadForUpdate();
+      else if (this.swReg) this.swReg.update();
     });
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
-
-      if (_swUpdatePending)
-        _reloadForUpdate(); // retry a deferred update reload
-      else if (_swReg) _swReg.update(); // catch a deploy made during a long session
-    });
-    window.addEventListener('load', () => {
-      // updateViaCache:'none' → the SW script is always revalidated against the
-      // network, so a new version is detected promptly; reg.update() forces that check.
-      navigator.serviceWorker
-        .register('/sw.js', { updateViaCache: 'none' })
-        .then((reg) => {
-          _swReg = reg;
-          reg.update();
-        })
-        .catch((e) => console.warn('SW register failed', e));
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((reg) => {
+        this.swReg = reg;
+        reg.update();
+      }).catch((e) => console.warn("SW register failed", e));
     });
   }
-} else {
-  // file:// mode: no server. Reading still works via EMBED_CONTENT.
-  todoList.innerHTML =
-    '<li class="px-3 py-4 text-center text-xs text-slate-500">' + t('fileModeTodosHtml') + '</li>';
-  todoInput.disabled = true;
-  todoForm.querySelector('button').disabled = true;
-  setStatus(t('serverRequired'), 'err');
-  newFileBtn.classList.add('hidden');
-  qcBtn.classList.add('hidden');
+  reloadForUpdate() {
+    if (this.swReloading || document.getElementById("md-editor")) return;
+    this.swReloading = true;
+    location.reload();
+  }
 }
+new Boot().start();

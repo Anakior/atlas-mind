@@ -9,7 +9,7 @@
 // Raw build-substitution barewords: render.py pastes a JSON literal over each in one
 // regex pass. 00-data-csrf.ts reads them (const TREE = __DATA__). `declare` is type-only,
 // erased by esbuild, so the bareword survives into the bundle for the Python build to fill.
-declare const __DATA__: TreeNode;
+declare const __DATA__: DirNode;
 declare const __EMBED_CONTENT__: Record<string, string> | null;
 declare const __EMBED_BACKLINKS__: any;
 declare const __EMBED_NOTES__: any;
@@ -44,6 +44,36 @@ declare function AtlasCombobox(
   opts: { source: () => string[]; creatable?: boolean; onSelect?: (value: string) => void },
 ): { destroy(): void };
 
+// Owned by .js modules that 99-bootstrap.ts / 02-content-tree.ts consume (Phase 3 coexistence).
+declare const isServerMode: boolean;
+declare function refresh(): void;
+declare function showMarkdown(file: FileNode): Promise<void>;
+declare function showNotFound(path: string): void;
+declare function renderRecent(): void;
+declare function routeFromHash(): void;
+declare function decorateTreeBadges(): Promise<void>;
+declare let backlinksIndex: any;
+declare let backlinksLoading: Promise<any> | null;
+declare let miniSearch: any;
+declare let searchInitPromise: Promise<any> | null;
+declare function refreshSecurityState(): void;
+declare const _selfSaveUntil: Record<string, number>;
+declare const newFileBackdrop: HTMLElement;
+declare const qcBackdrop: HTMLElement;
+declare const shareBackdrop: HTMLElement;
+declare const dirRenameBackdrop: HTMLElement;
+declare const todoList: HTMLElement;
+declare const todoInput: HTMLInputElement;
+declare const todoForm: HTMLElement;
+declare function setStatus(msg: string, kind?: string): void;
+declare const newFileBtn: HTMLElement;
+declare const qcBtn: HTMLElement;
+declare function openPublishNode(path: string): void;
+declare function openDirRenameModal(path: string): void;
+declare function openRenameModal(mode: string): void;
+declare function constellationSvg(identity: number, size?: number): string;
+declare function avatarSeed(first?: string, last?: string, email?: string): number;
+
 interface Window {
   AtlasInbox: {
     mount(container: Element): void;
@@ -51,4 +81,7 @@ interface Window {
     hide(): void;
     refreshBadge(): Promise<void>;
   };
+  refreshActivityData?: () => void;
+  openAccessFor?: (path: string) => void;
+  softReload?: () => Promise<void>;
 }
