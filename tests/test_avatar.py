@@ -1,32 +1,35 @@
-"""Determinism + id-uniqueness of the constellation avatar generator (02-avatar.js),
-exercised through node since the function is pure JS."""
+"""Determinism + id-uniqueness of the constellation avatar generator (02-avatar.ts),
+exercised through node since the function is pure JS. The .ts is transpiled to a
+require()-able .cjs by jsmod.requirable (esbuild bridge for pure modules)."""
 import re
 import shutil
 import subprocess
 import unittest
 from pathlib import Path
 
-AVATAR_JS = Path(__file__).resolve().parent.parent / "src" / "web" / "js" / "02-avatar.js"
+from jsmod import requirable
+
+AVATAR = Path(__file__).resolve().parent.parent / "src" / "web" / "js" / "02-avatar.ts"
 
 
 def _svg(identity, size=56):
     script = (
-        "const {constellationSvg} = require(process.argv[1]);"
-        "process.stdout.write(constellationSvg(process.argv[2], +process.argv[3]));"
+        "require(process.argv[1]);"
+        "process.stdout.write(globalThis.constellationSvg(process.argv[2], +process.argv[3]));"
     )
     out = subprocess.run(
-        ["node", "-e", script, str(AVATAR_JS), identity, str(size)],
+        ["node", "-e", script, str(requirable(AVATAR)), identity, str(size)],
         capture_output=True, text=True, check=True)
     return out.stdout
 
 
 def _seed(first, last, email):
     script = (
-        "const {avatarSeed} = require(process.argv[1]);"
-        "process.stdout.write(avatarSeed(process.argv[2], process.argv[3], process.argv[4]));"
+        "require(process.argv[1]);"
+        "process.stdout.write(globalThis.avatarSeed(process.argv[2], process.argv[3], process.argv[4]));"
     )
     out = subprocess.run(
-        ["node", "-e", script, str(AVATAR_JS), first, last, email],
+        ["node", "-e", script, str(requirable(AVATAR)), first, last, email],
         capture_output=True, text=True, check=True)
     return out.stdout
 
