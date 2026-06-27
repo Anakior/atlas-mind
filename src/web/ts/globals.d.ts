@@ -35,3 +35,20 @@ declare function createApp(
   view: (state?: any) => Child,
 ): { render(state?: any): void; unmount(): void };
 declare function Show(cond: any, view: () => Child): Child;
+
+// Cross-module globals still owned by .js modules (declared for tsc; removed as each migrates).
+declare function folderTagsOf(path: string): string[];
+declare function getAllDirs(): string[];
+declare function AtlasCombobox(
+  input: HTMLElement,
+  opts: { source: () => string[]; creatable?: boolean; onSelect?: (value: string) => void },
+): { destroy(): void };
+
+interface Window {
+  AtlasInbox: {
+    mount(container: Element): void;
+    show(): void;
+    hide(): void;
+    refreshBadge(): Promise<void>;
+  };
+}
