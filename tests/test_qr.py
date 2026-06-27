@@ -14,7 +14,7 @@ from pathlib import Path
 
 from jsmod import requirable
 
-QR = Path(__file__).resolve().parent.parent / "src" / "web" / "js" / "17-qr.ts"
+QR = Path(__file__).resolve().parent.parent / "src" / "web" / "js" / "ui" / "qr-code.ts"
 
 # input -> (dimensions, sha256 of the rows joined by '\n', each cell '1' if ===1 else '0').
 GOLDENS = {

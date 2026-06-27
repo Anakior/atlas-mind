@@ -1,14 +1,11 @@
-// Ambient declarations for the SHARED GLOBAL SCOPE during the .js/.ts coexistence.
-// transform-concat keeps every module in one scope, so a symbol defined in one file
-// is visible in the others without import; tsc needs them declared here.
-//
-// Discipline: when a module migrates to .ts and defines a symbol with a real type,
-// REMOVE its declaration from this file (otherwise "Duplicate identifier"). This file
-// shrinks at every phase.
+// Ambient declarations for the symbols that live outside the typed module graph: the build barewords
+// render.py substitutes, the Atlas DOM runtime the IIFE assigns onto the shared scope, the QR codec
+// 17-qr.ts exposes, and the window.* augmentations. Everything else is a real .ts symbol in the
+// shared (transform-concat) scope and needs no declaration here.
 
-// Raw build-substitution barewords: render.py pastes a JSON literal over each in one
-// regex pass. 00-data-csrf.ts reads them (const TREE = __DATA__). `declare` is type-only,
-// erased by esbuild, so the bareword survives into the bundle for the Python build to fill.
+// Raw build-substitution barewords: render.py pastes a JSON literal over each in one regex pass.
+// 00-data-csrf.ts reads them (const TREE = __DATA__). `declare` is type-only, erased by esbuild, so
+// the bareword survives into the bundle for the Python build to fill.
 declare const __DATA__: DirNode;
 declare const __EMBED_CONTENT__: Record<string, string> | null;
 declare const __EMBED_BACKLINKS__: any;
@@ -18,12 +15,11 @@ declare const __EMBED_ACTIVITY__: any;
 declare const __TEMPLATES__: Record<string, string>;
 declare const __TAGLINE_JSON__: string;
 declare const __SITE_PREFIX_JSON__: string;
+declare const __TODO_CATEGORIES_JSON__: Array<{ cat: string; label: string }>;
 
-// Still owned by un-migrated .js modules (removed as each migrates to .ts).
-declare const TODO_CATEGORIES: Array<{ cat: string; label: string }>;
-
-// Atlas DOM runtime (00b-atlas-dom.ts): the keyed virtual-DOM exposed to the shared scope.
-// h/raw/render/createApp/Show are globals; the reconciler internals stay private to its IIFE.
+// Atlas DOM runtime (00b-atlas-dom.ts): the keyed virtual-DOM the IIFE assigns onto the shared scope
+// (assigned, not a top-level declaration), so tsc needs the ambient. Reconciler internals stay
+// private to the IIFE.
 declare const h: {
   (tag: string, props?: Record<string, any> | null, ...children: Child[]): VNode;
   host(tag: string, props?: Record<string, any> | null): VNode;
@@ -36,41 +32,13 @@ declare function createApp(
 ): { render(state?: any): void; unmount(): void };
 declare function Show(cond: any, view: () => Child): Child;
 
-// Cross-module globals still owned by .js modules (declared for tsc; removed as each migrates).
-declare function folderTagsOf(path: string): string[];
-declare function getAllDirs(): string[];
-declare function AtlasCombobox(
-  input: HTMLElement,
-  opts: { source: () => string[]; creatable?: boolean; onSelect?: (value: string) => void },
-): { destroy(): void };
+// QR codec exposed by 17-qr.ts's IIFE on the shared scope (consumed by 18-totp.ts's 2FA enable flow).
+declare class QrCode {
+  constructor(text: string);
+  readonly matrix: (0 | 1)[][] | null;
+}
 
-// Owned by .js modules that 99-bootstrap.ts / 02-content-tree.ts consume (Phase 3 coexistence).
-declare const isServerMode: boolean;
-declare function refresh(): void;
-declare function showMarkdown(file: FileNode): Promise<void>;
-declare function showNotFound(path: string): void;
-declare function renderRecent(): void;
-declare function routeFromHash(): void;
-declare function decorateTreeBadges(): Promise<void>;
-declare let backlinksIndex: any;
-declare let backlinksLoading: Promise<any> | null;
-declare let miniSearch: any;
-declare let searchInitPromise: Promise<any> | null;
-declare function refreshSecurityState(): void;
-declare const _selfSaveUntil: Record<string, number>;
-declare const newFileBackdrop: HTMLElement;
-declare const qcBackdrop: HTMLElement;
-declare const shareBackdrop: HTMLElement;
-declare const dirRenameBackdrop: HTMLElement;
-declare const todoList: HTMLElement;
-declare const todoInput: HTMLInputElement;
-declare const todoForm: HTMLElement;
-declare function setStatus(msg: string, kind?: string): void;
-declare const newFileBtn: HTMLElement;
-declare const qcBtn: HTMLElement;
-declare function openPublishNode(path: string): void;
-declare function openDirRenameModal(path: string): void;
-declare function openRenameModal(mode: string): void;
+// Avatar/identity helpers exposed by 02-avatar.ts's IIFE on the shared scope.
 declare function constellationSvg(identity: number, size?: number): string;
 declare function avatarSeed(first?: string, last?: string, email?: string): number;
 
@@ -81,7 +49,18 @@ interface Window {
     hide(): void;
     refreshBadge(): Promise<void>;
   };
+  AtlasUI: {
+    btnPrimary: string;
+    btnDanger: string;
+    btnSecondary: string;
+    input: string;
+    label: string;
+  };
+  Atlas: AtlasExtensionAPI;
   refreshActivityData?: () => void;
+  mountActivity?: () => void;
   openAccessFor?: (path: string) => void;
   softReload?: () => Promise<void>;
+  __viewerMode?: boolean;
+  mammoth?: { convertToHtml(o: { arrayBuffer: ArrayBuffer }): Promise<{ value: string }> };
 }

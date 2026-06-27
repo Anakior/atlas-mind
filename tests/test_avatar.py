@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jsmod import requirable
 
-AVATAR = Path(__file__).resolve().parent.parent / "src" / "web" / "js" / "02-avatar.ts"
+AVATAR = Path(__file__).resolve().parent.parent / "src" / "web" / "js" / "ui" / "avatar.ts"
 
 
 def _svg(identity, size=56):

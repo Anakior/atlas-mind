@@ -196,7 +196,7 @@ class TestI18nViewerDictionaryConsistency(unittest.TestCase):
         for sub in ("js", "partials", "styles"):
             directory = web / sub
             if directory.is_dir():
-                for frag in sorted(directory.iterdir()):
+                for frag in sorted(directory.rglob("*")):  # rglob: js/ now has clean-named subfolders
                     if frag.is_file():
                         parts.append(frag.read_text(encoding="utf-8"))
         cls.template = "\n".join(parts)

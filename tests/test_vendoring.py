@@ -36,7 +36,7 @@ def _viewer_source() -> str:
     for sub in ("styles", "partials", "js"):
         directory = WEB_DIR / sub
         if directory.is_dir():
-            for frag in sorted(directory.iterdir()):
+            for frag in sorted(directory.rglob("*")):  # rglob: js/ now has clean-named subfolders
                 if frag.is_file():
                     parts.append(frag.read_text(encoding="utf-8"))
     return "\n".join(parts)
@@ -96,7 +96,7 @@ class TestVendoringOnline(unittest.TestCase):
                     'src="/vendor/marked.min.js"', 'src="/vendor/purify.min.js"',
                     'href="/vendor/highlight-github-dark.min.css"',
                     'src="/vendor/highlight.min.js"',
-                    "'/vendor/minisearch.min.js'"):
+                    "/vendor/minisearch.min.js"):
             self.assertIn(ref, text)
 
     def test_vendor_assets_served_with_content_types(self):

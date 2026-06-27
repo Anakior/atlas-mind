@@ -101,7 +101,7 @@ def _read_app_bundle() -> str:
             f"FATAL: {bundle} is missing. Run `npm run build` in web/ts (or `atlas "
             "build`, which regenerates it when the node toolchain is present).")
     js_dir = WEB_DIR / "js"
-    newest_src = max((p.stat().st_mtime for p in (*js_dir.glob("*.js"), *js_dir.glob("*.ts"))),
+    newest_src = max((p.stat().st_mtime for p in js_dir.rglob("*.ts")),
                      default=0.0)
     # The 2s tolerance absorbs the mtime jitter of a fresh git checkout / file copy (every
     # file lands within one instant); a genuine "forgot to rebuild" gap is far larger.

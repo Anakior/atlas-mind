@@ -893,9 +893,9 @@ class TestAdminUiPanel(unittest.TestCase):
 
     def test_token_reveal_has_close_and_warning(self):
         # The one-time token reveal: strong warning + Close button + the secret
-        # is purged from the DOM when hidden (hideTokenResult).
+        # is purged from the DOM when hidden (SettingsTokens.hideResult).
         self.assertIn('id="settings-token-close"', self.index)
-        self.assertIn("function hideTokenResult", self.index)
+        self.assertIn("hideResult(", self.index)
         self.assertIn("token-warning-text", self.index)
 
 

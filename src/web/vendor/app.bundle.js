@@ -261,6 +261,40 @@ function currentCsrfToken() {
   root.Show = Show;
 })(typeof window !== "undefined" ? window : globalThis);
 
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class SseCoord {
+  constructor() {
+    __publicField(this, "selfSaveUntil", {});
+    __publicField(this, "taskWrites", /* @__PURE__ */ new Set());
+  }
+  // Mute the self-triggered SSE reload for `path` over the next `ms` (the commit echo would re-render it).
+  muteSelfSave(path, ms = 6e3) {
+    this.selfSaveUntil[path] = Date.now() + ms;
+  }
+  isSelfSaveMuted(path) {
+    return !!(this.selfSaveUntil[path] && Date.now() < this.selfSaveUntil[path]);
+  }
+  // Track an in-flight checkbox PUT so drainTaskWrites() can await it; it drops out once settled.
+  trackTaskWrite(p) {
+    this.taskWrites.add(p);
+    p.finally(() => this.taskWrites.delete(p));
+  }
+  async drainTaskWrites() {
+    await Promise.allSettled([...this.taskWrites]);
+  }
+}
+const sse = new SseCoord();
+
+window.AtlasUI = {
+  btnPrimary: "px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium",
+  btnDanger: "px-3 py-1.5 text-sm bg-rose-500/80 hover:bg-rose-500 text-white rounded font-medium",
+  btnSecondary: "px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded",
+  input: "w-full px-3 py-2 text-sm bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent",
+  label: "text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block"
+};
+
 const treeEl = document.getElementById("tree");
 const contentEl = document.getElementById("content");
 const breadcrumbPath = document.getElementById("breadcrumb-path");
@@ -1386,12 +1420,85 @@ function applyStaticI18n() {
 }
 applyStaticI18n();
 
+function setStatus(msg, kind) {
+  const colors = { ok: "text-emerald-400", err: "text-rose-400", info: "text-ink-500" };
+  todoStatus.innerHTML = `<span class="${colors[kind] || colors.info}">${msg}</span><span class="text-ink-600">${location.host}</span>`;
+}
+async function api(method, path, body) {
+  const headers = {};
+  const opts = { method, headers };
+  if (body) {
+    headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
 let tocHasLinks = false;
 let tocHasNotes = false;
 let currentFile = null;
 let editMode = false;
 let editTextarea = null;
 let mdCount = 0, otherCount = 0;
+const EMBED_MIND = location.hash.replace(/^#/, "") === "mind";
+const isServerMode = (location.protocol === "http:" || location.protocol === "https:") && !IS_OFFLINE_BUILD;
+
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class Tooltip {
+  constructor() {
+    __publicField(this, "el");
+    this.el = document.createElement("div");
+    this.el.className = "fixed pointer-events-none bg-navy-800/95 border subtle-border text-ink-100 text-xs px-3 py-1.5 rounded-md shadow-2xl shadow-black/70 z-50 opacity-0 max-w-md whitespace-nowrap font-medium";
+    this.el.style.cssText += ";backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:opacity 0.12s ease, transform 0.12s ease;transform:translateY(-50%) translateX(-4px);";
+    document.body.appendChild(this.el);
+    document.addEventListener("mouseover", (e) => this.onMouseOver(e));
+    document.addEventListener("mouseout", (e) => this.onMouseOut(e));
+  }
+  isTruncated(el) {
+    return el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
+  }
+  position(target) {
+    const rect = target.getBoundingClientRect();
+    const GAP = 14;
+    this.el.style.left = rect.right + GAP + "px";
+    this.el.style.top = rect.top + rect.height / 2 + "px";
+    requestAnimationFrame(() => {
+      const tipRect = this.el.getBoundingClientRect();
+      if (tipRect.right > window.innerWidth - 8) this.el.style.left = rect.left - tipRect.width - GAP + "px";
+    });
+  }
+  hide() {
+    this.el.style.opacity = "0";
+    this.el.style.transform = "translateY(-50%) translateX(-4px)";
+  }
+  onMouseOver(e) {
+    const target = e.target?.closest("[data-name], [data-tip]") ?? null;
+    if (!target) {
+      this.hide();
+      return;
+    }
+    const isTip = !!target.dataset.tip;
+    const text = isTip ? target.dataset.tip : this.isTruncated(target) ? target.dataset.name : "";
+    if (!text) {
+      this.hide();
+      return;
+    }
+    this.el.style.whiteSpace = isTip ? "normal" : "nowrap";
+    this.el.textContent = text;
+    this.position(target);
+    this.el.style.opacity = "1";
+    this.el.style.transform = "translateY(-50%) translateX(0)";
+  }
+  onMouseOut(e) {
+    const related = e.relatedTarget;
+    if (!related || !related.closest("[data-name], [data-tip]")) this.hide();
+  }
+}
+new Tooltip();
 
 const fileMap = {};
 function index(node) {
@@ -1434,6 +1541,24 @@ function escapeHtml(s) {
     "'": "&#39;"
   };
   return String(s).replace(/[&<>"']/g, (c) => map[c]);
+}
+
+class Modal {
+  constructor(backdrop) {
+    this.backdrop = backdrop;
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) this.close();
+    });
+  }
+  isOpen() {
+    return !this.backdrop.classList.contains("hidden");
+  }
+  close() {
+    this.backdrop.classList.add("hidden");
+  }
+  reveal() {
+    this.backdrop.classList.remove("hidden");
+  }
 }
 
 var __defProp = Object.defineProperty;
@@ -1964,3492 +2089,2427 @@ if (IS_OFFLINE_BUILD) {
   contentTree.decorateRemoteOrigins();
 }
 
-function resolveWikilink(target) {
-  const { byPath, byStem } = wlMaps();
-  const t = target.split('|')[0].trim().toLowerCase();
-
-  if (!t) return null;
-
-  // Exact path, with or without one of the known extensions.
-  for (const ext of ['', ...WL_TARGET_EXTS]) {
-    if (byPath[t + ext]) return byPath[t + ext];
+class Markdown {
+  constructor() {
+    marked.use({ extensions: [this.wikilinkExtension()] });
   }
-
-  // Fallback: match on the file stem (last segment, extension stripped).
-  const stem = t
-    .split('/')
-    .pop()
-    .replace(/\.[^.]+$/, '');
-
-  return byStem[stem] || null;
-}
-
-// marked extension: [[target]] or [[target|text]] → navigable link (or .broken if
-// unresolved). Handled as an inline token → ignored inside code blocks.
-marked.use({
-  extensions: [
-    {
-      name: 'wikilink',
-      level: 'inline',
-      start(src) {
-        return src.indexOf('[[');
-      },
-      tokenizer(src) {
+  // marked leaves raw HTML intact — a doc with <script>/<img onerror> would run in the innerHTML.
+  // The output goes through DOMPurify (vendored, inlined in the offline build); if it is missing
+  // that is a build bug, so show an error and NEVER render unsanitised HTML.
+  render(md) {
+    if (typeof DOMPurify === "undefined") {
+      console.error("DOMPurify absent : asset /vendor/purify.min.js manquant (bug de build).");
+      return '<p class="text-red-400 font-sans">' + escapeHtml(t("sanitizerMissing")) + "</p>";
+    }
+    return DOMPurify.sanitize(marked.parse(md || ""));
+  }
+  // [[target]] / [[target|text]] → a navigable link (.broken when unresolved). Inline token, so it
+  // is ignored inside code blocks.
+  wikilinkExtension() {
+    return {
+      name: "wikilink",
+      level: "inline",
+      start: (src) => src.indexOf("[["),
+      tokenizer: (src) => {
         const m = /^\[\[([^\[\]\n]+?)\]\]/.exec(src);
-
-        if (m) return { type: 'wikilink', raw: m[0], target: m[1].trim() };
+        return m ? { type: "wikilink", raw: m[0], target: m[1].trim() } : void 0;
       },
-      renderer(token) {
-        const parts = token.target.split('|');
+      renderer: (token) => {
+        const parts = token.target.split("|");
         const label = (parts[1] || parts[0]).trim();
-        const path = resolveWikilink(parts[0].trim());
-
-        if (path)
-          return (
-            '<a class="wikilink" data-path="' + escapeHtml(path) + '">' + escapeHtml(label) + '</a>'
-          );
-
-        return (
-          '<a class="wikilink broken" title="' +
-          escapeHtml(t('brokenLink', parts[0].trim())) +
-          '">' +
-          escapeHtml(label) +
-          '</a>'
-        );
-      },
-    },
-  ],
-});
-
-// Markdown → secure HTML rendering. marked doesn't neutralize raw HTML: a doc
-// containing <script>/<img onerror> would run in the innerHTML. We pass the
-// output through DOMPurify — a local lib (/vendor/, inlined in the offline build):
-// if it's missing that's a build bug, we show an error and NEVER render
-// unsanitized HTML.
+        const path = this.resolveWikilink(parts[0].trim());
+        if (path) return '<a class="wikilink" data-path="' + escapeHtml(path) + '">' + escapeHtml(label) + "</a>";
+        return '<a class="wikilink broken" title="' + escapeHtml(t("brokenLink", parts[0].trim())) + '">' + escapeHtml(label) + "</a>";
+      }
+    };
+  }
+  resolveWikilink(target) {
+    const { byPath, byStem } = wlMaps();
+    const norm = target.split("|")[0].trim().toLowerCase();
+    if (!norm) return null;
+    for (const ext of ["", ...WL_TARGET_EXTS]) {
+      if (byPath[norm + ext]) return byPath[norm + ext];
+    }
+    const stem = norm.split("/").pop().replace(/\.[^.]+$/, "");
+    return byStem[stem] || null;
+  }
+}
+const markdown = new Markdown();
 function renderMd(md) {
-  if (typeof DOMPurify === 'undefined') {
-    console.error('DOMPurify absent : asset /vendor/purify.min.js manquant (bug de build).');
-
-    return '<p class="text-red-400 font-sans">' + escapeHtml(t('sanitizerMissing')) + '</p>';
-  }
-
-  return DOMPurify.sanitize(marked.parse(md || ''));
+  return markdown.render(md);
 }
 
-// Live-reload suppression window (per path): after we write a doc ourselves (a
-// checkbox toggle), the SSE that follows the commit must NOT re-render it — cf.
-// softReload.
-const _selfSaveUntil = {};
-// In-flight checkbox PUTs. The rollup is computed live from disk, so
-// loadTasksIndex awaits these before fetching — else it reads the pre-toggle file.
-const _taskWrites = new Set();
-// Flipping the Nth rendered checkbox flips the Nth source marker, so the count
-// must mirror marked exactly: skip fenced-code tasks (no checkbox), count
-// blockquoted ones (marked renders them) — and a fence nested in a blockquote is
-// not honoured here, so detect fences only outside blockquotes.
-const TASK_MARK_RE = /^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/;
-const _FENCE_RE = /^(?:`{3,}|~{3,})/;
-const _BQ_RE = /^\s*>[ \t]?/;
-
-function _stripBlockquote(line) {
-  let s = line,
-    quoted = false;
-
-  while (_BQ_RE.test(s)) {
-    s = s.replace(_BQ_RE, '');
-    quoted = true;
-  }
-
-  return [s, quoted];
+function hashStr(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (h << 5) + h + s.charCodeAt(i) >>> 0;
+  return h;
 }
-
-function toggleNthTaskMarker(content, index, checked) {
-  const lines = content.split('\n');
-  let n = -1,
-    inFence = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const [unquoted, quoted] = _stripBlockquote(lines[i]);
-
-    if (!quoted && _FENCE_RE.test(lines[i].trimStart())) {
-      inFence = !inFence;
-      continue;
+function renderSkeleton(file) {
+  let state = (file && file.path ? hashStr(file.path) : 1) || 1;
+  const next = () => state = state * 1664525 + 1013904223 >>> 0;
+  const range = (min, max) => min + next() % (max - min + 1);
+  const coin = (p) => next() % 100 < p * 100;
+  const parts = [];
+  const para = (lines) => {
+    const rows = [];
+    for (let i = 0; i < lines; i++) {
+      const isLast = i === lines - 1;
+      const isPenult = i === lines - 2;
+      let w;
+      if (isLast) w = range(35, 70);
+      else if (isPenult && coin(0.4)) w = range(78, 94);
+      else w = range(95, 100);
+      rows.push('<div class="skeleton" style="height:.95rem;width:' + w + '%;"></div>');
     }
-
-    if (inFence) continue;
-
-    if (!TASK_MARK_RE.test(unquoted)) continue;
-    n++;
-
-    if (n === index) {
-      const prefix = lines[i].slice(0, lines[i].length - unquoted.length); // keep the `>`
-
-      lines[i] = prefix + unquoted.replace(TASK_MARK_RE, '$1' + (checked ? 'x' : ' ') + '$3');
-
-      return lines.join('\n');
-    }
+    return '<div style="display:flex;flex-direction:column;gap:.55rem;margin-bottom:1.75rem;">' + rows.join("") + "</div>";
+  };
+  const h2 = () => '<div class="skeleton-h2" style="height:1.6rem;width:' + range(28, 58) + '%;margin-bottom:1rem;margin-top:.5rem;"></div>';
+  const code = () => '<div class="skeleton-code" style="height:' + range(4, 9) + 'rem;margin-bottom:1.75rem;"></div>';
+  parts.push(
+    '<div class="skeleton-title" style="height:2.4rem;width:' + range(48, 78) + '%;margin-bottom:1rem;"></div>'
+  );
+  parts.push(
+    '<div style="display:flex;gap:.5rem;margin-bottom:2rem;"><div class="skeleton" style="height:.7rem;width:' + range(5, 9) + 'rem;"></div><div class="skeleton" style="height:.7rem;width:' + range(4, 7) + 'rem;"></div></div>'
+  );
+  parts.push(para(range(3, 5)));
+  const sections = range(1, 3);
+  for (let s = 0; s < sections; s++) {
+    parts.push(h2());
+    parts.push(para(range(2, 5)));
+    if (coin(0.4)) parts.push(code());
   }
-
-  return null;
+  return '<div class="not-prose" aria-busy="true" aria-label="' + t("loadingDoc") + '">' + parts.join("") + "</div>";
 }
 
-function wireTaskCheckboxes(file, fullContent) {
-  // Offline (file://) or read-only shared view: no writing possible.
-  if (!isServerMode || window.__viewerMode) return;
-  const boxes = contentEl.querySelectorAll('input[type="checkbox"]');
-
-  if (!boxes.length) return;
-  let docContent = fullContent;
-
-  boxes.forEach((box, index) => {
-    box.disabled = false;
-    box.style.cursor = 'pointer';
-    box.addEventListener('change', () => {
-      const desired = box.checked;
-      const newContent = toggleNthTaskMarker(docContent, index, desired);
-
-      if (newContent == null) {
-        box.checked = !desired;
-
-        return;
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _TaskMarkers = class _TaskMarkers {
+  // Flipping the Nth rendered checkbox flips the Nth source marker, so the count must mirror marked
+  // exactly: skip fenced-code tasks (no checkbox), count blockquoted ones, detect fences only
+  // outside blockquotes (a fence nested in a blockquote is not honoured here).
+  static toggleNthTaskMarker(content, index, checked) {
+    const lines = content.split("\n");
+    let n = -1;
+    let inFence = false;
+    for (let i = 0; i < lines.length; i++) {
+      const [unquoted, quoted] = _TaskMarkers.stripBlockquote(lines[i]);
+      if (!quoted && _TaskMarkers.FENCE_RE.test(lines[i].trimStart())) {
+        inFence = !inFence;
+        continue;
       }
-
-      // Optimistic: advance local state now, PUT in the background, no re-render.
-      const prev = docContent;
-
-      docContent = newContent;
-      contentCache.set(file.path, newContent);
-
-      if (currentFile && currentFile.path === file.path) currentFile.content = newContent;
-      _selfSaveUntil[file.path] = Date.now() + 6000; // mute the self-triggered SSE reload
-      // The task's own text (drop nested sub-tasks) → a "checked:/unchecked:" commit subject.
-      const li = box.closest('li');
-      let taskText = '';
-
-      if (li) {
-        const clone = li.cloneNode(true);
-
-        clone.querySelectorAll('ul, ol').forEach((n) => n.remove());
-        taskText = clone.textContent.replace(/\s+/g, ' ').trim();
-      }
-
-      // Tracked in _taskWrites so the rollup waits for it before reading from disk.
-      const write = fetch('/api/file', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: file.path,
-          content: newContent,
-          task: { text: taskText, checked: desired },
-        }),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-
-          return res.json();
-        })
-        .then((data) => {
-          if (currentFile && currentFile.path === file.path && data.mtime)
-            currentFile.mtime = data.mtime;
-        })
-        .catch((e) => {
-          // Failure: we roll back the optimistic update (state + visual).
-          docContent = prev;
-          contentCache.set(file.path, prev);
-
-          if (currentFile && currentFile.path === file.path) currentFile.content = prev;
-          box.checked = !desired;
-          notifyError('err', e.message);
-        });
-
-      _taskWrites.add(write);
-      write.finally(() => _taskWrites.delete(write));
-    });
-  });
-}
-
-function buildToc() {
-  tocList.innerHTML = '';
-  const headings = contentEl.querySelectorAll('h2, h3');
-
-  if (headings.length < 2) {
-    tocList.classList.add('hidden'); // no table of contents → no empty area
-
-    if (typeof applyToc === 'function') applyToc();
-    else {
-      tocPanel.classList.add('hidden');
-      tocPanel.classList.remove('flex');
-    }
-
-    return;
-  }
-
-  tocList.classList.remove('hidden');
-  const used = new Set();
-
-  headings.forEach((h) => {
-    let id = slugify(h.textContent);
-    let base = id,
-      n = 2;
-
-    while (used.has(id)) {
-      id = base + '-' + n;
+      if (inFence) continue;
+      if (!_TaskMarkers.TASK_MARK_RE.test(unquoted)) continue;
       n++;
+      if (n === index) {
+        const prefix = lines[i].slice(0, lines[i].length - unquoted.length);
+        lines[i] = prefix + unquoted.replace(_TaskMarkers.TASK_MARK_RE, "$1" + (checked ? "x" : " ") + "$3");
+        return lines.join("\n");
+      }
     }
-
-    used.add(id);
-    h.id = id;
-    const a = document.createElement('a');
-
-    a.href = '#' + id;
-    a.textContent = h.textContent;
-    a.className =
-      'block px-2 py-1 rounded hover:bg-white/5 text-ink-300 hover:text-accent truncate ' +
-      (h.tagName === 'H3' ? 'pl-5 text-[11px] text-ink-400' : 'font-medium');
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-    tocList.appendChild(a);
-  });
-
-  if (typeof applyToc === 'function') applyToc();
-  else {
-    tocPanel.classList.remove('hidden');
-    tocPanel.classList.add('flex');
+    return null;
   }
+  static stripBlockquote(line) {
+    let s = line;
+    let quoted = false;
+    while (_TaskMarkers.BQ_RE.test(s)) {
+      s = s.replace(_TaskMarkers.BQ_RE, "");
+      quoted = true;
+    }
+    return [s, quoted];
+  }
+};
+__publicField(_TaskMarkers, "TASK_MARK_RE", /^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/);
+__publicField(_TaskMarkers, "FENCE_RE", /^(?:`{3,}|~{3,})/);
+__publicField(_TaskMarkers, "BQ_RE", /^\s*>[ \t]?/);
+let TaskMarkers = _TaskMarkers;
+function toggleNthTaskMarker(content, index, checked) {
+  return TaskMarkers.toggleNthTaskMarker(content, index, checked);
 }
 
+class Toc {
+  // Build the right-panel TOC from the rendered h2/h3 (<2 headings → hide it); anchors smooth-scroll.
+  buildToc() {
+    tocList.innerHTML = "";
+    const headings = contentEl.querySelectorAll("h2, h3");
+    if (headings.length < 2) {
+      tocList.classList.add("hidden");
+      if (typeof applyToc === "function") applyToc();
+      else {
+        tocPanel.classList.add("hidden");
+        tocPanel.classList.remove("flex");
+      }
+      return;
+    }
+    tocList.classList.remove("hidden");
+    const used = /* @__PURE__ */ new Set();
+    headings.forEach((heading) => {
+      let id = slugify(heading.textContent || "");
+      let base = id, n = 2;
+      while (used.has(id)) {
+        id = base + "-" + n;
+        n++;
+      }
+      used.add(id);
+      heading.id = id;
+      const a = document.createElement("a");
+      a.href = "#" + id;
+      a.textContent = heading.textContent;
+      a.className = "block px-2 py-1 rounded hover:bg-white/5 text-ink-300 hover:text-accent truncate " + (heading.tagName === "H3" ? "pl-5 text-[11px] text-ink-400" : "font-medium");
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        document.getElementById(id).scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      tocList.appendChild(a);
+    });
+    if (typeof applyToc === "function") applyToc();
+    else {
+      tocPanel.classList.remove("hidden");
+      tocPanel.classList.add("flex");
+    }
+  }
+}
+const toc = new Toc();
+function buildToc() {
+  toc.buildToc();
+}
 function readingTimeFromWords(words) {
   if (!words) return null;
   const minutes = Math.max(1, Math.round(words / 220));
-
   return { words, minutes };
 }
 
-// ─── Backlinks (index pre-computed at build time) ─────────────────────────────
+class TaskCheckboxes {
+  // Make the rendered task checkboxes writable; each toggle flips its source marker and commits.
+  wireTaskCheckboxes(file, fullContent) {
+    if (!isServerMode || window.__viewerMode) return;
+    const boxes = contentEl.querySelectorAll('input[type="checkbox"]');
+    if (!boxes.length) return;
+    let docContent = fullContent;
+    boxes.forEach((box, index) => {
+      box.disabled = false;
+      box.style.cursor = "pointer";
+      box.addEventListener("change", () => {
+        const desired = box.checked;
+        const newContent = toggleNthTaskMarker(docContent, index, desired);
+        if (newContent == null) {
+          box.checked = !desired;
+          return;
+        }
+        const prev = docContent;
+        docContent = newContent;
+        contentCache.set(file.path, newContent);
+        if (currentFile && currentFile.path === file.path) currentFile.content = newContent;
+        sse.muteSelfSave(file.path);
+        const li = box.closest("li");
+        let taskText = "";
+        if (li) {
+          const clone = li.cloneNode(true);
+          clone.querySelectorAll("ul, ol").forEach((n) => n.remove());
+          taskText = (clone.textContent || "").replace(/\s+/g, " ").trim();
+        }
+        const body = {
+          path: file.path,
+          content: newContent,
+          task: { text: taskText, checked: desired }
+        };
+        const write = fetch("/api/file", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }).then((res) => {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.json();
+        }).then((data) => {
+          if (currentFile && currentFile.path === file.path && data.mtime)
+            currentFile.mtime = data.mtime;
+        }).catch((e) => {
+          docContent = prev;
+          contentCache.set(file.path, prev);
+          if (currentFile && currentFile.path === file.path) currentFile.content = prev;
+          box.checked = !desired;
+          notifyError("err", e.message);
+        });
+        sse.trackTaskWrite(write);
+      });
+    });
+  }
+}
+const taskCheckboxes = new TaskCheckboxes();
+function wireTaskCheckboxes(file, fullContent) {
+  taskCheckboxes.wireTaskCheckboxes(file, fullContent);
+}
+
+function attachCopyButtons() {
+  contentEl.querySelectorAll("pre").forEach((pre) => {
+    if (pre.querySelector(".copy-btn")) return;
+    pre.style.position = "relative";
+    const btn = document.createElement("button");
+    btn.className = "copy-btn absolute top-2 right-2 opacity-0 transition-opacity px-2 py-1 text-[11px] bg-white/8 hover:bg-white/15 text-ink-300 hover:text-white rounded font-mono";
+    btn.innerHTML = '<svg class="w-3 h-3 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' + t("copy");
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const codeEl = pre.querySelector("code");
+      const code = (codeEl ? codeEl.textContent : pre.textContent) ?? "";
+      try {
+        await navigator.clipboard.writeText(code);
+        btn.innerHTML = '<svg class="w-3 h-3 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>' + t("copied");
+        btn.classList.add("text-emerald-400");
+        setTimeout(() => {
+          btn.innerHTML = '<svg class="w-3 h-3 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' + t("copy");
+          btn.classList.remove("text-emerald-400");
+        }, 1500);
+      } catch (e2) {
+      }
+    });
+    pre.appendChild(btn);
+    pre.addEventListener("mouseenter", () => btn.style.opacity = "1");
+    pre.addEventListener("mouseleave", () => btn.style.opacity = "0");
+  });
+}
+function highlightFirstMatch(container, query) {
+  const tokens = query.trim().split(/\s+/).filter((tok) => tok.length >= 2).map((tok) => tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!tokens.length) return;
+  const re = new RegExp("(" + tokens.join("|") + ")", "i");
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => n.nodeValue && re.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+  });
+  const node = walker.nextNode();
+  if (!node) return;
+  const value = node.nodeValue;
+  if (value == null) return;
+  const m = value.match(re);
+  if (!m) return;
+  const after = node.splitText(m.index);
+  after.nodeValue = after.nodeValue.slice(m[0].length);
+  const mark = document.createElement("mark");
+  mark.className = "search-hit";
+  mark.textContent = m[0];
+  after.parentNode.insertBefore(mark, after);
+  mark.scrollIntoView({ behavior: "smooth", block: "center" });
+}
 
 let backlinksIndex = null;
 let backlinksLoading = null;
-
 async function loadBacklinksIndex() {
   if (backlinksIndex) return backlinksIndex;
-
   if (backlinksLoading) return backlinksLoading;
   backlinksLoading = (async () => {
     if (IS_OFFLINE_BUILD) {
       backlinksIndex = EMBED_BACKLINKS || {};
     } else {
       try {
-        const res = await fetch('/_backlinks.json', { cache: 'no-cache' });
-
+        const res = await fetch("/_backlinks.json", { cache: "no-cache" });
         backlinksIndex = res.ok ? await res.json() : {};
       } catch (e) {
         backlinksIndex = {};
       }
     }
-
     return backlinksIndex;
   })();
-
   return backlinksLoading;
 }
-
 async function renderBacklinksFor(file) {
-  // Synchronous reset (before the await): applyToc() from buildToc() will see a clean state.
   tocHasLinks = false;
-
   if (tocLinks) {
-    tocLinks.innerHTML = '';
-    tocLinks.classList.remove('border-t', 'panel-divider');
+    tocLinks.innerHTML = "";
+    tocLinks.classList.remove("border-t", "panel-divider");
   }
-
   const idx = await loadBacklinksIndex();
-
-  if (currentFile !== file) return; // user changed page mid-load
+  if (currentFile !== file) return;
   const entry = idx[file.path] || { out: [], in: [] };
-  const resolve = (paths) => (paths || []).map((p) => fileMap[p]).filter(Boolean);
+  const resolve = (paths) => (paths || []).map((p) => fileMap[p]).filter((f) => !!f);
   const incoming = resolve(entry.in);
   const outgoing = resolve(entry.out);
-  // Same-topic docs: shared tags (excluding the current doc), ranked by shared-tag
-  // count then recency.
   const tagSet = new Set(file.tags || []);
-  const shared = (f) => (f.tags || []).filter((t) => tagSet.has(t)).length;
-  const related = tagSet.size
-    ? Object.values(fileMap)
-        .filter((f) => f.ext === '.md' && f.path !== file.path && shared(f) > 0)
-        .sort((a, b) => shared(b) - shared(a) || (b.mtime || 0) - (a.mtime || 0))
-        .slice(0, 8)
-    : [];
-
+  const shared = (f) => (f.tags || []).filter((tg) => tagSet.has(tg)).length;
+  const related = tagSet.size ? Object.values(fileMap).filter((f) => f.ext === ".md" && f.path !== file.path && shared(f) > 0).sort((a, b) => shared(b) - shared(a) || (b.mtime || 0) - (a.mtime || 0)).slice(0, 8) : [];
   tocHasLinks = !!(incoming.length || outgoing.length || related.length);
-  tocLinks.classList.toggle('hidden', !tocHasLinks); // empty section → no gap
-
+  tocLinks.classList.toggle("hidden", !tocHasLinks);
   if (!tocHasLinks) {
     applyToc();
-
     return;
   }
-
-  const card = (f) =>
-    '<a class="block px-2 py-1 rounded hover:bg-white/5 text-ink-300 hover:text-accent cursor-pointer truncate" ' +
-    'data-conn="' +
-    escapeHtml(f.path) +
-    '" title="' +
-    escapeHtml(f.path) +
-    '">' +
-    escapeHtml(f.name) +
-    '</a>';
-  const group = (title, items) =>
-    items.length
-      ? '<div class="mt-2"><div class="px-2 pb-0.5 text-[10px] uppercase tracking-[0.1em] text-ink-500 font-bold">' +
-        title +
-        '</div>' +
-        items.map(card).join('') +
-        '</div>'
-      : '';
-
-  tocLinks.classList.add('border-t', 'panel-divider');
-  tocLinks.innerHTML =
-    '<div class="px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-accent font-bold">' +
-    t('linksTitle') +
-    '</div>' +
-    group(t('referencedBy', incoming.length), incoming) +
-    group(t('outgoingLinks', outgoing.length), outgoing) +
-    group(t('sameTopic', related.length), related);
-  tocLinks.querySelectorAll('[data-conn]').forEach((a) => {
-    a.addEventListener('click', (e) => {
+  const card = (f) => '<a class="block px-2 py-1 rounded hover:bg-white/5 text-ink-300 hover:text-accent cursor-pointer truncate" data-conn="' + escapeHtml(f.path) + '" title="' + escapeHtml(f.path) + '">' + escapeHtml(f.name) + "</a>";
+  const group = (title, items) => items.length ? '<div class="mt-2"><div class="px-2 pb-0.5 text-[10px] uppercase tracking-[0.1em] text-ink-500 font-bold">' + title + "</div>" + items.map(card).join("") + "</div>" : "";
+  tocLinks.classList.add("border-t", "panel-divider");
+  tocLinks.innerHTML = '<div class="px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-accent font-bold">' + t("linksTitle") + "</div>" + group(t("referencedBy", incoming.length), incoming) + group(t("outgoingLinks", outgoing.length), outgoing) + group(t("sameTopic", related.length), related);
+  tocLinks.querySelectorAll("[data-conn]").forEach((a) => {
+    a.addEventListener("click", (e) => {
       e.preventDefault();
       const f = fileMap[a.dataset.conn];
-
       if (f) {
         showMarkdown(f);
-        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+        history.replaceState(null, "", "#" + encodeURIComponent(f.path));
       }
     });
   });
   applyToc();
 }
 
-// ─── Passage annotations ─────────────────────────────────────────────────────
-// Data: sidecar .notes/<doc>.json server-side (offline: EMBED_NOTES). Text-quote
-// anchoring (exact + prefix/suffix + approx. pos), W3C Web Annotation style:
-// resilient to text shifts; if the passage disappears the note becomes orphaned.
-const CTX_LEN = 60; // captured prefix/suffix context length
-// Notes are the (deferred) comment level — admin-only for now. A member has the
-// `viewer-mode` body class (but writes its own docs), so gate notes on the class.
-const notesCanEdit = () => !IS_OFFLINE_BUILD && !document.body.classList.contains('viewer-mode');
-let notesForDoc = []; // notes of the current doc (anchors resolved on the fly)
-// notesIndex ({path: count}, tree badges) is declared at the top of the script so
-// it's visible from the top-level decorateTreeBadges().
-
-const noteAddBtn = document.getElementById('kb-note-add');
-const notePop = document.getElementById('kb-note-pop');
-
-// Global text offset of a (node, offset) within contentEl, by walking the text
-// nodes. -1 if the node isn't under contentEl.
-function textOffsetOf(node, offset) {
-  if (!contentEl.contains(node)) return -1;
-  const walker = document.createTreeWalker(contentEl, NodeFilter.SHOW_TEXT);
-  let acc = 0,
-    n;
-
-  while ((n = walker.nextNode())) {
-    if (n === node) return acc + offset;
-    acc += n.nodeValue.length;
-  }
-
-  return -1;
-}
-
-// Builds a text-quote anchor from the current selection.
-function selectionToAnchor() {
-  const sel = window.getSelection();
-
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
-  const r = sel.getRangeAt(0);
-
-  if (!contentEl.contains(r.commonAncestorContainer)) return null;
-  const start = textOffsetOf(r.startContainer, r.startOffset);
-  const end = textOffsetOf(r.endContainer, r.endOffset);
-
-  if (start < 0 || end < 0 || end <= start) return null;
-  const full = contentEl.textContent;
-  const exact = full.slice(start, end);
-
-  if (!exact.trim()) return null;
-
-  return {
-    exact,
-    prefix: full.slice(Math.max(0, start - CTX_LEN), start),
-    suffix: full.slice(end, end + CTX_LEN),
-    pos: start,
-  };
-}
-
-// Re-locates an anchor in the current text → {start, end} or null (orphan).
-// Searches all occurrences of `exact`, scores by prefix/suffix context and
-// proximity to `pos`, keeps the best one.
-function locateAnchor(a) {
-  const full = contentEl.textContent;
-
-  if (!a.exact) return null;
-  const idxs = [];
-  let i = full.indexOf(a.exact);
-
-  while (i !== -1) {
-    idxs.push(i);
-    i = full.indexOf(a.exact, i + 1);
-  }
-
-  if (!idxs.length) return null;
-  let best = idxs[0],
-    bestScore = -Infinity;
-
-  for (const s of idxs) {
-    let score = 0;
-    const before = full.slice(Math.max(0, s - CTX_LEN), s);
-    const after = full.slice(s + a.exact.length, s + a.exact.length + CTX_LEN);
-
-    if (a.prefix && before.endsWith(a.prefix)) score += 100;
-    else if (a.prefix) {
-      let k = 0;
-
-      while (
-        k < a.prefix.length &&
-        before[before.length - 1 - k] === a.prefix[a.prefix.length - 1 - k]
-      )
-        k++;
-      score += k;
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _NoteAnchor = class _NoteAnchor {
+  // captured prefix/suffix context length
+  // Global text offset of a (node, offset) within contentEl, by walking the text nodes. -1 if the
+  // node isn't under contentEl.
+  textOffsetOf(node, offset) {
+    if (!contentEl.contains(node)) return -1;
+    const walker = document.createTreeWalker(contentEl, NodeFilter.SHOW_TEXT);
+    let acc = 0;
+    let n;
+    while (n = walker.nextNode()) {
+      if (n === node) return acc + offset;
+      acc += n.nodeValue.length;
     }
-
-    if (a.suffix && after.startsWith(a.suffix)) score += 100;
-    else if (a.suffix) {
-      let k = 0;
-
-      while (k < a.suffix.length && after[k] === a.suffix[k]) k++;
-      score += k;
-    }
-
-    score -= Math.abs(s - (a.pos || 0)) / 1000;
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = s;
-    }
+    return -1;
   }
-
-  return { start: best, end: best + a.exact.length };
-}
-
-// Wraps the global text range [start,end) in <mark> (one per traversed text node),
-// with data-* + click handler. Injected AFTER DOMPurify, so the note text never
-// goes through markdown rendering.
-function highlightRange(start, end, note) {
-  const walker = document.createTreeWalker(contentEl, NodeFilter.SHOW_TEXT);
-  let acc = 0,
-    n;
-  const todo = [];
-
-  while ((n = walker.nextNode())) {
-    const len = n.nodeValue.length;
-    const ns = acc,
-      ne = acc + len;
-
-    if (ne > start && ns < end) {
-      todo.push({ node: n, from: Math.max(0, start - ns), to: Math.min(len, end - ns) });
-    }
-
-    acc = ne;
-
-    if (ns >= end) break;
+  // Builds a text-quote anchor from the current selection.
+  selectionToAnchor() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+    const r = sel.getRangeAt(0);
+    if (!contentEl.contains(r.commonAncestorContainer)) return null;
+    const start = this.textOffsetOf(r.startContainer, r.startOffset);
+    const end = this.textOffsetOf(r.endContainer, r.endOffset);
+    if (start < 0 || end < 0 || end <= start) return null;
+    const full = contentEl.textContent || "";
+    const exact = full.slice(start, end);
+    if (!exact.trim()) return null;
+    return {
+      exact,
+      prefix: full.slice(Math.max(0, start - _NoteAnchor.CTX_LEN), start),
+      suffix: full.slice(end, end + _NoteAnchor.CTX_LEN),
+      pos: start
+    };
   }
+  // Re-locates an anchor in the current text → {start, end} or null (orphan). Searches all
+  // occurrences of `exact`, scores by prefix/suffix context and proximity to `pos`, keeps the best.
+  locateAnchor(a) {
+    const full = contentEl.textContent || "";
+    if (!a.exact) return null;
+    const idxs = [];
+    let i = full.indexOf(a.exact);
+    while (i !== -1) {
+      idxs.push(i);
+      i = full.indexOf(a.exact, i + 1);
+    }
+    if (!idxs.length) return null;
+    let best = idxs[0];
+    let bestScore = -Infinity;
+    for (const s of idxs) {
+      let score = 0;
+      const before = full.slice(Math.max(0, s - _NoteAnchor.CTX_LEN), s);
+      const after = full.slice(s + a.exact.length, s + a.exact.length + _NoteAnchor.CTX_LEN);
+      if (a.prefix && before.endsWith(a.prefix)) score += 100;
+      else if (a.prefix) {
+        let k = 0;
+        while (k < a.prefix.length && before[before.length - 1 - k] === a.prefix[a.prefix.length - 1 - k])
+          k++;
+        score += k;
+      }
+      if (a.suffix && after.startsWith(a.suffix)) score += 100;
+      else if (a.suffix) {
+        let k = 0;
+        while (k < a.suffix.length && after[k] === a.suffix[k]) k++;
+        score += k;
+      }
+      score -= Math.abs(s - (a.pos || 0)) / 1e3;
+      if (score > bestScore) {
+        bestScore = score;
+        best = s;
+      }
+    }
+    return { start: best, end: best + a.exact.length };
+  }
+  // Wraps the global text range [start,end) in <mark> (one per traversed text node), with data-* +
+  // click handler. Injected AFTER DOMPurify, so the note text never goes through markdown rendering.
+  // onMarkClick fires when a painted <mark> is clicked; the panel routes it to the popover.
+  highlightRange(start, end, note, onMarkClick) {
+    const walker = document.createTreeWalker(contentEl, NodeFilter.SHOW_TEXT);
+    let acc = 0;
+    let n;
+    const todo = [];
+    while (n = walker.nextNode()) {
+      const len = n.nodeValue.length;
+      const ns = acc;
+      const ne = acc + len;
+      if (ne > start && ns < end) {
+        todo.push({ node: n, from: Math.max(0, start - ns), to: Math.min(len, end - ns) });
+      }
+      acc = ne;
+      if (ns >= end) break;
+    }
+    for (const seg of todo) {
+      let node = seg.node;
+      if (seg.to < node.nodeValue.length) node.splitText(seg.to);
+      if (seg.from > 0) node = node.splitText(seg.from);
+      const mark = document.createElement("mark");
+      mark.className = "kb-annot";
+      mark.dataset.noteId = note.id;
+      node.parentNode.insertBefore(mark, node);
+      mark.appendChild(node);
+      mark.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onMarkClick(note, mark);
+      });
+    }
+    return todo.length > 0;
+  }
+};
+__publicField(_NoteAnchor, "CTX_LEN", 60);
+let NoteAnchor = _NoteAnchor;
+const noteAnchor = new NoteAnchor();
 
-  for (const t of todo) {
-    let node = t.node;
-
-    if (t.to < node.nodeValue.length) node.splitText(t.to);
-
-    if (t.from > 0) node = node.splitText(t.from);
-    const mark = document.createElement('mark');
-
-    mark.className = 'kb-annot';
-    mark.dataset.noteId = note.id;
-    node.parentNode.insertBefore(mark, node);
-    mark.appendChild(node);
-    mark.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openNotePopForExisting(note, mark);
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const noteContext = { notesForDoc: [] };
+const _NotesPanel = class _NotesPanel {
+  async renderNotesFor(file) {
+    tocHasNotes = false;
+    if (tocNotes) {
+      tocNotes.innerHTML = "";
+      tocNotes.classList.remove("border-t", "panel-divider");
+    }
+    noteContext.notesForDoc = [];
+    const notes = await notesStore.fetchNotes(file);
+    if (currentFile !== file) return;
+    noteContext.notesForDoc = notes;
+    if (!notes.length) {
+      applyToc();
+      return;
+    }
+    notes.forEach((note) => {
+      const loc = noteAnchor.locateAnchor(note);
+      note._orphan = !(loc && noteAnchor.highlightRange(
+        loc.start,
+        loc.end,
+        note,
+        (n, mark) => notePopover.openNotePopForExisting(n, mark)
+      ));
     });
+    this.renderNotesPanel();
   }
-
-  return todo.length > 0;
-}
-
-async function fetchNotes(file) {
-  if (IS_OFFLINE_BUILD) return (EMBED_NOTES && EMBED_NOTES[file.path]) || [];
-
-  try {
-    const res = await fetch('/api/notes?path=' + encodeURIComponent(file.path), {
-      cache: 'no-cache',
+  renderNotesPanel() {
+    tocHasNotes = noteContext.notesForDoc.length > 0;
+    tocNotes.classList.toggle("hidden", !tocHasNotes);
+    if (!tocHasNotes) {
+      applyToc();
+      return;
+    }
+    const row = (note) => {
+      const by = note.author ? "✍ " + escapeHtml(String(note.author).split("@")[0]) : "";
+      const when = note.created ? relativeDate(note.created) : "";
+      const byline = [by, when].filter(Boolean).join(" · ");
+      return '<button class="kb-note-row' + (note._orphan ? " kb-orphan" : "") + '" data-note-id="' + escapeHtml(note.id) + '"><span class="kb-note-snip">' + escapeHtml(note.note.length > 90 ? note.note.slice(0, 90) + "…" : note.note) + '</span><span class="kb-note-meta">' + (note._orphan ? t("orphanShort") : "“" + escapeHtml(note.exact.length > 40 ? note.exact.slice(0, 40) + "…" : note.exact) + "”") + "</span>" + (byline ? '<span class="kb-note-meta" style="opacity:.65">' + byline + "</span>" : "") + "</button>";
+    };
+    tocNotes.classList.add("border-t", "panel-divider");
+    tocNotes.innerHTML = '<div class="px-2 pb-1 flex items-center justify-between gap-2"><span class="text-[10px] uppercase tracking-[0.12em] text-amber-300 font-bold">' + t("notesTitle", noteContext.notesForDoc.length) + '</span><button id="toc-notes-copy" class="p-0.5 -mr-0.5 text-ink-500 hover:text-amber-300 rounded hover:bg-white/5 flex-shrink-0" title="' + escapeHtml(t("copyAllNotes")) + '">' + _NotesPanel.NOTES_COPY_ICON + "</button></div>" + noteContext.notesForDoc.map(row).join("");
+    const copyBtn = tocNotes.querySelector("#toc-notes-copy");
+    if (copyBtn)
+      copyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        notesStore.copyAllNotes(copyBtn);
+      });
+    tocNotes.querySelectorAll("[data-note-id]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const note = noteContext.notesForDoc.find((n) => n.id === el.dataset.noteId);
+        if (!note) return;
+        const mark = contentEl.querySelector(
+          'mark.kb-annot[data-note-id="' + CSS.escape(note.id) + '"]'
+        );
+        if (mark) {
+          mark.scrollIntoView({ behavior: "smooth", block: "center" });
+          notePopover.openNotePopForExisting(note, mark);
+        } else notePopover.openNotePopForExisting(note, el);
+      });
     });
-
-    return res.ok ? await res.json() : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-async function renderNotesFor(file) {
-  tocHasNotes = false;
-
-  if (tocNotes) {
-    tocNotes.innerHTML = '';
-    tocNotes.classList.remove('border-t', 'panel-divider');
-  }
-
-  notesForDoc = [];
-  const notes = await fetchNotes(file);
-
-  if (currentFile !== file) return; // page changed during the fetch
-  notesForDoc = notes;
-
-  if (!notes.length) {
     applyToc();
-
-    return;
   }
-
-  // Resolve each anchor in the rendered DOM and highlight it.
-  notes.forEach((note) => {
-    const loc = locateAnchor(note);
-
-    note._orphan = !(loc && highlightRange(loc.start, loc.end, note));
-  });
-  renderNotesPanel(file);
+};
+__publicField(_NotesPanel, "NOTES_COPY_ICON", '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"/></svg>');
+let NotesPanel = _NotesPanel;
+const notesPanel = new NotesPanel();
+function renderNotesFor(file) {
+  return notesPanel.renderNotesFor(file);
 }
 
-function renderNotesPanel(file) {
-  tocHasNotes = notesForDoc.length > 0;
-  tocNotes.classList.toggle('hidden', !tocHasNotes); // empty section → no gap
-
-  if (!tocHasNotes) {
-    applyToc();
-
-    return;
-  }
-
-  const row = (note) => {
-    const by = note.author ? '✍ ' + escapeHtml(String(note.author).split('@')[0]) : '';
-    const when = note.created ? relativeDate(note.created) : '';
-    const byline = [by, when].filter(Boolean).join(' · ');
-    return (
-      '<button class="kb-note-row' +
-      (note._orphan ? ' kb-orphan' : '') +
-      '" data-note-id="' +
-      escapeHtml(note.id) +
-      '">' +
-      '<span class="kb-note-snip">' +
-      escapeHtml(note.note.length > 90 ? note.note.slice(0, 90) + '…' : note.note) +
-      '</span>' +
-      '<span class="kb-note-meta">' +
-      (note._orphan
-        ? t('orphanShort')
-        : '“' +
-          escapeHtml(note.exact.length > 40 ? note.exact.slice(0, 40) + '…' : note.exact) +
-          '”') +
-      '</span>' +
-      (byline
-        ? '<span class="kb-note-meta" style="opacity:.65">' + byline + '</span>'
-        : '') +
-      '</button>'
-    );
-  };
-
-  tocNotes.classList.add('border-t', 'panel-divider');
-  // Header with counter + « copy all notes » button (share annotations, incl.
-  // from a read-only remote node).
-  tocNotes.innerHTML =
-    '<div class="px-2 pb-1 flex items-center justify-between gap-2">' +
-    '<span class="text-[10px] uppercase tracking-[0.12em] text-amber-300 font-bold">' +
-    t('notesTitle', notesForDoc.length) +
-    '</span>' +
-    '<button id="toc-notes-copy" class="p-0.5 -mr-0.5 text-ink-500 hover:text-amber-300 rounded hover:bg-white/5 flex-shrink-0" title="' +
-    escapeHtml(t('copyAllNotes')) +
-    '"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"/></svg></button>' +
-    '</div>' +
-    notesForDoc.map(row).join('');
-  const copyBtn = tocNotes.querySelector('#toc-notes-copy');
-
-  if (copyBtn)
-    copyBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      copyAllNotes(copyBtn);
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class NotePopover {
+  constructor() {
+    // Anchor being created (selection -> popover), null when the create popover is closed.
+    __publicField(this, "pendingAnchor", null);
+    // selectionchange debounce handle.
+    __publicField(this, "selTimer", null);
+    // Anchor + rect captured at selection time, so the "Note" button tap works after the selection
+    // collapses (mobile) — was stashed on the DOM node (noteAddBtn._anchor/_rect) before.
+    __publicField(this, "pendingButtonAnchor", null);
+    __publicField(this, "pendingButtonRect", null);
+    // Stateful islands: the floating "Note" button + the popover. Guaranteed by the viewer markup.
+    __publicField(this, "noteAddBtn", document.getElementById("kb-note-add"));
+    __publicField(this, "notePop", document.getElementById("kb-note-pop"));
+    contentEl.addEventListener("mouseup", () => setTimeout(() => this.updateNoteButton(), 10));
+    document.addEventListener("selectionchange", () => {
+      if (this.selTimer) clearTimeout(this.selTimer);
+      this.selTimer = setTimeout(() => this.updateNoteButton(), 350);
     });
-  tocNotes.querySelectorAll('[data-note-id]').forEach((el) => {
-    el.addEventListener('click', () => {
-      const note = notesForDoc.find((n) => n.id === el.dataset.noteId);
-
-      if (!note) return;
-      const mark = contentEl.querySelector(
-        'mark.kb-annot[data-note-id="' + CSS.escape(note.id) + '"]',
-      );
-
-      if (mark) {
-        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        openNotePopForExisting(note, mark);
-      } else openNotePopForExisting(note, el); // orphan: anchor the popover on the row
+    this.noteAddBtn.addEventListener("click", () => this.triggerNoteCreate());
+    this.noteAddBtn.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      this.triggerNoteCreate();
     });
-  });
-  applyToc();
-}
-
-// Copies all notes of the current doc as markdown (quote + note) for sharing.
-async function copyAllNotes(btn) {
-  if (!notesForDoc.length) return;
-  const lines = [];
-  const title = currentFile ? currentFile.name || currentFile.path : '';
-
-  if (title) lines.push('# Notes — ' + title, '');
-  notesForDoc.forEach((n) => {
-    if (n.exact && !n._orphan) lines.push('> ' + n.exact);
-    lines.push(n.note);
-    const meta = [];
-    if (n.author) meta.push(String(n.author));
-    if (n.created) meta.push(new Date(n.created * 1000).toLocaleString(LANG));
-    if (meta.length) lines.push('— ' + meta.join(' · '));
-    lines.push('');
-  });
-  await copyToClipboard(lines.join('\n').trim() + '\n');
-
-  if (btn) {
-    btn.classList.add('text-emerald-400');
-    setTimeout(() => btn.classList.remove('text-emerald-400'), 1200);
+    document.addEventListener("mousedown", (e) => this.maybeCloseOutside(e));
+    document.addEventListener("touchstart", (e) => this.maybeCloseOutside(e), { passive: true });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        this.closeNotePop();
+        this.noteAddBtn.style.display = "none";
+      }
+    });
   }
-
-  setStatus(t('notesCopied', notesForDoc.length), 'ok');
-}
-
-// ─── Popover create / read-edit ──────────────────────────────────────────────
-let pendingAnchor = null;
-
-function positionPop(el, anchorRect) {
-  const margin = 8;
-  let top = window.scrollY + anchorRect.bottom + margin;
-  let left = window.scrollX + anchorRect.left;
-
-  el.style.display = 'block';
-  const w = el.offsetWidth,
-    h = el.offsetHeight;
-
-  if (left + w > window.scrollX + document.documentElement.clientWidth - margin)
-    left = window.scrollX + document.documentElement.clientWidth - w - margin;
-
-  if (anchorRect.bottom + margin + h > document.documentElement.clientHeight)
-    top = window.scrollY + anchorRect.top - h - margin;
-  el.style.top = Math.max(window.scrollY + margin, top) + 'px';
-  el.style.left = Math.max(margin, left) + 'px';
-}
-
-function closeNotePop() {
-  notePop.style.display = 'none';
-  notePop.innerHTML = '';
-  pendingAnchor = null;
-  contentEl
-    .querySelectorAll('mark.kb-annot.kb-annot-active')
-    .forEach((m) => m.classList.remove('kb-annot-active'));
-}
-
-function openNotePopForNew(anchor, rect) {
-  pendingAnchor = anchor;
-  notePop.innerHTML =
-    '<div class="kb-quote">“' +
-    escapeHtml(anchor.exact.length > 160 ? anchor.exact.slice(0, 160) + '…' : anchor.exact) +
-    '”</div>' +
-    '<textarea placeholder="' +
-    escapeHtml(t('notePlaceholder')) +
-    '"></textarea>' +
-    '<div class="kb-pop-actions"><button class="kb-btn-ghost" data-act="cancel">' +
-    t('cancel') +
-    '</button><button class="kb-btn-save" data-act="save">' +
-    t('save') +
-    '</button></div>';
-  positionPop(notePop, rect);
-  const ta = notePop.querySelector('textarea');
-
-  ta.focus();
-  notePop.querySelector('[data-act="cancel"]').onclick = closeNotePop;
-  notePop.querySelector('[data-act="save"]').onclick = () => saveNewNote(ta.value);
-  ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNewNote(ta.value);
-  });
-}
-
-function openNotePopForExisting(note, anchorEl) {
-  closeNotePop();
-  contentEl
-    .querySelectorAll('mark.kb-annot[data-note-id="' + CSS.escape(note.id) + '"]')
-    .forEach((m) => m.classList.add('kb-annot-active'));
-  const canEdit = notesCanEdit();
-  const created = note.created ? relativeDate(note.created) : '';
-  const by = note.author ? '✍ ' + escapeHtml(String(note.author).split('@')[0]) : '';
-  const meta = [by, created].filter(Boolean).join(' · ');
-
-  notePop.innerHTML =
-    (note._orphan
-      ? '<div class="kb-quote">' + t('orphanLong', escapeHtml(note.exact.slice(0, 120))) + '</div>'
-      : '') +
-    (canEdit
-      ? '<textarea>' + escapeHtml(note.note) + '</textarea>'
-      : '<div style="font-size:0.82rem;color:#e7e7ec;white-space:pre-wrap">' +
-        escapeHtml(note.note) +
-        '</div>') +
-    (meta
-      ? '<div class="kb-note-meta" style="font-size:0.66rem;color:#6b7280;margin-top:0.5rem">' +
-        meta +
-        '</div>'
-      : '') +
-    '<div class="kb-pop-actions">' +
-    (canEdit ? '<button class="kb-btn-del" data-act="del">' + t('del') + '</button>' : '') +
-    '<button class="kb-btn-ghost" data-act="cancel">' +
-    t('close') +
-    '</button>' +
-    (canEdit ? '<button class="kb-btn-save" data-act="save">' + t('save') + '</button>' : '') +
-    '</div>';
-  positionPop(notePop, anchorEl.getBoundingClientRect());
-  notePop.querySelector('[data-act="cancel"]').onclick = closeNotePop;
-
-  if (canEdit) {
-    const ta = notePop.querySelector('textarea');
-
+  // Notes are the (deferred) comment level — admin-only for now. A member has the `viewer-mode`
+  // body class (but writes its own docs), so gate notes on the class.
+  notesCanEdit() {
+    return !IS_OFFLINE_BUILD && !document.body.classList.contains("viewer-mode");
+  }
+  // ─── Popover create / read-edit ──────────────────────────────────────────
+  positionPop(el, anchorRect) {
+    const margin = 8;
+    let top = window.scrollY + anchorRect.bottom + margin;
+    let left = window.scrollX + anchorRect.left;
+    el.style.display = "block";
+    const w = el.offsetWidth;
+    const ph = el.offsetHeight;
+    if (left + w > window.scrollX + document.documentElement.clientWidth - margin)
+      left = window.scrollX + document.documentElement.clientWidth - w - margin;
+    if (anchorRect.bottom + margin + ph > document.documentElement.clientHeight)
+      top = window.scrollY + anchorRect.top - ph - margin;
+    el.style.top = Math.max(window.scrollY + margin, top) + "px";
+    el.style.left = Math.max(margin, left) + "px";
+  }
+  closeNotePop() {
+    this.notePop.style.display = "none";
+    this.notePop.innerHTML = "";
+    this.pendingAnchor = null;
+    contentEl.querySelectorAll("mark.kb-annot.kb-annot-active").forEach((m) => m.classList.remove("kb-annot-active"));
+  }
+  openNotePopForNew(anchor, rect) {
+    this.pendingAnchor = anchor;
+    this.notePop.innerHTML = '<div class="kb-quote">“' + escapeHtml(anchor.exact.length > 160 ? anchor.exact.slice(0, 160) + "…" : anchor.exact) + '”</div><textarea placeholder="' + escapeHtml(t("notePlaceholder")) + '"></textarea><div class="kb-pop-actions"><button class="kb-btn-ghost" data-act="cancel">' + t("cancel") + '</button><button class="kb-btn-save" data-act="save">' + t("save") + "</button></div>";
+    this.positionPop(this.notePop, rect);
+    const ta = this.notePop.querySelector("textarea");
     ta.focus();
-    notePop.querySelector('[data-act="save"]').onclick = () => saveEditNote(note, ta.value);
-    notePop.querySelector('[data-act="del"]').onclick = () => deleteNote(note);
-  }
-}
-
-async function saveNewNote(text) {
-  text = (text || '').trim();
-
-  if (!text || !pendingAnchor || !currentFile) return;
-  const body = Object.assign({ path: currentFile.path, note: text }, pendingAnchor);
-
-  try {
-    const res = await fetch('/api/notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+    this.notePop.querySelector('[data-act="cancel"]').onclick = () => this.closeNotePop();
+    this.notePop.querySelector('[data-act="save"]').onclick = () => notesStore.saveNewNote(this.pendingAnchor, ta.value);
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) notesStore.saveNewNote(this.pendingAnchor, ta.value);
     });
-
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-  } catch (e) {
-    notifyError('noteSaveFailed', e.message);
-
-    return;
   }
-
-  closeNotePop();
-  window.getSelection().removeAllRanges();
-  refreshNotes();
-}
-
-async function saveEditNote(note, text) {
-  text = (text || '').trim();
-
-  if (!text || !currentFile) return;
-
-  try {
-    const res = await fetch(
-      '/api/notes?path=' +
-        encodeURIComponent(currentFile.path) +
-        '&id=' +
-        encodeURIComponent(note.id),
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: text }),
-      },
-    );
-
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-  } catch (e) {
-    notifyError('actionFailed', e.message);
-
-    return;
-  }
-
-  closeNotePop();
-  refreshNotes();
-}
-
-async function deleteNote(note) {
-  if (!currentFile) return;
-  const ok = await confirmDialog({
-    title: t('deleteNoteTitle'),
-    message: t('deleteNoteMsg', note.note.length > 80 ? note.note.slice(0, 80) + '…' : note.note),
-    confirmLabel: t('del'),
-    destructive: true,
-  });
-
-  if (!ok) return;
-
-  try {
-    const res = await fetch(
-      '/api/notes?path=' +
-        encodeURIComponent(currentFile.path) +
-        '&id=' +
-        encodeURIComponent(note.id),
-      { method: 'DELETE' },
-    );
-
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-  } catch (e) {
-    notifyError('actionFailed', e.message);
-
-    return;
-  }
-
-  closeNotePop();
-  refreshNotes();
-}
-
-// Full re-render of the current doc + live tree-badge update. We recount notes
-// from the SOURCE (/api/notes) because _notes-index.json is only regenerated at
-// the next build — without this the badge only appeared after a reload.
-async function refreshNotes() {
-  if (!currentFile) return;
-  const path = currentFile.path;
-
-  try {
-    const res = await fetch('/api/notes?path=' + encodeURIComponent(path), { cache: 'no-cache' });
-    const list = res.ok ? await res.json() : null;
-
-    if (Array.isArray(list)) {
-      const idx = await loadNotesIndex();
-
-      if (list.length) idx[path] = list.length;
-      else delete idx[path];
-      decorateTreeBadges();
+  openNotePopForExisting(note, anchorEl) {
+    this.closeNotePop();
+    contentEl.querySelectorAll('mark.kb-annot[data-note-id="' + CSS.escape(note.id) + '"]').forEach((m) => m.classList.add("kb-annot-active"));
+    const canEdit = this.notesCanEdit();
+    const created = note.created ? relativeDate(note.created) : "";
+    const by = note.author ? "✍ " + escapeHtml(String(note.author).split("@")[0]) : "";
+    const meta = [by, created].filter(Boolean).join(" · ");
+    this.notePop.innerHTML = (note._orphan ? '<div class="kb-quote">' + t("orphanLong", escapeHtml(note.exact.slice(0, 120))) + "</div>" : "") + (canEdit ? "<textarea>" + escapeHtml(note.note) + "</textarea>" : '<div style="font-size:0.82rem;color:#e7e7ec;white-space:pre-wrap">' + escapeHtml(note.note) + "</div>") + (meta ? '<div class="kb-note-meta" style="font-size:0.66rem;color:#6b7280;margin-top:0.5rem">' + meta + "</div>" : "") + '<div class="kb-pop-actions">' + (canEdit ? '<button class="kb-btn-del" data-act="del">' + t("del") + "</button>" : "") + '<button class="kb-btn-ghost" data-act="cancel">' + t("close") + "</button>" + (canEdit ? '<button class="kb-btn-save" data-act="save">' + t("save") + "</button>" : "") + "</div>";
+    this.positionPop(this.notePop, anchorEl.getBoundingClientRect());
+    this.notePop.querySelector('[data-act="cancel"]').onclick = () => this.closeNotePop();
+    if (canEdit) {
+      const ta = this.notePop.querySelector("textarea");
+      ta.focus();
+      this.notePop.querySelector('[data-act="save"]').onclick = () => notesStore.saveEditNote(note, ta.value);
+      this.notePop.querySelector('[data-act="del"]').onclick = () => notesStore.deleteNote(note);
     }
-  } catch (_) {}
-
-  showMarkdown(currentFile);
-}
-
-// Text selection → floating "Note" button (edit mode only). We store the anchor +
-// rect at selection time, so the button tap doesn't need the selection to survive
-// (on mobile the tap collapses it).
-function updateNoteButton() {
-  // Notes anchor into a markdown doc: no meaning on the home page (no currentFile)
-  // nor a .html/.pdf (isolated iframe).
-  if (
-    !notesCanEdit() ||
-    editMode ||
-    notePop.style.display === 'block' ||
-    !currentFile ||
-    currentFile.ext !== '.md'
-  ) {
-    noteAddBtn.style.display = 'none';
-
-    return;
   }
-
-  const a = selectionToAnchor();
-
-  if (!a) {
-    noteAddBtn.style.display = 'none';
-
-    return;
+  // Text selection → floating "Note" button (edit mode only). We store the anchor + rect at
+  // selection time, so the button tap doesn't need the selection to survive (on mobile the tap
+  // collapses it).
+  updateNoteButton() {
+    if (!this.notesCanEdit() || editMode || this.notePop.style.display === "block" || !currentFile || currentFile.ext !== ".md") {
+      this.noteAddBtn.style.display = "none";
+      return;
+    }
+    const a = noteAnchor.selectionToAnchor();
+    if (!a) {
+      this.noteAddBtn.style.display = "none";
+      return;
+    }
+    const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
+    this.pendingButtonAnchor = a;
+    this.pendingButtonRect = rect;
+    this.noteAddBtn.style.display = "inline-flex";
+    const bw = this.noteAddBtn.offsetWidth || 96;
+    let left = window.scrollX + rect.left;
+    const maxLeft = window.scrollX + document.documentElement.clientWidth - bw - 8;
+    if (left > maxLeft) left = maxLeft;
+    this.noteAddBtn.style.top = window.scrollY + rect.bottom + 8 + "px";
+    this.noteAddBtn.style.left = Math.max(8, left) + "px";
   }
-
-  const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
-
-  noteAddBtn._anchor = a;
-  noteAddBtn._rect = rect;
-  noteAddBtn.style.display = 'inline-flex';
-  // Placed BELOW the selection: the native copy/paste bar (mobile) is above it.
-  const bw = noteAddBtn.offsetWidth || 96;
-  let left = window.scrollX + rect.left;
-  const maxLeft = window.scrollX + document.documentElement.clientWidth - bw - 8;
-
-  if (left > maxLeft) left = maxLeft;
-  noteAddBtn.style.top = window.scrollY + rect.bottom + 8 + 'px';
-  noteAddBtn.style.left = Math.max(8, left) + 'px';
-}
-
-// Desktop: immediate mouseup. Mobile/keyboard: selectionchange (touch handles emit
-// no mouseup) debounced until the selection stabilizes — the delay also lets the
-// button tap land before the collapse clears it.
-let _selTimer = null;
-
-contentEl.addEventListener('mouseup', () => setTimeout(updateNoteButton, 10));
-document.addEventListener('selectionchange', () => {
-  clearTimeout(_selTimer);
-  _selTimer = setTimeout(updateNoteButton, 350);
-});
-
-function triggerNoteCreate() {
-  if (!noteAddBtn._anchor) return;
-  noteAddBtn.style.display = 'none';
-  openNotePopForNew(noteAddBtn._anchor, noteAddBtn._rect);
-}
-
-noteAddBtn.addEventListener('click', triggerNoteCreate);
-// dedicated touchend: on mobile the click can be swallowed by the selection dismiss.
-noteAddBtn.addEventListener('touchend', (e) => {
-  e.preventDefault();
-  triggerNoteCreate();
-});
-
-function maybeCloseOutside(e) {
-  if (
-    !notePop.contains(e.target) &&
-    e.target !== noteAddBtn &&
-    !noteAddBtn.contains(e.target) &&
-    !e.target.closest('mark.kb-annot') &&
-    !e.target.closest('.kb-note-row')
-  ) {
-    if (notePop.style.display === 'block') closeNotePop();
-
-    if (!e.target.closest('#content')) noteAddBtn.style.display = 'none';
+  triggerNoteCreate() {
+    if (!this.pendingButtonAnchor) return;
+    this.noteAddBtn.style.display = "none";
+    this.openNotePopForNew(this.pendingButtonAnchor, this.pendingButtonRect);
+  }
+  maybeCloseOutside(e) {
+    const target = e.target;
+    if (!this.notePop.contains(target) && target !== this.noteAddBtn && !this.noteAddBtn.contains(target) && !target.closest("mark.kb-annot") && !target.closest(".kb-note-row")) {
+      if (this.notePop.style.display === "block") this.closeNotePop();
+      if (!target.closest("#content")) this.noteAddBtn.style.display = "none";
+    }
   }
 }
+const notePopover = new NotePopover();
 
-document.addEventListener('mousedown', maybeCloseOutside);
-document.addEventListener('touchstart', maybeCloseOutside, { passive: true });
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closeNotePop();
-    noteAddBtn.style.display = 'none';
+class NotesStore {
+  async fetchNotes(file) {
+    if (IS_OFFLINE_BUILD) return EMBED_NOTES && EMBED_NOTES[file.path] || [];
+    try {
+      const res = await fetch("/api/notes?path=" + encodeURIComponent(file.path), {
+        cache: "no-cache"
+      });
+      return res.ok ? await res.json() : [];
+    } catch (e) {
+      return [];
+    }
   }
-});
+  // Copies all notes of the current doc as markdown (quote + note) for sharing.
+  async copyAllNotes(btn) {
+    if (!noteContext.notesForDoc.length) return;
+    const lines = [];
+    const title = currentFile ? currentFile.name || currentFile.path : "";
+    if (title) lines.push("# Notes — " + title, "");
+    noteContext.notesForDoc.forEach((n) => {
+      if (n.exact && !n._orphan) lines.push("> " + n.exact);
+      lines.push(n.note);
+      const meta = [];
+      if (n.author) meta.push(String(n.author));
+      if (n.created) meta.push(new Date(n.created * 1e3).toLocaleString(LANG));
+      if (meta.length) lines.push("— " + meta.join(" · "));
+      lines.push("");
+    });
+    await copyToClipboard(lines.join("\n").trim() + "\n");
+    if (btn) {
+      btn.classList.add("text-emerald-400");
+      setTimeout(() => btn.classList.remove("text-emerald-400"), 1200);
+    }
+    setStatus(t("notesCopied", noteContext.notesForDoc.length), "ok");
+  }
+  async saveNewNote(anchor, text) {
+    text = (text || "").trim();
+    if (!text || !anchor || !currentFile) return;
+    const body = Object.assign({ path: currentFile.path, note: text }, anchor);
+    try {
+      const res = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+    } catch (e) {
+      notifyError("noteSaveFailed", e.message);
+      return;
+    }
+    notePopover.closeNotePop();
+    window.getSelection().removeAllRanges();
+    this.refreshNotes();
+  }
+  async saveEditNote(note, text) {
+    text = (text || "").trim();
+    if (!text || !currentFile) return;
+    try {
+      const res = await fetch(
+        "/api/notes?path=" + encodeURIComponent(currentFile.path) + "&id=" + encodeURIComponent(note.id),
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: text })
+        }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+    } catch (e) {
+      notifyError("actionFailed", e.message);
+      return;
+    }
+    notePopover.closeNotePop();
+    this.refreshNotes();
+  }
+  async deleteNote(note) {
+    if (!currentFile) return;
+    const ok = await confirmDialog({
+      title: t("deleteNoteTitle"),
+      message: t("deleteNoteMsg", note.note.length > 80 ? note.note.slice(0, 80) + "…" : note.note),
+      confirmLabel: t("del"),
+      destructive: true
+    });
+    if (!ok) return;
+    try {
+      const res = await fetch(
+        "/api/notes?path=" + encodeURIComponent(currentFile.path) + "&id=" + encodeURIComponent(note.id),
+        { method: "DELETE" }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+    } catch (e) {
+      notifyError("actionFailed", e.message);
+      return;
+    }
+    notePopover.closeNotePop();
+    this.refreshNotes();
+  }
+  // Full re-render of the current doc + live tree-badge update. We recount notes from the SOURCE
+  // (/api/notes) because _notes-index.json is only regenerated at the next build — without this the
+  // badge only appeared after a reload.
+  async refreshNotes() {
+    if (!currentFile) return;
+    const path = currentFile.path;
+    try {
+      const res = await fetch("/api/notes?path=" + encodeURIComponent(path), { cache: "no-cache" });
+      const list = res.ok ? await res.json() : null;
+      if (Array.isArray(list)) {
+        const idx = await loadNotesIndex();
+        if (list.length) idx[path] = list.length;
+        else delete idx[path];
+        decorateTreeBadges();
+      }
+    } catch (_) {
+    }
+    showMarkdown(currentFile);
+  }
+}
+const notesStore = new NotesStore();
 
-// Notes index (tree badges). Online: _notes-index.json ; offline: EMBED_NOTES.
 async function loadNotesIndex() {
   if (notesIndex) return notesIndex;
-
   if (IS_OFFLINE_BUILD) {
     notesIndex = {};
-
     for (const p in EMBED_NOTES || {}) notesIndex[p] = EMBED_NOTES[p].length;
-
     return notesIndex;
   }
-
   try {
-    const res = await fetch('/_notes-index.json', { cache: 'no-cache' });
-
+    const res = await fetch("/_notes-index.json", { cache: "no-cache" });
     notesIndex = res.ok ? await res.json() : {};
   } catch (e) {
     notesIndex = {};
   }
-
   return notesIndex;
 }
-
 async function decorateTreeBadges() {
   const idx = await loadNotesIndex();
-
-  document.querySelectorAll('.kb-tree-badge').forEach((b) => b.remove());
-
+  document.querySelectorAll(".kb-tree-badge").forEach((b) => b.remove());
   for (const path in idx) {
     const link = treeEl.querySelector('a[data-path="' + CSS.escape(path) + '"]');
-
     if (!link) continue;
-    const badge = document.createElement('span');
-
-    badge.className = 'kb-tree-badge';
-    badge.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg><span>' +
-      idx[path] +
-      '</span>';
-    badge.title = t('notesBadge', idx[path]);
+    const badge = document.createElement("span");
+    badge.className = "kb-tree-badge";
+    badge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg><span>' + idx[path] + "</span>";
+    badge.title = t("notesBadge", idx[path]);
     link.appendChild(badge);
   }
 }
 
-function attachCopyButtons() {
-  contentEl.querySelectorAll('pre').forEach((pre) => {
-    if (pre.querySelector('.copy-btn')) return;
-    pre.style.position = 'relative';
-    const btn = document.createElement('button');
-
-    btn.className =
-      'copy-btn absolute top-2 right-2 opacity-0 transition-opacity px-2 py-1 text-[11px] bg-white/8 hover:bg-white/15 text-ink-300 hover:text-white rounded font-mono';
-    btn.innerHTML =
-      '<svg class="w-3 h-3 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
-      t('copy');
-    btn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      const code = pre.querySelector('code')
-        ? pre.querySelector('code').textContent
-        : pre.textContent;
-
-      try {
-        await navigator.clipboard.writeText(code);
-        btn.innerHTML =
-          '<svg class="w-3 h-3 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>' +
-          t('copied');
-        btn.classList.add('text-emerald-400');
-        setTimeout(() => {
-          btn.innerHTML =
-            '<svg class="w-3 h-3 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
-            t('copy');
-          btn.classList.remove('text-emerald-400');
-        }, 1500);
-      } catch (e) {}
-    });
-    pre.appendChild(btn);
-    pre.addEventListener('mouseenter', () => (btn.style.opacity = '1'));
-    pre.addEventListener('mouseleave', () => (btn.style.opacity = '0'));
-  });
-}
-
-function renderSkeleton(file) {
-  // Deterministic per-path skeleton (same doc → same layout). LCG seeded by hashStr(path).
-  let state = (file && file.path ? hashStr(file.path) : 1) || 1;
-  const next = () => (state = (state * 1664525 + 1013904223) >>> 0);
-  const range = (min, max) => min + (next() % (max - min + 1));
-  const coin = (p) => next() % 100 < p * 100;
-
-  const parts = [];
-  const para = (lines) => {
-    const rows = [];
-
-    for (let i = 0; i < lines; i++) {
-      const isLast = i === lines - 1;
-      const isPenult = i === lines - 2;
-      let w;
-
-      if (isLast) w = range(35, 70);
-      else if (isPenult && coin(0.4)) w = range(78, 94);
-      else w = range(95, 100);
-      rows.push('<div class="skeleton" style="height:.95rem;width:' + w + '%;"></div>');
-    }
-
-    return (
-      '<div style="display:flex;flex-direction:column;gap:.55rem;margin-bottom:1.75rem;">' +
-      rows.join('') +
-      '</div>'
-    );
-  };
-
-  const h2 = () =>
-    '<div class="skeleton-h2" style="height:1.6rem;width:' +
-    range(28, 58) +
-    '%;margin-bottom:1rem;margin-top:.5rem;"></div>';
-  const code = () =>
-    '<div class="skeleton-code" style="height:' +
-    range(4, 9) +
-    'rem;margin-bottom:1.75rem;"></div>';
-
-  parts.push(
-    '<div class="skeleton-title" style="height:2.4rem;width:' +
-      range(48, 78) +
-      '%;margin-bottom:1rem;"></div>',
-  );
-  parts.push(
-    '<div style="display:flex;gap:.5rem;margin-bottom:2rem;">' +
-      '<div class="skeleton" style="height:.7rem;width:' +
-      range(5, 9) +
-      'rem;"></div>' +
-      '<div class="skeleton" style="height:.7rem;width:' +
-      range(4, 7) +
-      'rem;"></div>' +
-      '</div>',
-  );
-
-  parts.push(para(range(3, 5)));
-
-  const sections = range(1, 3);
-
-  for (let s = 0; s < sections; s++) {
-    parts.push(h2());
-    parts.push(para(range(2, 5)));
-
-    if (coin(0.4)) parts.push(code());
-  }
-
-  return (
-    '<div class="not-prose" aria-busy="true" aria-label="' +
-    t('loadingDoc') +
-    '">' +
-    parts.join('') +
-    '</div>'
-  );
-}
-
-function hashStr(s) {
-  // djb2 — small stable fingerprint to seed the skeleton's LCG
-  let h = 5381;
-
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
-
-  return h;
-}
-
-async function showMarkdown(file, highlightQuery) {
-  if (editMode) exitEditMode(false);
-  currentFile = file;
-  // Reset the overrides set by HTML rendering (cf. renderHtmlFrame): a .md doc
-  // after a .html must get back the prose width/padding, and the todos widget
-  // (hidden during the HTML preview) must reappear.
-  contentEl.style.maxWidth = '';
-  contentEl.style.padding = '';
-  document.getElementById('todo-widget')?.classList.remove('hidden');
-  contentEl.innerHTML = renderSkeleton(file);
-  // Breadcrumb: we replace the technical prefix « remotes/ » with the label
-  // « Mental nodes / » (consistent with the tree).
-  breadcrumbPath.textContent = file.path.startsWith('remotes/')
-    ? t('remotesLabel') + ' / ' + file.path.slice('remotes/'.length)
-    : file.path;
-  const parts = [];
-
-  if (file.mtime) parts.push(t('modifiedAgo', relativeDate(file.mtime)));
-  const rt = readingTimeFromWords(file.words);
-
-  if (rt) parts.push(t('readingTime', rt.minutes, rt.words.toLocaleString(LANG)));
-  breadcrumbDate.textContent = parts.length ? '· ' + parts.join(' · ') : '';
-  breadcrumbActions.classList.remove('hidden');
-  breadcrumbActions.classList.add('flex');
-  // Mirror doc (under remotes/) = read-only mental node of another atlas: no Edit
-  // (write → 403), no Share (don't re-share others' content), no ⋯ menu
-  // (rename/move/delete → 403).
-  const isRemoteDoc = (file.path || '').startsWith('remotes/');
-
-  btnEdit.classList.toggle('hidden', isRemoteDoc);
-  btnSave.classList.add('hidden');
-  btnCancel.classList.add('hidden');
-  document.getElementById('btn-share')?.classList.toggle('hidden', isRemoteDoc);
-  document.getElementById('btn-access')?.classList.toggle('hidden', isRemoteDoc || IS_OFFLINE_BUILD);
-  document.getElementById('btn-more-wrap')?.classList.toggle('hidden', isRemoteDoc);
-  // "Shared by" badge: if this doc is owned by someone else (shared WITH you),
-  // surface who shared it inline — no need to open the access dialog. Fire-and-
-  // forget; cloud-only; guarded against a stale response after navigating away.
-  const sharedByEl = document.getElementById('breadcrumb-sharedby');
-  if (sharedByEl) {
-    sharedByEl.textContent = '';
-    sharedByEl.title = '';
-    if (location.protocol.startsWith('http') && !isRemoteDoc && !IS_OFFLINE_BUILD) {
-      fetch('/api/acl?path=' + encodeURIComponent(file.path))
-        .then((r) => (r.ok ? r.json() : null))
-        .then((a) => {
+class DocRenderer {
+  // THE document renderer that owns #content. Writes the skeleton, gates the breadcrumb chrome,
+  // dispatches by extension (.html/.pdf/.docx → an isolated frame, else the markdown pipeline) and
+  // fires the post-render hooks. async: a slow load is raced out by the currentFile !== file guards.
+  async show(file, highlightQuery) {
+    if (editMode) exitEditMode(false);
+    currentFile = file;
+    contentEl.style.maxWidth = "";
+    contentEl.style.padding = "";
+    document.getElementById("todo-widget")?.classList.remove("hidden");
+    contentEl.innerHTML = renderSkeleton(file);
+    breadcrumbPath.textContent = file.path.startsWith("remotes/") ? t("remotesLabel") + " / " + file.path.slice("remotes/".length) : file.path;
+    const parts = [];
+    if (file.mtime) parts.push(t("modifiedAgo", relativeDate(file.mtime)));
+    const rt = readingTimeFromWords(file.words);
+    if (rt) parts.push(t("readingTime", rt.minutes, rt.words.toLocaleString(LANG)));
+    breadcrumbDate.textContent = parts.length ? "· " + parts.join(" · ") : "";
+    breadcrumbActions.classList.remove("hidden");
+    breadcrumbActions.classList.add("flex");
+    const isRemoteDoc = (file.path || "").startsWith("remotes/");
+    btnEdit.classList.toggle("hidden", isRemoteDoc);
+    btnSave.classList.add("hidden");
+    btnCancel.classList.add("hidden");
+    document.getElementById("btn-share")?.classList.toggle("hidden", isRemoteDoc);
+    document.getElementById("btn-access")?.classList.toggle("hidden", isRemoteDoc || IS_OFFLINE_BUILD);
+    document.getElementById("btn-more-wrap")?.classList.toggle("hidden", isRemoteDoc);
+    const sharedByEl = document.getElementById("breadcrumb-sharedby");
+    if (sharedByEl) {
+      sharedByEl.textContent = "";
+      sharedByEl.title = "";
+      if (location.protocol.startsWith("http") && !isRemoteDoc && !IS_OFFLINE_BUILD) {
+        fetch("/api/acl?path=" + encodeURIComponent(file.path)).then((r) => r.ok ? r.json() : null).then((a) => {
           if (a && a.owner && !a.can_manage && currentFile && currentFile.path === file.path) {
-            const who = String(a.owner).replace(/^user:/, '');
-            sharedByEl.textContent = ' ' + t('sharedByLabel', who.split('@')[0]);
-            sharedByEl.title = t('sharedByLabel', who);
+            const who = String(a.owner).replace(/^user:/, "");
+            sharedByEl.textContent = " " + t("sharedByLabel", who.split("@")[0]);
+            sharedByEl.title = t("sharedByLabel", who);
           }
-        })
-        .catch(() => {});
-    }
-  }
-  // Remote node actions: only on a mirror doc, never offline (no server to
-  // appropriate/remove against — the buttons would 404).
-  const showNodeActions = isRemoteDoc && !IS_OFFLINE_BUILD;
-
-  document.getElementById('btn-node-appropriate')?.classList.toggle('hidden', !showNodeActions);
-  document.getElementById('btn-node-remove')?.classList.toggle('hidden', !showNodeActions);
-  // Download button label = the doc's actual extension (.md/.html/.pdf/.docx).
-  const dlExt = document.getElementById('btn-download-ext');
-
-  if (dlExt) dlExt.textContent = file.ext || '';
-  // Close any history panel left open from the previous doc so it never shows
-  // stale revisions; the button itself is gated by historyAvailable().
-  closeHistory();
-  document.getElementById('btn-history')?.classList.toggle('hidden', !historyAvailable(file));
-  updatePinButton(file);
-  document.querySelectorAll('.tree-item').forEach((el) => el.classList.remove('active'));
-  const active = document.querySelector(`[data-path="${file.path}"]`);
-
-  if (active) {
-    active.classList.add('active');
-    let p = active.parentElement;
-
-    while (p && p !== treeEl) {
-      if (p.tagName === 'UL' && p.classList.contains('hidden')) {
-        p.classList.remove('hidden');
-        const btn = p.previousElementSibling;
-
-        if (btn) btn.querySelector('.caret')?.classList.add('open');
+        }).catch(() => {
+        });
       }
-
-      p = p.parentElement;
     }
-  }
-
-  document.querySelector('main').scrollTop = 0;
-
-  // .html document → standalone render in an isolated iframe, no markdown pipeline.
-  if (file.ext === '.html') {
-    renderHtmlFrame(file);
-
-    return;
-  }
-
-  // .pdf document → browser's native viewer in an iframe, no markdown.
-  if (file.ext === '.pdf') {
-    renderPdfFrame(file);
-
-    return;
-  }
-
-  // Word document → converted to readable HTML in the browser (read-only).
-  if (file.ext === '.docx') {
-    renderDocxFrame(file);
-
-    return;
-  }
-
-  let content;
-
-  try {
-    content = await loadContent(file);
-  } catch (e) {
+    const showNodeActions = isRemoteDoc && !IS_OFFLINE_BUILD;
+    document.getElementById("btn-node-appropriate")?.classList.toggle("hidden", !showNodeActions);
+    document.getElementById("btn-node-remove")?.classList.toggle("hidden", !showNodeActions);
+    const dlExt = document.getElementById("btn-download-ext");
+    if (dlExt) dlExt.textContent = file.ext || "";
+    closeHistory();
+    document.getElementById("btn-history")?.classList.toggle("hidden", !historyAvailable(file));
+    updatePinButton(file);
+    contentTree.rerender();
+    document.querySelector("main").scrollTop = 0;
+    if (file.ext === ".html") {
+      renderHtmlFrame(file);
+      return;
+    }
+    if (file.ext === ".pdf") {
+      renderPdfFrame(file);
+      return;
+    }
+    if (file.ext === ".docx") {
+      renderDocxFrame(file);
+      return;
+    }
+    let content;
+    try {
+      content = await loadContent(file);
+    } catch (e) {
+      if (currentFile !== file) return;
+      contentEl.innerHTML = '<div class="text-rose-400 text-sm">' + escapeHtml(t("loadError", e.message)) + "</div>";
+      return;
+    }
     if (currentFile !== file) return;
-    contentEl.innerHTML =
-      '<div class="text-rose-400 text-sm">' + escapeHtml(t('loadError', e.message)) + '</div>';
-
-    return;
-  }
-
-  if (currentFile !== file) return;
-  const body = stripFrontmatter(content);
-
-  contentEl.innerHTML = renderDocTags(file) + renderMd(body);
-  attachCopyButtons();
-  wireTaskCheckboxes(file, content);
-  renderBacklinksFor(file);
-  buildToc();
-  renderNotesFor(file);
-  // Extensions hook: the doc has just been rendered (path + markdown without
-  // frontmatter). Extensions listen to decorate / track the current doc.
-  document.dispatchEvent(
-    new CustomEvent('atlas:doc-rendered', { detail: { path: file.path, markdown: body } }),
-  );
-
-  if (highlightQuery) highlightFirstMatch(contentEl, highlightQuery);
-}
-
-// ─── Git history (revisions + diff) ──────────────────────────────────────────
-// Each doc is versioned git. This panel lists a doc's revisions and shows, per
-// revision, what that commit changed (diff against the previous revision) or the
-// full version at that point. Backed by /api/history|diff|revision, which require
-// an authenticated admin/viewer — so the button is hidden in offline builds and
-// read-only share views, where those endpoints don't exist / return 401.
-const historyOverlay = document.getElementById('history-overlay');
-const historyList = document.getElementById('history-list');
-const historyDetail = document.getElementById('history-detail');
-const historyPathEl = document.getElementById('history-path');
-let historyFile = null;
-
-function historyAvailable(file) {
-  // Inline the protocol check rather than reference the `isServerMode` const:
-  // showMarkdown calls this synchronously before its first await, so on an initial
-  // deep-link it can run before that const is initialized (TDZ).
-  const serverMode = location.protocol === 'http:' || location.protocol === 'https:';
-
-  return (
-    !!file &&
-    (file.ext === '.md' || file.ext === '.html') &&
-    serverMode &&
-    !IS_OFFLINE_BUILD &&
-    !window.__viewerMode &&
-    !(file.path || '').startsWith('remotes/')
-  );
-}
-
-function closeHistory() {
-  historyFile = null;
-  historyOverlay.classList.add('hidden');
-}
-
-function formatRevDate(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-
-  return isNaN(d)
-    ? ''
-    : d.toLocaleDateString(LANG, { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-async function openHistory(file) {
-  // Optional target → the activity feed can peek a doc's history without navigating. Guard on a
-  // real file (path is a string): btn-history binds this as a click handler, so a passed MouseEvent
-  // (or its array-valued .path on old Chrome) must NOT be taken as `file`.
-  file = (file && typeof file.path === 'string') ? file : currentFile;
-
-  if (!historyAvailable(file)) return;
-  historyFile = file;
-  historyPathEl.textContent = file.path;
-  historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">…</div>';
-  historyDetail.innerHTML = '<div class="text-ink-500">' + escapeHtml(t('historyPick')) + '</div>';
-  historyOverlay.classList.remove('hidden');
-  let data;
-
-  try {
-    data = await api('GET', '/api/history?path=' + encodeURIComponent(file.path));
-  } catch (e) {
-    if (historyFile !== file) return;
-    historyList.innerHTML =
-      '<div class="text-rose-400 px-2 py-1">' + escapeHtml(t('historyError')) + '</div>';
-
-    return;
-  }
-
-  if (historyFile !== file) return; // user closed / navigated mid-load
-  const revisions = data.revisions || [];
-
-  if (!revisions.length) {
-    historyList.innerHTML =
-      '<div class="text-ink-500 px-2 py-1">' + escapeHtml(t('historyEmpty')) + '</div>';
-
-    return;
-  }
-
-  historyAllRevisions = revisions;
-  historyAiOnly = false; // each doc opens unfiltered
-  historyCurrentSha = null;
-  renderHistoryList(file);
-}
-
-// 13d — AI-only filter on the revision list. State + renderer are module-level so the
-// toggle can re-render in place. showVersion always receives the FULL revisions array +
-// the absolute index, so the diff (parent = revisions[i+1]) stays correct when filtered.
-let historyAllRevisions = [];
-let historyAiOnly = false;
-let historyCurrentSha = null; // the revision shown in the detail pane (preserved across a filter toggle)
-
-function renderHistoryList(file) {
-  const revisions = historyAllRevisions;
-  const hasAi = revisions.some((r) => r.ai);
-  const shown = historyAiOnly ? revisions.filter((r) => r.ai) : revisions;
-  historyList.innerHTML = '';
-
-  if (hasAi) {
-    const tg = document.createElement('button');
-
-    tg.type = 'button';
-    tg.className =
-      'flex items-center gap-1.5 w-full text-left px-2 py-1.5 mb-1.5 text-xs transition ' +
-      (historyAiOnly ? 'text-accent' : 'text-ink-400 hover:text-ink-200');
-    tg.innerHTML =
-      '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;' +
-      'border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ' +
-      (historyAiOnly ? '#1d9bd1' : '#5e6066') + ';background:' +
-      (historyAiOnly ? '#1d9bd1' : 'transparent') + '">' + (historyAiOnly ? '✓' : '') + '</span>' +
-      escapeHtml(t('historyAiOnly')) + ' seulement';
-    tg.addEventListener('click', () => {
-      historyAiOnly = !historyAiOnly;
-      renderHistoryList(file);
-    });
-    historyList.appendChild(tg);
-  }
-
-  if (!shown.length) {
-    const empty = document.createElement('div');
-
-    empty.className = 'text-ink-500 px-2 py-2 text-xs';
-    empty.textContent = t('historyNoAi');
-    historyList.appendChild(empty);
-
-    return;
-  }
-
-  shown.forEach((rev) => {
-    const i = revisions.indexOf(rev); // absolute index → keeps diff/parent correct under the filter
-    const when = formatRevDate(rev.date);
-    const row = document.createElement('button');
-
-    row.type = 'button';
-    row.className =
-      'history-rev block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 mb-0.5 transition';
-    row.innerHTML =
-      '<div class="text-ink-200 truncate">' +
-      escapeHtml(rev.subject || '(' + rev.sha.slice(0, 7) + ')') +
-      (rev.ai ? ' <span class="text-accent text-xs font-medium">· ' + escapeHtml(rev.ai) + '</span>' : '') +
-      '</div>' +
-      '<div class="text-xs text-ink-500 font-mono mt-0.5">' +
-      escapeHtml(rev.sha.slice(0, 7)) +
-      (when ? ' · ' + escapeHtml(when) : '') +
-      (rev.author ? ' · ' + escapeHtml(rev.author) : '') +
-      '</div>';
-    row.addEventListener('click', () => {
-      historyList.querySelectorAll('.history-rev').forEach((b) => b.classList.remove('bg-accent/15'));
-      row.classList.add('bg-accent/15');
-      historyCurrentSha = rev.sha;
-      showVersion(file, revisions, i);
-    });
-    historyList.appendChild(row);
-  });
-  // Keep the shown revision selected across a filter toggle (no re-fetch → no flash);
-  // only auto-load when nothing is selected yet or the selection was filtered out.
-  const rows = historyList.querySelectorAll('.history-rev');
-  const keepIdx = shown.findIndex((r) => r.sha === historyCurrentSha);
-  if (keepIdx >= 0) rows[keepIdx].classList.add('bg-accent/15');
-  else rows[0]?.click();
-}
-
-// `toggle` = { label, handler } for the secondary button: document view ↔ diff
-// view. The document is the default (cf. row click).
-function revisionHeader(file, revisions, i, toggle) {
-  const rev = revisions[i];
-  const wrap = document.createElement('div');
-
-  wrap.className = 'mb-3 pb-2 border-b subtle-border';
-  const when = rev.date ? new Date(rev.date).toLocaleString(LANG) : '';
-
-  wrap.innerHTML =
-    '<div class="text-ink-100 font-medium">' +
-    escapeHtml(rev.subject || '') +
-    '</div>' +
-    '<div class="text-xs text-ink-500 font-mono mt-0.5">' +
-    escapeHtml(rev.sha.slice(0, 7)) +
-    (when ? ' · ' + escapeHtml(when) : '') +
-    (rev.author ? ' · ' + escapeHtml(rev.author) : '') +
-    '</div>';
-  // Actions in a flex-wrap row (gap, no per-button margin): stay left-aligned
-  // whether they sit on one line (desktop) or wrap to two (mobile) — the old
-  // marginLeft hack left the wrapped button indented by 8px.
-  const actions = document.createElement('div');
-
-  actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:8px';
-  const view = document.createElement('button');
-
-  view.type = 'button';
-  view.className =
-    'px-3 py-1.5 text-sm font-medium bg-white/5 hover:bg-white/10 text-ink-200 rounded-lg transition';
-  view.textContent = t(toggle.label);
-  view.addEventListener('click', toggle.handler);
-  actions.appendChild(view);
-  const restore = document.createElement('button');
-
-  restore.type = 'button';
-  restore.className =
-    'px-3 py-1.5 text-sm font-medium bg-accent/15 hover:bg-accent/25 text-accent rounded-lg transition';
-  restore.textContent = t('historyRestore');
-  restore.addEventListener('click', () => revertToRevision(file, rev));
-  actions.appendChild(restore);
-  wrap.appendChild(actions);
-
-  return wrap;
-}
-
-async function showRevision(file, revisions, i) {
-  const rev = revisions[i];
-  const parent = revisions[i + 1]; // newest-first → the next entry is the older revision
-
-  historyDetail.innerHTML = '';
-  historyDetail.appendChild(
-    revisionHeader(file, revisions, i, {
-      label: 'historyViewVersion',
-      handler: () => showVersion(file, revisions, i),
-    }),
-  );
-  const body = document.createElement('div');
-
-  body.className = 'text-ink-500';
-  body.textContent = '…';
-  historyDetail.appendChild(body);
-
-  try {
-    if (parent) {
-      const data = await api(
-        'GET',
-        '/api/diff?path=' +
-          encodeURIComponent(file.path) +
-          '&from=' +
-          parent.sha +
-          '&to=' +
-          rev.sha,
-      );
-
-      if (historyFile !== file) return;
-      body.replaceWith(
-        data.diff && data.diff.trim() ? diffToDom(data.diff) : simpleNode(t('historyNoChange')),
-      );
-    } else {
-      // Oldest revision: no parent to diff against → show the full version as introduced.
-      const data = await api(
-        'GET',
-        '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha,
-      );
-
-      if (historyFile !== file) return;
-      body.replaceWith(plainTextNode(data.content));
-    }
-  } catch (e) {
-    if (historyFile !== file) return;
-    body.textContent = t('historyError');
-    body.className = 'text-rose-400';
-  }
-}
-
-// Default view when a revision is picked: the DOCUMENT at that revision (what the
-// reader cares about first), with a button to switch to the git diff.
-async function showVersion(file, revisions, i) {
-  const rev = revisions[i];
-
-  historyDetail.innerHTML = '';
-  historyDetail.appendChild(
-    revisionHeader(file, revisions, i, {
-      label: 'historyViewChanges',
-      handler: () => showRevision(file, revisions, i),
-    }),
-  );
-  const wrap = document.createElement('div');
-
-  // max-w-none: let the rendered version fill the (now wide) detail pane instead
-  // of the default ~65ch prose cap, so md uses the room on large screens.
-  wrap.className = 'prose prose-invert max-w-none text-base mt-1';
-  wrap.innerHTML = '<p class="text-ink-500">…</p>';
-  historyDetail.appendChild(wrap);
-  let data;
-
-  try {
-    data = await api(
-      'GET',
-      '/api/revision?path=' + encodeURIComponent(file.path) + '&rev=' + rev.sha,
+    const body = stripFrontmatter(content);
+    contentEl.innerHTML = renderDocTags(file) + renderMd(body);
+    attachCopyButtons();
+    wireTaskCheckboxes(file, content);
+    renderBacklinksFor(file);
+    buildToc();
+    renderNotesFor(file);
+    document.dispatchEvent(
+      new CustomEvent("atlas:doc-rendered", { detail: { path: file.path, markdown: body } })
     );
-  } catch (e) {
-    if (historyFile !== file) return;
-    wrap.innerHTML = '<p class="text-rose-400">' + escapeHtml(t('historyError')) + '</p>';
-
-    return;
+    if (highlightQuery) highlightFirstMatch(contentEl, highlightQuery);
   }
+}
+const docRenderer = new DocRenderer();
+function showMarkdown(file, highlightQuery) {
+  return docRenderer.show(file, highlightQuery);
+}
 
-  if (historyFile !== file) return;
-
-  // .html doc: render the past version as-is in a sandboxed iframe (no markdown
-  // pipeline), mirroring the live render (cf. renderHtmlFrame). srcdoc set as a
-  // property so the raw HTML is never concatenated into the viewer DOM; its JS
-  // runs in an opaque origin (allow-scripts, no same-origin) with no access to
-  // the viewer's cookies/DOM.
-  if (file.ext === '.html') {
-    const frame = document.createElement('iframe');
-
-    frame.setAttribute('sandbox', 'allow-scripts');
-    frame.title = file.name;
-    frame.srcdoc = data.content || '';
-    frame.style.cssText =
-      'width:100%;height:60vh;border:0;display:block;background:#0b0d13;border-radius:.5rem';
-    wrap.replaceWith(frame);
-
-    return;
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const historyOverlay = document.getElementById("history-overlay");
+const historyList = document.getElementById("history-list");
+const historyDetail = document.getElementById("history-detail");
+const historyPathEl = document.getElementById("history-path");
+class HistoryPanel {
+  constructor() {
+    __publicField(this, "file", null);
+    // AI-only filter state: showVersion always receives the FULL revisions array + the absolute index,
+    // so the diff (parent = revisions[i+1]) stays correct when the list is filtered.
+    __publicField(this, "allRevisions", []);
+    __publicField(this, "aiOnly", false);
+    __publicField(this, "currentSha", null);
   }
-
-  wrap.innerHTML = renderMd(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
-}
-
-// Restore a doc to a past revision by writing that content back as a new,
-// forward-moving change (kept in git history). Admin-only server-side; CSRF is
-// auto-injected by the global fetch wrapper.
-async function revertToRevision(file, rev) {
-  const ok = await confirmDialog({
-    title: t('historyRestore'),
-    message: t('historyRestoreConfirm'),
-    confirmLabel: t('historyRestoreBtn'),
-  });
-
-  if (!ok) return;
-
-  try {
-    await api('POST', '/api/revert', { path: file.path, rev: rev.sha });
-  } catch (e) {
-    setStatus(t('historyRestoreError'), 'err');
-
-    return;
+  // the revision shown in the detail pane (kept across a filter toggle)
+  available(file) {
+    const serverMode = location.protocol === "http:" || location.protocol === "https:";
+    return !!file && (file.ext === ".md" || file.ext === ".html") && serverMode && !IS_OFFLINE_BUILD && !window.__viewerMode && !(file.path || "").startsWith("remotes/");
   }
-
-  contentCache.delete(file.path); // force a fresh load of the restored content
-  closeHistory();
-  setStatus(t('historyRestored'), 'info');
-  showMarkdown(file);
-}
-
-function simpleNode(text) {
-  const d = document.createElement('div');
-
-  d.className = 'text-ink-500';
-  d.textContent = text;
-
-  return d;
-}
-
-function plainTextNode(text) {
-  const pre = document.createElement('pre');
-
-  pre.className = 'font-mono text-[15px] leading-relaxed text-ink-300';
-  pre.style.whiteSpace = 'pre-wrap';
-  pre.style.wordBreak = 'break-word';
-  pre.textContent = text || '';
-
-  return pre;
-}
-
-// Unified diff → escaped, color-coded DOM. Diff colors use inline styles because
-// the green/emerald utilities aren't in the precompiled tailwind.css.
-function diffToDom(diffText) {
-  const wrap = document.createElement('div');
-
-  wrap.className = 'font-mono text-[15px] leading-relaxed';
-  wrap.style.whiteSpace = 'pre-wrap';
-  wrap.style.wordBreak = 'break-word';
-  // Skip everything before the first @@ (git plumbing: diff --git / index / --- /
-  // +++, noise for a reader). Each @@ → a thin separator. After the first @@ every
-  // line is content, so a content line starting with --- is rendered, not skipped.
-  let hunks = 0;
-
-  for (const line of (diffText || '').split('\n')) {
-    if (line.startsWith('@@')) {
-      if (hunks > 0) {
-        const sep = document.createElement('div');
-
-        sep.className = 'border-t subtle-border';
-        sep.style.margin = '8px 0';
-        wrap.appendChild(sep);
+  close() {
+    this.file = null;
+    historyOverlay.classList.add("hidden");
+  }
+  async open(file) {
+    const target = file && typeof file.path === "string" ? file : currentFile;
+    if (!this.available(target)) return;
+    this.file = target;
+    historyPathEl.textContent = target.path;
+    historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">…</div>';
+    historyDetail.innerHTML = '<div class="text-ink-500">' + escapeHtml(t("historyPick")) + "</div>";
+    historyOverlay.classList.remove("hidden");
+    let data;
+    try {
+      data = await api("GET", "/api/history?path=" + encodeURIComponent(target.path));
+    } catch (_) {
+      if (this.file !== target) return;
+      historyList.innerHTML = '<div class="text-rose-400 px-2 py-1">' + escapeHtml(t("historyError")) + "</div>";
+      return;
+    }
+    if (this.file !== target) return;
+    const revisions = data.revisions || [];
+    if (!revisions.length) {
+      historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">' + escapeHtml(t("historyEmpty")) + "</div>";
+      return;
+    }
+    this.allRevisions = revisions;
+    this.aiOnly = false;
+    this.currentSha = null;
+    this.renderHistoryList(target);
+  }
+  formatRevDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "" : d.toLocaleDateString(LANG, { day: "numeric", month: "short", year: "numeric" });
+  }
+  renderHistoryList(file) {
+    const revisions = this.allRevisions;
+    const hasAi = revisions.some((r) => r.ai);
+    const shown = this.aiOnly ? revisions.filter((r) => r.ai) : revisions;
+    historyList.innerHTML = "";
+    if (hasAi) {
+      const tg = document.createElement("button");
+      tg.type = "button";
+      tg.className = "flex items-center gap-1.5 w-full text-left px-2 py-1.5 mb-1.5 text-xs transition " + (this.aiOnly ? "text-accent" : "text-ink-400 hover:text-ink-200");
+      tg.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ' + (this.aiOnly ? "#1d9bd1" : "#5e6066") + ";background:" + (this.aiOnly ? "#1d9bd1" : "transparent") + '">' + (this.aiOnly ? "✓" : "") + "</span>" + escapeHtml(t("historyAiOnly")) + " seulement";
+      tg.addEventListener("click", () => {
+        this.aiOnly = !this.aiOnly;
+        this.renderHistoryList(file);
+      });
+      historyList.appendChild(tg);
+    }
+    if (!shown.length) {
+      const empty = document.createElement("div");
+      empty.className = "text-ink-500 px-2 py-2 text-xs";
+      empty.textContent = t("historyNoAi");
+      historyList.appendChild(empty);
+      return;
+    }
+    shown.forEach((rev) => {
+      const i = revisions.indexOf(rev);
+      const when = this.formatRevDate(rev.date);
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "history-rev block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 mb-0.5 transition";
+      row.innerHTML = '<div class="text-ink-200 truncate">' + escapeHtml(rev.subject || "(" + rev.sha.slice(0, 7) + ")") + (rev.ai ? ' <span class="text-accent text-xs font-medium">· ' + escapeHtml(rev.ai) + "</span>" : "") + '</div><div class="text-xs text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) + (when ? " · " + escapeHtml(when) : "") + (rev.author ? " · " + escapeHtml(rev.author) : "") + "</div>";
+      row.addEventListener("click", () => {
+        historyList.querySelectorAll(".history-rev").forEach((b) => b.classList.remove("bg-accent/15"));
+        row.classList.add("bg-accent/15");
+        this.currentSha = rev.sha;
+        this.showVersion(file, revisions, i);
+      });
+      historyList.appendChild(row);
+    });
+    const rows = historyList.querySelectorAll(".history-rev");
+    const keepIdx = shown.findIndex((r) => r.sha === this.currentSha);
+    if (keepIdx >= 0) rows[keepIdx].classList.add("bg-accent/15");
+    else rows[0]?.click();
+  }
+  // `toggle` = { label, handler } for the secondary button: document view ↔ diff view. The document
+  // is the default (cf. row click).
+  revisionHeader(file, revisions, i, toggle) {
+    const rev = revisions[i];
+    const wrap = document.createElement("div");
+    wrap.className = "mb-3 pb-2 border-b subtle-border";
+    const when = rev.date ? new Date(rev.date).toLocaleString(LANG) : "";
+    wrap.innerHTML = '<div class="text-ink-100 font-medium">' + escapeHtml(rev.subject || "") + '</div><div class="text-xs text-ink-500 font-mono mt-0.5">' + escapeHtml(rev.sha.slice(0, 7)) + (when ? " · " + escapeHtml(when) : "") + (rev.author ? " · " + escapeHtml(rev.author) : "") + "</div>";
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-top:8px";
+    const view = document.createElement("button");
+    view.type = "button";
+    view.className = "px-3 py-1.5 text-sm font-medium bg-white/5 hover:bg-white/10 text-ink-200 rounded-lg transition";
+    view.textContent = t(toggle.label);
+    view.addEventListener("click", toggle.handler);
+    actions.appendChild(view);
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "px-3 py-1.5 text-sm font-medium bg-accent/15 hover:bg-accent/25 text-accent rounded-lg transition";
+    restore.textContent = t("historyRestore");
+    restore.addEventListener("click", () => this.revertToRevision(file, rev));
+    actions.appendChild(restore);
+    wrap.appendChild(actions);
+    return wrap;
+  }
+  async showRevision(file, revisions, i) {
+    const rev = revisions[i];
+    const parent = revisions[i + 1];
+    historyDetail.innerHTML = "";
+    historyDetail.appendChild(
+      this.revisionHeader(file, revisions, i, {
+        label: "historyViewVersion",
+        handler: () => this.showVersion(file, revisions, i)
+      })
+    );
+    const body = document.createElement("div");
+    body.className = "text-ink-500";
+    body.textContent = "…";
+    historyDetail.appendChild(body);
+    try {
+      if (parent) {
+        const data = await api(
+          "GET",
+          "/api/diff?path=" + encodeURIComponent(file.path) + "&from=" + parent.sha + "&to=" + rev.sha
+        );
+        if (this.file !== file) return;
+        body.replaceWith(
+          data.diff && data.diff.trim() ? this.diffToDom(data.diff) : this.simpleNode(t("historyNoChange"))
+        );
+      } else {
+        const data = await api(
+          "GET",
+          "/api/revision?path=" + encodeURIComponent(file.path) + "&rev=" + rev.sha
+        );
+        if (this.file !== file) return;
+        body.replaceWith(this.plainTextNode(data.content));
       }
-
-      hunks++;
-      continue;
+    } catch (_) {
+      if (this.file !== file) return;
+      body.textContent = t("historyError");
+      body.className = "text-rose-400";
     }
-
-    if (hunks === 0) continue;
-    const row = document.createElement('div');
-
-    row.className = 'px-2';
-
-    if (line[0] === '+') {
-      row.style.color = '#86efac';
-      row.style.background = 'rgba(16,185,129,0.10)';
-    } else if (line[0] === '-') {
-      row.style.color = '#fca5a5';
-      row.style.background = 'rgba(244,63,94,0.10)';
-    } else {
-      row.className += ' text-ink-400';
-    }
-
-    row.textContent = line === '' ? ' ' : line;
-    wrap.appendChild(row);
   }
-
-  return wrap;
+  // Default view when a revision is picked: the DOCUMENT at that revision (what the reader cares
+  // about first), with a button to switch to the git diff.
+  async showVersion(file, revisions, i) {
+    const rev = revisions[i];
+    historyDetail.innerHTML = "";
+    historyDetail.appendChild(
+      this.revisionHeader(file, revisions, i, {
+        label: "historyViewChanges",
+        handler: () => this.showRevision(file, revisions, i)
+      })
+    );
+    const wrap = document.createElement("div");
+    wrap.className = "prose prose-invert max-w-none text-base mt-1";
+    wrap.innerHTML = '<p class="text-ink-500">…</p>';
+    historyDetail.appendChild(wrap);
+    let data;
+    try {
+      data = await api(
+        "GET",
+        "/api/revision?path=" + encodeURIComponent(file.path) + "&rev=" + rev.sha
+      );
+    } catch (_) {
+      if (this.file !== file) return;
+      wrap.innerHTML = '<p class="text-rose-400">' + escapeHtml(t("historyError")) + "</p>";
+      return;
+    }
+    if (this.file !== file) return;
+    if (file.ext === ".html") {
+      const frame = document.createElement("iframe");
+      frame.setAttribute("sandbox", "allow-scripts");
+      frame.title = file.name;
+      frame.srcdoc = data.content || "";
+      frame.style.cssText = "width:100%;height:60vh;border:0;display:block;background:#0b0d13;border-radius:.5rem";
+      wrap.replaceWith(frame);
+      return;
+    }
+    wrap.innerHTML = renderMd(stripFrontmatter(data.content || ""));
+  }
+  // Restore a doc to a past revision by writing that content back as a new, forward-moving change
+  // (kept in git history). Admin-only server-side; CSRF is auto-injected by the global fetch wrapper.
+  async revertToRevision(file, rev) {
+    const ok = await confirmDialog({
+      title: t("historyRestore"),
+      message: t("historyRestoreConfirm"),
+      confirmLabel: t("historyRestoreBtn")
+    });
+    if (!ok) return;
+    try {
+      await api("POST", "/api/revert", { path: file.path, rev: rev.sha });
+    } catch (_) {
+      setStatus(t("historyRestoreError"), "err");
+      return;
+    }
+    contentCache.delete(file.path);
+    closeHistory();
+    setStatus(t("historyRestored"), "info");
+    showMarkdown(file);
+  }
+  simpleNode(text) {
+    const d = document.createElement("div");
+    d.className = "text-ink-500";
+    d.textContent = text;
+    return d;
+  }
+  plainTextNode(text) {
+    const pre = document.createElement("pre");
+    pre.className = "font-mono text-[15px] leading-relaxed text-ink-300";
+    pre.style.whiteSpace = "pre-wrap";
+    pre.style.wordBreak = "break-word";
+    pre.textContent = text || "";
+    return pre;
+  }
+  // Unified diff → escaped, color-coded DOM. Diff colors use inline styles because the green/emerald
+  // utilities aren't in the precompiled tailwind.css.
+  diffToDom(diffText) {
+    const wrap = document.createElement("div");
+    wrap.className = "font-mono text-[15px] leading-relaxed";
+    wrap.style.whiteSpace = "pre-wrap";
+    wrap.style.wordBreak = "break-word";
+    let hunks = 0;
+    for (const line of (diffText || "").split("\n")) {
+      if (line.startsWith("@@")) {
+        if (hunks > 0) {
+          const sep = document.createElement("div");
+          sep.className = "border-t subtle-border";
+          sep.style.margin = "8px 0";
+          wrap.appendChild(sep);
+        }
+        hunks++;
+        continue;
+      }
+      if (hunks === 0) continue;
+      const row = document.createElement("div");
+      row.className = "px-2";
+      if (line[0] === "+") {
+        row.style.color = "#86efac";
+        row.style.background = "rgba(16,185,129,0.10)";
+      } else if (line[0] === "-") {
+        row.style.color = "#fca5a5";
+        row.style.background = "rgba(244,63,94,0.10)";
+      } else {
+        row.className += " text-ink-400";
+      }
+      row.textContent = line === "" ? " " : line;
+      wrap.appendChild(row);
+    }
+    return wrap;
+  }
 }
-
-document.getElementById('btn-history').addEventListener('click', () => openHistory());
-document.getElementById('history-close').addEventListener('click', closeHistory);
-historyOverlay.addEventListener('click', (e) => {
+const historyPanel = new HistoryPanel();
+function historyAvailable(file) {
+  return historyPanel.available(file);
+}
+function openHistory(file) {
+  return historyPanel.open(file);
+}
+function closeHistory() {
+  historyPanel.close();
+}
+document.getElementById("btn-history").addEventListener("click", () => openHistory());
+document.getElementById("history-close").addEventListener("click", closeHistory);
+historyOverlay.addEventListener("click", (e) => {
   if (e.target === historyOverlay) closeHistory();
 });
 
-// Render a .html doc (slide deck, dashboard…) as-is in a sandboxed iframe.
-// sandbox="allow-scripts" runs its JS but isolates it in an opaque origin (no
-// access to the viewer's DOM/cookies); allow="fullscreen" enables fullscreen.
-// The raw HTML is never injected into the viewer's DOM.
-
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _Frames = class _Frames {
+  constructor() {
+    // In-flight loads of lazy vendor scripts, cached by URL so a second .docx reuses the first load.
+    __publicField(this, "scriptCache", /* @__PURE__ */ new Map());
+  }
+  // .html doc (slide deck, dashboard…) rendered as-is in a sandboxed iframe: allow-scripts runs its
+  // JS in an opaque origin (no access to the viewer's DOM/cookies), allow=fullscreen enables
+  // fullscreen. Offline (file://) the absolute URL won't resolve → inject the embedded content via
+  // srcdoc instead.
+  renderHtml(file) {
+    this.enterFrameMode(true);
+    const u = escapeHtml(this.frameUrl(file));
+    const offlineSrc = IS_OFFLINE_BUILD ? file.content ?? EMBED_CONTENT?.[file.path] ?? null : null;
+    const frameAttr = offlineSrc != null ? 'srcdoc="' + escapeHtml(offlineSrc) + '"' : 'src="' + u + '"';
+    contentEl.innerHTML = this.banner("htmlDocBanner", u) + "<iframe " + frameAttr + ' sandbox="allow-scripts" allow="fullscreen" title="' + escapeHtml(file.name) + '" style="' + _Frames.FRAME_STYLE + '"></iframe>';
+  }
+  // .pdf in the browser's native viewer via a same-origin iframe (X-Frame-Options SAMEORIGIN allows
+  // our own framing). Offline a binary can't be inlined → offer a direct-open link instead.
+  renderPdf(file) {
+    this.enterFrameMode(true);
+    const u = escapeHtml(this.frameUrl(file));
+    const body = IS_OFFLINE_BUILD ? '<div class="p-6 text-sm text-ink-400">' + t("pdfOfflineHint") + ' <a href="' + u + '" class="text-sky-400 hover:underline">' + escapeHtml(file.name) + "</a></div>" : '<iframe src="' + u + '" title="' + escapeHtml(file.name) + '" style="' + _Frames.FRAME_STYLE + '"></iframe>';
+    contentEl.innerHTML = this.banner("pdfDocBanner", u) + body;
+  }
+  // .docx → HTML via mammoth, sanitized and injected into .prose. Read-only, client-side. Each
+  // currentFile guard drops a result whose page changed during the fetch/parse.
+  async renderDocx(file) {
+    this.enterFrameMode(false);
+    contentEl.innerHTML = renderSkeleton(file);
+    try {
+      await this.loadScript(_Frames.MAMMOTH_URL, () => !!window.mammoth);
+      const buf = await (await fetch(this.frameUrl(file), { cache: "no-cache" })).arrayBuffer();
+      if (currentFile !== file) return;
+      const result = await window.mammoth.convertToHtml({ arrayBuffer: buf });
+      if (currentFile !== file) return;
+      contentEl.innerHTML = '<div class="docx-doc">' + DOMPurify.sanitize(result.value) + "</div>";
+    } catch (e) {
+      if (currentFile !== file) return;
+      contentEl.innerHTML = '<div class="text-rose-400 text-sm">' + escapeHtml(t("docxError", e.message)) + ' <a href="' + escapeHtml(this.encodePath(file)) + '" class="text-sky-400 hover:underline">' + escapeHtml(file.name) + "</a></div>";
+    }
+  }
+  // Banner above a framed doc: a label + an "open fullscreen" link to the raw URL.
+  banner(bannerKey, u) {
+    return '<div class="flex items-center justify-between px-4 py-2 border-b border-navy-500 bg-navy-800 text-xs"><span class="text-ink-400 font-mono">' + t(bannerKey) + '</span><a href="' + u + '" target="_blank" rel="noopener" class="text-sky-400 hover:underline whitespace-nowrap ml-3">' + t("openFullscreen") + "</a></div>";
+  }
+  // A framed doc takes over the content pane: no editing (none of these is editable via the viewer),
+  // no TOC/backlinks/notes/todos (meaningless over a standalone doc). fullWidth drops the prose width
+  // cap + padding for the HTML/PDF decks; DOCX keeps prose width (restores it). All restored by the
+  // next .md doc via showMarkdown.
+  enterFrameMode(fullWidth) {
+    btnEdit.classList.add("hidden");
+    btnSave.classList.add("hidden");
+    btnCancel.classList.add("hidden");
+    contentEl.style.maxWidth = fullWidth ? "none" : "";
+    contentEl.style.padding = fullWidth ? "0" : "";
+    tocList.innerHTML = "";
+    tocLinks.innerHTML = "";
+    tocNotes.innerHTML = "";
+    tocPanel.classList.add("hidden");
+    tocPanel.classList.remove("flex");
+    if (tocShow) tocShow.classList.add("hidden");
+    document.getElementById("todo-widget")?.classList.add("hidden");
+  }
+  // Content-relative path → an absolute, percent-encoded URL (no cache-buster).
+  encodePath(file) {
+    return "/" + file.path.split("/").map(encodeURIComponent).join("/");
+  }
+  // Same, plus the mtime cache-buster used for the live fetch / iframe src.
+  frameUrl(file) {
+    return this.encodePath(file) + (file.mtime ? "?v=" + file.mtime : "");
+  }
+  // Load a vendor <script> once, cached by URL; resolve when onload fires AND ready() confirms the
+  // global it defines is present (a 200 that isn't the expected script still rejects). A failed load
+  // is evicted so a later open can retry.
+  loadScript(url, ready) {
+    if (ready()) return Promise.resolve();
+    const cached = this.scriptCache.get(url);
+    if (cached) return cached;
+    const p = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = url;
+      s.onload = () => ready() ? resolve() : reject(new Error(url));
+      s.onerror = () => {
+        this.scriptCache.delete(url);
+        reject(new Error(url + " load failed"));
+      };
+      document.head.appendChild(s);
+    });
+    this.scriptCache.set(url, p);
+    return p;
+  }
+};
+// Shared iframe geometry: full-bleed minus the breadcrumb, dark backdrop.
+__publicField(_Frames, "FRAME_STYLE", "width:100%;height:calc(100vh - 150px);border:0;display:block;background:#0b0d13");
+// mammoth.js (DOCX → HTML) is ~640 KB: loaded on demand, never in the <head>, since most sessions
+// never open a .docx.
+__publicField(_Frames, "MAMMOTH_URL", "/vendor/mammoth.min.js");
+let Frames = _Frames;
+const frameRenderer = new Frames();
 function renderHtmlFrame(file) {
-  btnEdit.classList.add('hidden'); // no inline HTML editing via the viewer
-  btnSave.classList.add('hidden');
-  btnCancel.classList.add('hidden');
-  // The prose article is narrow and padded: full width for the deck.
-  contentEl.style.maxWidth = 'none';
-  contentEl.style.padding = '0';
-  const url =
-    '/' +
-    file.path.split('/').map(encodeURIComponent).join('/') +
-    (file.mtime ? '?v=' + file.mtime : '');
-  const u = escapeHtml(url);
-  // Online: iframe src=URL. Offline (file://) the absolute URL doesn't resolve →
-  // inject the embedded content via srcdoc.
-  const offlineSrc =
-    typeof IS_OFFLINE_BUILD !== 'undefined' && IS_OFFLINE_BUILD
-      ? file.content != null
-        ? file.content
-        : typeof EMBED_CONTENT !== 'undefined'
-          ? EMBED_CONTENT[file.path]
-          : null
-      : null;
-  const frameAttr =
-    offlineSrc != null ? 'srcdoc="' + escapeHtml(offlineSrc) + '"' : 'src="' + u + '"';
-
-  contentEl.innerHTML =
-    '<div class="flex items-center justify-between px-4 py-2 border-b border-navy-500 bg-navy-800 text-xs">' +
-    '<span class="text-ink-400 font-mono">' +
-    t('htmlDocBanner') +
-    '</span>' +
-    '<a href="' +
-    u +
-    '" target="_blank" rel="noopener" class="text-sky-400 hover:underline whitespace-nowrap ml-3">' +
-    t('openFullscreen') +
-    '</a>' +
-    '</div>' +
-    '<iframe ' +
-    frameAttr +
-    ' sandbox="allow-scripts" allow="fullscreen" title="' +
-    escapeHtml(file.name) +
-    '" ' +
-    'style="width:100%;height:calc(100vh - 150px);border:0;display:block;background:#0b0d13"></iframe>';
-  // TOC/backlinks/notes + todos widget make no sense over a standalone HTML doc:
-  // hide them (restored on the next .md doc via showMarkdown).
-  tocList.innerHTML = '';
-  tocLinks.innerHTML = '';
-  tocNotes.innerHTML = '';
-  tocPanel.classList.add('hidden');
-  tocPanel.classList.remove('flex');
-
-  if (typeof tocShow !== 'undefined' && tocShow) tocShow.classList.add('hidden');
-  document.getElementById('todo-widget')?.classList.add('hidden');
+  frameRenderer.renderHtml(file);
 }
-
-// Render a .pdf in the browser's native viewer via a same-origin iframe
-// (X-Frame-Options SAMEORIGIN allows our own framing). Offline, a binary can't be
-// inlined → we offer direct opening instead.
 function renderPdfFrame(file) {
-  btnEdit.classList.add('hidden');
-  btnSave.classList.add('hidden');
-  btnCancel.classList.add('hidden');
-  contentEl.style.maxWidth = 'none';
-  contentEl.style.padding = '0';
-  const url =
-    '/' +
-    file.path.split('/').map(encodeURIComponent).join('/') +
-    (file.mtime ? '?v=' + file.mtime : '');
-  const u = escapeHtml(url);
-  const offline = typeof IS_OFFLINE_BUILD !== 'undefined' && IS_OFFLINE_BUILD;
-  const body = offline
-    ? '<div class="p-6 text-sm text-ink-400">' +
-      t('pdfOfflineHint') +
-      ' <a href="' +
-      u +
-      '" class="text-sky-400 hover:underline">' +
-      escapeHtml(file.name) +
-      '</a></div>'
-    : '<iframe src="' +
-      u +
-      '" title="' +
-      escapeHtml(file.name) +
-      '" style="width:100%;height:calc(100vh - 150px);border:0;display:block;background:#0b0d13"></iframe>';
-
-  contentEl.innerHTML =
-    '<div class="flex items-center justify-between px-4 py-2 border-b border-navy-500 bg-navy-800 text-xs">' +
-    '<span class="text-ink-400 font-mono">' +
-    t('pdfDocBanner') +
-    '</span>' +
-    '<a href="' +
-    u +
-    '" target="_blank" rel="noopener" class="text-sky-400 hover:underline whitespace-nowrap ml-3">' +
-    t('openFullscreen') +
-    '</a>' +
-    '</div>' +
-    body;
-  tocList.innerHTML = '';
-  tocLinks.innerHTML = '';
-  tocNotes.innerHTML = '';
-  tocPanel.classList.add('hidden');
-  tocPanel.classList.remove('flex');
-
-  if (typeof tocShow !== 'undefined' && tocShow) tocShow.classList.add('hidden');
-  document.getElementById('todo-widget')?.classList.add('hidden');
+  frameRenderer.renderPdf(file);
+}
+function renderDocxFrame(file) {
+  return frameRenderer.renderDocx(file);
 }
 
-// mammoth.js (DOCX → HTML) loaded ON DEMAND: ~640 KB, no point embedding it
-// in the <head> when most sessions never open a .docx.
-let _mammothPromise = null;
-
-function loadMammoth() {
-  if (window.mammoth) return Promise.resolve(window.mammoth);
-
-  if (_mammothPromise) return _mammothPromise;
-  _mammothPromise = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-
-    s.src = '/vendor/mammoth.min.js';
-    s.onload = () => (window.mammoth ? resolve(window.mammoth) : reject(new Error('mammoth')));
-    s.onerror = () => {
-      _mammothPromise = null;
-      reject(new Error('mammoth load failed'));
-    };
-
-    document.head.appendChild(s);
-  });
-
-  return _mammothPromise;
-}
-
-// .docx → HTML via mammoth, injected into .prose. Read-only, client-side.
-async function renderDocxFrame(file) {
-  btnEdit.classList.add('hidden');
-  btnSave.classList.add('hidden');
-  btnCancel.classList.add('hidden');
-  contentEl.style.maxWidth = '';
-  contentEl.style.padding = '';
-  contentEl.innerHTML = renderSkeleton(file);
-  tocList.innerHTML = '';
-  tocLinks.innerHTML = '';
-  tocNotes.innerHTML = '';
-  tocPanel.classList.add('hidden');
-  tocPanel.classList.remove('flex');
-
-  if (typeof tocShow !== 'undefined' && tocShow) tocShow.classList.add('hidden');
-  document.getElementById('todo-widget')?.classList.add('hidden');
-
-  try {
-    const mammoth = await loadMammoth();
-    const url =
-      '/' +
-      file.path.split('/').map(encodeURIComponent).join('/') +
-      (file.mtime ? '?v=' + file.mtime : '');
-    const buf = await (await fetch(url, { cache: 'no-cache' })).arrayBuffer();
-
-    if (currentFile !== file) return; // page changed during the fetch/parse
-    const result = await mammoth.convertToHtml({ arrayBuffer: buf });
-
-    if (currentFile !== file) return;
-    contentEl.innerHTML = '<div class="docx-doc">' + DOMPurify.sanitize(result.value) + '</div>';
-  } catch (e) {
-    if (currentFile !== file) return;
-    const url = '/' + file.path.split('/').map(encodeURIComponent).join('/');
-
-    contentEl.innerHTML =
-      '<div class="text-rose-400 text-sm">' +
-      escapeHtml(t('docxError', e.message)) +
-      ' <a href="' +
-      escapeHtml(url) +
-      '" class="text-sky-400 hover:underline">' +
-      escapeHtml(file.name) +
-      '</a></div>';
-  }
-}
-
-// Strips the leading YAML frontmatter (--- ... ---) before rendering (same regex
-// as the build). The raw content keeps the frontmatter (tag editing).
-
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 function stripFrontmatter(text) {
-  return text.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n?/, '');
+  return text.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n?/, "");
 }
-
 function folderTagsOf(path) {
-  return path
-    .split('/')
-    .slice(0, -1)
-    .map((s) => s.toLowerCase());
+  return path.split("/").slice(0, -1).map((s) => s.toLowerCase());
 }
-
-// Clickable tag chips for the doc (→ view by tag).
+class DocTags {
+  renderDocTags(file) {
+    if (!file || file.ext !== ".md") return "";
+    const canEdit = !IS_OFFLINE_BUILD && !window.__viewerMode && !(file.path || "").startsWith("remotes/");
+    const folderSet = new Set(folderTagsOf(file.path));
+    const chips = (file.tags || []).map(
+      (tg) => folderSet.has(tg) ? '<span class="doc-tag doc-tag-folder" data-tag="' + escapeHtml(tg) + '" title="' + escapeHtml(t("folderTagTitle")) + '">#' + escapeHtml(tg) + "</span>" : '<span class="doc-tag" data-tag="' + escapeHtml(tg) + '">#' + escapeHtml(tg) + (canEdit ? '<button class="doc-tag-x" data-removetag="' + escapeHtml(tg) + '" title="' + escapeHtml(t("removeTag")) + '">×</button>' : "") + "</span>"
+    ).join("");
+    if (!chips && !canEdit) return "";
+    return '<div class="doc-tags not-prose">' + chips + (canEdit ? '<button class="doc-tag-add" title="' + escapeHtml(t("addTag")) + '">+</button>' : "") + "</div>";
+  }
+}
+class TagStore {
+  constructor(docTags2) {
+    this.docTags = docTags2;
+  }
+  allTagsList() {
+    const s = /* @__PURE__ */ new Set();
+    for (const f of Object.values(fileMap)) {
+      if (f.ext === ".md") for (const tg of f.tags || []) s.add(tg);
+    }
+    return [...s].sort();
+  }
+  // Rewrites the `tags:` frontmatter key (custom tags only — folder tags are derived at build).
+  // Empty list → removes the key (and the frontmatter block if it empties).
+  static setFrontmatterTags(content, customTags) {
+    const tagsLine = customTags.length ? "tags: [" + customTags.join(", ") + "]" : null;
+    const m = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/);
+    if (m) {
+      const lines = m[1].split(/\r?\n/);
+      const out = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (/^tags[ \t]*:/i.test(lines[i])) {
+          let j = i + 1;
+          while (j < lines.length && /^[ \t]*-[ \t]+/.test(lines[j])) j++;
+          i = j - 1;
+          continue;
+        }
+        out.push(lines[i]);
+      }
+      if (tagsLine) out.push(tagsLine);
+      const cleaned = out.filter((l) => l.trim().length).join("\n");
+      const body = content.slice(m[0].length).replace(/^\n+/, "");
+      return cleaned ? "---\n" + cleaned + "\n---\n\n" + body : body;
+    }
+    return tagsLine ? "---\n" + tagsLine + "\n---\n\n" + content : content;
+  }
+  // Persists custom tags: rewrite frontmatter, PUT /api/file (server rebuilds + commits), then update
+  // fileMap and re-render the chips in place.
+  async persistTags(file, customTags) {
+    let loaded;
+    try {
+      loaded = await loadContent(file);
+    } catch {
+      return false;
+    }
+    const newContent = TagStore.setFrontmatterTags(loaded, customTags);
+    try {
+      const res = await fetch("/api/file", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: file.path, content: newContent })
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+    } catch (err) {
+      notifyError("tagSaveFailed", err.message);
+      return false;
+    }
+    contentCache.set(file.path, newContent);
+    file.content = newContent;
+    const merged = folderTagsOf(file.path);
+    for (const tg of customTags) if (!merged.includes(tg)) merged.push(tg);
+    file.tags = merged;
+    if (currentFile === file) {
+      const wrap = contentEl.querySelector(".doc-tags");
+      if (wrap) wrap.outerHTML = this.docTags.renderDocTags(file);
+    }
+    return true;
+  }
+  async addCustomTag(file, tag) {
+    tag = (tag || "").trim().toLowerCase().replace(/^#/, "").replace(/\s+/g, "-");
+    if (!file || !tag) return;
+    const folderSet = new Set(folderTagsOf(file.path));
+    if (folderSet.has(tag)) return;
+    const custom = (file.tags || []).filter((tg) => !folderSet.has(tg));
+    if (custom.includes(tag)) return;
+    custom.push(tag);
+    await this.persistTags(file, custom);
+  }
+  async removeCustomTag(file, tag) {
+    if (!file) return;
+    const folderSet = new Set(folderTagsOf(file.path));
+    const custom = (file.tags || []).filter((tg) => !folderSet.has(tg) && tg !== tag);
+    await this.persistTags(file, custom);
+  }
+}
+const _TagEditor = class _TagEditor {
+  constructor(store) {
+    this.store = store;
+    // The popup island: created on open, torn down on close. The combobox is mounted on its input and
+    // owns its own body-level dropdown (refresh re-pulls the tag list after a new tag is committed).
+    __publicField(this, "editorEl", null);
+    __publicField(this, "editorCb", null);
+  }
+  closeEditor() {
+    if (this.editorCb) {
+      this.editorCb.destroy();
+      this.editorCb = null;
+    }
+    if (this.editorEl) {
+      this.editorEl.remove();
+      this.editorEl = null;
+    }
+  }
+  openEditor(file, anchorEl) {
+    if (!file) return;
+    this.closeEditor();
+    const folderSet = new Set(folderTagsOf(file.path));
+    const el = document.createElement("div");
+    el.id = "tag-editor";
+    el.className = _TagEditor.EDITOR_CLASS;
+    el.innerHTML = '<div class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-2 font-sans">' + t("tagEditorTitle") + '</div><div id="tag-ed-list" class="flex flex-wrap gap-1.5 mb-2"></div><input id="tag-ed-input" placeholder="' + escapeHtml(t("tagPlaceholder")) + '" autocomplete="off" class="w-full px-3 py-2 text-sm bg-black/30 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40"><div class="text-[10px] text-ink-500 mt-1.5 font-sans">' + t("tagEditorHint") + "</div>";
+    document.body.appendChild(el);
+    this.editorEl = el;
+    const r = anchorEl.getBoundingClientRect();
+    el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + "px";
+    el.style.top = r.bottom + 6 + "px";
+    const input = el.querySelector("#tag-ed-input");
+    const renderList = () => {
+      const cur = (file.tags || []).filter((tg) => !folderSet.has(tg));
+      const box = el.querySelector("#tag-ed-list");
+      box.innerHTML = cur.length ? cur.map(
+        (tg) => '<span class="doc-tag" style="cursor:default">#' + escapeHtml(tg) + '<button class="doc-tag-x" data-ed-rm="' + escapeHtml(tg) + '">×</button></span>'
+      ).join("") : '<span class="text-[11px] text-ink-500">' + t("noCustomTags") + "</span>";
+      box.querySelectorAll("[data-ed-rm]").forEach(
+        (b) => b.addEventListener("click", async () => {
+          await this.store.removeCustomTag(file, b.dataset.edRm);
+          renderList();
+        })
+      );
+    };
+    renderList();
+    this.editorCb = AtlasCombobox(input, {
+      source: () => this.store.allTagsList(),
+      creatable: true,
+      onSelect: async (v) => {
+        input.value = "";
+        if (v && v.trim()) {
+          await this.store.addCustomTag(file, v);
+          renderList();
+          this.editorCb.refresh();
+        }
+      }
+    });
+    input.focus();
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.closeEditor();
+      }
+    });
+  }
+  // ---- delegation + outside-click wiring (top-level side effects in the old .js) ----
+  init() {
+    document.addEventListener("click", (e) => {
+      const target = e.target;
+      if (this.editorEl && !this.editorEl.contains(target) && !target.closest(".doc-tag-add")) {
+        this.closeEditor();
+      }
+    });
+    contentEl.addEventListener("click", (e) => {
+      const target = e.target;
+      const rm = target.closest("[data-removetag]");
+      if (rm) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.store.removeCustomTag(currentFile, rm.dataset.removetag);
+        return;
+      }
+      const add = target.closest(".doc-tag-add");
+      if (add) {
+        e.preventDefault();
+        this.openEditor(currentFile, add);
+        return;
+      }
+      const tagBtn = target.closest(".doc-tag");
+      if (tagBtn && tagBtn.dataset.tag) {
+        e.preventDefault();
+        showTag(tagBtn.dataset.tag);
+        return;
+      }
+      const wl = target.closest("a.wikilink");
+      if (wl) {
+        e.preventDefault();
+        const f = wl.dataset.path ? fileMap[wl.dataset.path] : void 0;
+        if (f) {
+          showMarkdown(f);
+          history.replaceState(null, "", "#" + encodeURIComponent(f.path));
+        }
+      }
+    });
+  }
+};
+// The tag-editor popup wrapper (z-50, body-anchored). Only static class string worth hoisting.
+__publicField(_TagEditor, "EDITOR_CLASS", "fixed z-50 w-64 bg-navy-800 border subtle-border rounded-lg shadow-2xl shadow-black/70 p-3");
+let TagEditor = _TagEditor;
+const docTags = new DocTags();
+const tagStore = new TagStore(docTags);
+const tagEditor = new TagEditor(tagStore);
+tagEditor.init();
 function renderDocTags(file) {
-  if (!file || file.ext !== '.md') return '';
-  // Mirror doc = read-only: no +/× (any tag write would 403).
-  const canEdit =
-    !IS_OFFLINE_BUILD && !window.__viewerMode && !(file.path || '').startsWith('remotes/');
-  const folderSet = new Set(folderTagsOf(file.path));
-  const chips = (file.tags || [])
-    .map((tg) =>
-      folderSet.has(tg)
-        ? '<span class="doc-tag doc-tag-folder" data-tag="' +
-          escapeHtml(tg) +
-          '" title="' +
-          escapeHtml(t('folderTagTitle')) +
-          '">#' +
-          escapeHtml(tg) +
-          '</span>'
-        : '<span class="doc-tag" data-tag="' +
-          escapeHtml(tg) +
-          '">#' +
-          escapeHtml(tg) +
-          (canEdit
-            ? '<button class="doc-tag-x" data-removetag="' +
-              escapeHtml(tg) +
-              '" title="' +
-              escapeHtml(t('removeTag')) +
-              '">×</button>'
-            : '') +
-          '</span>',
-    )
-    .join('');
-
-  if (!chips && !canEdit) return '';
-
-  return (
-    '<div class="doc-tags not-prose">' +
-    chips +
-    (canEdit
-      ? '<button class="doc-tag-add" title="' + escapeHtml(t('addTag')) + '">+</button>'
-      : '') +
-    '</div>'
-  );
+  return docTags.renderDocTags(file);
 }
-
-function allTagsList() {
-  const s = new Set();
-
-  for (const f of Object.values(fileMap))
-    if (f.ext === '.md') for (const t of f.tags || []) s.add(t);
-
-  return [...s].sort();
-}
-
-// Rewrites the `tags:` frontmatter key (custom tags only — folder tags are derived
-// at build). Empty list → removes the key (and the frontmatter block if it empties).
-function setFrontmatterTags(content, customTags) {
-  const tagsLine = customTags.length ? 'tags: [' + customTags.join(', ') + ']' : null;
-  const m = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/);
-
-  if (m) {
-    const lines = m[1].split(/\r?\n/);
-    const out = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      if (/^tags[ \t]*:/i.test(lines[i])) {
-        let j = i + 1;
-
-        while (j < lines.length && /^[ \t]*-[ \t]+/.test(lines[j])) j++;
-        i = j - 1;
-        continue;
-      }
-
-      out.push(lines[i]);
-    }
-
-    if (tagsLine) out.push(tagsLine);
-    const cleaned = out.filter((l) => l.trim().length).join('\n');
-    const body = content.slice(m[0].length).replace(/^\n+/, '');
-
-    return cleaned ? '---\n' + cleaned + '\n---\n\n' + body : body;
-  }
-
-  return tagsLine ? '---\n' + tagsLine + '\n---\n\n' + content : content;
-}
-
-// Persists custom tags: rewrite frontmatter, PUT /api/file (server rebuilds +
-// commits), then update fileMap and re-render the chips locally.
-async function persistTags(file, customTags) {
-  let raw;
-
-  try {
-    raw = await loadContent(file);
-  } catch (e) {
-    return false;
-  }
-
-  const newContent = setFrontmatterTags(raw, customTags);
-
-  try {
-    const res = await fetch('/api/file', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: file.path, content: newContent }),
-    });
-
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-  } catch (err) {
-    notifyError('tagSaveFailed', err.message);
-
-    return false;
-  }
-
-  contentCache.set(file.path, newContent);
-  file.content = newContent;
-  const merged = folderTagsOf(file.path);
-
-  for (const t of customTags) if (!merged.includes(t)) merged.push(t);
-  file.tags = merged;
-
-  if (currentFile === file) {
-    const wrap = contentEl.querySelector('.doc-tags');
-
-    if (wrap) wrap.outerHTML = renderDocTags(file);
-  }
-
-  return true;
-}
-
-async function addCustomTag(file, tag) {
-  tag = (tag || '').trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, '-');
-
-  if (!file || !tag) return;
-  const folderSet = new Set(folderTagsOf(file.path));
-
-  if (folderSet.has(tag)) return; // already covered by the folder
-  const custom = (file.tags || []).filter((t) => !folderSet.has(t));
-
-  if (custom.includes(tag)) return;
-  custom.push(tag);
-  await persistTags(file, custom);
-}
-
-async function removeCustomTag(file, tag) {
-  if (!file) return;
-  const folderSet = new Set(folderTagsOf(file.path));
-  const custom = (file.tags || []).filter((t) => !folderSet.has(t) && t !== tag);
-
-  await persistTags(file, custom);
-}
-
-// Tag editing popup anchored below the « + » button.
-let tagEditorEl = null;
-let tagEditorCb = null;
-
-function closeTagEditor() {
-  if (tagEditorCb) {
-    tagEditorCb.destroy();
-    tagEditorCb = null;
-  }
-  if (tagEditorEl) {
-    tagEditorEl.remove();
-    tagEditorEl = null;
-  }
-}
-
-function openTagEditor(file, anchorEl) {
-  if (!file) return;
-  closeTagEditor();
-  const folderSet = new Set(folderTagsOf(file.path));
-  const el = document.createElement('div');
-
-  el.id = 'tag-editor';
-  el.className =
-    'fixed z-50 w-64 bg-navy-800 border subtle-border rounded-lg shadow-2xl shadow-black/70 p-3';
-  el.innerHTML =
-    '<div class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-2 font-sans">' +
-    t('tagEditorTitle') +
-    '</div>' +
-    '<div id="tag-ed-list" class="flex flex-wrap gap-1.5 mb-2"></div>' +
-    '<input id="tag-ed-input" placeholder="' +
-    escapeHtml(t('tagPlaceholder')) +
-    '" autocomplete="off" class="w-full px-3 py-2 text-sm bg-black/30 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40">' +
-    '<div class="text-[10px] text-ink-500 mt-1.5 font-sans">' +
-    t('tagEditorHint') +
-    '</div>';
-  document.body.appendChild(el);
-  tagEditorEl = el;
-  const r = anchorEl.getBoundingClientRect();
-
-  el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + 'px';
-  el.style.top = r.bottom + 6 + 'px';
-  const input = el.querySelector('#tag-ed-input');
-  const renderList = () => {
-    const cur = (file.tags || []).filter((t) => !folderSet.has(t));
-    const box = el.querySelector('#tag-ed-list');
-
-    box.innerHTML = cur.length
-      ? cur
-          .map(
-            (t) =>
-              '<span class="doc-tag" style="cursor:default">#' +
-              escapeHtml(t) +
-              '<button class="doc-tag-x" data-ed-rm="' +
-              escapeHtml(t) +
-              '">×</button></span>',
-          )
-          .join('')
-      : '<span class="text-[11px] text-ink-500">' + t('noCustomTags') + '</span>';
-    box.querySelectorAll('[data-ed-rm]').forEach((b) =>
-      b.addEventListener('click', async () => {
-        await removeCustomTag(file, b.dataset.edRm);
-        renderList();
-      }),
-    );
-  };
-
-  renderList();
-  tagEditorCb = AtlasCombobox(input, {
-    source: allTagsList,
-    creatable: true,
-    onSelect: async (v) => {
-      input.value = '';
-      if (v && v.trim()) {
-        await addCustomTag(file, v);
-        renderList();
-        tagEditorCb.refresh();
-      }
-    },
-  });
-  input.focus();
-  input.addEventListener('keydown', (e) => {
-    // Enter is handled by the combobox (select/create → onSelect). Escape here
-    // closes the editor (the combobox swallowed it if its dropdown was open).
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      closeTagEditor();
-    }
-  });
-}
-
-document.addEventListener('click', (e) => {
-  if (tagEditorEl && !tagEditorEl.contains(e.target) && !e.target.closest('.doc-tag-add'))
-    closeTagEditor();
-});
-
-// View « all docs carrying this tag ».
-function showTag(tag) {
-  if (editMode) exitEditMode(false);
-  currentFile = null;
-  document.querySelector('main').scrollTop = 0;
-  const docs = Object.values(fileMap)
-    .filter((f) => f.ext === '.md' && (f.tags || []).includes(tag))
-    .sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
-  let html =
-    '<h1 class="!mb-1">#' +
-    escapeHtml(tag) +
-    '</h1>' +
-    '<p class="lead text-ink-400 !mt-0">' +
-    t('docsWithTag', docs.length) +
-    '</p>' +
-    '<ul class="not-prose mt-6 space-y-2">';
-
-  for (const f of docs) {
-    html +=
-      '<li><a class="block p-3 bg-black/20 hover:bg-black/30 border subtle-border rounded-lg cursor-pointer transition" data-tagdoc="' +
-      escapeHtml(f.path) +
-      '">' +
-      '<div class="text-sm text-ink-100 font-medium font-sans truncate">' +
-      escapeHtml(f.name) +
-      '</div>' +
-      '<div class="text-[10px] text-ink-500 mt-0.5 font-mono truncate">' +
-      escapeHtml(f.path) +
-      '</div></a></li>';
-  }
-
-  contentEl.innerHTML = html + '</ul>';
-  contentEl.querySelectorAll('[data-tagdoc]').forEach((a) =>
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      const f = fileMap[a.dataset.tagdoc];
-
-      if (f) {
-        showMarkdown(f);
-        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-      }
-    }),
-  );
-  breadcrumbPath.textContent = '#' + tag;
-  breadcrumbDate.textContent = '';
-  breadcrumbActions.classList.add('hidden');
-  breadcrumbActions.classList.remove('flex');
-  tocPanel.classList.add('hidden');
-  tocPanel.classList.remove('flex');
-  document.querySelectorAll('.tree-item').forEach((el) => el.classList.remove('active'));
-}
-
-// Delegation: clicks on tag chips and wikilinks rendered in the content.
-contentEl.addEventListener('click', (e) => {
-  const rm = e.target.closest('[data-removetag]');
-
-  if (rm) {
-    e.preventDefault();
-    e.stopPropagation();
-    removeCustomTag(currentFile, rm.dataset.removetag);
-
-    return;
-  }
-
-  const add = e.target.closest('.doc-tag-add');
-
-  if (add) {
-    e.preventDefault();
-    openTagEditor(currentFile, add);
-
-    return;
-  }
-
-  const tagBtn = e.target.closest('.doc-tag');
-
-  if (tagBtn && tagBtn.dataset.tag) {
-    e.preventDefault();
-    showTag(tagBtn.dataset.tag);
-
-    return;
-  }
-
-  const wl = e.target.closest('a.wikilink');
-
-  if (wl) {
-    e.preventDefault();
-    const f = wl.dataset.path && fileMap[wl.dataset.path];
-
-    if (f) {
-      showMarkdown(f);
-      history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-    }
-  }
-});
-
-// Highlights + scrolls to the 1st occurrence of a search term in the rendered doc.
-// Walks text nodes to avoid breaking marked's HTML. Case-insensitive; on an accent
-// mismatch there's no match and the scroll stays at the top.
-function highlightFirstMatch(container, query) {
-  const tokens = query
-    .trim()
-    .split(/\s+/)
-    .filter((t) => t.length >= 2)
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-
-  if (!tokens.length) return;
-  const re = new RegExp('(' + tokens.join('|') + ')', 'i');
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) =>
-      n.nodeValue && re.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
-  });
-  const node = walker.nextNode();
-
-  if (!node) return;
-  const m = node.nodeValue.match(re);
-
-  if (!m) return;
-  const after = node.splitText(m.index);
-
-  after.nodeValue = after.nodeValue.slice(m[0].length);
-  const mark = document.createElement('mark');
-
-  mark.className = 'search-hit';
-  mark.textContent = m[0];
-  after.parentNode.insertBefore(mark, after);
-  mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
 function mdInsertWrap(before, after, placeholderIfEmpty) {
-  if (!editTextarea) return;
-  const start = editTextarea.selectionStart;
-  const end = editTextarea.selectionEnd;
-  const sel = editTextarea.value.substring(start, end) || placeholderIfEmpty || '';
+  const ta = editTextarea;
+  if (!ta) return;
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const sel = ta.value.substring(start, end) || placeholderIfEmpty || "";
   const replacement = before + sel + after;
-
-  editTextarea.setRangeText(replacement, start, end, 'end');
-
-  if (
-    !editTextarea.value.substring(start, end + replacement.length - (before.length + after.length))
-  ) {
-    editTextarea.selectionStart = editTextarea.selectionEnd = start + before.length + sel.length;
+  ta.setRangeText(replacement, start, end, "end");
+  if (!ta.value.substring(start, end + replacement.length - (before.length + after.length))) {
+    ta.selectionStart = ta.selectionEnd = start + before.length + sel.length;
   } else {
-    editTextarea.selectionStart = start + before.length;
-    editTextarea.selectionEnd = start + before.length + sel.length;
+    ta.selectionStart = start + before.length;
+    ta.selectionEnd = start + before.length + sel.length;
   }
-
-  editTextarea.dispatchEvent(new Event('input'));
+  ta.dispatchEvent(new Event("input"));
 }
-
 function mdInsertLineStart(prefix) {
-  if (!editTextarea) return;
-  const v = editTextarea.value;
-  const start = editTextarea.selectionStart;
+  const ta = editTextarea;
+  if (!ta) return;
+  const v = ta.value;
+  const start = ta.selectionStart;
   let lineStart = start;
-
-  while (lineStart > 0 && v[lineStart - 1] !== '\n') lineStart--;
-  editTextarea.setRangeText(prefix, lineStart, lineStart, 'end');
-  editTextarea.selectionStart = editTextarea.selectionEnd = start + prefix.length;
-  editTextarea.dispatchEvent(new Event('input'));
+  while (lineStart > 0 && v[lineStart - 1] !== "\n") lineStart--;
+  ta.setRangeText(prefix, lineStart, lineStart, "end");
+  ta.selectionStart = ta.selectionEnd = start + prefix.length;
+  ta.dispatchEvent(new Event("input"));
 }
-
 function mdInsertAtCursor(text) {
-  if (!editTextarea) return;
-  const start = editTextarea.selectionStart;
-
-  editTextarea.setRangeText(text, start, editTextarea.selectionEnd, 'end');
-  editTextarea.dispatchEvent(new Event('input'));
+  const ta = editTextarea;
+  if (!ta) return;
+  const start = ta.selectionStart;
+  ta.setRangeText(text, start, ta.selectionEnd, "end");
+  ta.dispatchEvent(new Event("input"));
 }
 
-function mdHandleAction(action) {
-  if (!editTextarea) return;
-  editTextarea.focus();
-
-  switch (action) {
-    case 'bold':
-      mdInsertWrap('**', '**', t('phText'));
-      break;
-    case 'italic':
-      mdInsertWrap('*', '*', t('phText'));
-      break;
-    case 'strike':
-      mdInsertWrap('~~', '~~', t('phText'));
-      break;
-    case 'h1':
-      mdInsertLineStart('# ');
-      break;
-    case 'h2':
-      mdInsertLineStart('## ');
-      break;
-    case 'h3':
-      mdInsertLineStart('### ');
-      break;
-    case 'ul':
-      mdInsertLineStart('- ');
-      break;
-    case 'ol':
-      mdInsertLineStart('1. ');
-      break;
-    case 'todo':
-      mdInsertLineStart('- [ ] ');
-      break;
-    case 'quote':
-      mdInsertLineStart('> ');
-      break;
-    case 'link':
-      mdInsertWrap('[', '](url)', t('phLabel'));
-      break;
-    case 'code':
-      mdInsertWrap('`', '`', 'code');
-      break;
-    case 'codeblock':
-      mdInsertWrap('\n```\n', '\n```\n', 'code');
-      break;
-    case 'hr':
-      mdInsertAtCursor('\n\n---\n\n');
-      break;
-    case 'table':
-      mdInsertAtCursor('\n| Col 1 | Col 2 |\n| --- | --- |\n| A | B |\n');
-      break;
-  }
-}
-
-const MD_TOOLBAR_HTML =
-  '' +
-  '<button data-md="bold" class="md-tb-btn" title="' +
-  t('tbBold') +
-  '"><b>B</b></button>' +
-  '<button data-md="italic" class="md-tb-btn" title="' +
-  t('tbItalic') +
-  '"><i>I</i></button>' +
-  '<button data-md="strike" class="md-tb-btn" title="' +
-  t('tbStrike') +
-  '"><s>S</s></button>' +
-  '<span class="md-tb-sep"></span>' +
-  '<button data-md="h1" class="md-tb-btn">H1</button>' +
-  '<button data-md="h2" class="md-tb-btn">H2</button>' +
-  '<button data-md="h3" class="md-tb-btn">H3</button>' +
-  '<span class="md-tb-sep"></span>' +
-  '<button data-md="ul" class="md-tb-btn" title="' +
-  t('tbUl') +
-  '">' +
-  t('tbUlLabel') +
-  '</button>' +
-  '<button data-md="ol" class="md-tb-btn" title="' +
-  t('tbOl') +
-  '">' +
-  t('tbOlLabel') +
-  '</button>' +
-  '<button data-md="todo" class="md-tb-btn" title="' +
-  t('tbTodo') +
-  '">☐ Todo</button>' +
-  '<button data-md="quote" class="md-tb-btn" title="' +
-  t('tbQuote') +
-  '">' +
-  t('tbQuoteLabel') +
-  '</button>' +
-  '<span class="md-tb-sep"></span>' +
-  '<button data-md="link" class="md-tb-btn" title="' +
-  t('tbLink') +
-  '">' +
-  t('tbLinkLabel') +
-  '</button>' +
-  '<button data-md="code" class="md-tb-btn" title="' +
-  t('tbCode') +
-  '">&lt;/&gt;</button>' +
-  '<button data-md="codeblock" class="md-tb-btn" title="' +
-  t('tbCodeblock') +
-  '">' +
-  t('tbCodeblockLabel') +
-  '</button>' +
-  '<button data-md="table" class="md-tb-btn" title="' +
-  t('tbTable') +
-  '">⊞ Table</button>' +
-  '<button data-md="hr" class="md-tb-btn" title="' +
-  t('tbHr') +
-  '">— HR</button>';
-
-// ─── [[wikilink]] autocomplete in the editor ──────────────────────────────────
-// Triggered by typing `[[`: suggests docs (filtered by name/path), keyboard nav,
-// inserts an always-resolvable target (name only if unique, full path otherwise).
-// Client-side, from fileMap.
-let wlOpen = false,
-  wlItems = [],
-  wlActive = 0,
-  wlStart = -1,
-  wlCands = null,
-  wlMenuEl = null;
-
-function wlMenu() {
-  if (wlMenuEl) return wlMenuEl;
-  wlMenuEl = document.createElement('div');
-  wlMenuEl.id = 'wl-autocomplete';
-  wlMenuEl.className =
-    'fixed z-50 hidden w-80 max-h-64 overflow-y-auto rounded-md border subtle-border bg-navy-800 shadow-xl scrollbar-thin text-sm';
-  document.body.appendChild(wlMenuEl);
-  wlMenuEl.addEventListener('mousedown', (e) => {
-    const opt = e.target.closest('.wl-opt');
-
-    if (!opt) return;
-    e.preventDefault(); // keeps the textarea focus
-    wlInsert(+opt.dataset.i);
-  });
-  document.addEventListener('mousedown', (e) => {
-    if (wlOpen && !wlMenuEl.contains(e.target) && e.target !== editTextarea) wlClose();
-  });
-
-  return wlMenuEl;
-}
-
-function wlClose() {
-  wlOpen = false;
-  wlStart = -1;
-  wlItems = [];
-
-  if (wlMenuEl) {
-    wlMenuEl.classList.add('hidden');
-    wlMenuEl.innerHTML = '';
-  }
-}
-
-function wlBuildCands() {
-  const out = [];
-
-  for (const f of Object.values(fileMap)) {
-    if (!WL_TARGET_EXTS.includes(f.ext)) continue;
-    const stem = f.name.replace(/\.[^.]+$/, '');
-
-    out.push({
-      path: f.path,
-      label: stem,
-      sub: f.path,
-      mtime: f.mtime || 0,
-      _name: stem.toLowerCase(),
-      _hay: (stem + ' ' + f.path).toLowerCase(),
-    });
-  }
-
-  return out;
-}
-
-function wlQueryAtCursor() {
-  const v = editTextarea.value,
-    cur = editTextarea.selectionStart;
-  const open = v.lastIndexOf('[[', cur - 2);
-
-  if (open === -1 || open + 2 > cur) return null;
-  const between = v.slice(open + 2, cur);
-
-  if (/[\]\n]/.test(between)) return null;
-
-  return { start: open, query: between };
-}
-
-function wlFilter(query) {
-  if (!wlCands) wlCands = wlBuildCands();
-  const q = query.trim().toLowerCase();
-  let res;
-
-  if (q) {
-    res = wlCands.filter((c) => c._hay.includes(q));
-    const rank = (c) => (c._name.startsWith(q) ? 0 : c._name.includes(q) ? 1 : 2);
-
-    res.sort((a, b) => rank(a) - rank(b) || b.mtime - a.mtime);
-  } else {
-    res = wlCands.slice().sort((a, b) => b.mtime - a.mtime);
-  }
-
-  return res.slice(0, 8);
-}
-
-function wlRender() {
-  const m = wlMenu();
-
-  m.innerHTML = wlItems
-    .map(
-      (c, i) =>
-        '<div class="wl-opt px-3 py-1.5 cursor-pointer ' +
-        (i === wlActive ? 'bg-white/10' : '') +
-        '" data-i="' +
-        i +
-        '">' +
-        '<div class="text-ink-100 truncate">' +
-        escapeHtml(c.label) +
-        '</div>' +
-        '<div class="text-[11px] text-ink-400 truncate">' +
-        escapeHtml(c.sub) +
-        '</div>' +
-        '</div>',
-    )
-    .join('');
-  m.classList.remove('hidden');
-
-  if (m.children[wlActive]) m.children[wlActive].scrollIntoView({ block: 'nearest' });
-}
-
-function wlCaretCoords() {
-  const ta = editTextarea,
-    pos = ta.selectionStart,
-    s = getComputedStyle(ta);
-  const div = document.createElement('div');
-
-  [
-    'boxSizing',
-    'width',
-    'paddingTop',
-    'paddingRight',
-    'paddingBottom',
-    'paddingLeft',
-    'borderTopWidth',
-    'borderRightWidth',
-    'borderBottomWidth',
-    'borderLeftWidth',
-    'fontFamily',
-    'fontSize',
-    'fontWeight',
-    'fontStyle',
-    'letterSpacing',
-    'lineHeight',
-    'textTransform',
-    'wordSpacing',
-    'textIndent',
-    'tabSize',
-  ].forEach((p) => {
-    div.style[p] = s[p];
-  });
-  div.style.position = 'absolute';
-  div.style.visibility = 'hidden';
-  div.style.whiteSpace = 'pre-wrap';
-  div.style.wordWrap = 'break-word';
-  div.style.overflow = 'hidden';
-  div.textContent = ta.value.slice(0, pos);
-  const span = document.createElement('span');
-
-  span.textContent = ta.value.slice(pos) || '.';
-  div.appendChild(span);
-  document.body.appendChild(div);
-  const lh = parseInt(s.lineHeight, 10) || parseInt(s.fontSize, 10) || 16;
-  const rect = ta.getBoundingClientRect();
-  const top = rect.top + span.offsetTop - ta.scrollTop + lh;
-  const left = rect.left + span.offsetLeft - ta.scrollLeft;
-
-  document.body.removeChild(div);
-
-  return { top, left, lineHeight: lh };
-}
-
-function wlPosition() {
-  const m = wlMenu();
-  const c = wlCaretCoords();
-  let top = c.top + 4,
-    left = c.left;
-  const mh = m.offsetHeight || 200,
-    mw = m.offsetWidth || 320;
-
-  if (top + mh > window.innerHeight - 8) top = c.top - c.lineHeight - mh - 4;
-
-  if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
-  m.style.top = Math.max(8, top) + 'px';
-  m.style.left = Math.max(8, left) + 'px';
-}
-
-function wlTargetFor(path) {
-  const stem = fileMap[path].name.replace(/\.[^.]+$/, '');
-  const stemLc = stem.toLowerCase();
-  let count = 0;
-
-  for (const f of Object.values(fileMap)) {
-    if (WL_TARGET_EXTS.includes(f.ext) && f.name.replace(/\.[^.]+$/, '').toLowerCase() === stemLc)
-      count++;
-  }
-
-  return count <= 1 ? stem : path.replace(/\.[^.]+$/, '');
-}
-
-function wlUpdate() {
-  if (!editTextarea) return;
-  const q = wlQueryAtCursor();
-
-  if (!q) {
-    wlClose();
-
-    return;
-  }
-
-  wlStart = q.start;
-  wlItems = wlFilter(q.query);
-
-  if (!wlItems.length) {
-    wlClose();
-
-    return;
-  }
-
-  wlActive = 0;
-  wlOpen = true;
-  wlRender();
-  wlPosition();
-}
-
-function wlInsert(i) {
-  const c = wlItems[i];
-
-  if (!c || wlStart < 0) {
-    wlClose();
-
-    return;
-  }
-
-  const cur = editTextarea.selectionStart;
-
-  editTextarea.setRangeText('[[' + wlTargetFor(c.path) + ']]', wlStart, cur, 'end');
-  wlClose();
-  editTextarea.focus();
-  editTextarea.dispatchEvent(new Event('input'));
-}
-
-function wlHandleKeydown(e) {
-  if (!wlOpen) return false;
-
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    wlActive = (wlActive + 1) % wlItems.length;
-    wlRender();
-
-    return true;
-  }
-
-  if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    wlActive = (wlActive - 1 + wlItems.length) % wlItems.length;
-    wlRender();
-
-    return true;
-  }
-
-  if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault();
-    wlInsert(wlActive);
-
-    return true;
-  }
-
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    wlClose();
-
-    return true;
-  }
-
-  return false;
-}
-
-async function enterEditMode() {
-  if (!currentFile) return;
-  // Make sure we have the content before switching to edit mode.
-  let content;
-
-  try {
-    content = await loadContent(currentFile);
-  } catch (e) {
-    notifyError('cantLoadDoc', e.message);
-
-    return;
-  }
-
-  editMode = true;
-  contentEl.classList.remove('max-w-4xl', 'px-10', 'py-10', 'prose', 'prose-invert');
-  contentEl.classList.add('max-w-none', 'px-4', 'py-4');
-
-  const wrap = document.createElement('div');
-
-  wrap.className = 'flex flex-col';
-  wrap.style.height = 'calc(100vh - 11rem)';
-
-  const toolbar = document.createElement('div');
-
-  toolbar.className =
-    'flex flex-wrap items-center gap-1 px-3 py-2 border subtle-border rounded-t-md bg-navy-800';
-  toolbar.innerHTML = MD_TOOLBAR_HTML;
-
-  const splitWrap = document.createElement('div');
-
-  splitWrap.className =
-    'flex flex-1 min-h-0 border-l border-r border-b subtle-border rounded-b-md overflow-hidden bg-navy-900';
-
-  editTextarea = document.createElement('textarea');
-  editTextarea.id = 'md-editor';
-  editTextarea.value = content;
-  editTextarea.spellcheck = false;
-  editTextarea.className =
-    'min-w-0 p-5 bg-transparent text-ink-100 resize-none focus:outline-none scrollbar-thin';
-  editTextarea.style.flex = '1 1 0';
-
-  const divider = document.createElement('div');
-
-  divider.className = 'w-px bg-[#2a2a32] flex-shrink-0';
-
-  const preview = document.createElement('article');
-
-  preview.id = 'md-preview';
-  preview.className =
-    'min-w-0 px-8 py-6 overflow-y-auto scrollbar-thin prose prose-sm prose-invert max-w-none';
-  preview.style.flex = '1 1 0';
-  preview.innerHTML = renderMd(content);
-
-  splitWrap.appendChild(editTextarea);
-  splitWrap.appendChild(divider);
-  splitWrap.appendChild(preview);
-
-  wrap.appendChild(toolbar);
-  wrap.appendChild(splitWrap);
-
-  contentEl.innerHTML = '';
-  contentEl.appendChild(wrap);
-
-  toolbar.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-md]');
-
-    if (btn) mdHandleAction(btn.dataset.md);
-  });
-
-  wlCands = null; // recomputed on the 1st keystroke (catches any new docs)
-  let previewTimer = null;
-
-  editTextarea.addEventListener('input', () => {
-    wlUpdate();
-    clearTimeout(previewTimer);
-    previewTimer = setTimeout(() => {
-      preview.innerHTML = renderMd(editTextarea.value);
-    }, 150);
-  });
-  editTextarea.addEventListener('blur', () => setTimeout(wlClose, 150));
-  editTextarea.addEventListener('keydown', (e) => {
-    if (wlHandleKeydown(e)) return;
-
-    if (e.ctrlKey || e.metaKey) {
-      const k = e.key.toLowerCase();
-
-      if (k === 'b') {
-        e.preventDefault();
-        mdHandleAction('bold');
-
-        return;
-      }
-
-      if (k === 'i') {
-        e.preventDefault();
-        mdHandleAction('italic');
-
-        return;
-      }
-
-      if (k === 'l') {
-        e.preventDefault();
-        mdHandleAction('link');
-
-        return;
-      }
+class TagBrowsePage {
+  showTag(tag) {
+    if (editMode) exitEditMode(false);
+    currentFile = null;
+    document.querySelector("main").scrollTop = 0;
+    const docs = Object.values(fileMap).filter((f) => f.ext === ".md" && (f.tags || []).includes(tag)).sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
+    let html = '<h1 class="!mb-1">#' + escapeHtml(tag) + '</h1><p class="lead text-ink-400 !mt-0">' + t("docsWithTag", docs.length) + '</p><ul class="not-prose mt-6 space-y-2">';
+    for (const f of docs) {
+      html += '<li><a class="block p-3 bg-black/20 hover:bg-black/30 border subtle-border rounded-lg cursor-pointer transition" data-tagdoc="' + escapeHtml(f.path) + '"><div class="text-sm text-ink-100 font-medium font-sans truncate">' + escapeHtml(f.name) + '</div><div class="text-[10px] text-ink-500 mt-0.5 font-mono truncate">' + escapeHtml(f.path) + "</div></a></li>";
     }
-
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      mdInsertAtCursor('  ');
-    }
-  });
-
-  editTextarea.focus();
-  editTextarea.setSelectionRange(0, 0);
-  editTextarea.scrollTop = 0;
-
-  btnEdit.classList.add('hidden');
-  btnSave.classList.remove('hidden');
-  btnCancel.classList.remove('hidden');
-  // Extensions hook: entering edit mode (hide their doc actions).
-  document.dispatchEvent(new CustomEvent('atlas:edit-enter'));
-  tocPanel.classList.add('hidden');
-  tocPanel.classList.remove('flex');
-
-  if (typeof tocShow !== 'undefined' && tocShow) tocShow.classList.add('hidden');
-}
-
-async function saveEdit() {
-  if (!editMode || !currentFile) return;
-
-  if (!isServerMode) {
-    notifyError('fileModeNoEdit');
-
-    return;
-  }
-
-  const newContent = editTextarea.value;
-
-  btnSave.disabled = true;
-  btnSave.textContent = t('saving');
-
-  try {
-    const res = await fetch('/api/file', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: currentFile.path, content: newContent }),
-    });
-
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-
-    currentFile.content = newContent;
-    contentCache.set(currentFile.path, newContent);
-    currentFile.mtime = data.mtime || Math.floor(Date.now() / 1000);
-    // Neutralize the live-reload SSE that follows the commit, to avoid a 2nd
-    // re-render (flash) on top of the one done when exiting edit mode. Same trick
-    // as the checkboxes.
-    _selfSaveUntil[currentFile.path] = Date.now() + 6000;
-    exitEditMode(true);
-  } catch (e) {
-    notifyError('err', e.message);
-  } finally {
-    btnSave.disabled = false;
-    btnSave.textContent = t('saveBtn');
-  }
-}
-
-function exitEditMode(reload) {
-  wlClose();
-  editMode = false;
-  editTextarea = null;
-  contentEl.classList.add('max-w-4xl', 'px-10', 'py-10', 'prose', 'prose-invert');
-  contentEl.classList.remove('max-w-none', 'px-4', 'py-4');
-
-  if (reload && currentFile) showMarkdown(currentFile);
-  else if (currentFile) {
-    btnEdit.classList.remove('hidden');
-    btnSave.classList.add('hidden');
-    btnCancel.classList.add('hidden');
-    // Re-render from the cached content (always present since we were editing).
-    const cached =
-      currentFile.content != null ? currentFile.content : contentCache.get(currentFile.path);
-
-    contentEl.innerHTML = renderMd(cached || '');
-    attachCopyButtons();
-    wireTaskCheckboxes(currentFile, cached || '');
-    renderBacklinksFor(currentFile);
-    buildToc();
-    document.dispatchEvent(
-      new CustomEvent('atlas:doc-rendered', {
-        detail: { path: currentFile.path, markdown: cached || '' },
-      }),
+    contentEl.innerHTML = html + "</ul>";
+    contentEl.querySelectorAll("[data-tagdoc]").forEach(
+      (a) => a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const f = fileMap[a.dataset.tagdoc];
+        if (f) {
+          showMarkdown(f);
+          history.replaceState(null, "", "#" + encodeURIComponent(f.path));
+        }
+      })
     );
+    breadcrumbPath.textContent = "#" + tag;
+    breadcrumbDate.textContent = "";
+    breadcrumbActions.classList.add("hidden");
+    breadcrumbActions.classList.remove("flex");
+    tocPanel.classList.add("hidden");
+    tocPanel.classList.remove("flex");
+    document.querySelectorAll(".tree-item").forEach((el) => el.classList.remove("active"));
   }
 }
+const tagBrowsePage = new TagBrowsePage();
+function showTag(tag) {
+  tagBrowsePage.showTag(tag);
+}
 
-btnEdit.addEventListener('click', enterEditMode);
-btnSave.addEventListener('click', saveEdit);
-btnCancel.addEventListener('click', () => exitEditMode(false));
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _WikilinkAutocomplete = class _WikilinkAutocomplete {
+  constructor() {
+    __publicField(this, "isOpen", false);
+    __publicField(this, "items", []);
+    __publicField(this, "active", 0);
+    __publicField(this, "start", -1);
+    __publicField(this, "cands", null);
+    __publicField(this, "menuEl", null);
+    // Held so the body popup, its document-level outside-click, and the pending blur timer are torn
+    // down on exit (no leak across edit sessions).
+    __publicField(this, "docMousedown", null);
+    __publicField(this, "blurTimer", null);
+  }
+  // Drop the cached candidates so they recompute on the next keystroke (catches any new docs).
+  resetCandidates() {
+    this.cands = null;
+  }
+  // Deferred close on textarea blur, so a mousedown on a popup option is handled first.
+  scheduleClose() {
+    this.blurTimer = setTimeout(() => this.close(), 150);
+  }
+  // ---- popup ----
+  menu() {
+    if (this.menuEl) return this.menuEl;
+    const el = document.createElement("div");
+    el.id = "wl-autocomplete";
+    el.className = "fixed z-50 hidden w-80 max-h-64 overflow-y-auto rounded-md border subtle-border bg-navy-800 shadow-xl scrollbar-thin text-sm";
+    document.body.appendChild(el);
+    el.addEventListener("mousedown", (e) => {
+      const opt = e.target.closest(".wl-opt");
+      if (!opt) return;
+      e.preventDefault();
+      this.insert(+opt.dataset.i);
+    });
+    this.docMousedown = (e) => {
+      if (this.isOpen && this.menuEl && !this.menuEl.contains(e.target) && e.target !== editTextarea)
+        this.close();
+    };
+    document.addEventListener("mousedown", this.docMousedown);
+    this.menuEl = el;
+    return el;
+  }
+  close() {
+    this.isOpen = false;
+    this.start = -1;
+    this.items = [];
+    if (this.menuEl) {
+      this.menuEl.classList.add("hidden");
+      this.menuEl.innerHTML = "";
+    }
+  }
+  // Remove the body popup + its document-level mousedown and clear the blur timer, so nothing
+  // survives into the next edit session.
+  teardown() {
+    this.close();
+    if (this.blurTimer) {
+      clearTimeout(this.blurTimer);
+      this.blurTimer = null;
+    }
+    if (this.docMousedown) {
+      document.removeEventListener("mousedown", this.docMousedown);
+      this.docMousedown = null;
+    }
+    if (this.menuEl) {
+      this.menuEl.remove();
+      this.menuEl = null;
+    }
+  }
+  buildCands() {
+    const out = [];
+    for (const f of Object.values(fileMap)) {
+      if (!WL_TARGET_EXTS.includes(f.ext)) continue;
+      const stem = f.name.replace(/\.[^.]+$/, "");
+      out.push({
+        path: f.path,
+        label: stem,
+        sub: f.path,
+        mtime: f.mtime || 0,
+        _name: stem.toLowerCase(),
+        _hay: (stem + " " + f.path).toLowerCase()
+      });
+    }
+    return out;
+  }
+  queryAtCursor(ta) {
+    const v = ta.value, cur = ta.selectionStart;
+    const open = v.lastIndexOf("[[", cur - 2);
+    if (open === -1 || open + 2 > cur) return null;
+    const between = v.slice(open + 2, cur);
+    if (/[\]\n]/.test(between)) return null;
+    return { start: open, query: between };
+  }
+  filter(query) {
+    if (!this.cands) this.cands = this.buildCands();
+    const q = query.trim().toLowerCase();
+    let res;
+    if (q) {
+      res = this.cands.filter((c) => c._hay.includes(q));
+      const rank = (c) => c._name.startsWith(q) ? 0 : c._name.includes(q) ? 1 : 2;
+      res.sort((a, b) => rank(a) - rank(b) || b.mtime - a.mtime);
+    } else {
+      res = this.cands.slice().sort((a, b) => b.mtime - a.mtime);
+    }
+    return res.slice(0, 8);
+  }
+  render() {
+    const m = this.menu();
+    m.innerHTML = this.items.map(
+      (c, i) => '<div class="wl-opt px-3 py-1.5 cursor-pointer ' + (i === this.active ? "bg-white/10" : "") + '" data-i="' + i + '"><div class="text-ink-100 truncate">' + escapeHtml(c.label) + '</div><div class="text-[11px] text-ink-400 truncate">' + escapeHtml(c.sub) + "</div></div>"
+    ).join("");
+    m.classList.remove("hidden");
+    const active = m.children[this.active];
+    if (active) active.scrollIntoView({ block: "nearest" });
+  }
+  caretCoords(ta) {
+    const pos = ta.selectionStart, s = getComputedStyle(ta);
+    const div = document.createElement("div");
+    for (const p of _WikilinkAutocomplete.STYLE_KEYS) div.style[p] = s[p];
+    div.style.position = "absolute";
+    div.style.visibility = "hidden";
+    div.style.whiteSpace = "pre-wrap";
+    div.style.wordWrap = "break-word";
+    div.style.overflow = "hidden";
+    div.textContent = ta.value.slice(0, pos);
+    const span = document.createElement("span");
+    span.textContent = ta.value.slice(pos) || ".";
+    div.appendChild(span);
+    document.body.appendChild(div);
+    const lh = parseInt(s.lineHeight, 10) || parseInt(s.fontSize, 10) || 16;
+    const rect = ta.getBoundingClientRect();
+    const top = rect.top + span.offsetTop - ta.scrollTop + lh;
+    const left = rect.left + span.offsetLeft - ta.scrollLeft;
+    document.body.removeChild(div);
+    return { top, left, lineHeight: lh };
+  }
+  position(ta) {
+    const m = this.menu();
+    const c = this.caretCoords(ta);
+    let top = c.top + 4, left = c.left;
+    const mh = m.offsetHeight || 200, mw = m.offsetWidth || 320;
+    if (top + mh > window.innerHeight - 8) top = c.top - c.lineHeight - mh - 4;
+    if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
+    m.style.top = Math.max(8, top) + "px";
+    m.style.left = Math.max(8, left) + "px";
+  }
+  targetFor(path) {
+    const stem = fileMap[path].name.replace(/\.[^.]+$/, "");
+    const stemLc = stem.toLowerCase();
+    let count = 0;
+    for (const f of Object.values(fileMap)) {
+      if (WL_TARGET_EXTS.includes(f.ext) && f.name.replace(/\.[^.]+$/, "").toLowerCase() === stemLc)
+        count++;
+    }
+    return count <= 1 ? stem : path.replace(/\.[^.]+$/, "");
+  }
+  update() {
+    const ta = editTextarea;
+    if (!ta) return;
+    const q = this.queryAtCursor(ta);
+    if (!q) {
+      this.close();
+      return;
+    }
+    this.start = q.start;
+    this.items = this.filter(q.query);
+    if (!this.items.length) {
+      this.close();
+      return;
+    }
+    this.active = 0;
+    this.isOpen = true;
+    this.render();
+    this.position(ta);
+  }
+  insert(i) {
+    const ta = editTextarea;
+    const c = this.items[i];
+    if (!ta || !c || this.start < 0) {
+      this.close();
+      return;
+    }
+    const cur = ta.selectionStart;
+    ta.setRangeText("[[" + this.targetFor(c.path) + "]]", this.start, cur, "end");
+    this.close();
+    ta.focus();
+    ta.dispatchEvent(new Event("input"));
+  }
+  handleKeydown(e) {
+    if (!this.isOpen) return false;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      this.active = (this.active + 1) % this.items.length;
+      this.render();
+      return true;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      this.active = (this.active - 1 + this.items.length) % this.items.length;
+      this.render();
+      return true;
+    }
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      this.insert(this.active);
+      return true;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.close();
+      return true;
+    }
+    return false;
+  }
+};
+// The textarea computed-style props mirrored onto the caret-measuring div.
+__publicField(_WikilinkAutocomplete, "STYLE_KEYS", [
+  "boxSizing",
+  "width",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "borderTopWidth",
+  "borderRightWidth",
+  "borderBottomWidth",
+  "borderLeftWidth",
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "fontStyle",
+  "letterSpacing",
+  "lineHeight",
+  "textTransform",
+  "wordSpacing",
+  "textIndent",
+  "tabSize"
+]);
+let WikilinkAutocomplete = _WikilinkAutocomplete;
 
-// ─── Search (MiniSearch, lazy-loaded on first call) ───────────────────────────────
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _Editor = class _Editor {
+  constructor() {
+    // The split-view live-preview debounce timer, cleared on exit. The [[wikilink]] popup, its caret
+    // measurement, and its own timers/listeners live in the composed WikilinkAutocomplete.
+    __publicField(this, "previewTimer", null);
+    __publicField(this, "wikilink", new WikilinkAutocomplete());
+    btnEdit.addEventListener("click", () => this.enterEditMode());
+    btnSave.addEventListener("click", () => this.saveEdit());
+    btnCancel.addEventListener("click", () => this.exitEditMode(false));
+  }
+  mdHandleAction(action) {
+    const ta = editTextarea;
+    if (!ta) return;
+    ta.focus();
+    switch (action) {
+      case "bold":
+        mdInsertWrap("**", "**", t("phText"));
+        break;
+      case "italic":
+        mdInsertWrap("*", "*", t("phText"));
+        break;
+      case "strike":
+        mdInsertWrap("~~", "~~", t("phText"));
+        break;
+      case "h1":
+        mdInsertLineStart("# ");
+        break;
+      case "h2":
+        mdInsertLineStart("## ");
+        break;
+      case "h3":
+        mdInsertLineStart("### ");
+        break;
+      case "ul":
+        mdInsertLineStart("- ");
+        break;
+      case "ol":
+        mdInsertLineStart("1. ");
+        break;
+      case "todo":
+        mdInsertLineStart("- [ ] ");
+        break;
+      case "quote":
+        mdInsertLineStart("> ");
+        break;
+      case "link":
+        mdInsertWrap("[", "](url)", t("phLabel"));
+        break;
+      case "code":
+        mdInsertWrap("`", "`", "code");
+        break;
+      case "codeblock":
+        mdInsertWrap("\n```\n", "\n```\n", "code");
+        break;
+      case "hr":
+        mdInsertAtCursor("\n\n---\n\n");
+        break;
+      case "table":
+        mdInsertAtCursor("\n| Col 1 | Col 2 |\n| --- | --- |\n| A | B |\n");
+        break;
+    }
+  }
+  // ---- edit-mode lifecycle ----
+  async enterEditMode() {
+    if (!currentFile) return;
+    let content;
+    try {
+      content = await loadContent(currentFile);
+    } catch (e) {
+      notifyError("cantLoadDoc", e.message);
+      return;
+    }
+    editMode = true;
+    contentEl.classList.remove("max-w-4xl", "px-10", "py-10", "prose", "prose-invert");
+    contentEl.classList.add("max-w-none", "px-4", "py-4");
+    const wrap = document.createElement("div");
+    wrap.className = "flex flex-col";
+    wrap.style.height = "calc(100vh - 11rem)";
+    const toolbar = document.createElement("div");
+    toolbar.className = "flex flex-wrap items-center gap-1 px-3 py-2 border subtle-border rounded-t-md bg-navy-800";
+    toolbar.innerHTML = _Editor.MD_TOOLBAR_HTML;
+    const splitWrap = document.createElement("div");
+    splitWrap.className = "flex flex-1 min-h-0 border-l border-r border-b subtle-border rounded-b-md overflow-hidden bg-navy-900";
+    const ta = document.createElement("textarea");
+    ta.id = "md-editor";
+    ta.value = content;
+    ta.spellcheck = false;
+    ta.className = "min-w-0 p-5 bg-transparent text-ink-100 resize-none focus:outline-none scrollbar-thin";
+    ta.style.flex = "1 1 0";
+    editTextarea = ta;
+    const divider = document.createElement("div");
+    divider.className = "w-px bg-[#2a2a32] flex-shrink-0";
+    const preview = document.createElement("article");
+    preview.id = "md-preview";
+    preview.className = "min-w-0 px-8 py-6 overflow-y-auto scrollbar-thin prose prose-sm prose-invert max-w-none";
+    preview.style.flex = "1 1 0";
+    preview.innerHTML = renderMd(content);
+    splitWrap.appendChild(ta);
+    splitWrap.appendChild(divider);
+    splitWrap.appendChild(preview);
+    wrap.appendChild(toolbar);
+    wrap.appendChild(splitWrap);
+    contentEl.innerHTML = "";
+    contentEl.appendChild(wrap);
+    toolbar.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-md]");
+      if (btn) this.mdHandleAction(btn.dataset.md);
+    });
+    this.wikilink.resetCandidates();
+    ta.addEventListener("input", () => {
+      this.wikilink.update();
+      if (this.previewTimer) clearTimeout(this.previewTimer);
+      this.previewTimer = setTimeout(() => {
+        preview.innerHTML = renderMd(ta.value);
+      }, 150);
+    });
+    ta.addEventListener("blur", () => {
+      this.wikilink.scheduleClose();
+    });
+    ta.addEventListener("keydown", (e) => {
+      if (this.wikilink.handleKeydown(e)) return;
+      if (e.ctrlKey || e.metaKey) {
+        const k = e.key.toLowerCase();
+        if (k === "b") {
+          e.preventDefault();
+          this.mdHandleAction("bold");
+          return;
+        }
+        if (k === "i") {
+          e.preventDefault();
+          this.mdHandleAction("italic");
+          return;
+        }
+        if (k === "l") {
+          e.preventDefault();
+          this.mdHandleAction("link");
+          return;
+        }
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        mdInsertAtCursor("  ");
+      }
+    });
+    ta.focus();
+    ta.setSelectionRange(0, 0);
+    ta.scrollTop = 0;
+    btnEdit.classList.add("hidden");
+    btnSave.classList.remove("hidden");
+    btnCancel.classList.remove("hidden");
+    document.dispatchEvent(new CustomEvent("atlas:edit-enter"));
+    tocPanel.classList.add("hidden");
+    tocPanel.classList.remove("flex");
+    if (typeof tocShow !== "undefined" && tocShow) tocShow.classList.add("hidden");
+  }
+  async saveEdit() {
+    if (!editMode || !currentFile) return;
+    if (!isServerMode) {
+      notifyError("fileModeNoEdit");
+      return;
+    }
+    const file = currentFile;
+    const newContent = editTextarea.value;
+    btnSave.disabled = true;
+    btnSave.textContent = t("saving");
+    try {
+      const body = { path: file.path, content: newContent };
+      const res = await fetch("/api/file", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      file.content = newContent;
+      contentCache.set(file.path, newContent);
+      file.mtime = data.mtime || Math.floor(Date.now() / 1e3);
+      sse.muteSelfSave(file.path);
+      this.exitEditMode(true);
+    } catch (e) {
+      notifyError("err", e.message);
+    } finally {
+      btnSave.disabled = false;
+      btnSave.textContent = t("saveBtn");
+    }
+  }
+  exitEditMode(reload) {
+    this.teardownEditSession();
+    editMode = false;
+    editTextarea = null;
+    contentEl.classList.add("max-w-4xl", "px-10", "py-10", "prose", "prose-invert");
+    contentEl.classList.remove("max-w-none", "px-4", "py-4");
+    if (reload && currentFile) showMarkdown(currentFile);
+    else if (currentFile) {
+      btnEdit.classList.remove("hidden");
+      btnSave.classList.add("hidden");
+      btnCancel.classList.add("hidden");
+      const cached = currentFile.content != null ? currentFile.content : contentCache.get(currentFile.path);
+      contentEl.innerHTML = renderMd(cached || "");
+      attachCopyButtons();
+      wireTaskCheckboxes(currentFile, cached || "");
+      renderBacklinksFor(currentFile);
+      buildToc();
+      document.dispatchEvent(
+        new CustomEvent("atlas:doc-rendered", {
+          detail: { path: currentFile.path, markdown: cached || "" }
+        })
+      );
+    }
+  }
+  // Clear the live-preview timer and tear down the wikilink popup so nothing survives the session.
+  teardownEditSession() {
+    this.wikilink.teardown();
+    if (this.previewTimer) {
+      clearTimeout(this.previewTimer);
+      this.previewTimer = null;
+    }
+  }
+};
+// ---- markdown toolbar ----
+// Built once at class-definition time (same timing as the old module-level const); the strings
+// are localized via t(), so it must evaluate after 01-i18n.
+__publicField(_Editor, "MD_TOOLBAR_HTML", '<button data-md="bold" class="md-tb-btn" title="' + t("tbBold") + '"><b>B</b></button><button data-md="italic" class="md-tb-btn" title="' + t("tbItalic") + '"><i>I</i></button><button data-md="strike" class="md-tb-btn" title="' + t("tbStrike") + '"><s>S</s></button><span class="md-tb-sep"></span><button data-md="h1" class="md-tb-btn">H1</button><button data-md="h2" class="md-tb-btn">H2</button><button data-md="h3" class="md-tb-btn">H3</button><span class="md-tb-sep"></span><button data-md="ul" class="md-tb-btn" title="' + t("tbUl") + '">' + t("tbUlLabel") + '</button><button data-md="ol" class="md-tb-btn" title="' + t("tbOl") + '">' + t("tbOlLabel") + '</button><button data-md="todo" class="md-tb-btn" title="' + t("tbTodo") + '">☐ Todo</button><button data-md="quote" class="md-tb-btn" title="' + t("tbQuote") + '">' + t("tbQuoteLabel") + '</button><span class="md-tb-sep"></span><button data-md="link" class="md-tb-btn" title="' + t("tbLink") + '">' + t("tbLinkLabel") + '</button><button data-md="code" class="md-tb-btn" title="' + t("tbCode") + '">&lt;/&gt;</button><button data-md="codeblock" class="md-tb-btn" title="' + t("tbCodeblock") + '">' + t("tbCodeblockLabel") + '</button><button data-md="table" class="md-tb-btn" title="' + t("tbTable") + '">⊞ Table</button><button data-md="hr" class="md-tb-btn" title="' + t("tbHr") + '">— HR</button>');
+let Editor = _Editor;
+const editor = new Editor();
+function enterEditMode() {
+  return editor.enterEditMode();
+}
+function exitEditMode(reload) {
+  editor.exitEditMode(reload);
+}
+
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 let miniSearch = null;
 let searchInitPromise = null;
-const SEARCH_FIELDS = ['name', 'path', 'content'];
-const SEARCH_STORE = ['name', 'path', 'preview'];
-
-// Local lib (/vendor/); in an offline build (file://) it's inlined into the
-// monolith by build.py, so the typeof short-circuits — no fetch.
-async function loadMiniSearchLib() {
-  if (typeof MiniSearch !== 'undefined') return;
-  await new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-
-    s.src = '/vendor/minisearch.min.js';
-    s.onload = resolve;
-    s.onerror = () => reject(new Error(t('cdnFailMiniSearch')));
-    document.head.appendChild(s);
-  });
-}
-
-// MiniSearch is only used in offline builds (file://, no server). Online,
-// search goes through /api/search. We index the already-embedded content.
-async function getSearchData() {
-  const docs = [];
-
-  for (const f of Object.values(fileMap)) {
-    if (f.ext !== '.md') continue;
-    const c = EMBED_CONTENT[f.path] || '';
-
-    docs.push({ id: f.path, name: f.name, path: f.path, content: c, preview: c.slice(0, 240) });
+const _Search = class _Search {
+  constructor() {
+    __publicField(this, "searchDebounce", null);
+    // The "FILES" header above the tree, hidden alongside the tree while a query is active.
+    __publicField(this, "treeHeaderEl", document.getElementById("tree-header"));
+    searchEl.addEventListener("input", () => this.onSearchInput());
   }
-
-  return docs;
-}
-
-async function initMiniSearch() {
-  if (miniSearch) return miniSearch;
-
-  if (searchInitPromise) return searchInitPromise;
-  searchInitPromise = (async () => {
-    await loadMiniSearchLib();
-    const docs = await getSearchData();
-    const ms = new MiniSearch({
-      idField: 'id',
-      fields: SEARCH_FIELDS,
-      storeFields: SEARCH_STORE,
-      searchOptions: {
-        boost: { name: 3, path: 2 },
-        fuzzy: 0.2,
-        prefix: true,
-        combineWith: 'AND',
-      },
-      tokenize: (text) =>
-        text
-          .normalize('NFD')
-          .replace(/[̀-ͯ]/g, '')
-          .toLowerCase()
-          .split(/[^a-z0-9]+/)
-          .filter(Boolean),
-      processTerm: (term) => term.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(),
+  // Local lib (/vendor/); in an offline build (file://) it's inlined into the
+  // monolith by build.py, so the typeof short-circuits — no fetch.
+  async loadMiniSearchLib() {
+    if (typeof MiniSearch !== "undefined") return;
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "/vendor/minisearch.min.js";
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error(t("cdnFailMiniSearch")));
+      document.head.appendChild(s);
     });
-
-    ms.addAll(docs);
-    miniSearch = ms;
-
-    return ms;
-  })();
-
-  return searchInitPromise;
-}
-
+  }
+  // MiniSearch is only used in offline builds (file://, no server). Online,
+  // search goes through /api/search. We index the already-embedded content.
+  async getSearchData() {
+    const docs = [];
+    for (const f of Object.values(fileMap)) {
+      if (f.ext !== ".md") continue;
+      const c = EMBED_CONTENT[f.path] || "";
+      docs.push({ id: f.path, name: f.name, path: f.path, content: c, preview: c.slice(0, 240) });
+    }
+    return docs;
+  }
+  async initMiniSearch() {
+    if (miniSearch) return miniSearch;
+    if (searchInitPromise) return searchInitPromise;
+    searchInitPromise = (async () => {
+      await this.loadMiniSearchLib();
+      const docs = await this.getSearchData();
+      const ms = new MiniSearch({
+        idField: "id",
+        fields: _Search.SEARCH_FIELDS,
+        storeFields: _Search.SEARCH_STORE,
+        searchOptions: {
+          boost: { name: 3, path: 2 },
+          fuzzy: 0.2,
+          prefix: true,
+          combineWith: "AND"
+        },
+        tokenize: (text) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
+        processTerm: (term) => term.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+      });
+      ms.addAll(docs);
+      miniSearch = ms;
+      return ms;
+    })();
+    return searchInitPromise;
+  }
+  // Online: server-side search (/api/search) → transfer O(results), nothing to
+  // download. Offline (file:// monolith): MiniSearch over the embedded content.
+  // Each branch returns a normalized array [{path, snippet}].
+  async getSearchHits(q) {
+    if (IS_OFFLINE_BUILD) {
+      const ms = await this.initMiniSearch();
+      const matches = ms.search(q, { boost: { name: 3, path: 2 }, fuzzy: 0.2, prefix: true });
+      return matches.map((m) => ({
+        path: m.path,
+        snippet: makeSnippet(m.preview || "", q)
+      }));
+    }
+    const res = await fetch("/api/search?q=" + encodeURIComponent(q) + "&limit=50", {
+      cache: "no-store"
+    });
+    if (!res.ok) throw new Error("search HTTP " + res.status);
+    const hits = await res.json();
+    return hits.map((h) => ({ path: h.path, snippet: h.snippet || "" }));
+  }
+  async renderSearchResults(q) {
+    searchResultsEl.innerHTML = '<div class="px-3 py-4 text-xs text-ink-500">' + t("searching") + "</div>";
+    let hits;
+    try {
+      hits = await this.getSearchHits(q);
+    } catch (e) {
+      searchResultsEl.innerHTML = '<div class="px-3 py-4 text-xs text-rose-400">' + escapeHtml(t("err", e.message)) + "</div>";
+      return;
+    }
+    if (searchEl.value.trim() !== q) return;
+    if (hits.length === 0) {
+      searchResultsEl.innerHTML = '<div class="px-3 py-4 text-xs text-ink-500">' + escapeHtml(t("noResults", q)) + "</div>";
+      return;
+    }
+    const top = hits.slice(0, 50);
+    searchResultsEl.innerHTML = '<div class="px-2 pb-2 text-[10px] uppercase tracking-wider text-ink-500 font-semibold">' + t("nResults", hits.length) + (hits.length > 50 ? t("cappedSuffix") : "") + "</div>";
+    const tokens = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(/\s+/).filter(Boolean);
+    const highlightRe = tokens.length ? new RegExp("(" + tokens.join("|") + ")", "gi") : null;
+    for (const m of top) {
+      const file = fileMap[m.path];
+      if (!file) continue;
+      const a = document.createElement("a");
+      a.className = "tree-item block px-2 py-1.5 rounded cursor-pointer text-ink-200 mb-0.5";
+      a.dataset.path = file.path;
+      const snippet = m.snippet;
+      const snippetHtml = snippet && highlightRe ? '<div class="text-[11px] text-ink-400 mt-0.5 leading-snug">' + escapeHtml(snippet).replace(
+        highlightRe,
+        '<mark class="bg-blue-500/30 text-blue-200 rounded px-0.5">$1</mark>'
+      ) + "</div>" : "";
+      a.innerHTML = '<div class="text-sm font-medium text-ink-100 truncate">' + escapeHtml(file.name) + '</div><div class="text-[10px] text-ink-500">' + file.path + "</div>" + snippetHtml;
+      if (file.ext === ".md" || file.ext === ".html") {
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          showMarkdown(file, q);
+        });
+      } else {
+        a.href = encodeURI(file.path);
+      }
+      searchResultsEl.appendChild(a);
+    }
+  }
+  onSearchInput() {
+    const q = searchEl.value.trim();
+    if (this.searchDebounce) clearTimeout(this.searchDebounce);
+    if (!q) {
+      searchResultsEl.classList.add("hidden");
+      treeEl.classList.remove("hidden");
+      if (this.treeHeaderEl) this.treeHeaderEl.classList.remove("hidden");
+      if (recentList.children.length > 0) recentSection.classList.remove("hidden");
+      return;
+    }
+    treeEl.classList.add("hidden");
+    if (this.treeHeaderEl) this.treeHeaderEl.classList.add("hidden");
+    recentSection.classList.add("hidden");
+    searchResultsEl.classList.remove("hidden");
+    this.searchDebounce = setTimeout(() => this.renderSearchResults(q), 140);
+  }
+};
+__publicField(_Search, "SEARCH_FIELDS", ["name", "path", "content"]);
+__publicField(_Search, "SEARCH_STORE", ["name", "path", "preview"]);
+let Search = _Search;
 function makeSnippet(preview, query) {
-  if (!preview) return '';
-  const words = query
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .split(/\s+/)
-    .filter(Boolean);
-  const lower = preview.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  let idx = -1,
-    term = null;
-
+  if (!preview) return "";
+  const words = query.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/\s+/).filter(Boolean);
+  const lower = preview.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  let idx = -1, term = null;
   for (const w of words) {
     const i = lower.indexOf(w);
-
     if (i >= 0 && (idx < 0 || i < idx)) {
       idx = i;
       term = w;
     }
   }
-
-  if (idx < 0) return preview.slice(0, 160) + (preview.length > 160 ? '…' : '');
+  if (idx < 0) return preview.slice(0, 160) + (preview.length > 160 ? "…" : "");
   const start = Math.max(0, idx - 40);
   const end = Math.min(preview.length, idx + term.length + 80);
-
-  return (start > 0 ? '…' : '') + preview.slice(start, end) + (end < preview.length ? '…' : '');
+  return (start > 0 ? "…" : "") + preview.slice(start, end) + (end < preview.length ? "…" : "");
+}
+const search = new Search();
+function getSearchHits(q) {
+  return search.getSearchHits(q);
 }
 
-// Online: server-side search (/api/search) → transfer O(results), nothing to
-// download. Offline (file:// monolith): MiniSearch over the embedded content.
-// Each branch returns a normalized array [{path, snippet}].
-async function getSearchHits(q) {
-  if (IS_OFFLINE_BUILD) {
-    const ms = await initMiniSearch();
-    const matches = ms.search(q, { boost: { name: 3, path: 2 }, fuzzy: 0.2, prefix: true });
-
-    return matches.map((m) => ({ path: m.path, snippet: makeSnippet(m.preview || '', q) }));
-  }
-
-  const res = await fetch('/api/search?q=' + encodeURIComponent(q) + '&limit=50', {
-    cache: 'no-store',
-  });
-
-  if (!res.ok) throw new Error('search HTTP ' + res.status);
-  const hits = await res.json();
-
-  return hits.map((h) => ({ path: h.path, snippet: h.snippet || '' }));
-}
-
-async function renderSearchResults(q) {
-  searchResultsEl.innerHTML =
-    '<div class="px-3 py-4 text-xs text-ink-500">' + t('searching') + '</div>';
-  let hits;
-
-  try {
-    hits = await getSearchHits(q);
-  } catch (e) {
-    searchResultsEl.innerHTML =
-      '<div class="px-3 py-4 text-xs text-rose-400">' + escapeHtml(t('err', e.message)) + '</div>';
-
-    return;
-  }
-
-  if (searchEl.value.trim() !== q) return; // user typed something else in the meantime
-
-  if (hits.length === 0) {
-    searchResultsEl.innerHTML =
-      '<div class="px-3 py-4 text-xs text-ink-500">' + escapeHtml(t('noResults', q)) + '</div>';
-
-    return;
-  }
-
-  const top = hits.slice(0, 50);
-
-  searchResultsEl.innerHTML =
-    '<div class="px-2 pb-2 text-[10px] uppercase tracking-wider text-ink-500 font-semibold">' +
-    t('nResults', hits.length) +
-    (hits.length > 50 ? t('cappedSuffix') : '') +
-    '</div>';
-  const tokens = q
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .split(/\s+/)
-    .filter(Boolean);
-  const highlightRe = tokens.length ? new RegExp('(' + tokens.join('|') + ')', 'gi') : null;
-
-  for (const m of top) {
-    const file = fileMap[m.path];
-
-    if (!file) continue;
-    const a = document.createElement('a');
-
-    a.className = 'tree-item block px-2 py-1.5 rounded cursor-pointer text-ink-200 mb-0.5';
-    a.dataset.path = file.path;
-    const snippet = m.snippet;
-    const snippetHtml =
-      snippet && highlightRe
-        ? '<div class="text-[11px] text-ink-400 mt-0.5 leading-snug">' +
-          escapeHtml(snippet).replace(
-            highlightRe,
-            '<mark class="bg-blue-500/30 text-blue-200 rounded px-0.5">$1</mark>',
-          ) +
-          '</div>'
-        : '';
-
-    a.innerHTML =
-      '<div class="text-sm font-medium text-ink-100 truncate">' +
-      escapeHtml(file.name) +
-      '</div><div class="text-[10px] text-ink-500">' +
-      file.path +
-      '</div>' +
-      snippetHtml;
-
-    if (file.ext === '.md' || file.ext === '.html') {
-      a.addEventListener('click', (e) => {
-        e.preventDefault();
-        showMarkdown(file, q);
-      });
-    } else {
-      a.href = encodeURI(file.path);
-    }
-
-    searchResultsEl.appendChild(a);
-  }
-}
-
-let searchDebounce = null;
-
-searchEl.addEventListener('input', () => {
-  const q = searchEl.value.trim();
-
-  clearTimeout(searchDebounce);
-
-  if (!q) {
-    searchResultsEl.classList.add('hidden');
-    treeEl.classList.remove('hidden');
-    if (treeHeaderEl) treeHeaderEl.classList.remove('hidden');
-
-    if (recentList.children.length > 0) recentSection.classList.remove('hidden');
-
-    return;
-  }
-
-  treeEl.classList.add('hidden');
-  if (treeHeaderEl) treeHeaderEl.classList.add('hidden');
-  recentSection.classList.add('hidden');
-  searchResultsEl.classList.remove('hidden');
-  searchDebounce = setTimeout(() => renderSearchResults(q), 140);
-});
-
-// Recent files (top 5 most recent .md)
-
-function renderRecent() {
-  const files = Object.values(fileMap)
-    .filter((f) => f.ext === '.md' && f.mtime)
-    .sort((a, b) => b.mtime - a.mtime)
-    .slice(0, 3);
-
-  if (files.length === 0) return;
-  recentSection.classList.remove('hidden');
-  recentList.innerHTML = files
-    .map(
+class HomeView {
+  // ---- home renderers (imperative innerHTML; see file header) ----
+  renderRecent() {
+    const files = Object.values(fileMap).filter((f) => f.ext === ".md" && f.mtime).sort((a, b) => b.mtime - a.mtime).slice(0, 3);
+    if (files.length === 0) return;
+    recentSection.classList.remove("hidden");
+    recentList.innerHTML = files.map(
       (f) => `
     <li class="overflow-hidden"><a class="tree-item w-full flex flex-col px-2 py-1 rounded cursor-pointer" data-path="${f.path}">
       <span class="block text-xs text-ink-200 truncate w-full" data-name="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
       <span class="text-[10px] text-ink-500">${relativeDate(f.mtime)}</span>
     </a></li>
-  `,
-    )
-    .join('');
-  recentList.querySelectorAll('a').forEach((a) => {
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      const f = fileMap[a.dataset.path];
-
-      if (f) {
-        showMarkdown(f);
-        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-      }
+  `
+    ).join("");
+    recentList.querySelectorAll("a").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const path = a.dataset.path;
+        const f = path ? fileMap[path] : void 0;
+        if (f) {
+          showMarkdown(f);
+          history.replaceState(null, "", "#" + encodeURIComponent(f.path));
+        }
+      });
     });
-  });
-}
-
-renderRecent();
-
-// "Shared with me": docs another member shared WITH the viewer, discovered
-// via /api/shared-with-me. Cloud-only and fully defensive — any failure (offline
-// build, local mode, empty list, network error) just leaves the section hidden, so
-// it can never break the home view.
-async function renderSharedWithMe() {
-  if (!sharedSection || IS_OFFLINE_BUILD || !location.protocol.startsWith('http')) return;
-  let docs;
-  try {
-    const r = await fetch('/api/shared-with-me');
-    if (!r.ok) return;
-    docs = await r.json();
-  } catch (e) {
-    return;
   }
-  if (!Array.isArray(docs) || docs.length === 0) return;
-  sharedSection.classList.remove('hidden');
-  sharedList.innerHTML = docs
-    .slice(0, 8)
-    .map((d) => {
-      const name = String(d.path).split('/').pop();
-      const by = d.granted_by ? String(d.granted_by).replace(/^user:/, '') : '';
+  // "Shared with me": docs another member shared WITH the viewer, discovered via
+  // /api/shared-with-me. Cloud-only and fully defensive — any failure (offline build, local mode,
+  // empty list, network error) just leaves the section hidden, so it can never break the home view.
+  async renderSharedWithMe() {
+    if (IS_OFFLINE_BUILD || !location.protocol.startsWith("http")) return;
+    let docs;
+    try {
+      const r = await fetch("/api/shared-with-me");
+      if (!r.ok) return;
+      docs = await r.json();
+    } catch {
+      return;
+    }
+    if (!Array.isArray(docs) || docs.length === 0) return;
+    sharedSection.classList.remove("hidden");
+    sharedList.innerHTML = docs.slice(0, 8).map((d) => {
+      const name = String(d.path).split("/").pop();
+      const by = d.granted_by ? String(d.granted_by).replace(/^user:/, "") : "";
       return `
     <li class="overflow-hidden"><a class="tree-item w-full flex flex-col px-2 py-1 rounded cursor-pointer" data-path="${escapeHtml(d.path)}">
       <span class="block text-xs text-ink-200 truncate w-full" data-name="${escapeHtml(name)}">${escapeHtml(name)}</span>
-      ${by ? `<span class="text-[10px] text-ink-500">${escapeHtml(by)}</span>` : ''}
+      ${by ? `<span class="text-[10px] text-ink-500">${escapeHtml(by)}</span>` : ""}
     </a></li>`;
-    })
-    .join('');
-  sharedList.querySelectorAll('a').forEach((a) => {
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      const f = fileMap[a.dataset.path];
-      if (f) {
-        showMarkdown(f);
-        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-      }
-    });
-  });
-}
-
-renderSharedWithMe();
-
-// Custom tooltip for truncated filenames
-const tooltipEl = document.createElement('div');
-
-tooltipEl.className =
-  'fixed pointer-events-none bg-navy-800/95 border subtle-border text-ink-100 text-xs px-3 py-1.5 rounded-md shadow-2xl shadow-black/70 z-50 opacity-0 max-w-md whitespace-nowrap font-medium';
-tooltipEl.style.cssText +=
-  ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:opacity 0.12s ease, transform 0.12s ease;transform:translateY(-50%) translateX(-4px);';
-document.body.appendChild(tooltipEl);
-
-function isTruncated(el) {
-  return el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
-}
-
-function positionTooltip(target) {
-  const rect = target.getBoundingClientRect();
-  const GAP = 14;
-
-  tooltipEl.style.left = rect.right + GAP + 'px';
-  tooltipEl.style.top = rect.top + rect.height / 2 + 'px';
-  requestAnimationFrame(() => {
-    const tipRect = tooltipEl.getBoundingClientRect();
-
-    if (tipRect.right > window.innerWidth - 8) {
-      tooltipEl.style.left = rect.left - tipRect.width - GAP + 'px';
-    }
-  });
-}
-
-function hideTooltip() {
-  tooltipEl.style.opacity = '0';
-  tooltipEl.style.transform = 'translateY(-50%) translateX(-4px)';
-}
-
-document.addEventListener('mouseover', (e) => {
-  const target = e.target.closest('[data-name], [data-tip]');
-  // data-tip: an explicit tooltip string, shown as-is (and allowed to wrap). data-name:
-  // the full filename, shown only when the on-screen label is actually truncated.
-  const isTip = !!(target && target.dataset.tip);
-  const text = !target ? '' : (isTip ? target.dataset.tip
-    : (isTruncated(target) ? target.dataset.name : ''));
-  if (!text) {
-    hideTooltip();
-    return;
-  }
-  tooltipEl.style.whiteSpace = isTip ? 'normal' : 'nowrap';
-  tooltipEl.textContent = text;
-  positionTooltip(target);
-  tooltipEl.style.opacity = '1';
-  tooltipEl.style.transform = 'translateY(-50%) translateX(0)';
-});
-document.addEventListener('mouseout', (e) => {
-  if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('[data-name], [data-tip]')) {
-    hideTooltip();
-  }
-});
-
-function showNotFound(path) {
-  // A doc the viewer can't reach (filtered out of the tree) or that doesn't exist:
-  // a clean in-app page instead of silently bouncing to the home. The wording is
-  // deliberately ambiguous (not-found OR no-access) to keep the no-existence-oracle.
-  currentFile = null;
-  contentEl.style.maxWidth = '';
-  contentEl.style.padding = '';
-  document.getElementById('todo-widget')?.classList.remove('hidden');
-  // Reset the doc header/breadcrumb (path + mtime + actions) — else it would keep
-  // revealing the path's existence and a "modified X ago" (an existence oracle).
-  breadcrumbPath.textContent = '/';
-  breadcrumbDate.textContent = '';
-  breadcrumbActions.classList.add('hidden');
-  breadcrumbActions.classList.remove('flex');
-  tocPanel.classList.add('hidden');
-  contentEl.innerHTML =
-    '<div class="max-w-md mx-auto mt-24 text-center">' +
-    '<div class="text-5xl mb-4 opacity-60">🔒</div>' +
-    '<h1 class="text-xl font-semibold text-ink-100 mb-2 !border-0 !p-0">' +
-    escapeHtml(t('notFoundTitle')) + '</h1>' +
-    '<p class="text-sm text-ink-400 mb-1">' + escapeHtml(t('notFoundBody')) + '</p>' +
-    '<p class="text-[11px] text-ink-500 font-mono mb-6 break-all">' + escapeHtml(path) + '</p>' +
-    '<button id="nf-home" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium">' +
-    escapeHtml(t('notFoundHome')) + '</button></div>';
-  document.getElementById('nf-home')?.addEventListener('click', () => {
-    history.replaceState(null, '', location.pathname);
-    showWelcome();
-  });
-}
-
-function routeFromHash() {
-  // Route from the URL hash once fileMap reflects the viewer's accessible docs.
-  const hash = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
-  if (!hash || hash === 'mind') return showWelcome();
-  const f = fileMap[hash];
-  if (f && f.ext === '.md') return showMarkdown(f);
-  if (f) return showWelcome();
-  // Not in the (per-viewer filtered) tree. Only declare "not found / no access"
-  // once the tree is actually loaded (server mode loads it async via softReload) —
-  // before that, hold on the welcome to avoid a false flash.
-  if (Object.keys(fileMap).length) showNotFound(hash);
-  else showWelcome();
-}
-
-function showWelcome() {
-  currentFile = null;
-  document.querySelector('main').scrollTop = 0;  // a fresh home view starts at the top
-  // Reset width/padding overrides left by a previous .html render
-  // (renderHtmlFrame), else the home page inherits full-width; restore the
-  // todo widget hidden during the HTML preview.
-  contentEl.style.maxWidth = '';
-  contentEl.style.padding = '';
-  document.getElementById('todo-widget')?.classList.remove('hidden');
-  const byCategory = {};
-  let totalWords = 0;
-  let longestDoc = null;
-
-  for (const f of Object.values(fileMap)) {
-    if (f.ext !== '.md') continue;
-    const parts = f.path.split('/');
-    const cat = parts.length >= 2 ? parts[0] + (parts.length >= 3 ? '/' + parts[1] : '') : 'root';
-
-    byCategory[cat] = (byCategory[cat] || 0) + 1;
-
-    if (f.words) {
-      totalWords += f.words;
-
-      if (!longestDoc || f.words > longestDoc.words) longestDoc = { file: f, words: f.words };
-    }
-  }
-
-  const catEntries = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
-  const recent = Object.values(fileMap)
-    .filter((f) => f.ext === '.md' && f.mtime)
-    .sort((a, b) => b.mtime - a.mtime)
-    .slice(0, 4);
-  const todoSummary = todos.length ? `${todos.filter((t) => t.done).length}/${todos.length}` : '–';
-
-  const HEATMAP_WEEKS = 53;
-  const dayMs = 86400 * 1000;
-  const now = new Date();
-
-  now.setHours(0, 0, 0, 0);
-  const todayDow = (now.getDay() + 6) % 7;
-  const monday = new Date(now.getTime() - todayDow * dayMs);
-  const startDate = new Date(monday.getTime() - (HEATMAP_WEEKS - 1) * 7 * dayMs);
-  const cells = Array.from({ length: HEATMAP_WEEKS * 7 }, () => 0);
-  let weekModif = 0,
-    prevWeekModif = 0;
-  const startOfThisWeek = monday.getTime() / 1000;
-  const startOfPrevWeek = (monday.getTime() - 7 * dayMs) / 1000;
-
-  for (const f of Object.values(fileMap)) {
-    if (f.ext !== '.md' || !f.mtime) continue;
-    const d = new Date(f.mtime * 1000);
-
-    d.setHours(0, 0, 0, 0);
-    const diffDays = Math.floor((d.getTime() - startDate.getTime()) / dayMs);
-
-    if (diffDays >= 0 && diffDays < HEATMAP_WEEKS * 7) {
-      const week = Math.floor(diffDays / 7);
-      const day = diffDays % 7;
-
-      cells[week * 7 + day] += 1;
-    }
-
-    if (f.mtime >= startOfThisWeek) weekModif += 1;
-    else if (f.mtime >= startOfPrevWeek) prevWeekModif += 1;
-  }
-
-  const maxCell = Math.max(1, ...cells);
-  const heatmapCells = [];
-
-  for (let w = 0; w < HEATMAP_WEEKS; w++) {
-    for (let d = 0; d < 7; d++) {
-      const count = cells[w * 7 + d];
-      const intensity = count === 0 ? 0 : Math.min(4, Math.ceil((count / maxCell) * 4));
-      const cellDate = new Date(startDate.getTime() + (w * 7 + d) * dayMs);
-      const color = [
-        '#1a1820',
-        'rgba(29,155,209,0.18)',
-        'rgba(29,155,209,0.36)',
-        'rgba(29,155,209,0.6)',
-        '#1d9bd1',
-      ][intensity];
-      const dateStr = cellDate.toLocaleDateString(LANG, {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
+    }).join("");
+    sharedList.querySelectorAll("a").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const path = a.dataset.path;
+        const f = path ? fileMap[path] : void 0;
+        if (f) {
+          showMarkdown(f);
+          history.replaceState(null, "", "#" + encodeURIComponent(f.path));
+        }
       });
-      const tip = (count === 0 ? t('heatNone') : t('heatCount', count)) + ' · ' + dateStr;
-
-      heatmapCells.push(
-        '<div data-tip="' +
-          tip +
-          '" style="background:' +
-          color +
-          ';border-radius:2px;cursor:default;"></div>',
-      );
+    });
+  }
+  showNotFound(path) {
+    currentFile = null;
+    contentEl.style.maxWidth = "";
+    contentEl.style.padding = "";
+    document.getElementById("todo-widget")?.classList.remove("hidden");
+    breadcrumbPath.textContent = "/";
+    breadcrumbDate.textContent = "";
+    breadcrumbActions.classList.add("hidden");
+    breadcrumbActions.classList.remove("flex");
+    tocPanel.classList.add("hidden");
+    contentEl.innerHTML = '<div class="max-w-md mx-auto mt-24 text-center"><div class="text-5xl mb-4 opacity-60">🔒</div><h1 class="text-xl font-semibold text-ink-100 mb-2 !border-0 !p-0">' + escapeHtml(t("notFoundTitle")) + '</h1><p class="text-sm text-ink-400 mb-1">' + escapeHtml(t("notFoundBody")) + '</p><p class="text-[11px] text-ink-500 font-mono mb-6 break-all">' + escapeHtml(path) + '</p><button id="nf-home" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium">' + escapeHtml(t("notFoundHome")) + "</button></div>";
+    document.getElementById("nf-home")?.addEventListener("click", () => {
+      history.replaceState(null, "", location.pathname);
+      this.showWelcome();
+    });
+  }
+  routeFromHash() {
+    const hash = location.hash ? decodeURIComponent(location.hash.slice(1)) : "";
+    if (!hash || hash === "mind") {
+      this.showWelcome();
+      return;
     }
+    const f = fileMap[hash];
+    if (f && f.ext === ".md") {
+      showMarkdown(f);
+      return;
+    }
+    if (f) {
+      this.showWelcome();
+      return;
+    }
+    if (Object.keys(fileMap).length) this.showNotFound(hash);
+    else this.showWelcome();
   }
-
-  const weekDelta = weekModif - prevWeekModif;
-  const weekDeltaTxt = weekDelta === 0 ? '=' : (weekDelta > 0 ? '+' : '') + weekDelta;
-  const weekDeltaColor = weekDelta > 0 ? '#4ade80' : weekDelta < 0 ? '#f87171' : '#868a90';
-
-  const categoryItems = catEntries
-    .map(([cat, n]) => {
-      return (
-        '<div class="flex items-center justify-between px-3 py-2 rounded border subtle-border bg-black/15 hover:bg-black/25 transition"><span class="text-sm text-ink-200 font-mono truncate">' +
-        escapeHtml(cat) +
-        '</span><span class="text-xs text-ink-400 font-semibold ml-2">' +
-        n +
-        '</span></div>'
-      );
-    })
-    .join('');
-
-  const recentItems = recent
-    .map((f) => {
-      return (
-        '<a data-recent-path="' +
-        f.path +
-        '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
-        '<div class="text-sm text-ink-100 font-medium font-sans truncate">' +
-        escapeHtml(f.name) +
-        '</div>' +
-        '<div class="text-[11px] text-ink-500 mt-0.5 font-sans">' +
-        relativeDate(f.mtime) +
-        ' · ' +
-        escapeHtml(f.path.split('/').slice(0, -1).join('/') || t('rootLabel')) +
-        '</div>' +
-        '</a>'
-      );
-    })
-    .join('');
-
-  const longest = Object.values(fileMap)
-    .filter((f) => f.ext === '.md' && f.words)
-    .sort((a, b) => b.words - a.words)
-    .slice(0, 6);
-  const maxWords = longest.length ? longest[0].words : 1;
-  const rankingHtml = longest.length
-    ? longest
-        .map((f, i) => {
-          const pct = Math.max(4, Math.round((100 * f.words) / maxWords));
-
-          return (
-            '<a data-recent-path="' +
-            f.path +
-            '" class="block cursor-pointer group">' +
-            '<div class="flex items-center gap-2">' +
-            '<span class="text-ink-500 font-mono text-xs w-4 text-right">' +
-            (i + 1) +
-            '</span>' +
-            '<span class="text-sm text-ink-200 group-hover:text-accent truncate flex-1">' +
-            escapeHtml(f.name) +
-            '</span>' +
-            '<span class="text-[11px] text-ink-500 font-mono whitespace-nowrap">' +
-            f.words.toLocaleString(LANG) +
-            '</span>' +
-            '</div>' +
-            '<div class="h-1 mt-1 ml-6 rounded bg-black/30 overflow-hidden"><div class="h-full rounded" style="width:' +
-            pct +
-            '%;background:rgba(29,155,209,0.55)"></div></div>' +
-            '</a>'
-          );
-        })
-        .join('')
-    : '<span class="text-sm text-ink-500">—</span>';
-
-  // Tag cloud: font size ∝ number of docs.
-  const tagCounts = {};
-
-  for (const f of Object.values(fileMap)) {
-    if (f.ext !== '.md') continue;
-
-    for (const t of f.tags || []) tagCounts[t] = (tagCounts[t] || 0) + 1;
-  }
-
-  const tagEntries = Object.entries(tagCounts).sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
-  const maxTagCount = tagEntries.length ? tagEntries[0][1] : 1;
-  const tagCloud = tagEntries
-    .map(([t, n]) => {
+  showWelcome() {
+    currentFile = null;
+    document.querySelector("main").scrollTop = 0;
+    contentEl.style.maxWidth = "";
+    contentEl.style.padding = "";
+    document.getElementById("todo-widget")?.classList.remove("hidden");
+    const byCategory = {};
+    let totalWords = 0;
+    for (const f of Object.values(fileMap)) {
+      if (f.ext !== ".md") continue;
+      const parts = f.path.split("/");
+      const cat = parts.length >= 2 ? parts[0] + (parts.length >= 3 ? "/" + parts[1] : "") : "root";
+      byCategory[cat] = (byCategory[cat] || 0) + 1;
+      if (f.words) totalWords += f.words;
+    }
+    const catEntries = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+    const recent = Object.values(fileMap).filter((f) => f.ext === ".md" && f.mtime).sort((a, b) => b.mtime - a.mtime).slice(0, 4);
+    const todoSummary = todos.length ? `${todos.filter((td) => td.done).length}/${todos.length}` : "–";
+    const dayMs = 86400 * 1e3;
+    const now = /* @__PURE__ */ new Date();
+    now.setHours(0, 0, 0, 0);
+    const todayDow = (now.getDay() + 6) % 7;
+    const monday = new Date(now.getTime() - todayDow * dayMs);
+    const startOfThisWeek = monday.getTime() / 1e3;
+    const startOfPrevWeek = (monday.getTime() - 7 * dayMs) / 1e3;
+    let weekModif = 0;
+    let prevWeekModif = 0;
+    for (const f of Object.values(fileMap)) {
+      if (f.ext !== ".md" || !f.mtime) continue;
+      if (f.mtime >= startOfThisWeek) weekModif += 1;
+      else if (f.mtime >= startOfPrevWeek) prevWeekModif += 1;
+    }
+    const weekDelta = weekModif - prevWeekModif;
+    const weekDeltaTxt = weekDelta === 0 ? "=" : (weekDelta > 0 ? "+" : "") + weekDelta;
+    const weekDeltaColor = weekDelta > 0 ? "#4ade80" : weekDelta < 0 ? "#f87171" : "#868a90";
+    const categoryItems = catEntries.map(([cat, n]) => {
+      return '<div class="flex items-center justify-between px-3 py-2 rounded border subtle-border bg-black/15 hover:bg-black/25 transition"><span class="text-sm text-ink-200 font-mono truncate">' + escapeHtml(cat) + '</span><span class="text-xs text-ink-400 font-semibold ml-2">' + n + "</span></div>";
+    }).join("");
+    const recentItems = recent.map((f) => {
+      return '<a data-recent-path="' + f.path + '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer"><div class="text-sm text-ink-100 font-medium font-sans truncate">' + escapeHtml(f.name) + '</div><div class="text-[11px] text-ink-500 mt-0.5 font-sans">' + relativeDate(f.mtime) + " · " + escapeHtml(f.path.split("/").slice(0, -1).join("/") || t("rootLabel")) + "</div></a>";
+    }).join("");
+    const longest = Object.values(fileMap).filter((f) => f.ext === ".md" && f.words).sort((a, b) => (b.words ?? 0) - (a.words ?? 0)).slice(0, 6);
+    const maxWords = longest.length ? longest[0].words ?? 1 : 1;
+    const rankingHtml = longest.length ? longest.map((f, i) => {
+      const words = f.words ?? 0;
+      const pct = Math.max(4, Math.round(100 * words / maxWords));
+      return '<a data-recent-path="' + f.path + '" class="block cursor-pointer group"><div class="flex items-center gap-2"><span class="text-ink-500 font-mono text-xs w-4 text-right">' + (i + 1) + '</span><span class="text-sm text-ink-200 group-hover:text-accent truncate flex-1">' + escapeHtml(f.name) + '</span><span class="text-[11px] text-ink-500 font-mono whitespace-nowrap">' + words.toLocaleString(LANG) + '</span></div><div class="h-1 mt-1 ml-6 rounded bg-black/30 overflow-hidden"><div class="h-full rounded" style="width:' + pct + '%;background:rgba(29,155,209,0.55)"></div></div></a>';
+    }).join("") : '<span class="text-sm text-ink-500">—</span>';
+    const tagCounts = {};
+    for (const f of Object.values(fileMap)) {
+      if (f.ext !== ".md") continue;
+      for (const tag of f.tags || []) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+    }
+    const tagEntries = Object.entries(tagCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const maxTagCount = tagEntries.length ? tagEntries[0][1] : 1;
+    const tagCloud = tagEntries.map(([tag, n]) => {
       const scale = (0.78 + 0.5 * (n / maxTagCount)).toFixed(2);
-
-      return (
-        '<button class="doc-tag" data-hometag="' +
-        escapeHtml(t) +
-        '" style="font-size:' +
-        scale +
-        'rem">#' +
-        escapeHtml(t) +
-        '<span class="doc-tag-count">' +
-        n +
-        '</span></button>'
-      );
-    })
-    .join('');
-
-  contentEl.innerHTML = `
+      return '<button class="doc-tag" data-hometag="' + escapeHtml(tag) + '" style="font-size:' + scale + 'rem">#' + escapeHtml(tag) + '<span class="doc-tag-count">' + n + "</span></button>";
+    }).join("");
+    contentEl.innerHTML = `
     <h1 class="!mb-2"><span style="font-family:'Corinthia',cursive;font-weight:700;font-size:1.7em;line-height:.9;color:#eef0f2">${escapeHtml(SITE_PREFIX)}</span> <span style="display:inline-flex;align-items:center;gap:.4em;line-height:1;margin-left:.22em"><span style="font-family:'Lora',Georgia,serif;font-style:italic;font-weight:600;font-size:1.3em;color:#e8941c;text-shadow:0 1px 2px rgba(0,0,0,0.6),0 0 1px rgba(0,0,0,0.85)">Atlas</span><span class="nebula-pill">Mind</span></span></h1>
     <p class="lead text-ink-400 !mt-0">${escapeHtml(TAGLINE)}</p>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 not-prose mt-6 mb-8">
       <div class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t('statDocs')}</div>
+        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t("statDocs")}</div>
         <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${mdCount}</div>
-        <div class="text-[11px] text-ink-400 mt-0.5">${t('statDocsSub')}</div>
+        <div class="text-[11px] text-ink-400 mt-0.5">${t("statDocsSub")}</div>
       </div>
       <div class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t('statWords')}</div>
-        <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${(totalWords / 1000).toFixed(1)}k</div>
-        <div class="text-[11px] text-ink-400 mt-0.5">${t('statWordsSub', Math.round(totalWords / 220))}</div>
+        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t("statWords")}</div>
+        <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${(totalWords / 1e3).toFixed(1)}k</div>
+        <div class="text-[11px] text-ink-400 mt-0.5">${t("statWordsSub", Math.round(totalWords / 220))}</div>
       </div>
       <div class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t('statWeek')}</div>
+        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t("statWeek")}</div>
         <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${weekModif} <span class="text-sm font-bold ml-1" style="color:${weekDeltaColor}">${weekDeltaTxt}</span></div>
-        <div class="text-[11px] text-ink-400 mt-0.5">${t('statWeekSub')}</div>
+        <div class="text-[11px] text-ink-400 mt-0.5">${t("statWeekSub")}</div>
       </div>
       <div class="border subtle-border rounded-lg p-4 bg-black/15">
         <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">To-do</div>
         <div id="home-todo-stat" class="text-3xl font-extrabold text-accent mt-1 font-sans">${escapeHtml(todoSummary)}</div>
-        <div class="text-[11px] text-ink-400 mt-0.5">${t('statTodoSub')}</div>
+        <div class="text-[11px] text-ink-400 mt-0.5">${t("statTodoSub")}</div>
       </div>
     </div>
 
@@ -5458,4490 +4518,3504 @@ function showWelcome() {
     <div class="not-prose mb-10">
       <div class="flex items-center justify-between mb-4">
         <h2 class="!mb-0 !mt-0">Tags</h2>
-        <button id="home-graph-btn" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded-lg border subtle-border transition" title="${t('graphBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>${t('graphLabel')}</button>
+        <button id="home-graph-btn" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded-lg border subtle-border transition" title="${t("graphBtnTitle")}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>${t("graphLabel")}</button>
       </div>
-      <div class="doc-tags">${tagCloud || '<span class="text-sm text-ink-500">' + t('noTags') + '</span>'}</div>
+      <div class="doc-tags">${tagCloud || '<span class="text-sm text-ink-500">' + t("noTags") + "</span>"}</div>
     </div>
 
-    <h2 class="!mt-0 !mb-4">${t('recentlyModified')}</h2>
-    <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-3 mb-10">${recentItems || '<div class="text-sm text-ink-500">' + t('noRecentDocs') + '</div>'}</div>
+    <h2 class="!mt-0 !mb-4">${t("recentlyModified")}</h2>
+    <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-3 mb-10">${recentItems || '<div class="text-sm text-ink-500">' + t("noRecentDocs") + "</div>"}</div>
 
     <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
       <div>
-        <h2 class="!mb-4 !mt-0">${t('categories')}</h2>
+        <h2 class="!mb-4 !mt-0">${t("categories")}</h2>
         <div class="grid grid-cols-1 gap-2">${categoryItems}</div>
       </div>
       <div>
-        <h2 class="!mb-4 !mt-0">${t('longestDocs')}</h2>
+        <h2 class="!mb-4 !mt-0">${t("longestDocs")}</h2>
         <div class="space-y-2.5">${rankingHtml}</div>
       </div>
     </div>
 
     <div class="not-prose mt-8 text-xs text-ink-500 flex flex-wrap gap-x-4 gap-y-2 items-center">
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+K</kbd> ${t('hintPalette')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">/</kbd> ${t('hintSearch')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+B</kbd> ${t('hintSidebar')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+J</kbd> ${t('hintToc')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">E</kbd> ${t('hintEdit')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">N</kbd> ${t('hintNewTodo')}</span>
+      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+K</kbd> ${t("hintPalette")}</span>
+      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">/</kbd> ${t("hintSearch")}</span>
+      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+B</kbd> ${t("hintSidebar")}</span>
+      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+J</kbd> ${t("hintToc")}</span>
+      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">E</kbd> ${t("hintEdit")}</span>
+      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">N</kbd> ${t("hintNewTodo")}</span>
     </div>
   `;
-  contentEl.querySelectorAll('[data-recent-path]').forEach((a) => {
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      const f = fileMap[a.dataset.recentPath];
-
-      if (f) {
-        showMarkdown(f);
-        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-      }
+    contentEl.querySelectorAll("[data-recent-path]").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const path = a.dataset.recentPath;
+        const f = path ? fileMap[path] : void 0;
+        if (f) {
+          showMarkdown(f);
+          history.replaceState(null, "", "#" + encodeURIComponent(f.path));
+        }
+      });
     });
-  });
-  contentEl.querySelectorAll('[data-hometag]').forEach((b) =>
-    b.addEventListener('click', (e) => {
-      e.preventDefault();
-      showTag(b.dataset.hometag);
-    }),
-  );
-  const homeGraphBtn = contentEl.querySelector('#home-graph-btn');
-
-  if (homeGraphBtn) homeGraphBtn.addEventListener('click', openGraph);
-  if (window.mountActivity) window.mountActivity();
-  const hm = contentEl.querySelector('#home-heatmap');
-
-  if (hm) {
-    let tip = document.getElementById('hm-tip');
-
-    if (!tip) {
-      tip = document.createElement('div');
-      tip.id = 'hm-tip';
-      tip.style.cssText =
-        'position:fixed;z-index:60;pointer-events:none;opacity:0;transition:opacity .1s;background:#1a1d29;border:1px solid #2a2c36;color:#e5e7eb;font:500 11px system-ui,sans-serif;padding:4px 8px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.45);white-space:nowrap;';
-      document.body.appendChild(tip);
-    }
-
-    hm.addEventListener('mouseover', (e) => {
-      const cell = e.target.closest('[data-tip]');
-
-      if (cell) {
-        tip.textContent = cell.dataset.tip;
-        tip.style.opacity = '1';
-      } else {
-        tip.style.opacity = '0';
-      }
-    });
-    hm.addEventListener('mousemove', (e) => {
-      tip.style.left = e.clientX + 12 + 'px';
-      tip.style.top = e.clientY - 34 + 'px';
-    });
-    hm.addEventListener('mouseleave', () => {
-      tip.style.opacity = '0';
-    });
-  }
-
-  breadcrumbPath.textContent = '/';
-  breadcrumbDate.textContent = '';
-  breadcrumbActions.classList.add('hidden');
-  breadcrumbActions.classList.remove('flex');
-  tocPanel.classList.add('hidden');
-  tocPanel.classList.remove('flex');
-
-  if (typeof tocShow !== 'undefined' && tocShow) tocShow.classList.add('hidden');
-}
-
-// Sidebar + TOC collapse
-const sidebarEl = document.getElementById('sidebar');
-const sidebarToggle = document.getElementById('sidebar-toggle');
-const sidebarShowInline = document.getElementById('sidebar-show-inline');
-const tocClose = document.getElementById('toc-close');
-const tocShow = document.getElementById('toc-show');
-
-let sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === '1';
-let tocHiddenMap = {};
-
-try {
-  tocHiddenMap = JSON.parse(localStorage.getItem('toc-hidden-per-doc') || '{}');
-} catch (e) {}
-
-const isMobile = () => window.matchMedia('(max-width: 767px)').matches;
-
-function applySidebar() {
-  if (isMobile()) {
-    sidebarEl.style.marginLeft = '';
-    sidebarShowInline.classList.remove('hidden');
-
-    return;
-  }
-
-  if (sidebarCollapsed) {
-    sidebarEl.style.marginLeft = '-20rem';
-    sidebarShowInline.classList.remove('hidden');
-  } else {
-    sidebarEl.style.marginLeft = '';
-    sidebarShowInline.classList.add('hidden');
+    contentEl.querySelectorAll("[data-hometag]").forEach(
+      (b) => b.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (b.dataset.hometag) showTag(b.dataset.hometag);
+      })
+    );
+    const homeGraphBtn = contentEl.querySelector("#home-graph-btn");
+    if (homeGraphBtn) homeGraphBtn.addEventListener("click", openGraph);
+    if (window.mountActivity) window.mountActivity();
+    breadcrumbPath.textContent = "/";
+    breadcrumbDate.textContent = "";
+    breadcrumbActions.classList.add("hidden");
+    breadcrumbActions.classList.remove("flex");
+    tocPanel.classList.add("hidden");
+    tocPanel.classList.remove("flex");
+    tocShow.classList.add("hidden");
   }
 }
-
-function toggleSidebar() {
-  if (isMobile()) {
-    document.body.classList.toggle('sidebar-open');
-
-    return;
-  }
-
-  sidebarCollapsed = !sidebarCollapsed;
-  localStorage.setItem('sidebar-collapsed', sidebarCollapsed ? '1' : '0');
-  applySidebar();
+const homeView = new HomeView();
+function renderRecent() {
+  homeView.renderRecent();
 }
-
-const sidebarBackdrop = document.getElementById('sidebar-backdrop');
-
-sidebarBackdrop.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
-treeEl.addEventListener('click', (e) => {
-  if (isMobile() && e.target.closest('a[data-path]'))
-    document.body.classList.remove('sidebar-open');
+function showNotFound(path) {
+  homeView.showNotFound(path);
+}
+function routeFromHash() {
+  homeView.routeFromHash();
+}
+function showWelcome() {
+  homeView.showWelcome();
+}
+renderRecent();
+homeView.renderSharedWithMe();
+document.getElementById("home-link").addEventListener("click", () => {
+  homeView.showWelcome();
+  history.replaceState(null, "", location.pathname);
 });
-window.addEventListener('resize', () => {
-  if (!isMobile()) document.body.classList.remove('sidebar-open');
-  applySidebar();
-  applyToc();
-});
-
-function isTocHiddenForCurrent() {
-  if (!currentFile) return false;
-
-  return tocHiddenMap[currentFile.path] === true;
-}
-
-function applyToc() {
-  if (!currentFile) {
-    tocPanel.classList.add('hidden');
-    tocPanel.classList.remove('flex');
-    tocShow.classList.add('hidden');
-
+document.getElementById("btn-download").addEventListener("click", async () => {
+  const file = currentFile;
+  if (!file) return;
+  if (file.ext !== ".md") {
+    const fileUrl = "/" + file.path.split("/").map(encodeURIComponent).join("/");
+    const a2 = document.createElement("a");
+    a2.href = fileUrl;
+    a2.download = file.name;
+    document.body.appendChild(a2);
+    a2.click();
+    document.body.removeChild(a2);
     return;
   }
-
-  const hasContent = tocList.children.length >= 2 || tocHasLinks || tocHasNotes;
-
-  if (isMobile()) {
-    tocPanel.classList.add('hidden');
-    tocPanel.classList.remove('flex');
-    tocShow.classList.toggle('hidden', !hasContent);
-
-    return;
-  }
-
-  const hidden = isTocHiddenForCurrent();
-
-  if (hidden || !hasContent) {
-    tocPanel.classList.add('hidden');
-    tocPanel.classList.remove('flex');
-    tocShow.classList.toggle('hidden', !hasContent || !hidden);
-  } else {
-    tocPanel.classList.remove('hidden');
-    tocPanel.classList.add('flex');
-    tocShow.classList.add('hidden');
-  }
-}
-
-function toggleToc() {
-  if (!currentFile) return;
-
-  if (isMobile()) {
-    const wasHidden = tocPanel.classList.contains('hidden');
-
-    tocPanel.classList.toggle('hidden', !wasHidden);
-    tocPanel.classList.toggle('flex', wasHidden);
-    tocShow.classList.toggle('hidden', wasHidden);
-
-    return;
-  }
-
-  const path = currentFile.path;
-
-  tocHiddenMap[path] = !isTocHiddenForCurrent();
-
-  if (!tocHiddenMap[path]) delete tocHiddenMap[path];
-  localStorage.setItem('toc-hidden-per-doc', JSON.stringify(tocHiddenMap));
-  applyToc();
-}
-
-sidebarToggle.addEventListener('click', toggleSidebar);
-sidebarShowInline.addEventListener('click', toggleSidebar);
-tocClose.addEventListener('click', toggleToc);
-tocShow.addEventListener('click', toggleToc);
-applySidebar();
-
-document.getElementById('home-link').addEventListener('click', () => {
-  showWelcome();
-  history.replaceState(null, '', location.pathname);
-});
-
-// Download .md button
-document.getElementById('btn-download').addEventListener('click', async () => {
-  if (!currentFile) return;
-
-  // Non-.md: download the ORIGINAL served as-is — loadContent would return text
-  // and corrupt a binary .pdf/.docx.
-  if (currentFile.ext !== '.md') {
-    const fileUrl = '/' + currentFile.path.split('/').map(encodeURIComponent).join('/');
-    const a = document.createElement('a');
-
-    a.href = fileUrl;
-    a.download = currentFile.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    return;
-  }
-
   let content;
-
   try {
-    content = await loadContent(currentFile);
+    content = await loadContent(file);
   } catch (e) {
-    notifyError('cantLoadDoc', e.message);
-
+    notifyError("cantLoadDoc", e.message);
     return;
   }
-
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-
+  const a = document.createElement("a");
   a.href = url;
-  a.download = currentFile.name;
+  a.download = file.name;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 100);
 });
 
-// Command palette (Ctrl+K)
-const paletteBackdrop = document.getElementById('palette-backdrop');
-const paletteInput = document.getElementById('palette-input');
-const paletteList = document.getElementById('palette-list');
-const paletteCount = document.getElementById('palette-count');
-let paletteItems = [];
-let paletteIdx = 0;
-let paletteNav = []; // actions + files matched by name/path (instant)
-let paletteContent = []; // files matched by content (async, via getSearchHits)
-let paletteSearchDebounce = null;
-let paletteSearchSeq = 0;
-
-const PALETTE_ACTIONS = [
-  {
-    label: t('actHome'),
-    hint: t('actHomeHint'),
-    icon: 'home',
-    action: () => {
-      showWelcome();
-      history.replaceState(null, '', location.pathname);
-    },
-  },
-  { label: t('actSidebar'), hint: 'Ctrl+B', icon: 'sidebar', action: toggleSidebar },
-  { label: t('actToc'), hint: 'Ctrl+J', icon: 'toc', action: toggleToc },
-  {
-    label: t('actEdit'),
-    hint: 'E',
-    icon: 'edit',
-    action: () => currentFile && !editMode && enterEditMode(),
-  },
-  {
-    label: t('actDownload'),
-    hint: '',
-    icon: 'download',
-    action: () => currentFile && document.getElementById('btn-download').click(),
-  },
-  {
-    label: t('actSearch'),
-    hint: '/',
-    icon: 'search',
-    action: () => {
-      closePalette();
-      searchEl.focus();
-    },
-  },
-  {
-    label: t('actGraph'),
-    hint: 'Ctrl+G',
-    icon: 'graph',
-    action: () => {
-      closePalette();
-      openGraph();
-    },
-  },
-  { label: t('actReload'), hint: 'F5', icon: 'reload', action: () => location.reload() },
-];
-
-const ICON_PATHS = {
-  home: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-7h6v7h3a1 1 0 001-1V10',
-  sidebar: 'M4 6h16M4 12h7M4 18h16',
-  toc: 'M4 6h16M4 12h16M4 18h7',
-  edit: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
-  download: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
-  search: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
-  reload:
-    'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-  file: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-  graph:
-    'M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4',
-};
-
-function iconSvg(name) {
-  const p = ICON_PATHS[name] || ICON_PATHS.file;
-
-  return (
-    '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="' +
-    p +
-    '"/></svg>'
-  );
-}
-
-function openPalette() {
-  paletteBackdrop.classList.remove('hidden');
-  paletteInput.value = '';
-  renderPaletteResults('');
-  setTimeout(() => paletteInput.focus(), 0);
-}
-
-function closePalette() {
-  paletteBackdrop.classList.add('hidden');
-}
-
-function renderPaletteResults(q) {
-  const raw = q.trim();
-
-  q = raw.toLowerCase();
-  // Instant pass: actions + files matched by name/path.
-  const nav = [];
-
-  for (const a of PALETTE_ACTIONS) {
-    if (!q || a.label.toLowerCase().includes(q)) nav.push({ kind: 'action', ...a });
-  }
-
-  const seen = new Set();
-
-  for (const f of Object.values(fileMap)) {
-    if (f.ext !== '.md') continue;
-
-    if (!q || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q)) {
-      nav.push({ kind: 'file', label: f.name, hint: f.path, file: f, query: raw });
-      seen.add(f.path);
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class LayoutChrome {
+  constructor() {
+    __publicField(this, "sidebarCollapsed", localStorage.getItem("sidebar-collapsed") === "1");
+    __publicField(this, "tocHiddenMap", {});
+    try {
+      this.tocHiddenMap = JSON.parse(localStorage.getItem("toc-hidden-per-doc") || "{}");
+    } catch {
     }
   }
-
-  paletteNav = nav;
-  paletteContent = [];
-  paintPalette();
-  // Async pass: full-text content search via getSearchHits (same engine as the
-  // search bar). Debounced; skips files already listed by name/path.
-  const seq = ++paletteSearchSeq;
-
-  clearTimeout(paletteSearchDebounce);
-
-  if (q.length >= 2) {
-    paletteSearchDebounce = setTimeout(async () => {
-      let hits;
-
-      try {
-        hits = await getSearchHits(raw);
-      } catch (e) {
-        return;
-      }
-
-      if (seq !== paletteSearchSeq) return; // stale request, we bail out
-      const extra = [];
-
-      for (const h of hits) {
-        if (seen.has(h.path)) continue;
-        const f = fileMap[h.path];
-
-        if (f)
-          extra.push({
-            kind: 'file',
-            label: f.name,
-            hint: f.path,
-            file: f,
-            snippet: h.snippet,
-            query: raw,
-          });
-      }
-
-      paletteContent = extra;
-      paintPalette();
-    }, 160);
+  isMobile() {
+    return window.matchMedia("(max-width: 767px)").matches;
+  }
+  applySidebar() {
+    if (this.isMobile()) {
+      sidebarEl.style.marginLeft = "";
+      sidebarShowInline.classList.remove("hidden");
+      return;
+    }
+    if (this.sidebarCollapsed) {
+      sidebarEl.style.marginLeft = "-20rem";
+      sidebarShowInline.classList.remove("hidden");
+    } else {
+      sidebarEl.style.marginLeft = "";
+      sidebarShowInline.classList.add("hidden");
+    }
+  }
+  toggleSidebar() {
+    if (this.isMobile()) {
+      document.body.classList.toggle("sidebar-open");
+      return;
+    }
+    this.sidebarCollapsed = !this.sidebarCollapsed;
+    localStorage.setItem("sidebar-collapsed", this.sidebarCollapsed ? "1" : "0");
+    this.applySidebar();
+  }
+  isTocHiddenForCurrent() {
+    if (!currentFile) return false;
+    return this.tocHiddenMap[currentFile.path] === true;
+  }
+  applyToc() {
+    if (!currentFile) {
+      tocPanel.classList.add("hidden");
+      tocPanel.classList.remove("flex");
+      tocShow.classList.add("hidden");
+      return;
+    }
+    const hasContent = tocList.children.length >= 2 || tocHasLinks || tocHasNotes;
+    if (this.isMobile()) {
+      tocPanel.classList.add("hidden");
+      tocPanel.classList.remove("flex");
+      tocShow.classList.toggle("hidden", !hasContent);
+      return;
+    }
+    const hidden = this.isTocHiddenForCurrent();
+    if (hidden || !hasContent) {
+      tocPanel.classList.add("hidden");
+      tocPanel.classList.remove("flex");
+      tocShow.classList.toggle("hidden", !hasContent || !hidden);
+    } else {
+      tocPanel.classList.remove("hidden");
+      tocPanel.classList.add("flex");
+      tocShow.classList.add("hidden");
+    }
+  }
+  toggleToc() {
+    if (!currentFile) return;
+    if (this.isMobile()) {
+      const wasHidden = tocPanel.classList.contains("hidden");
+      tocPanel.classList.toggle("hidden", !wasHidden);
+      tocPanel.classList.toggle("flex", wasHidden);
+      tocShow.classList.toggle("hidden", wasHidden);
+      return;
+    }
+    const path = currentFile.path;
+    this.tocHiddenMap[path] = !this.isTocHiddenForCurrent();
+    if (!this.tocHiddenMap[path]) delete this.tocHiddenMap[path];
+    localStorage.setItem("toc-hidden-per-doc", JSON.stringify(this.tocHiddenMap));
+    this.applyToc();
   }
 }
+const sidebarEl = document.getElementById("sidebar");
+const sidebarToggle = document.getElementById("sidebar-toggle");
+const sidebarShowInline = document.getElementById("sidebar-show-inline");
+const tocClose = document.getElementById("toc-close");
+const tocShow = document.getElementById("toc-show");
+const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+const layoutChrome = new LayoutChrome();
+function toggleSidebar() {
+  layoutChrome.toggleSidebar();
+}
+function toggleToc() {
+  layoutChrome.toggleToc();
+}
+function applyToc() {
+  layoutChrome.applyToc();
+}
+function isMobile() {
+  return layoutChrome.isMobile();
+}
+sidebarBackdrop.addEventListener("click", () => document.body.classList.remove("sidebar-open"));
+treeEl.addEventListener("click", (e) => {
+  if (layoutChrome.isMobile() && e.target.closest("a[data-path]")) document.body.classList.remove("sidebar-open");
+});
+window.addEventListener("resize", () => {
+  if (!layoutChrome.isMobile()) document.body.classList.remove("sidebar-open");
+  layoutChrome.applySidebar();
+  layoutChrome.applyToc();
+});
+sidebarToggle.addEventListener("click", toggleSidebar);
+sidebarShowInline.addEventListener("click", toggleSidebar);
+tocClose.addEventListener("click", toggleToc);
+tocShow.addEventListener("click", toggleToc);
+layoutChrome.applySidebar();
 
-function paintPalette() {
-  const items = paletteNav.concat(paletteContent);
-
-  paletteItems = items.slice(0, 30);
-  paletteIdx = 0;
-  paletteCount.textContent =
-    items.length > 30 ? t('paletteResultsCapped', items.length) : t('nResults', items.length);
-  paletteList.innerHTML = paletteItems
-    .map((item, i) => {
-      const secondary = item.snippet
-        ? '<div class="text-[10px] text-ink-400 truncate">' + escapeHtml(item.snippet) + '</div>'
-        : item.hint
-          ? '<div class="text-[10px] text-ink-500 truncate font-mono">' +
-            escapeHtml(item.hint) +
-            '</div>'
-          : '';
-      const kbd =
-        item.kind === 'action' && item.hint
-          ? '<kbd class="text-[10px] text-ink-500 bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">' +
-            escapeHtml(item.hint) +
-            '</kbd>'
-          : '';
-
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _CommandPalette = class _CommandPalette {
+  constructor() {
+    __publicField(this, "backdrop", document.getElementById("palette-backdrop"));
+    __publicField(this, "input", document.getElementById("palette-input"));
+    __publicField(this, "list", document.getElementById("palette-list"));
+    __publicField(this, "count", document.getElementById("palette-count"));
+    __publicField(this, "items", []);
+    __publicField(this, "idx", 0);
+    __publicField(this, "nav", []);
+    // actions + files matched by name/path (instant)
+    __publicField(this, "content", []);
+    // files matched by content (async, via getSearchHits)
+    __publicField(this, "searchDebounce", null);
+    __publicField(this, "searchSeq", 0);
+    // Static command rows. Built once at load (i18n labels are fixed for the session, as before); the
+    // closures capture `this` for the palette-close actions, so this is an instance field, not static.
+    __publicField(this, "actions");
+    this.actions = [
+      {
+        kind: "action",
+        label: t("actHome"),
+        hint: t("actHomeHint"),
+        icon: "home",
+        action: () => {
+          showWelcome();
+          history.replaceState(null, "", location.pathname);
+        }
+      },
+      { kind: "action", label: t("actSidebar"), hint: "Ctrl+B", icon: "sidebar", action: toggleSidebar },
+      { kind: "action", label: t("actToc"), hint: "Ctrl+J", icon: "toc", action: toggleToc },
+      {
+        kind: "action",
+        label: t("actEdit"),
+        hint: "E",
+        icon: "edit",
+        action: () => {
+          if (currentFile && !editMode) enterEditMode();
+        }
+      },
+      {
+        kind: "action",
+        label: t("actDownload"),
+        hint: "",
+        icon: "download",
+        action: () => {
+          if (currentFile) document.getElementById("btn-download").click();
+        }
+      },
+      {
+        kind: "action",
+        label: t("actSearch"),
+        hint: "/",
+        icon: "search",
+        action: () => {
+          this.close();
+          searchEl.focus();
+        }
+      },
+      {
+        kind: "action",
+        label: t("actGraph"),
+        hint: "Ctrl+G",
+        icon: "graph",
+        action: () => {
+          this.close();
+          mindGraph.open();
+        }
+      },
+      { kind: "action", label: t("actReload"), hint: "F5", icon: "reload", action: () => location.reload() }
+    ];
+    this.input.addEventListener("input", (e) => this.renderResults(e.target.value));
+    this.input.addEventListener("keydown", (e) => this.onInputKey(e));
+    this.backdrop.addEventListener("click", (e) => {
+      if (e.target === this.backdrop) this.close();
+    });
+  }
+  open() {
+    this.backdrop.classList.remove("hidden");
+    this.input.value = "";
+    this.renderResults("");
+    setTimeout(() => this.input.focus(), 0);
+  }
+  close() {
+    this.backdrop.classList.add("hidden");
+  }
+  iconSvg(name) {
+    const p = _CommandPalette.ICON_PATHS[name] || _CommandPalette.ICON_PATHS.file;
+    return '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="' + p + '"/></svg>';
+  }
+  renderResults(q) {
+    const rawQuery = q.trim();
+    q = rawQuery.toLowerCase();
+    const nav = [];
+    for (const a of this.actions) {
+      if (!q || a.label.toLowerCase().includes(q)) nav.push(a);
+    }
+    const seen = /* @__PURE__ */ new Set();
+    for (const f of Object.values(fileMap)) {
+      if (f.ext !== ".md") continue;
+      if (!q || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q)) {
+        nav.push({ kind: "file", label: f.name, hint: f.path, file: f, query: rawQuery });
+        seen.add(f.path);
+      }
+    }
+    this.nav = nav;
+    this.content = [];
+    this.paint();
+    const seq = ++this.searchSeq;
+    if (this.searchDebounce) clearTimeout(this.searchDebounce);
+    if (q.length >= 2) {
+      this.searchDebounce = setTimeout(async () => {
+        let hits;
+        try {
+          hits = await getSearchHits(rawQuery);
+        } catch (e) {
+          return;
+        }
+        if (seq !== this.searchSeq) return;
+        const extra = [];
+        for (const hit of hits) {
+          if (seen.has(hit.path)) continue;
+          const f = fileMap[hit.path];
+          if (f) extra.push({ kind: "file", label: f.name, hint: f.path, file: f, snippet: hit.snippet, query: rawQuery });
+        }
+        this.content = extra;
+        this.paint();
+      }, 160);
+    }
+  }
+  paint() {
+    const items = this.nav.concat(this.content);
+    this.items = items.slice(0, 30);
+    this.idx = 0;
+    this.count.textContent = items.length > 30 ? t("paletteResultsCapped", items.length) : t("nResults", items.length);
+    this.list.innerHTML = this.items.map((item, i) => {
+      const secondary = item.snippet ? '<div class="text-[10px] text-ink-400 truncate">' + escapeHtml(item.snippet) + "</div>" : item.hint ? '<div class="text-[10px] text-ink-500 truncate font-mono">' + escapeHtml(item.hint) + "</div>" : "";
+      const kbd = item.kind === "action" && item.hint ? '<kbd class="text-[10px] text-ink-500 bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">' + escapeHtml(item.hint) + "</kbd>" : "";
       return `
-    <li data-idx="${i}" class="palette-item flex items-center gap-3 px-4 py-2.5 cursor-pointer ${i === 0 ? 'palette-active' : ''}">
-      <span class="text-ink-400">${iconSvg(item.icon || (item.kind === 'file' ? 'file' : 'edit'))}</span>
+    <li data-idx="${i}" class="palette-item flex items-center gap-3 px-4 py-2.5 cursor-pointer ${i === 0 ? "palette-active" : ""}">
+      <span class="text-ink-400">${this.iconSvg(item.icon || (item.kind === "file" ? "file" : "edit"))}</span>
       <div class="flex-1 min-w-0">
         <div class="text-sm text-ink-100 truncate">${escapeHtml(item.label)}</div>
         ${secondary}
       </div>
       ${kbd}
     </li>`;
-    })
-    .join('');
-  paletteList.querySelectorAll('.palette-item').forEach((el, i) => {
-    el.addEventListener('mouseenter', () => {
-      paletteIdx = i;
-      updatePaletteHighlight();
+    }).join("");
+    this.list.querySelectorAll(".palette-item").forEach((el, i) => {
+      el.addEventListener("mouseenter", () => {
+        this.idx = i;
+        this.updateHighlight();
+      });
+      el.addEventListener("click", () => this.select(i));
     });
-    el.addEventListener('click', () => selectPaletteItem(i));
-  });
-}
-
-function updatePaletteHighlight() {
-  paletteList.querySelectorAll('.palette-item').forEach((li, i) => {
-    li.classList.toggle('palette-active', i === paletteIdx);
-  });
-  const active = paletteList.querySelector('.palette-active');
-
-  if (active) active.scrollIntoView({ block: 'nearest' });
-}
-
-function selectPaletteItem(i) {
-  const item = paletteItems[i];
-
-  if (!item) return;
-  closePalette();
-
-  if (item.kind === 'action') item.action();
-  else if (item.kind === 'file') {
-    showMarkdown(item.file, item.query);
-    history.replaceState(null, '', '#' + encodeURIComponent(item.file.path));
   }
-}
-
-paletteInput.addEventListener('input', (e) => renderPaletteResults(e.target.value));
-paletteInput.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    paletteIdx = Math.min(paletteItems.length - 1, paletteIdx + 1);
-    updatePaletteHighlight();
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    paletteIdx = Math.max(0, paletteIdx - 1);
-    updatePaletteHighlight();
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    selectPaletteItem(paletteIdx);
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    closePalette();
+  updateHighlight() {
+    this.list.querySelectorAll(".palette-item").forEach((li, i) => {
+      li.classList.toggle("palette-active", i === this.idx);
+    });
+    const active = this.list.querySelector(".palette-active");
+    if (active) active.scrollIntoView({ block: "nearest" });
   }
-});
-paletteBackdrop.addEventListener('click', (e) => {
-  if (e.target === paletteBackdrop) closePalette();
-});
-
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-    e.preventDefault();
-    openPalette();
-
-    return;
-  }
-
-  if (e.key === 'Escape' && !historyOverlay.classList.contains('hidden')) {
-    closeHistory();
-
-    return;
-  }
-
-  if (e.key === 'Escape' && !tasksOverlay.classList.contains('hidden')) {
-    closeTasks();
-
-    return;
-  }
-
-  if (e.key === 'Escape' && !graphOverlay.classList.contains('hidden')) {
-    closeGraph();
-
-    return;
-  }
-
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
-    e.preventDefault();
-    openGraph();
-
-    return;
-  }
-
-  if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-    if (e.key === 'Escape' && document.activeElement === searchEl) {
-      searchEl.value = '';
-      searchEl.dispatchEvent(new Event('input'));
-      searchEl.blur();
+  select(i) {
+    const item = this.items[i];
+    if (!item) return;
+    this.close();
+    if (item.kind === "action") item.action();
+    else if (item.kind === "file") {
+      showMarkdown(item.file, item.query);
+      history.replaceState(null, "", "#" + encodeURIComponent(item.file.path));
     }
-
-    return;
   }
-
-  if (e.key === '/') {
-    e.preventDefault();
-    searchEl.focus();
+  onInputKey(e) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      this.idx = Math.min(this.items.length - 1, this.idx + 1);
+      this.updateHighlight();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      this.idx = Math.max(0, this.idx - 1);
+      this.updateHighlight();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      this.select(this.idx);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      this.close();
+    }
   }
-
-  if (e.key === 'e' && currentFile && !editMode && !window.__viewerMode) {
-    e.preventDefault();
-    enterEditMode();
-  }
-
-  if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-    e.preventDefault();
-    toggleSidebar();
-  }
-
-  if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
-    e.preventDefault();
-    toggleToc();
-  }
+};
+__publicField(_CommandPalette, "ICON_PATHS", {
+  home: "M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-7h6v7h3a1 1 0 001-1V10",
+  sidebar: "M4 6h16M4 12h7M4 18h16",
+  toc: "M4 6h16M4 12h16M4 18h7",
+  edit: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+  download: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+  search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+  reload: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
+  file: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  graph: "M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"
 });
+let CommandPalette = _CommandPalette;
+const commandPalette = new CommandPalette();
 
-// ─── Pinned favorites ────────────────────────────────────────────────────────────
-const pinnedSection = document.getElementById('pinned-section');
-const pinnedList = document.getElementById('pinned-list');
-const btnPin = document.getElementById('btn-pin');
-const btnPinIcon = document.getElementById('btn-pin-icon');
-let pins = [];
-
-try {
-  pins = (JSON.parse(localStorage.getItem('kb-pins') || '[]') || []).filter((p) => fileMap[p]);
-} catch (e) {
-  pins = [];
-}
-
-function savePins() {
-  try {
-    localStorage.setItem('kb-pins', JSON.stringify(pins));
-  } catch (e) {}
-}
-
-function isPinned(path) {
-  return pins.includes(path);
-}
-
-function togglePin(path) {
-  if (!path) return;
-  const i = pins.indexOf(path);
-
-  if (i >= 0) pins.splice(i, 1);
-  else pins.unshift(path);
-  savePins();
-  renderPinned();
-
-  if (currentFile) updatePinButton(currentFile);
-}
-
-function updatePinButton(file) {
-  if (!file || file.ext !== '.md') {
-    btnPin.classList.add('hidden');
-
-    return;
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class Pins {
+  constructor() {
+    __publicField(this, "section", document.getElementById("pinned-section"));
+    __publicField(this, "list", document.getElementById("pinned-list"));
+    __publicField(this, "btn", document.getElementById("btn-pin"));
+    __publicField(this, "btnIcon", document.getElementById("btn-pin-icon"));
+    __publicField(this, "pins", []);
+    try {
+      this.pins = (JSON.parse(localStorage.getItem("kb-pins") || "[]") || []).filter((p) => fileMap[p]);
+    } catch (e) {
+      this.pins = [];
+    }
+    this.btn.addEventListener("click", () => {
+      if (currentFile) this.toggle(currentFile.path);
+    });
+    this.render();
   }
-
-  btnPin.classList.remove('hidden');
-  const on = isPinned(file.path);
-
-  btnPinIcon.setAttribute('fill', on ? 'currentColor' : 'none');
-  btnPin.classList.toggle('text-amber-300', on);
-  btnPin.title = on ? t('unpin') : t('pin');
-}
-
-function renderPinned() {
-  const items = pins.map((p) => fileMap[p]).filter(Boolean);
-
-  if (!items.length) {
-    pinnedSection.classList.add('hidden');
-    pinnedList.innerHTML = '';
-
-    return;
+  save() {
+    try {
+      localStorage.setItem("kb-pins", JSON.stringify(this.pins));
+    } catch (e) {
+    }
   }
-
-  pinnedSection.classList.remove('hidden');
-  pinnedList.innerHTML = items
-    .map(
+  isPinned(path) {
+    return this.pins.includes(path);
+  }
+  toggle(path) {
+    if (!path) return;
+    const i = this.pins.indexOf(path);
+    if (i >= 0) this.pins.splice(i, 1);
+    else this.pins.unshift(path);
+    this.save();
+    this.render();
+    if (currentFile) this.updateButton(currentFile);
+  }
+  updateButton(file) {
+    if (!file || file.ext !== ".md") {
+      this.btn.classList.add("hidden");
+      return;
+    }
+    this.btn.classList.remove("hidden");
+    const on = this.isPinned(file.path);
+    this.btnIcon.setAttribute("fill", on ? "currentColor" : "none");
+    this.btn.classList.toggle("text-amber-300", on);
+    this.btn.title = on ? t("unpin") : t("pin");
+  }
+  render() {
+    const items = this.pins.map((p) => fileMap[p]).filter((f) => !!f);
+    if (!items.length) {
+      this.section.classList.add("hidden");
+      this.list.innerHTML = "";
+      return;
+    }
+    this.section.classList.remove("hidden");
+    this.list.innerHTML = items.map(
       (f) => `
     <li class="overflow-hidden group flex items-center">
       <a class="tree-item flex-1 min-w-0 flex items-center px-2 py-1 rounded cursor-pointer" data-pinpath="${escapeHtml(f.path)}">
         <span class="block text-xs text-ink-200 truncate w-full">${escapeHtml(f.name)}</span>
       </a>
-      <button class="px-1.5 text-ink-600 hover:text-rose-300 opacity-0 group-hover:opacity-100 transition-opacity" data-unpin="${escapeHtml(f.path)}" title="${escapeHtml(t('unpin'))}">&times;</button>
-    </li>`,
-    )
-    .join('');
-  pinnedList.querySelectorAll('[data-pinpath]').forEach((a) =>
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      const f = fileMap[a.dataset.pinpath];
-
-      if (f) {
-        showMarkdown(f);
-        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-      }
-    }),
-  );
-  pinnedList.querySelectorAll('[data-unpin]').forEach((b) =>
-    b.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      togglePin(b.dataset.unpin);
-    }),
-  );
+      <button class="px-1.5 text-ink-600 hover:text-rose-300 opacity-0 group-hover:opacity-100 transition-opacity" data-unpin="${escapeHtml(f.path)}" title="${escapeHtml(t("unpin"))}">&times;</button>
+    </li>`
+    ).join("");
+    this.list.querySelectorAll("[data-pinpath]").forEach(
+      (a) => a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const f = fileMap[a.dataset.pinpath];
+        if (f) {
+          showMarkdown(f);
+          history.replaceState(null, "", "#" + encodeURIComponent(f.path));
+        }
+      })
+    );
+    this.list.querySelectorAll("[data-unpin]").forEach(
+      (b) => b.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggle(b.dataset.unpin);
+      })
+    );
+  }
 }
-
-btnPin.addEventListener('click', () => {
-  if (currentFile) togglePin(currentFile.path);
-});
-renderPinned();
-
-// Embed mode (#mind): landing page iframes this viewer as a chrome-less Mind hero.
-// Build the base view here; the graph opens (controls hidden) once fully wired, below.
-const EMBED_MIND = location.hash.replace(/^#/, '') === 'mind';
-
+const pins = new Pins();
+function updatePinButton(file) {
+  pins.updateButton(file);
+}
 if (EMBED_MIND) {
   showWelcome();
 } else {
   routeFromHash();
 }
 
-// ─── Connections graph view ────────────────────────────────────────────────────
-const graphOverlay = document.getElementById('graph-overlay');
-const graphCanvas = document.getElementById('graph-canvas');
-const graphTooltip = document.getElementById('graph-tooltip');
-const graphStats = document.getElementById('graph-stats');
-const GRAPH_COLORS = [
-  '#5db5e8',
-  '#fbc678',
-  '#a78bfa',
-  '#34d399',
-  '#f472b6',
-  '#f87171',
-  '#22d3ee',
-  '#facc15',
-  '#c084fc',
-  '#4ade80',
-];
-let graphState = null,
-  graphRaf = null;
-
-function tagColor(tag) {
-  if (!tag) return '#6b7280';
-  let h = 0;
-
-  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
-
-  return GRAPH_COLORS[h % GRAPH_COLORS.length];
-}
-
-// Hierarchical folder color: a top-level folder maps to a stable family HUE (golden-angle
-// spread, populated once in openGraph so families never collide), and the immediate
-// subfolder under it varies LIGHTNESS/SATURATION within that hue. So a dominant family
-// (e.g. wizishop) stays one recognizable hue while its subfolders read as distinct tints.
-let _familyHue = {};
-
-// HSL→#rrggbb. MUST return the 6-hex form: every consumer appends an alpha byte
-// (n.color + '30', col + '2b', …), so an hsl() string would corrupt every gradient stop.
-function hslToHex(h, s, l) {
-  s /= 100;
-  l /= 100;
-  const a = s * Math.min(l, 1 - l);
-  const f = (k) => {
-    const x = (k + h / 30) % 12;
-    const c = l - a * Math.max(-1, Math.min(x - 3, 9 - x, 1));
-    return Math.round(255 * c)
-      .toString(16)
-      .padStart(2, '0');
-  };
-  return '#' + f(0) + f(8) + f(4);
-}
-
-function hierColor(family, sub) {
-  if (!family) return '#6b7280'; // root-level docs: neutral (matches the old tagColor(''))
-  let fh = 0;
-  for (let i = 0; i < family.length; i++) fh = (fh * 31 + family.charCodeAt(i)) >>> 0;
-  const baseHue = family in _familyHue ? _familyHue[family] : fh % 360;
-  if (!sub) return hslToHex(baseHue, 68, 55); // family anchor color (blobs + sub-less docs)
-  // Spread subfolders on a 3D hue/sat/light grid — a single axis crowds for a family with
-  // ~8 subfolders. The hue jitter stays small (±16°, well within the gap between family
-  // hues) so the family is still recognizable. Mid-band lightness keeps cores legible and
-  // the additive bloom from washing to white.
-  let h = 0;
-  for (let i = 0; i < sub.length; i++) h = (h * 31 + sub.charCodeAt(i)) >>> 0;
-  const hue = (baseHue + ((h % 5) - 2) * 8 + 360) % 360; // ±16° within the family band
-  const light = 46 + (Math.floor(h / 5) % 5) * 5; // 46,51,56,61,66
-  const sat = 60 + (Math.floor(h / 25) % 3) * 9; // 60,69,78
-  return hslToHex(hue, sat, light);
-}
-
-// ── Mind view modes: "organic" (force-directed brain) ⇄ "structured" (folder map) ──
-
-// Which nodes/edges are active for the current mode. Organic shows the folder-zoned
-// force graph with TAGS HIDDEN by default — tags carry ~3× the edges of real wikilinks
-// and drown the structure. The hero (EMBED_MIND) keeps its full tag web for the landing.
-function applyGraphView(st) {
-  const tags = st.mode === 'organic' && (st.showTags || EMBED_MIND);
-
-  st.nodes = tags ? st.allNodes : st.allNodes.filter((n) => n.kind !== 'tag');
-  st.edges = st.allEdges.filter((e) => e.kind === 'link' || (tags && e.kind === 'tag'));
-  st.hover = null;
-}
-
-// Re-seed organic positions near each node's folder anchor (used when switching back
-// from the structured map so the force layout relaxes from an already-zoned start).
-function reseedOrganic(st) {
-  for (const n of st.nodes) {
-    const anc = (st.subAnchors && st.subAnchors[n.subKey]) || (st.regionAnchors && st.regionAnchors[n.region]);
-
-    n.x = anc ? anc.x + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520;
-    n.y = anc ? anc.y + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520;
-    n.vx = 0;
-    n.vy = 0;
+class GraphLayout {
+  constructor(canvas, palette) {
+    this.canvas = canvas;
+    this.palette = palette;
   }
-}
-
-// Fit the camera to the whole layout. Organic fits the anchor ring (nodes spread as the
-// sim relaxes); structured fits the fixed packed bbox. The hero keeps its own framing.
-function fitGraphCamera(st) {
-  st.cam.ox = graphCanvas.clientWidth / 2;
-  st.cam.oy = graphCanvas.clientHeight / 2;
-
-  if (EMBED_MIND) return;
-  let half;
-
-  if (st.mode === 'structured') {
-    half = 60;
-    for (const n of st.nodes) half = Math.max(half, Math.abs(n.x) + n.r, Math.abs(n.y) + n.r);
-    half += 70;
-  } else {
-    half = (st.ring || 360) + 220;
-  }
-
-  st.cam.scale = Math.min(
-    1,
-    (Math.min(graphCanvas.clientWidth, graphCanvas.clientHeight) / (2 * half)) * 0.92,
-  );
-}
-
-// Deterministic "map" layout: docs pack in a phyllotaxis disc per subfolder; subfolder
-// discs pack into a family box; family boxes pack across the canvas. No physics → tidy
-// and stable, the opposite of the organic hairball. Fills st.clusters + st.families for
-// the scaffold drawing, and sets each doc's fixed x/y.
-function layoutStructured(st) {
-  const docs = st.nodes.filter((n) => n.kind === 'doc');
-  const fams = {};
-
-  for (const n of docs) {
-    const fam = n.region || '·root';
-    const ckey = n.subRegion || '';
-    const f = (fams[fam] = fams[fam] || { name: fam, clusters: {} });
-
-    (f.clusters[ckey] = f.clusters[ckey] || { sub: ckey, docs: [] }).docs.push(n);
-  }
-
-  const DOC_SP = 15,
-    CL_GAP = 22,
-    FAM_GAP = 56,
-    FAM_PAD = 28;
-
-  // Phyllotaxis pack of a cluster's docs around a local (0,0); sets c.r.
-  const packCluster = (c) => {
-    let maxR = 0;
-
-    c.docs.forEach((n, i) => {
-      const a = i * 2.399963;
-      const r = DOC_SP * Math.sqrt(i + 0.6);
-
-      n._lx = Math.cos(a) * r;
-      n._ly = Math.sin(a) * r;
-      maxR = Math.max(maxR, r + (n.r || 6));
-    });
-    c.r = Math.max(18, maxR + 8);
-  };
-
-  // Row-pack square items {w,h} into maxW; sets it.x/it.y, returns the bounding {w,h}.
-  const rowPack = (items, maxW, gap) => {
-    let x = 0,
-      y = 0,
-      rowH = 0,
-      totalW = 0;
-
-    for (const it of items) {
-      if (x > 0 && x + it.w > maxW) {
-        x = 0;
-        y += rowH + gap;
-        rowH = 0;
+  // Build the whole graph model from the live file map + the backlinks index: folder families →
+  // hierarchical color + layout anchors, doc/tag nodes, wikilink/tag edges, degree-scaled radii and
+  // the "recent" halo flag. Pure (no DOM): returns the fresh state plus the counts for the stats line.
+  buildGraphModel(idx) {
+    const nodes = [];
+    const byPath = {};
+    const tagNodes = {};
+    const GRAPH_EXTS = /* @__PURE__ */ new Set([".md", ".html", ".pdf", ".docx"]);
+    const famSet = /* @__PURE__ */ new Set();
+    const subByFam = {};
+    for (const f of Object.values(fileMap)) {
+      if (!GRAPH_EXTS.has(f.ext)) continue;
+      const fp = f.path.split("/");
+      const isRemoteDoc = f.path.startsWith("remotes/");
+      const fam = isRemoteDoc ? "⧫ " + (fp[1] || "node") : fp.length > 1 ? fp[0] : "";
+      if (!fam) continue;
+      famSet.add(fam);
+      if (!isRemoteDoc && fp.length > 2) {
+        (subByFam[fam] = subByFam[fam] || /* @__PURE__ */ new Set()).add(fp[1]);
       }
-
-      it.x = x;
-      it.y = y;
-      x += it.w + gap;
-      rowH = Math.max(rowH, it.h);
-      totalW = Math.max(totalW, x - gap);
     }
-
-    return { w: totalW, h: y + rowH };
-  };
-
-  const famList = Object.values(fams);
-
-  // Each family becomes a "cell": its subfolder clusters are arranged, then wrapped
-  // in ONE enclosing circle (radius = the clusters' extent from their centre + pad)
-  // rather than a box — so the map reads as cells, not rectangles.
-  for (const f of famList) {
-    const cl = Object.values(f.clusters);
-
-    cl.forEach(packCluster);
-    cl.sort((a, b) => b.r - a.r);
-    f._items = cl.map((c) => ({ c, w: c.r * 2, h: c.r * 2 }));
-    const area = f._items.reduce((s, it) => s + it.w * it.h, 0);
-    const box = rowPack(f._items, Math.max(f._items[0].w, Math.sqrt(area) * 1.25), CL_GAP);
-    // Offsets are measured from the clusters' bounding-box centre; the cell radius is
-    // the farthest cluster edge from it.
-    const bcx = box.w / 2,
-      bcy = box.h / 2;
-    let rad = 0;
-
-    for (const it of f._items) {
-      it._dx = it.x + it.c.r - bcx;
-      it._dy = it.y + it.c.r - bcy;
-      rad = Math.max(rad, Math.hypot(it._dx, it._dy) + it.c.r);
-    }
-    f._r = rad + FAM_PAD;
-  }
-
-  // Pack the cells: a square of side 2r per family → the circles tile a grid and
-  // never overlap. Largest first keeps it tidy.
-  famList.sort((a, b) => b._r - a._r);
-  const famItems = famList.map((f) => ({ f, w: f._r * 2, h: f._r * 2 }));
-  const totalArea = famItems.reduce((s, it) => s + it.w * it.h, 0);
-  const total = rowPack(famItems, Math.max(famItems[0].w, Math.sqrt(totalArea) * 1.3), FAM_GAP);
-
-  const cx = total.w / 2,
-    cy = total.h / 2;
-  const clusters = [],
-    families = [];
-
-  for (const fit of famItems) {
-    const f = fit.f;
-    const fx = fit.x + f._r - cx,
-      fy = fit.y + f._r - cy;
-
-    families.push({ x: fx, y: fy, r: f._r, name: f.name, color: hierColor(f.name, '') });
-
-    for (const it of f._items) {
-      const ccx = fx + it._dx,
-        ccy = fy + it._dy;
-
-      it.c.docs.forEach((n) => {
-        n.x = ccx + n._lx;
-        n.y = ccy + n._ly;
-        n.vx = 0;
-        n.vy = 0;
-      });
-      clusters.push({ x: ccx, y: ccy, r: it.c.r, sub: it.c.sub, color: hierColor(f.name, it.c.sub) });
-    }
-  }
-
-  st.clusters = clusters;
-  st.families = families;
-}
-
-async function openGraph() {
-  const idx = await loadBacklinksIndex();
-
-  graphOverlay.classList.remove('hidden');
-  const nodes = [],
-    byPath = {},
-    tagNodes = {};
-  // Every previewable doc is a node (not just Markdown), so media docs cluster by region too.
-  const GRAPH_EXTS = new Set(['.md', '.html', '.pdf', '.docx']);
-
-  // ── Folder families + subfolders → hierarchical color AND layout anchors ──
-  // Built ONCE before the node loop so each node can be colored and SEEDED near its
-  // folder's zone. Families sit on a ring (even spacing); each family's subfolders orbit
-  // its anchor by sorted index (NOT a hash → no two subfolders re-collide at one spot).
-  const famSet = new Set();
-  const subByFam = {};
-
-  for (const f of Object.values(fileMap)) {
-    if (!GRAPH_EXTS.has(f.ext)) continue;
-    const fp = f.path.split('/');
-    const isRemoteDoc = f.path.startsWith('remotes/');
-    const fam = isRemoteDoc ? '⧫ ' + (fp[1] || 'node') : fp.length > 1 ? fp[0] : '';
-
-    if (!fam) continue; // root-level docs have no family
-    famSet.add(fam);
-
-    if (!isRemoteDoc && fp.length > 2) {
-      (subByFam[fam] = subByFam[fam] || new Set()).add(fp[1]);
-    }
-  }
-
-  const families = [...famSet].sort();
-  const regionAnchors = {};
-  const subAnchors = {};
-  const RING = Math.max(260, 78 * families.length); // ring radius grows with family count
-
-  _familyHue = {};
-  families.forEach((fam, i) => {
-    _familyHue[fam] = (i * 137.5) % 360; // golden-angle hue: maximal family separation
-    const a = (i / families.length) * Math.PI * 2; // even placement on the ring
-    regionAnchors[fam] = { x: Math.cos(a) * RING, y: Math.sin(a) * RING };
-    const subs = subByFam[fam] ? [...subByFam[fam]].sort() : [];
-    subs.forEach((sub, k) => {
-      const a2 = a + (k / subs.length) * Math.PI * 2; // distribute subs around the family
-      subAnchors[fam + '/' + sub] = {
-        x: regionAnchors[fam].x + Math.cos(a2) * 130,
-        y: regionAnchors[fam].y + Math.sin(a2) * 130,
-      };
-    });
-  });
-
-  for (const f of Object.values(fileMap)) {
-    if (!GRAPH_EXTS.has(f.ext)) continue;
-    const parts = f.path.split('/');
-    // Mirror doc (remotes/<source>/…) → own region per source, diamond-prefixed to
-    // avoid colliding with a same-named directory and to signal non-personal content.
-    const isRemote = f.path.startsWith('remotes/');
-    const region = isRemote ? '⧫ ' + (parts[1] || 'node') : parts.length > 1 ? parts[0] : '';
-    // Immediate subfolder (one level under the family) → color tint + a layout sub-anchor.
-    const subRegion = !isRemote && parts.length > 2 ? parts[1] : '';
-    const subKey = subRegion ? region + '/' + subRegion : '';
-    const anchor = subAnchors[subKey] || regionAnchors[region] || null;
-    const n = {
-      kind: 'doc',
-      path: f.path,
-      name: f.name.replace(/\.(md|html|pdf|docx)$/i, ''),
-      doctype: f.ext,
-      tags: f.tags || [],
-      region,
-      subRegion,
-      subKey,
-      remote: isRemote,
-      mtime: f.mtime || 0,
-      recent: false,
-      // Seed near the folder's zone so the layout settles already-organized.
-      x: anchor ? anchor.x + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520,
-      y: anchor ? anchor.y + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520,
-      vx: 0,
-      vy: 0,
-      deg: 0,
-    };
-
-    // Remote nodes get AI teal; otherwise color = family hue + subfolder tint.
-    n.color = isRemote ? '#59d0cf' : hierColor(region, subRegion);
-    nodes.push(n);
-    byPath[f.path] = n;
-  }
-
-  const edges = [];
-  const docCount = nodes.length;
-  let linkCount = 0;
-
-  for (const dn of nodes.slice()) {
-    for (const tg of dn.tags) {
-      let tn = tagNodes[tg];
-
-      if (!tn) {
-        tn = {
-          kind: 'tag',
-          tag: tg,
-          name: '#' + tg,
-          color: tagColor(tg),
-          docs: 0,
-          x: (Math.random() - 0.5) * 520,
-          y: (Math.random() - 0.5) * 520,
-          vx: 0,
-          vy: 0,
-          deg: 0,
+    const families = [...famSet].sort();
+    const regionAnchors = {};
+    const subAnchors = {};
+    const RING = Math.max(260, 78 * families.length);
+    this.palette.familyHue = {};
+    families.forEach((fam, i) => {
+      this.palette.familyHue[fam] = i * 137.5 % 360;
+      const a = i / families.length * Math.PI * 2;
+      regionAnchors[fam] = { x: Math.cos(a) * RING, y: Math.sin(a) * RING };
+      const subs = subByFam[fam] ? [...subByFam[fam]].sort() : [];
+      subs.forEach((sub, k) => {
+        const a2 = a + k / subs.length * Math.PI * 2;
+        subAnchors[fam + "/" + sub] = {
+          x: regionAnchors[fam].x + Math.cos(a2) * 130,
+          y: regionAnchors[fam].y + Math.sin(a2) * 130
         };
-        tagNodes[tg] = tn;
-        nodes.push(tn);
+      });
+    });
+    for (const f of Object.values(fileMap)) {
+      if (!GRAPH_EXTS.has(f.ext)) continue;
+      const parts = f.path.split("/");
+      const isRemote = f.path.startsWith("remotes/");
+      const region = isRemote ? "⧫ " + (parts[1] || "node") : parts.length > 1 ? parts[0] : "";
+      const subRegion = !isRemote && parts.length > 2 ? parts[1] : "";
+      const subKey = subRegion ? region + "/" + subRegion : "";
+      const anchor = subAnchors[subKey] || regionAnchors[region] || null;
+      const n = {
+        kind: "doc",
+        path: f.path,
+        name: f.name.replace(/\.(md|html|pdf|docx)$/i, ""),
+        doctype: f.ext,
+        tags: f.tags || [],
+        region,
+        subRegion,
+        subKey,
+        remote: isRemote,
+        mtime: f.mtime || 0,
+        recent: false,
+        // Seed near the folder's zone so the layout settles already-organized.
+        x: anchor ? anchor.x + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520,
+        y: anchor ? anchor.y + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520,
+        vx: 0,
+        vy: 0,
+        deg: 0,
+        // Remote nodes get AI teal; otherwise color = family hue + subfolder tint.
+        color: isRemote ? "#59d0cf" : this.palette.hierColor(region, subRegion),
+        r: 0
+      };
+      nodes.push(n);
+      byPath[f.path] = n;
+    }
+    const edges = [];
+    const docCount = nodes.length;
+    let linkCount = 0;
+    for (const dn of nodes.slice()) {
+      for (const tg of dn.tags) {
+        let tn = tagNodes[tg];
+        if (!tn) {
+          tn = {
+            kind: "tag",
+            tag: tg,
+            name: "#" + tg,
+            color: this.palette.tagColor(tg),
+            docs: 0,
+            x: (Math.random() - 0.5) * 520,
+            y: (Math.random() - 0.5) * 520,
+            vx: 0,
+            vy: 0,
+            deg: 0,
+            r: 0
+          };
+          tagNodes[tg] = tn;
+          nodes.push(tn);
+        }
+        tn.docs = (tn.docs ?? 0) + 1;
+        edges.push({ s: dn, t: tn, kind: "tag" });
+        dn.deg++;
+        tn.deg++;
       }
-
-      tn.docs++;
-      edges.push({ s: dn, t: tn, kind: 'tag' });
-      dn.deg++;
-      tn.deg++;
     }
-  }
-
-  const seen = new Set();
-
-  for (const [p, e] of Object.entries(idx)) {
-    for (const q of e.out || []) {
-      const key = p < q ? p + '\n' + q : q + '\n' + p;
-
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const s = byPath[p],
-        t = byPath[q];
-
-      if (s && t) {
-        edges.push({ s, t, kind: 'link' });
-        s.deg++;
-        t.deg++;
-        linkCount++;
-      }
-    }
-  }
-
-  // Node radius: docs larger than tags, scaled by degree (hubs grow).
-  for (const n of nodes)
-    n.r = (n.kind === 'tag' ? 3 : 5) + Math.sqrt(n.deg) * (n.kind === 'tag' ? 1.2 : 2.6);
-  // Docs edited < 14 days ago → halo at render time ("active thoughts").
-  const RECENT_CUTOFF = Date.now() / 1000 - 14 * 86400;
-
-  for (const n of nodes) if (n.kind === 'doc') n.recent = n.mtime > RECENT_CUTOFF;
-  graphStats.textContent = t('graphStats', docCount, linkCount, Object.keys(tagNodes).length);
-  graphState = {
-    allNodes: nodes,
-    allEdges: edges,
-    nodes,
-    edges,
-    regionAnchors,
-    subAnchors,
-    ring: RING,
-    mode: 'organic',
-    showTags: false, // de-cluttered by default; toggle to bring the tag web back
-    clusters: [],
-    families: [],
-    cam: { scale: 1, ox: 0, oy: 0 },
-    ticks: 0,
-    hover: null,
-    drag: null,
-    panFrom: null,
-    moved: false,
-  };
-  applyGraphView(graphState);
-  resizeGraph();
-  fitGraphCamera(graphState);
-
-  // Embed hero: pre-settle the layout off-screen so it appears already organized
-  // (no nodes flying into place on the landing page).
-  if (EMBED_MIND) {
-    for (let i = 0; i < 480; i++) graphSimStep(graphState);
-    graphState.ticks = 480;
-  }
-
-  cancelAnimationFrame(graphRaf);
-  graphLoop();
-  updateGraphModeUI();
-}
-
-function closeGraph() {
-  graphOverlay.classList.add('hidden');
-  cancelAnimationFrame(graphRaf);
-  graphRaf = null;
-  graphState = null;
-  graphTooltip.classList.add('hidden');
-}
-
-// ─── Tasks rollup — every - [ ] / - [x] across the mind in one view ───────────
-// Reads EMBED_TASKS (offline) or /_tasks-index.json (server). A row click opens
-// its doc and scrolls to the task text (highlightFirstMatch), like a search result.
-
-const tasksOverlay = document.getElementById('tasks-overlay');
-const tasksList = document.getElementById('tasks-list');
-const tasksStats = document.getElementById('tasks-stats');
-const tasksShowDone = document.getElementById('tasks-show-done');
-let _tasksIndex = [];
-
-async function loadTasksIndex() {
-  if (IS_OFFLINE_BUILD) return EMBED_TASKS || [];
-
-  // Let in-flight checkbox PUTs land first, then fetch fresh: the rollup is read
-  // live from disk, so fetching mid-write would return the pre-toggle state.
-  if (_taskWrites.size) await Promise.allSettled([..._taskWrites]);
-
-  try {
-    const res = await fetch('/_tasks-index.json', { cache: 'no-cache' });
-
-    return res.ok ? await res.json() : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-async function openTasks() {
-  tasksOverlay.classList.remove('hidden');
-  showTasksLoading(); // skeleton first → never flash the stale previous list
-  _tasksIndex = await loadTasksIndex(); // kept for the "show done" toggle re-render
-  renderTasks(_tasksIndex);
-}
-
-function closeTasks() {
-  tasksOverlay.classList.add('hidden');
-}
-
-// Skeleton mirrors renderTasks layout (no jump on swap). Seeded LCG → same skeleton each open.
-function renderTasksSkeleton() {
-  let state = 0x9e3779b9 >>> 0;
-  const next = () => (state = (state * 1664525 + 1013904223) >>> 0);
-  const range = (min, max) => min + (next() % (max - min + 1));
-  const sections = [];
-
-  for (let s = 0; s < 3; s++) {
-    const rows = [];
-
-    for (let r = 0, n = range(2, 4); r < n; r++) {
-      rows.push(
-        '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:0.5rem 0.75rem;">' +
-          '<span class="skeleton" style="flex-shrink:0;width:19px;height:19px;border-radius:5px;margin-top:3px;"></span>' +
-          '<span class="skeleton" style="height:0.95rem;width:' +
-          range(45, 90) +
-          '%;margin-top:5px;"></span>' +
-          '</div>',
-      );
-    }
-
-    sections.push(
-      '<div style="margin-bottom:1.75rem;">' +
-        '<div class="skeleton" style="height:0.7rem;width:' +
-        range(22, 42) +
-        '%;border-radius:4px;margin-bottom:0.6rem;"></div>' +
-        rows.join('') +
-        '</div>',
-    );
-  }
-
-  return sections.join('');
-}
-
-function showTasksLoading() {
-  tasksStats.innerHTML =
-    '<span class="skeleton" style="display:inline-block;height:0.7rem;width:9rem;border-radius:4px;vertical-align:middle;"></span>';
-  tasksList.innerHTML =
-    '<div aria-busy="true" aria-label="' +
-    t('tasksLoading') +
-    '">' +
-    renderTasksSkeleton() +
-    '</div>';
-}
-
-// Normalize a task line for matching against rendered text: the index stores raw
-// markdown, the rendered doc shows plain text. Drop wikilink/link syntax + inline
-// marks, lowercase, collapse spaces.
-function _normTask(s) {
-  return (s || '')
-    .toLowerCase()
-    .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[*_`~]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Scroll the open doc to the checkbox of `task` and flash it. Primary = the Nth
-// rendered checkbox (task._docIndex); on rare index/render drift, fall back to
-// matching by text, then to a loose text highlight.
-function scrollToTaskCheckbox(task) {
-  const want = _normTask(task.text);
-  const boxes = [...contentEl.querySelectorAll('input[type=checkbox]')];
-  const liOf = (b) => b && (b.closest('li') || b.parentElement);
-  let li = liOf(boxes[task._docIndex]);
-
-  if (!(li && want && _normTask(li.textContent).includes(want))) {
-    li = null;
-
-    if (want) {
-      for (const b of boxes) {
-        const candidate = liOf(b);
-
-        if (candidate && _normTask(candidate.textContent).includes(want)) {
-          li = candidate;
-          break;
+    const seen = /* @__PURE__ */ new Set();
+    for (const [p, e] of Object.entries(idx)) {
+      for (const q of e.out || []) {
+        const key = p < q ? p + "\n" + q : q + "\n" + p;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const src = byPath[p], dst = byPath[q];
+        if (src && dst) {
+          edges.push({ s: src, t: dst, kind: "link" });
+          src.deg++;
+          dst.deg++;
+          linkCount++;
         }
       }
     }
+    for (const n of nodes) n.r = (n.kind === "tag" ? 3 : 5) + Math.sqrt(n.deg) * (n.kind === "tag" ? 1.2 : 2.6);
+    const RECENT_CUTOFF = Date.now() / 1e3 - 14 * 86400;
+    for (const n of nodes) if (n.kind === "doc") n.recent = n.mtime > RECENT_CUTOFF;
+    const tagCount = Object.keys(tagNodes).length;
+    const state = {
+      allNodes: nodes,
+      allEdges: edges,
+      nodes,
+      edges,
+      regionAnchors,
+      subAnchors,
+      ring: RING,
+      mode: "organic",
+      showTags: false,
+      // de-cluttered by default; toggle to bring the tag web back
+      clusters: [],
+      families: [],
+      cam: { scale: 1, ox: 0, oy: 0 },
+      ticks: 0,
+      hover: null,
+      drag: null,
+      panFrom: null,
+      moved: false
+    };
+    return { state, docCount, linkCount, tagCount };
   }
-
-  if (!li) {
-    highlightFirstMatch(contentEl, task.text);
-
-    return;
+  // ── Mind view modes: "organic" (force-directed brain) ⇄ "structured" (folder map) ──
+  // Which nodes/edges are active for the current mode. Organic shows the folder-zoned force graph with
+  // TAGS HIDDEN by default — tags carry ~3× the edges of real wikilinks and drown the structure. The
+  // hero (EMBED_MIND) keeps its full tag web for the landing.
+  applyView(st) {
+    const tags = st.mode === "organic" && (st.showTags || EMBED_MIND);
+    st.nodes = tags ? st.allNodes : st.allNodes.filter((n) => n.kind !== "tag");
+    st.edges = st.allEdges.filter((e) => e.kind === "link" || tags && e.kind === "tag");
+    st.hover = null;
   }
-
-  li.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  li.style.transition = 'background-color 0.4s';
-  li.style.backgroundColor = 'rgba(89,208,207,0.18)';
-  li.style.borderRadius = '4px';
-  setTimeout(() => {
-    li.style.backgroundColor = '';
-  }, 1600);
-}
-
-// Render a task's inline markdown like the rest of the app. Links/images stripped
-// to text (the row is itself a button — no nested navigation).
-function renderTaskText(s) {
-  // On any unexpected error fall back to ESCAPED text (never raw, unsanitized HTML).
-  try {
-    return DOMPurify.sanitize(marked.parseInline(s), { FORBID_TAGS: ['a', 'img'] });
-  } catch (e) {
-    return escapeHtml(s);
-  }
-}
-
-function renderTasks(tasks) {
-  // _docIndex = position among its OWN doc's tasks → matches the Nth rendered
-  // checkbox, so a click scrolls straight to it regardless of the "show done" filter.
-  const perDoc = {};
-
-  for (const tk of tasks) tk._docIndex = perDoc[tk.path] = (perDoc[tk.path] ?? -1) + 1;
-  const open = tasks.filter((x) => !x.done).length;
-
-  tasksStats.textContent = t('tasksStats', open, tasks.length);
-  const visible = tasksShowDone.checked ? tasks : tasks.filter((x) => !x.done);
-
-  tasksList.innerHTML = '';
-
-  if (!visible.length) {
-    const empty = document.createElement('div');
-
-    empty.className = 'text-ink-500 text-sm font-sans';
-    empty.textContent = t('tasksEmpty');
-    tasksList.appendChild(empty);
-
-    return;
-  }
-
-  const byDoc = {};
-
-  for (const task of visible) (byDoc[task.path] = byDoc[task.path] || []).push(task);
-
-  for (const p of Object.keys(byDoc).sort()) {
-    const file = fileMap[p];
-    const section = document.createElement('div');
-
-    section.style.marginBottom = '1.75rem';
-    const head = document.createElement('div');
-
-    head.className = 'text-[11px] uppercase tracking-[0.12em] text-ink-500 font-bold font-mono';
-    head.style.marginBottom = '0.6rem';
-    head.textContent = p;
-    section.appendChild(head);
-
-    for (const task of byDoc[p]) {
-      const row = document.createElement('button');
-
-      row.type = 'button';
-      row.className =
-        'flex items-start gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-base font-sans';
-      const box = document.createElement('span');
-
-      box.className = 'flex-shrink-0';
-      box.style.marginTop = '3px';
-      box.innerHTML = task.done
-        ? '<svg viewBox="0 0 24 24" fill="none" class="text-accent" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor"/><path d="M7.4 12.4l3 3 6.2-6.7" fill="none" stroke="#0e0d12" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-        : '<svg viewBox="0 0 24 24" fill="none" class="text-ink-500" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="2"/></svg>';
-      const txt = document.createElement('span');
-
-      txt.className = task.done ? 'text-ink-500' : 'text-ink-100';
-
-      if (task.done) txt.style.textDecoration = 'line-through';
-      txt.innerHTML = renderTaskText(task.text);
-      row.appendChild(box);
-      row.appendChild(txt);
-      row.addEventListener('click', async () => {
-        closeTasks();
-
-        if (!file) return;
-        await showMarkdown(file);
-        history.replaceState(null, '', '#' + encodeURIComponent(file.path));
-        scrollToTaskCheckbox(task);
-      });
-      section.appendChild(row);
+  // Re-seed organic positions near each node's folder anchor (used when switching back from the
+  // structured map so the force layout relaxes from an already-zoned start).
+  reseedOrganic(st) {
+    for (const n of st.nodes) {
+      const anc = st.subAnchors && st.subAnchors[n.subKey ?? ""] || st.regionAnchors && st.regionAnchors[n.region ?? ""];
+      n.x = anc ? anc.x + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520;
+      n.y = anc ? anc.y + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520;
+      n.vx = 0;
+      n.vy = 0;
     }
-
-    tasksList.appendChild(section);
   }
-}
-
-document.getElementById('tasks-btn').addEventListener('click', openTasks);
-document.getElementById('tasks-close').addEventListener('click', closeTasks);
-tasksShowDone.addEventListener('change', () => renderTasks(_tasksIndex));
-
-function resizeGraph() {
-  const dpr = window.devicePixelRatio || 1;
-
-  graphCanvas.width = graphCanvas.clientWidth * dpr;
-  graphCanvas.height = graphCanvas.clientHeight * dpr;
-  graphCanvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-
-function graphSimStep(st) {
-  const { nodes, edges } = st;
-  const REP = 13000,
-    SPRING = 0.02,
-    REST = 120,
-    CENTER = 0.0034,
-    GRAVITY = 0.009;
-
-  for (let i = 0; i < nodes.length; i++) {
-    const a = nodes[i];
-
-    for (let j = i + 1; j < nodes.length; j++) {
-      const b = nodes[j];
-      let dx = a.x - b.x,
-        dy = a.y - b.y,
-        d2 = dx * dx + dy * dy || 0.01,
-        d = Math.sqrt(d2);
-      const f = REP / d2,
-        fx = (f * dx) / d,
-        fy = (f * dy) / d;
-
+  // Fit the camera to the whole layout. Organic fits the anchor ring; structured fits the fixed packed
+  // bbox. The hero keeps its own framing.
+  fitCamera(st) {
+    st.cam.ox = this.canvas.clientWidth / 2;
+    st.cam.oy = this.canvas.clientHeight / 2;
+    if (EMBED_MIND) return;
+    let half;
+    if (st.mode === "structured") {
+      half = 60;
+      for (const n of st.nodes) half = Math.max(half, Math.abs(n.x) + n.r, Math.abs(n.y) + n.r);
+      half += 70;
+    } else {
+      half = (st.ring || 360) + 220;
+    }
+    st.cam.scale = Math.min(1, Math.min(this.canvas.clientWidth, this.canvas.clientHeight) / (2 * half) * 0.92);
+  }
+  // Deterministic "map" layout: docs pack in a phyllotaxis disc per subfolder; subfolder discs pack
+  // into a family box; family boxes pack across the canvas. No physics → tidy and stable, the opposite
+  // of the organic hairball. Fills st.clusters + st.families for the scaffold, sets each doc's fixed x/y.
+  layoutStructured(st) {
+    const docs = st.nodes.filter((n) => n.kind === "doc");
+    const fams = {};
+    for (const n of docs) {
+      const fam = n.region || "·root";
+      const ckey = n.subRegion || "";
+      const f = fams[fam] = fams[fam] || { name: fam, clusters: {}, _items: [], _r: 0 };
+      (f.clusters[ckey] = f.clusters[ckey] || { sub: ckey, docs: [], r: 0 }).docs.push(n);
+    }
+    const DOC_SP = 15, CL_GAP = 22, FAM_GAP = 56, FAM_PAD = 28;
+    const packCluster = (c) => {
+      let maxR = 0;
+      c.docs.forEach((n, i) => {
+        const a = i * 2.399963;
+        const r = DOC_SP * Math.sqrt(i + 0.6);
+        n._lx = Math.cos(a) * r;
+        n._ly = Math.sin(a) * r;
+        maxR = Math.max(maxR, r + (n.r || 6));
+      });
+      c.r = Math.max(18, maxR + 8);
+    };
+    const rowPack = (items, maxW, gap) => {
+      let x = 0, y = 0, rowH = 0, totalW = 0;
+      for (const it of items) {
+        if (x > 0 && x + it.w > maxW) {
+          x = 0;
+          y += rowH + gap;
+          rowH = 0;
+        }
+        it.x = x;
+        it.y = y;
+        x += it.w + gap;
+        rowH = Math.max(rowH, it.h);
+        totalW = Math.max(totalW, x - gap);
+      }
+      return { w: totalW, h: y + rowH };
+    };
+    const famList = Object.values(fams);
+    for (const f of famList) {
+      const cl = Object.values(f.clusters);
+      cl.forEach(packCluster);
+      cl.sort((a, b) => b.r - a.r);
+      f._items = cl.map((c) => ({ c, w: c.r * 2, h: c.r * 2, x: 0, y: 0, _dx: 0, _dy: 0 }));
+      const area = f._items.reduce((s, it) => s + it.w * it.h, 0);
+      const box = rowPack(f._items, Math.max(f._items[0].w, Math.sqrt(area) * 1.25), CL_GAP);
+      const bcx = box.w / 2, bcy = box.h / 2;
+      let rad = 0;
+      for (const it of f._items) {
+        it._dx = it.x + it.c.r - bcx;
+        it._dy = it.y + it.c.r - bcy;
+        rad = Math.max(rad, Math.hypot(it._dx, it._dy) + it.c.r);
+      }
+      f._r = rad + FAM_PAD;
+    }
+    famList.sort((a, b) => b._r - a._r);
+    const famItems = famList.map((f) => ({ f, w: f._r * 2, h: f._r * 2, x: 0, y: 0 }));
+    const totalArea = famItems.reduce((s, it) => s + it.w * it.h, 0);
+    const total = rowPack(famItems, Math.max(famItems[0].w, Math.sqrt(totalArea) * 1.3), FAM_GAP);
+    const cx = total.w / 2, cy = total.h / 2;
+    const clusters = [];
+    const families = [];
+    for (const fit of famItems) {
+      const f = fit.f;
+      const fx = fit.x + f._r - cx, fy = fit.y + f._r - cy;
+      families.push({ x: fx, y: fy, r: f._r, name: f.name, color: this.palette.hierColor(f.name, "") });
+      for (const it of f._items) {
+        const ccx = fx + it._dx, ccy = fy + it._dy;
+        it.c.docs.forEach((n) => {
+          n.x = ccx + n._lx;
+          n.y = ccy + n._ly;
+          n.vx = 0;
+          n.vy = 0;
+        });
+        clusters.push({ x: ccx, y: ccy, r: it.c.r, sub: it.c.sub, color: this.palette.hierColor(f.name, it.c.sub) });
+      }
+    }
+    st.clusters = clusters;
+    st.families = families;
+  }
+  simStep(st) {
+    const { nodes, edges } = st;
+    const REP = 13e3, SPRING = 0.02, REST = 120, CENTER = 34e-4, GRAVITY = 9e-3;
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j];
+        let dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy || 0.01, d = Math.sqrt(d2);
+        const f = REP / d2, fx = f * dx / d, fy = f * dy / d;
+        a.vx += fx;
+        a.vy += fy;
+        b.vx -= fx;
+        b.vy -= fy;
+      }
+      const anc = st.subAnchors && st.subAnchors[a.subKey ?? ""] || st.regionAnchors && st.regionAnchors[a.region ?? ""];
+      if (anc) {
+        a.vx += (anc.x - a.x) * GRAVITY;
+        a.vy += (anc.y - a.y) * GRAVITY;
+      } else {
+        a.vx -= a.x * CENTER;
+        a.vy -= a.y * CENTER;
+      }
+    }
+    for (const e of edges) {
+      const a = e.s, b = e.t;
+      let dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+      const f = SPRING * (d - REST), fx = f * dx / d, fy = f * dy / d;
       a.vx += fx;
       a.vy += fy;
       b.vx -= fx;
       b.vy -= fy;
     }
-
-    // Folder gravity: pull each node toward its subfolder (or folder) anchor so folders
-    // settle into distinct spatial zones. GRAVITY < SPRING, so wikilinks still bend the
-    // clusters and the layout stays organic. Tags + root docs (no anchor) keep the old
-    // weak center pull.
-    const anc = (st.subAnchors && st.subAnchors[a.subKey]) || (st.regionAnchors && st.regionAnchors[a.region]);
-
-    if (anc) {
-      a.vx += (anc.x - a.x) * GRAVITY;
-      a.vy += (anc.y - a.y) * GRAVITY;
-    } else {
-      a.vx -= a.x * CENTER;
-      a.vy -= a.y * CENTER;
+    for (const n of nodes) {
+      if (n === st.drag) continue;
+      n.vx *= 0.86;
+      n.vy *= 0.86;
+      n.x += Math.max(-25, Math.min(25, n.vx));
+      n.y += Math.max(-25, Math.min(25, n.vy));
     }
-  }
-
-  for (const e of edges) {
-    const a = e.s,
-      b = e.t;
-    let dx = b.x - a.x,
-      dy = b.y - a.y,
-      d = Math.sqrt(dx * dx + dy * dy) || 0.01;
-    const f = SPRING * (d - REST),
-      fx = (f * dx) / d,
-      fy = (f * dy) / d;
-
-    a.vx += fx;
-    a.vy += fy;
-    b.vx -= fx;
-    b.vy -= fy;
-  }
-
-  for (const n of nodes) {
-    if (n === st.drag) continue;
-    n.vx *= 0.86;
-    n.vy *= 0.86;
-    n.x += Math.max(-25, Math.min(25, n.vx));
-    n.y += Math.max(-25, Math.min(25, n.vy));
   }
 }
 
-// Organic mode: a translucent radial blob + label per top-level folder, drawn at the
-// centroid/hull of wherever that family's nodes settled.
-function drawOrganicZones(ctx, st) {
-  const { cam, nodes } = st;
-  const regions = {};
-
-  for (const n of nodes) {
-    if (n.kind !== 'doc' || !n.region) continue;
-    (regions[n.region] = regions[n.region] || []).push(n);
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _GraphPalette = class _GraphPalette {
+  constructor() {
+    // Hierarchical folder color: a top-level folder maps to a stable family HUE (golden-angle spread,
+    // populated once in buildGraphModel so families never collide); the immediate subfolder varies
+    // LIGHTNESS/SATURATION within that hue. So a dominant family stays one recognizable hue while its
+    // subfolders read as distinct tints.
+    __publicField(this, "familyHue", {});
   }
+  tagColor(tag) {
+    if (!tag) return "#6b7280";
+    let h = 0;
+    for (let i = 0; i < tag.length; i++) h = h * 31 + tag.charCodeAt(i) >>> 0;
+    return _GraphPalette.GRAPH_COLORS[h % _GraphPalette.GRAPH_COLORS.length];
+  }
+  // HSL→#rrggbb. MUST return the 6-hex form: every consumer appends an alpha byte (n.color + '30',
+  // col + '2b', …), so an hsl() string would corrupt every gradient stop.
+  hslToHex(h, s, l) {
+    s /= 100;
+    l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (k) => {
+      const x = (k + h / 30) % 12;
+      const c = l - a * Math.max(-1, Math.min(x - 3, 9 - x, 1));
+      return Math.round(255 * c).toString(16).padStart(2, "0");
+    };
+    return "#" + f(0) + f(8) + f(4);
+  }
+  hierColor(family, sub) {
+    if (!family) return "#6b7280";
+    let fh = 0;
+    for (let i = 0; i < family.length; i++) fh = fh * 31 + family.charCodeAt(i) >>> 0;
+    const baseHue = family in this.familyHue ? this.familyHue[family] : fh % 360;
+    if (!sub) return this.hslToHex(baseHue, 68, 55);
+    let h = 0;
+    for (let i = 0; i < sub.length; i++) h = h * 31 + sub.charCodeAt(i) >>> 0;
+    const hue = (baseHue + (h % 5 - 2) * 8 + 360) % 360;
+    const light = 46 + Math.floor(h / 5) % 5 * 5;
+    const sat = 60 + Math.floor(h / 25) % 3 * 9;
+    return this.hslToHex(hue, sat, light);
+  }
+};
+__publicField(_GraphPalette, "GRAPH_COLORS", [
+  "#5db5e8",
+  "#fbc678",
+  "#a78bfa",
+  "#34d399",
+  "#f472b6",
+  "#f87171",
+  "#22d3ee",
+  "#facc15",
+  "#c084fc",
+  "#4ade80"
+]);
+let GraphPalette = _GraphPalette;
 
-  for (const name in regions) {
-    const rn = regions[name];
-    let cx = 0,
-      cy = 0;
-
-    for (const n of rn) {
-      cx += n.x;
-      cy += n.y;
+class GraphRenderer {
+  constructor(canvas, palette) {
+    this.canvas = canvas;
+    this.palette = palette;
+  }
+  // Organic mode: a translucent radial blob + label per top-level folder, drawn at the centroid/hull
+  // of wherever that family's nodes settled.
+  drawOrganicZones(ctx, st) {
+    const { cam, nodes } = st;
+    const regions = {};
+    for (const n of nodes) {
+      if (n.kind !== "doc" || !n.region) continue;
+      (regions[n.region] = regions[n.region] || []).push(n);
     }
-
-    cx /= rn.length;
-    cy /= rn.length;
-    let rad = 70;
-
-    for (const n of rn) rad = Math.max(rad, Math.hypot(n.x - cx, n.y - cy) + 46);
-    const scx = cx * cam.scale + cam.ox,
-      scy = cy * cam.scale + cam.oy,
-      sr = rad * cam.scale;
-    // Remote region (mental node from another atlas): teal + dashed ring, to
-    // detach it from the personal regions.
-    const isRemoteRegion = rn.some((n) => n.remote);
-    const col = isRemoteRegion ? '#59d0cf' : hierColor(name, '');
-    const grad = ctx.createRadialGradient(scx, scy, sr * 0.2, scx, scy, sr);
-
-    grad.addColorStop(0, col + (isRemoteRegion ? '3d' : '2b'));
-    grad.addColorStop(1, col + '00');
-    ctx.beginPath();
-    ctx.arc(scx, scy, sr, 0, Math.PI * 2);
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    if (isRemoteRegion) {
-      ctx.save();
-      ctx.setLineDash([6, 5]);
-      ctx.lineWidth = 1.4;
-      ctx.strokeStyle = col + '99';
+    for (const name in regions) {
+      const rn = regions[name];
+      let cx = 0, cy = 0;
+      for (const n of rn) {
+        cx += n.x;
+        cy += n.y;
+      }
+      cx /= rn.length;
+      cy /= rn.length;
+      let rad = 70;
+      for (const n of rn) rad = Math.max(rad, Math.hypot(n.x - cx, n.y - cy) + 46);
+      const scx = cx * cam.scale + cam.ox, scy = cy * cam.scale + cam.oy, sr = rad * cam.scale;
+      const isRemoteRegion = rn.some((n) => n.remote);
+      const col = isRemoteRegion ? "#59d0cf" : this.palette.hierColor(name, "");
+      const grad = ctx.createRadialGradient(scx, scy, sr * 0.2, scx, scy, sr);
+      grad.addColorStop(0, col + (isRemoteRegion ? "3d" : "2b"));
+      grad.addColorStop(1, col + "00");
       ctx.beginPath();
       ctx.arc(scx, scy, sr, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    ctx.font = '600 13px Manrope, system-ui, sans-serif';
-    ctx.fillStyle = col + (isRemoteRegion ? 'ff' : 'dd');
-    ctx.textAlign = 'center';
-    ctx.fillText(name, scx, scy - sr + 16);
-    ctx.textAlign = 'left';
-  }
-}
-
-// Structured "map" mode: a soft labeled container per family, with a thin ring + label
-// per subfolder cluster. Positions come from layoutStructured (fixed, no physics).
-function drawStructuredScaffold(ctx, st) {
-  const s = st.cam.scale;
-  const SX = (x) => x * s + st.cam.ox;
-  const SY = (y) => y * s + st.cam.oy;
-
-  for (const f of st.families) {
-    const x = SX(f.x),
-      y = SY(f.y),
-      r = f.r * s;
-
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    const grad = ctx.createRadialGradient(x, y, r * 0.25, x, y, r);
-
-    grad.addColorStop(0, f.color + '18');
-    grad.addColorStop(1, f.color + '05');
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = f.color + '33';
-    ctx.stroke();
-    ctx.font = '600 ' + Math.max(11, 13 * s) + 'px Manrope, system-ui, sans-serif';
-    ctx.fillStyle = f.color + 'ee';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(f.name, x, y - r - 7 * s);
-    ctx.textAlign = 'left';
-  }
-
-  ctx.textBaseline = 'middle';
-
-  for (const c of st.clusters) {
-    if (!c.sub) continue; // family-direct docs have no separate ring
-    const x = SX(c.x),
-      y = SY(c.y),
-      r = c.r * s;
-
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = c.color + '40';
-    ctx.stroke();
-    ctx.font = '500 ' + Math.max(9, 11 * s) + 'px Manrope, system-ui, sans-serif';
-    ctx.fillStyle = c.color + 'cc';
-    ctx.textAlign = 'center';
-    ctx.fillText(c.sub, x, y - r - 9 * s);
-    ctx.textAlign = 'left';
-  }
-}
-
-function graphDraw(st) {
-  const ctx = graphCanvas.getContext('2d');
-  const w = graphCanvas.clientWidth,
-    h = graphCanvas.clientHeight;
-
-  ctx.clearRect(0, 0, w, h);
-  const { cam, nodes, edges, hover } = st;
-  const SX = (n) => n.x * cam.scale + cam.ox,
-    SY = (n) => n.y * cam.scale + cam.oy;
-  // Scaffold UNDER the nodes: structured "map" mode → tidy folder boxes + subfolder
-  // rings; organic mode → translucent zone blobs per top-level folder.
-  if (st.mode === 'structured') {
-    drawStructuredScaffold(ctx, st);
-  } else {
-    drawOrganicZones(ctx, st);
-  }
-
-  // ── Render pass: link arcs + node glow ──
-  const now = performance.now();
-
-  // 1) Wikilinks bow into arcs (additive glow); tag links stay faint and straight.
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-
-  for (const e of edges) {
-    const hot = hover && (e.s === hover || e.t === hover);
-    const ax = SX(e.s),
-      ay = SY(e.s),
-      bx = SX(e.t),
-      by = SY(e.t);
-
-    if (e.kind === 'link') {
-      const dx = bx - ax,
-        dy = by - ay,
-        len = Math.hypot(dx, dy) || 1;
-      const bow = Math.min(26, len * 0.16);
-
-      e._cx = (ax + bx) / 2 - (dy / len) * bow;
-      e._cy = (ay + by) / 2 + (dx / len) * bow;
-      ctx.strokeStyle = hot ? 'rgba(196,181,253,0.95)' : 'rgba(150,130,246,0.28)';
-      ctx.lineWidth = hot ? 2 : 1.1;
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.quadraticCurveTo(e._cx, e._cy, bx, by);
-      ctx.stroke();
-    } else {
-      ctx.strokeStyle = hot ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.05)';
-      ctx.lineWidth = hot ? 1.2 : 0.7;
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(bx, by);
-      ctx.stroke();
-    }
-  }
-
-  // 2) Firing synapses: a pulse of light travels along each wikilink arc.
-  let pi = 0;
-
-  for (const e of edges) {
-    if (e.kind !== 'link') continue;
-    const ax = SX(e.s),
-      ay = SY(e.s),
-      bx = SX(e.t),
-      by = SY(e.t);
-    const tt = (now * 0.00016 + pi++ * 0.1379) % 1,
-      u = 1 - tt;
-    const px = u * u * ax + 2 * u * tt * e._cx + tt * tt * bx;
-    const py = u * u * ay + 2 * u * tt * e._cy + tt * tt * by;
-    const env = Math.sin(tt * Math.PI); // fade in/out along the arc
-    const gr = 0.9 + env * 1.0;
-
-    ctx.globalAlpha = 0.3 + env * 0.3;
-    ctx.beginPath();
-    ctx.arc(px, py, gr, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(200,188,250,0.9)';
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-
-  ctx.restore();
-  // 3) Radial glow under each doc node; recently-edited ones pulse.
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-
-  for (const n of nodes) {
-    if (n.kind !== 'doc') continue;
-    const dim = hover && n !== hover && !n._adj;
-
-    if (dim) continue;
-    const r = Math.max(2, n.r * cam.scale),
-      x = SX(n),
-      y = SY(n);
-    const breath = n.recent
-      ? 1 +
-        0.12 * Math.sin(now * 0.004 + (n._ph || (n._ph = (Math.abs(n.x) + Math.abs(n.y)) % 6.28)))
-      : 1;
-    const gr = (r + (n.recent ? 7 : 4)) * 2.1 * breath;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, gr);
-
-    g.addColorStop(0, n.color + (n.recent ? '3a' : '30'));
-    g.addColorStop(1, n.color + '00');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, gr, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
-
-  // 4) Neuron cores: solid doc discs, hollow-tinted tags, a ring on media docs.
-  for (const n of nodes) {
-    const dim = hover && n !== hover && !n._adj;
-    const orphan = n.kind === 'doc' && n.deg === 0;
-    const r = Math.max(2, n.r * cam.scale),
-      x = SX(n),
-      y = SY(n);
-
-    // Orphans (no link, no tag) muted when not hovered: disconnected thoughts.
-    ctx.globalAlpha = !dim && !hover && orphan ? 0.45 : 1;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = dim ? 'rgba(110,110,130,0.3)' : n.kind === 'tag' ? n.color + '33' : n.color;
-    ctx.fill();
-
-    if (n.kind === 'tag') {
-      ctx.lineWidth = dim ? 1 : 1.6;
-      ctx.strokeStyle = dim ? 'rgba(150,150,160,0.3)' : n.color;
-      ctx.stroke();
-    } else if (n.doctype && n.doctype !== '.md' && !dim) {
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = 'rgba(255,255,255,0.72)';
-      ctx.stroke();
-    }
-
-    if (n === hover) {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#fff';
-      ctx.stroke();
-    }
-
-    ctx.globalAlpha = 1;
-  }
-
-  ctx.font = '12px Manrope, system-ui, sans-serif';
-  ctx.textBaseline = 'middle';
-
-  for (const n of nodes) {
-    // Node labels only on hover / neighborhood / zoom: region names (above)
-    // carry the orientation, so labels don't clutter the default view. EXCEPTION:
-    // when the tag layer is explicitly toggled on, label every tag so turning it on
-    // visibly shows the tags (otherwise they're faint rings lost in the dense zones).
-    const tagAlways = n.kind === 'tag' && st.showTags && st.mode === 'organic';
-
-    if (!(tagAlways || n === hover || n._adj || cam.scale > 1.35)) continue;
-    ctx.font = (n.kind === 'tag' ? '600 12px' : '12px') + ' Manrope, system-ui, sans-serif';
-    ctx.fillStyle =
-      hover && n !== hover && !n._adj
-        ? 'rgba(150,150,160,0.5)'
-        : n.kind === 'tag'
-          ? n.color
-          : '#e5e6e8';
-    ctx.fillText(n.name, SX(n) + Math.max(2, n.r * cam.scale) + 4, SY(n));
-  }
-}
-
-function graphLoop() {
-  const st = graphState;
-
-  if (!st) return;
-
-  // Structured "map" mode has fixed positions → no physics, just draw (hover/zoom/pan
-  // and node breathing still animate).
-  if (st.mode !== 'structured' && st.ticks < 480) {
-    graphSimStep(st);
-    st.ticks++;
-  }
-
-  graphDraw(st);
-  graphRaf = requestAnimationFrame(graphLoop);
-}
-
-function graphNodeAt(st, sx, sy) {
-  const { cam, nodes } = st;
-
-  for (let i = nodes.length - 1; i >= 0; i--) {
-    const n = nodes[i];
-    const dx = sx - (n.x * cam.scale + cam.ox),
-      dy = sy - (n.y * cam.scale + cam.oy);
-    const r = Math.max(6, n.r * cam.scale + 4);
-
-    if (dx * dx + dy * dy <= r * r) return n;
-  }
-
-  return null;
-}
-
-graphCanvas.addEventListener('mousedown', (e) => {
-  const st = graphState;
-
-  if (!st) return;
-  st.drag = graphNodeAt(st, e.offsetX, e.offsetY);
-  st.panFrom = { x: e.offsetX, y: e.offsetY, ox: st.cam.ox, oy: st.cam.oy };
-  st.moved = false;
-});
-graphCanvas.addEventListener('mousemove', (e) => {
-  const st = graphState;
-
-  if (!st) return;
-
-  if (st.panFrom) {
-    st.moved = true;
-
-    if (st.drag) {
-      st.drag.x = (e.offsetX - st.cam.ox) / st.cam.scale;
-      st.drag.y = (e.offsetY - st.cam.oy) / st.cam.scale;
-      st.drag.vx = st.drag.vy = 0;
-    } else {
-      st.cam.ox = st.panFrom.ox + (e.offsetX - st.panFrom.x);
-      st.cam.oy = st.panFrom.oy + (e.offsetY - st.panFrom.y);
-    }
-
-    return;
-  }
-
-  const n = graphNodeAt(st, e.offsetX, e.offsetY);
-
-  if (n !== st.hover) {
-    st.nodes.forEach((x) => (x._adj = false));
-
-    if (n)
-      for (const e2 of st.edges) {
-        if (e2.s === n) e2.t._adj = true;
-        else if (e2.t === n) e2.s._adj = true;
+      ctx.fillStyle = grad;
+      ctx.fill();
+      if (isRemoteRegion) {
+        ctx.save();
+        ctx.setLineDash([6, 5]);
+        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = col + "99";
+        ctx.beginPath();
+        ctx.arc(scx, scy, sr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
-
-    st.hover = n;
+      ctx.font = "600 13px Manrope, system-ui, sans-serif";
+      ctx.fillStyle = col + (isRemoteRegion ? "ff" : "dd");
+      ctx.textAlign = "center";
+      ctx.fillText(name, scx, scy - sr + 16);
+      ctx.textAlign = "left";
+    }
   }
+  // Structured "map" mode: a soft labeled container per family, with a thin ring + label per subfolder
+  // cluster. Positions come from layoutStructured (fixed, no physics).
+  drawStructuredScaffold(ctx, st) {
+    const s = st.cam.scale;
+    const SX = (x) => x * s + st.cam.ox;
+    const SY = (y) => y * s + st.cam.oy;
+    for (const f of st.families) {
+      const x = SX(f.x), y = SY(f.y), r = f.r * s;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(x, y, r * 0.25, x, y, r);
+      grad.addColorStop(0, f.color + "18");
+      grad.addColorStop(1, f.color + "05");
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = f.color + "33";
+      ctx.stroke();
+      ctx.font = "600 " + Math.max(11, 13 * s) + "px Manrope, system-ui, sans-serif";
+      ctx.fillStyle = f.color + "ee";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(f.name, x, y - r - 7 * s);
+      ctx.textAlign = "left";
+    }
+    ctx.textBaseline = "middle";
+    for (const c of st.clusters) {
+      if (!c.sub) continue;
+      const x = SX(c.x), y = SY(c.y), r = c.r * s;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = c.color + "40";
+      ctx.stroke();
+      ctx.font = "500 " + Math.max(9, 11 * s) + "px Manrope, system-ui, sans-serif";
+      ctx.fillStyle = c.color + "cc";
+      ctx.textAlign = "center";
+      ctx.fillText(c.sub, x, y - r - 9 * s);
+      ctx.textAlign = "left";
+    }
+  }
+  draw(st) {
+    const ctx = this.canvas.getContext("2d");
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+    const { cam, nodes, edges, hover } = st;
+    const SX = (n) => n.x * cam.scale + cam.ox, SY = (n) => n.y * cam.scale + cam.oy;
+    if (st.mode === "structured") {
+      this.drawStructuredScaffold(ctx, st);
+    } else {
+      this.drawOrganicZones(ctx, st);
+    }
+    const now = performance.now();
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const e of edges) {
+      const hot = hover && (e.s === hover || e.t === hover);
+      const ax = SX(e.s), ay = SY(e.s), bx = SX(e.t), by = SY(e.t);
+      if (e.kind === "link") {
+        const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+        const bow = Math.min(26, len * 0.16);
+        e._cx = (ax + bx) / 2 - dy / len * bow;
+        e._cy = (ay + by) / 2 + dx / len * bow;
+        ctx.strokeStyle = hot ? "rgba(196,181,253,0.95)" : "rgba(150,130,246,0.28)";
+        ctx.lineWidth = hot ? 2 : 1.1;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.quadraticCurveTo(e._cx, e._cy, bx, by);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = hot ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.05)";
+        ctx.lineWidth = hot ? 1.2 : 0.7;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+      }
+    }
+    let pi = 0;
+    for (const e of edges) {
+      if (e.kind !== "link") continue;
+      const ax = SX(e.s), ay = SY(e.s), bx = SX(e.t), by = SY(e.t);
+      const tt = (now * 16e-5 + pi++ * 0.1379) % 1, u = 1 - tt;
+      const px = u * u * ax + 2 * u * tt * e._cx + tt * tt * bx;
+      const py = u * u * ay + 2 * u * tt * e._cy + tt * tt * by;
+      const env = Math.sin(tt * Math.PI);
+      const gr = 0.9 + env * 1;
+      ctx.globalAlpha = 0.3 + env * 0.3;
+      ctx.beginPath();
+      ctx.arc(px, py, gr, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(200,188,250,0.9)";
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const n of nodes) {
+      if (n.kind !== "doc") continue;
+      const dim = hover && n !== hover && !n._adj;
+      if (dim) continue;
+      const r = Math.max(2, n.r * cam.scale), x = SX(n), y = SY(n);
+      const breath = n.recent ? 1 + 0.12 * Math.sin(now * 4e-3 + (n._ph || (n._ph = (Math.abs(n.x) + Math.abs(n.y)) % 6.28))) : 1;
+      const gr = (r + (n.recent ? 7 : 4)) * 2.1 * breath;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, gr);
+      g.addColorStop(0, n.color + (n.recent ? "3a" : "30"));
+      g.addColorStop(1, n.color + "00");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, gr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    for (const n of nodes) {
+      const dim = hover && n !== hover && !n._adj;
+      const orphan = n.kind === "doc" && n.deg === 0;
+      const r = Math.max(2, n.r * cam.scale), x = SX(n), y = SY(n);
+      ctx.globalAlpha = !dim && !hover && orphan ? 0.45 : 1;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = dim ? "rgba(110,110,130,0.3)" : n.kind === "tag" ? n.color + "33" : n.color;
+      ctx.fill();
+      if (n.kind === "tag") {
+        ctx.lineWidth = dim ? 1 : 1.6;
+        ctx.strokeStyle = dim ? "rgba(150,150,160,0.3)" : n.color;
+        ctx.stroke();
+      } else if (n.doctype && n.doctype !== ".md" && !dim) {
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "rgba(255,255,255,0.72)";
+        ctx.stroke();
+      }
+      if (n === hover) {
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.font = "12px Manrope, system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    for (const n of nodes) {
+      const tagAlways = n.kind === "tag" && st.showTags && st.mode === "organic";
+      if (!(tagAlways || n === hover || n._adj || cam.scale > 1.35)) continue;
+      ctx.font = (n.kind === "tag" ? "600 12px" : "12px") + " Manrope, system-ui, sans-serif";
+      ctx.fillStyle = hover && n !== hover && !n._adj ? "rgba(150,150,160,0.5)" : n.kind === "tag" ? n.color : "#e5e6e8";
+      ctx.fillText(n.name, SX(n) + Math.max(2, n.r * cam.scale) + 4, SY(n));
+    }
+  }
+}
 
-  graphCanvas.style.cursor = n ? 'pointer' : 'grab';
-
-  if (n) {
-    graphTooltip.textContent =
-      n.kind === 'tag'
-        ? n.name + '  ' + t('nDocs', n.docs)
-        : n.name + (n.tags.length ? '  ' + n.tags.map((tag) => '#' + tag).join(' ') : '');
-    graphTooltip.style.left = e.offsetX + 14 + 'px';
-    graphTooltip.style.top = e.offsetY + 12 + 'px';
-    graphTooltip.classList.remove('hidden');
-  } else graphTooltip.classList.add('hidden');
-});
-window.addEventListener('mouseup', () => {
-  const st = graphState;
-
-  if (!st || !st.panFrom) return;
-  const node = st.drag,
-    moved = st.moved;
-
-  st.panFrom = null;
-  st.drag = null;
-
-  if (node && !moved) {
-    if (node.kind === 'tag') {
-      closeGraph();
-      showTag(node.tag);
-
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class MindGraph {
+  constructor() {
+    __publicField(this, "overlay", document.getElementById("graph-overlay"));
+    __publicField(this, "canvas", document.getElementById("graph-canvas"));
+    __publicField(this, "tooltip", document.getElementById("graph-tooltip"));
+    __publicField(this, "stats", document.getElementById("graph-stats"));
+    // The injected pieces. canvas is declared above so the layout/renderer initializers can read it.
+    __publicField(this, "palette", new GraphPalette());
+    __publicField(this, "layout", new GraphLayout(this.canvas, this.palette));
+    __publicField(this, "renderer", new GraphRenderer(this.canvas, this.palette));
+    __publicField(this, "state", null);
+    __publicField(this, "raf", null);
+    this.canvas.addEventListener("mousedown", (e) => this.onMouseDown(e));
+    this.canvas.addEventListener("mousemove", (e) => this.onMouseMove(e));
+    this.canvas.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
+    window.addEventListener("mouseup", () => this.onMouseUp());
+    window.addEventListener("resize", () => {
+      if (this.state) this.resize();
+    });
+    document.getElementById("graph-close").addEventListener("click", () => this.close());
+    document.getElementById("graph-btn").addEventListener("click", () => this.open());
+    document.getElementById("graph-mode-organic")?.addEventListener("click", () => this.setMode("organic"));
+    document.getElementById("graph-mode-structured")?.addEventListener("click", () => this.setMode("structured"));
+    document.getElementById("graph-tags-toggle")?.addEventListener("click", () => this.toggleTags());
+  }
+  isOpen() {
+    return this.state !== null;
+  }
+  async open() {
+    const idx = await loadBacklinksIndex();
+    this.overlay.classList.remove("hidden");
+    const model = this.layout.buildGraphModel(idx);
+    this.stats.textContent = t("graphStats", model.docCount, model.linkCount, model.tagCount);
+    this.state = model.state;
+    this.layout.applyView(this.state);
+    this.resize();
+    this.layout.fitCamera(this.state);
+    if (EMBED_MIND) {
+      for (let i = 0; i < 480; i++) this.layout.simStep(this.state);
+      this.state.ticks = 480;
+    }
+    if (this.raf != null) cancelAnimationFrame(this.raf);
+    this.loop();
+    this.updateModeUI();
+  }
+  close() {
+    this.overlay.classList.add("hidden");
+    if (this.raf != null) cancelAnimationFrame(this.raf);
+    this.raf = null;
+    this.state = null;
+    this.tooltip.classList.add("hidden");
+  }
+  resize() {
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = this.canvas.clientWidth * dpr;
+    this.canvas.height = this.canvas.clientHeight * dpr;
+    this.canvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  loop() {
+    const st = this.state;
+    if (!st) return;
+    if (st.mode !== "structured" && st.ticks < 480) {
+      this.layout.simStep(st);
+      st.ticks++;
+    }
+    this.renderer.draw(st);
+    this.raf = requestAnimationFrame(() => this.loop());
+  }
+  nodeAt(st, sx, sy) {
+    const { cam, nodes } = st;
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      const dx = sx - (n.x * cam.scale + cam.ox), dy = sy - (n.y * cam.scale + cam.oy);
+      const r = Math.max(6, n.r * cam.scale + 4);
+      if (dx * dx + dy * dy <= r * r) return n;
+    }
+    return null;
+  }
+  onMouseDown(e) {
+    const st = this.state;
+    if (!st) return;
+    st.drag = this.nodeAt(st, e.offsetX, e.offsetY);
+    st.panFrom = { x: e.offsetX, y: e.offsetY, ox: st.cam.ox, oy: st.cam.oy };
+    st.moved = false;
+  }
+  onMouseMove(e) {
+    const st = this.state;
+    if (!st) return;
+    if (st.panFrom) {
+      st.moved = true;
+      if (st.drag) {
+        st.drag.x = (e.offsetX - st.cam.ox) / st.cam.scale;
+        st.drag.y = (e.offsetY - st.cam.oy) / st.cam.scale;
+        st.drag.vx = st.drag.vy = 0;
+      } else {
+        st.cam.ox = st.panFrom.ox + (e.offsetX - st.panFrom.x);
+        st.cam.oy = st.panFrom.oy + (e.offsetY - st.panFrom.y);
+      }
       return;
     }
-
-    const f = fileMap[node.path];
-
-    closeGraph();
-
-    if (f) {
-      showMarkdown(f);
-      history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+    const n = this.nodeAt(st, e.offsetX, e.offsetY);
+    if (n !== st.hover) {
+      st.nodes.forEach((x) => x._adj = false);
+      if (n)
+        for (const e2 of st.edges) {
+          if (e2.s === n) e2.t._adj = true;
+          else if (e2.t === n) e2.s._adj = true;
+        }
+      st.hover = n;
+    }
+    this.canvas.style.cursor = n ? "pointer" : "grab";
+    if (n) {
+      this.tooltip.textContent = n.kind === "tag" ? n.name + "  " + t("nDocs", n.docs) : n.name + (n.tags.length ? "  " + n.tags.map((tag) => "#" + tag).join(" ") : "");
+      this.tooltip.style.left = e.offsetX + 14 + "px";
+      this.tooltip.style.top = e.offsetY + 12 + "px";
+      this.tooltip.classList.remove("hidden");
+    } else this.tooltip.classList.add("hidden");
+  }
+  onMouseUp() {
+    const st = this.state;
+    if (!st || !st.panFrom) return;
+    const node = st.drag, moved = st.moved;
+    st.panFrom = null;
+    st.drag = null;
+    if (node && !moved) {
+      if (node.kind === "tag") {
+        this.close();
+        showTag(node.tag);
+        return;
+      }
+      const f = fileMap[node.path];
+      this.close();
+      if (f) {
+        showMarkdown(f);
+        history.replaceState(null, "", "#" + encodeURIComponent(f.path));
+      }
     }
   }
-});
-graphCanvas.addEventListener(
-  'wheel',
-  (e) => {
-    const st = graphState;
-
+  onWheel(e) {
+    const st = this.state;
     if (!st) return;
     e.preventDefault();
     const ns = Math.max(0.2, Math.min(4, st.cam.scale * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
-
     st.cam.ox = e.offsetX - (e.offsetX - st.cam.ox) * (ns / st.cam.scale);
     st.cam.oy = e.offsetY - (e.offsetY - st.cam.oy) * (ns / st.cam.scale);
     st.cam.scale = ns;
-  },
-  { passive: false },
-);
-document.getElementById('graph-close').addEventListener('click', closeGraph);
-document.getElementById('graph-btn').addEventListener('click', openGraph);
-
-// ── View-mode toggle: organic brain ⇄ structured folder map (+ tag-layer toggle) ──
-function updateGraphModeUI() {
-  const st = graphState;
-  const orgBtn = document.getElementById('graph-mode-organic');
-
-  if (!st || !orgBtn) return;
-  const strBtn = document.getElementById('graph-mode-structured');
-  const tagBtn = document.getElementById('graph-tags-toggle');
-  const setActive = (btn, on) => {
-    btn.classList.toggle('bg-white/15', on);
-    btn.classList.toggle('text-white', on);
-    btn.classList.toggle('text-ink-400', !on);
-  };
-
-  setActive(orgBtn, st.mode === 'organic');
-  setActive(strBtn, st.mode === 'structured');
-
-  if (tagBtn) {
-    // Tags only matter in organic mode.
-    tagBtn.style.opacity = st.mode === 'organic' ? '1' : '.4';
-    tagBtn.style.pointerEvents = st.mode === 'organic' ? 'auto' : 'none';
-    setActive(tagBtn, st.mode === 'organic' && st.showTags);
   }
-}
-
-function setGraphMode(mode) {
-  const st = graphState;
-
-  if (!st || st.mode === mode) return;
-  st.mode = mode;
-  applyGraphView(st);
-
-  if (mode === 'structured') {
-    layoutStructured(st);
-  } else {
-    reseedOrganic(st);
-  }
-
-  st.ticks = 0;
-  st.hover = null;
-  fitGraphCamera(st);
-  updateGraphModeUI();
-}
-
-function toggleGraphTags() {
-  const st = graphState;
-
-  if (!st || st.mode !== 'organic') return;
-  st.showTags = !st.showTags;
-  applyGraphView(st);
-
-  // Seed each freshly-shown tag at the centroid of the docs it links, so it appears in
-  // place instead of flying in from a random corner. Docs keep their settled positions
-  // (no full re-seed → the layout doesn't jump), then a short re-settle integrates the tags.
-  if (st.showTags) {
-    for (const n of st.nodes) {
-      if (n.kind !== 'tag') continue;
-      let cx = 0,
-        cy = 0,
-        k = 0;
-
-      for (const e of st.edges) {
-        if (e.kind === 'tag' && e.t === n) {
-          cx += e.s.x;
-          cy += e.s.y;
-          k++;
-        }
-      }
-
-      if (k) {
-        n.x = cx / k + (Math.random() - 0.5) * 30;
-        n.y = cy / k + (Math.random() - 0.5) * 30;
-      }
-
-      n.vx = 0;
-      n.vy = 0;
+  // ── View-mode toggle: organic brain ⇄ structured folder map (+ tag-layer toggle) ──
+  updateModeUI() {
+    const st = this.state;
+    const orgBtn = document.getElementById("graph-mode-organic");
+    if (!st || !orgBtn) return;
+    const strBtn = document.getElementById("graph-mode-structured");
+    const tagBtn = document.getElementById("graph-tags-toggle");
+    const setActive = (btn, on) => {
+      btn.classList.toggle("bg-white/15", on);
+      btn.classList.toggle("text-white", on);
+      btn.classList.toggle("text-ink-400", !on);
+    };
+    setActive(orgBtn, st.mode === "organic");
+    setActive(strBtn, st.mode === "structured");
+    if (tagBtn) {
+      tagBtn.style.opacity = st.mode === "organic" ? "1" : ".4";
+      tagBtn.style.pointerEvents = st.mode === "organic" ? "auto" : "none";
+      setActive(tagBtn, st.mode === "organic" && st.showTags);
     }
   }
-
-  st.ticks = Math.min(st.ticks, 360); // a gentle re-settle, not a full upheaval
-  updateGraphModeUI();
-}
-
-document.getElementById('graph-mode-organic')?.addEventListener('click', () => setGraphMode('organic'));
-document.getElementById('graph-mode-structured')?.addEventListener('click', () => setGraphMode('structured'));
-document.getElementById('graph-tags-toggle')?.addEventListener('click', toggleGraphTags);
-window.addEventListener('resize', () => {
-  if (graphState) resizeGraph();
-});
-
-// Embed hero: open the graph chrome-less. The host iframe is pointer-events:none,
-// so there is nothing to interact with — it just lives.
-if (EMBED_MIND) {
-  const gc = document.getElementById('graph-controls');
-
-  if (gc) gc.style.display = 'none';
-  openGraph();
-}
-
-// To-do widget
-// A static OFFLINE build (EMBED_CONTENT inlined) is NEVER in server mode, even when
-// hosted over http(s) — e.g. the GitHub Pages /demo/. Keying this on the protocol
-// alone made such a build hit /api/* endpoints and a service worker that don't exist
-// there → 404s and a home stuck on skeletons. Offline = read from the embed.
-const isServerMode = (location.protocol === 'http:' || location.protocol === 'https:') && !IS_OFFLINE_BUILD;
-const todoWidget = document.getElementById('todo-widget');
-const todoHeader = document.getElementById('todo-header');
-const todoBody = document.getElementById('todo-body');
-const todoChevron = document.getElementById('todo-chevron');
-const todoList = document.getElementById('todo-list');
-const todoForm = document.getElementById('todo-form');
-const todoInput = document.getElementById('todo-input');
-const todoCount = document.getElementById('todo-count');
-const todoBubbleCount = document.getElementById('todo-bubble-count');
-const todoStatus = document.getElementById('todo-status');
-
-let collapsed;
-
-{
-  const stored = localStorage.getItem('todo-collapsed');
-
-  collapsed = stored === null ? isMobile() : stored === '1';
-}
-
-applyCollapsed();
-
-function applyCollapsed() {
-  if (collapsed) {
-    todoBody.classList.add('hidden');
-    todoChevron.style.transform = 'rotate(-90deg)';
-    todoWidget.classList.add('is-collapsed');
-  } else {
-    todoBody.classList.remove('hidden');
-    todoChevron.style.transform = '';
-    todoWidget.classList.remove('is-collapsed');
+  setMode(mode) {
+    const st = this.state;
+    if (!st || st.mode === mode) return;
+    st.mode = mode;
+    this.layout.applyView(st);
+    if (mode === "structured") {
+      this.layout.layoutStructured(st);
+    } else {
+      this.layout.reseedOrganic(st);
+    }
+    st.ticks = 0;
+    st.hover = null;
+    this.layout.fitCamera(st);
+    this.updateModeUI();
+  }
+  toggleTags() {
+    const st = this.state;
+    if (!st || st.mode !== "organic") return;
+    st.showTags = !st.showTags;
+    this.layout.applyView(st);
+    if (st.showTags) {
+      for (const n of st.nodes) {
+        if (n.kind !== "tag") continue;
+        let cx = 0, cy = 0, k = 0;
+        for (const e of st.edges) {
+          if (e.kind === "tag" && e.t === n) {
+            cx += e.s.x;
+            cy += e.s.y;
+            k++;
+          }
+        }
+        if (k) {
+          n.x = cx / k + (Math.random() - 0.5) * 30;
+          n.y = cy / k + (Math.random() - 0.5) * 30;
+        }
+        n.vx = 0;
+        n.vy = 0;
+      }
+    }
+    st.ticks = Math.min(st.ticks, 360);
+    this.updateModeUI();
   }
 }
 
-todoHeader.addEventListener('click', () => {
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class TasksOverlay {
+  // kept for the "show done" toggle re-render
+  constructor() {
+    __publicField(this, "overlay", document.getElementById("tasks-overlay"));
+    __publicField(this, "list", document.getElementById("tasks-list"));
+    __publicField(this, "stats", document.getElementById("tasks-stats"));
+    __publicField(this, "showDoneBox", document.getElementById("tasks-show-done"));
+    __publicField(this, "index", []);
+    document.getElementById("tasks-btn").addEventListener("click", () => this.open());
+    document.getElementById("tasks-close").addEventListener("click", () => this.close());
+    this.showDoneBox.addEventListener("change", () => this.render(this.index));
+  }
+  isOpen() {
+    return !this.overlay.classList.contains("hidden");
+  }
+  async open() {
+    this.overlay.classList.remove("hidden");
+    this.showLoading();
+    this.index = await this.loadIndex();
+    this.render(this.index);
+  }
+  close() {
+    this.overlay.classList.add("hidden");
+  }
+  async loadIndex() {
+    if (IS_OFFLINE_BUILD) return EMBED_TASKS || [];
+    await sse.drainTaskWrites();
+    try {
+      const res = await fetch("/_tasks-index.json", { cache: "no-cache" });
+      return res.ok ? await res.json() : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  // Skeleton mirrors render() layout (no jump on swap). Seeded LCG → same skeleton each open.
+  renderSkeleton() {
+    let state = 2654435769 >>> 0;
+    const next = () => state = state * 1664525 + 1013904223 >>> 0;
+    const range = (min, max) => min + next() % (max - min + 1);
+    const sections = [];
+    for (let s = 0; s < 3; s++) {
+      const rows = [];
+      for (let r = 0, n = range(2, 4); r < n; r++) {
+        rows.push(
+          '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:0.5rem 0.75rem;"><span class="skeleton" style="flex-shrink:0;width:19px;height:19px;border-radius:5px;margin-top:3px;"></span><span class="skeleton" style="height:0.95rem;width:' + range(45, 90) + '%;margin-top:5px;"></span></div>'
+        );
+      }
+      sections.push(
+        '<div style="margin-bottom:1.75rem;"><div class="skeleton" style="height:0.7rem;width:' + range(22, 42) + '%;border-radius:4px;margin-bottom:0.6rem;"></div>' + rows.join("") + "</div>"
+      );
+    }
+    return sections.join("");
+  }
+  showLoading() {
+    this.stats.innerHTML = '<span class="skeleton" style="display:inline-block;height:0.7rem;width:9rem;border-radius:4px;vertical-align:middle;"></span>';
+    this.list.innerHTML = '<div aria-busy="true" aria-label="' + t("tasksLoading") + '">' + this.renderSkeleton() + "</div>";
+  }
+  // Normalize a task line for matching against rendered text: the index stores raw markdown, the
+  // rendered doc shows plain text. Drop wikilink/link syntax + inline marks, lowercase, collapse spaces.
+  normTask(s) {
+    return (s || "").toLowerCase().replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, "$1").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[*_`~]/g, "").replace(/\s+/g, " ").trim();
+  }
+  // Scroll the open doc to the checkbox of `task` and flash it. Primary = the Nth rendered checkbox
+  // (task._docIndex); on rare index/render drift, fall back to matching by text, then a loose highlight.
+  scrollToCheckbox(task) {
+    const want = this.normTask(task.text);
+    const boxes = [...contentEl.querySelectorAll("input[type=checkbox]")];
+    const liOf = (b) => b ? b.closest("li") || b.parentElement : null;
+    let li = liOf(boxes[task._docIndex ?? -1]);
+    if (!(li && want && this.normTask(li.textContent || "").includes(want))) {
+      li = null;
+      if (want) {
+        for (const b of boxes) {
+          const candidate = liOf(b);
+          if (candidate && this.normTask(candidate.textContent || "").includes(want)) {
+            li = candidate;
+            break;
+          }
+        }
+      }
+    }
+    if (!li) {
+      highlightFirstMatch(contentEl, task.text);
+      return;
+    }
+    const el = li;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.style.transition = "background-color 0.4s";
+    el.style.backgroundColor = "rgba(89,208,207,0.18)";
+    el.style.borderRadius = "4px";
+    setTimeout(() => {
+      el.style.backgroundColor = "";
+    }, 1600);
+  }
+  // Render a task's inline markdown like the rest of the app. Links/images stripped to text (the row
+  // is itself a button — no nested navigation). Any error falls back to ESCAPED text, never raw HTML.
+  renderTaskText(s) {
+    try {
+      return DOMPurify.sanitize(marked.parseInline(s), { FORBID_TAGS: ["a", "img"] });
+    } catch (e) {
+      return escapeHtml(s);
+    }
+  }
+  render(tasks) {
+    const perDoc = {};
+    for (const tk of tasks) tk._docIndex = perDoc[tk.path] = (perDoc[tk.path] ?? -1) + 1;
+    const open = tasks.filter((x) => !x.done).length;
+    this.stats.textContent = t("tasksStats", open, tasks.length);
+    const visible = this.showDoneBox.checked ? tasks : tasks.filter((x) => !x.done);
+    this.list.innerHTML = "";
+    if (!visible.length) {
+      const empty = document.createElement("div");
+      empty.className = "text-ink-500 text-sm font-sans";
+      empty.textContent = t("tasksEmpty");
+      this.list.appendChild(empty);
+      return;
+    }
+    const byDoc = {};
+    for (const task of visible) (byDoc[task.path] = byDoc[task.path] || []).push(task);
+    for (const p of Object.keys(byDoc).sort()) {
+      const file = fileMap[p];
+      const section = document.createElement("div");
+      section.style.marginBottom = "1.75rem";
+      const head = document.createElement("div");
+      head.className = "text-[11px] uppercase tracking-[0.12em] text-ink-500 font-bold font-mono";
+      head.style.marginBottom = "0.6rem";
+      head.textContent = p;
+      section.appendChild(head);
+      for (const task of byDoc[p]) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "flex items-start gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-base font-sans";
+        const box = document.createElement("span");
+        box.className = "flex-shrink-0";
+        box.style.marginTop = "3px";
+        box.innerHTML = task.done ? '<svg viewBox="0 0 24 24" fill="none" class="text-accent" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor"/><path d="M7.4 12.4l3 3 6.2-6.7" fill="none" stroke="#0e0d12" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" class="text-ink-500" style="width:19px;height:19px"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="2"/></svg>';
+        const txt = document.createElement("span");
+        txt.className = task.done ? "text-ink-500" : "text-ink-100";
+        if (task.done) txt.style.textDecoration = "line-through";
+        txt.innerHTML = this.renderTaskText(task.text);
+        row.appendChild(box);
+        row.appendChild(txt);
+        row.addEventListener("click", async () => {
+          this.close();
+          if (!file) return;
+          await showMarkdown(file);
+          history.replaceState(null, "", "#" + encodeURIComponent(file.path));
+          this.scrollToCheckbox(task);
+        });
+        section.appendChild(row);
+      }
+      this.list.appendChild(section);
+    }
+  }
+}
+const tasksOverlay = new TasksOverlay();
+
+const todoWidget = document.getElementById("todo-widget");
+const todoHeader = document.getElementById("todo-header");
+const todoBody = document.getElementById("todo-body");
+const todoChevron = document.getElementById("todo-chevron");
+const todoList = document.getElementById("todo-list");
+const todoForm = document.getElementById("todo-form");
+const todoInput = document.getElementById("todo-input");
+const todoCount = document.getElementById("todo-count");
+const todoBubbleCount = document.getElementById("todo-bubble-count");
+const todoStatus = document.getElementById("todo-status");
+let collapsed;
+{
+  const stored = localStorage.getItem("todo-collapsed");
+  collapsed = stored === null ? isMobile() : stored === "1";
+}
+function applyCollapsed() {
+  if (collapsed) {
+    todoBody.classList.add("hidden");
+    todoChevron.style.transform = "rotate(-90deg)";
+    todoWidget.classList.add("is-collapsed");
+  } else {
+    todoBody.classList.remove("hidden");
+    todoChevron.style.transform = "";
+    todoWidget.classList.remove("is-collapsed");
+  }
+}
+applyCollapsed();
+todoHeader.addEventListener("click", () => {
   collapsed = !collapsed;
-  localStorage.setItem('todo-collapsed', collapsed ? '1' : '0');
+  localStorage.setItem("todo-collapsed", collapsed ? "1" : "0");
   applyCollapsed();
 });
-
 function updateHomeTodoStat() {
-  const el = document.getElementById('home-todo-stat');
-
+  const el = document.getElementById("home-todo-stat");
   if (!el) return;
-  el.textContent = todos.length ? `${todos.filter((t) => t.done).length}/${todos.length}` : '–';
+  el.textContent = todos.length ? `${todos.filter((td) => td.done).length}/${todos.length}` : "–";
 }
-
 function buildFavicon(count) {
-  const badge =
-    count > 0
-      ? "<circle cx='23' cy='9' r='8' fill='#ef4444' stroke='#0e0d12' stroke-width='1.5'/>" +
-        "<text x='23' y='12.5' font-family='system-ui,Arial,sans-serif' font-size='" +
-        (count > 9 ? '8.5' : '10') +
-        "' font-weight='800' fill='white' text-anchor='middle'>" +
-        (count > 9 ? '9+' : count) +
-        '</text>'
-      : '';
-  const svg =
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>" +
-    '<defs>' +
-    "<radialGradient id='sky' cx='50%' cy='40%' r='65%'><stop offset='0%' stop-color='#1f1d2a'/><stop offset='100%' stop-color='#0a0a12'/></radialGradient>" +
-    "<radialGradient id='glow' cx='50%' cy='50%' r='50%'><stop offset='0%' stop-color='#fbc678' stop-opacity='0.75'/><stop offset='100%' stop-color='#fbc678' stop-opacity='0'/></radialGradient>" +
-    '</defs>' +
-    "<rect width='32' height='32' rx='7' fill='url(#sky)'/>" +
-    "<circle cx='16' cy='16' r='9' fill='none' stroke='#fff' stroke-width='0.7' opacity='0.4'/>" +
-    "<circle cx='16' cy='16' r='1.2' fill='#fff' opacity='0.85'/>" +
-    "<circle cx='22.36' cy='9.64' r='4' fill='url(#glow)'/>" +
-    "<circle cx='22.36' cy='9.64' r='1.9' fill='#fbc678'/>" +
-    badge +
-    '</svg>';
-
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  const badge = count > 0 ? "<circle cx='23' cy='9' r='8' fill='#ef4444' stroke='#0e0d12' stroke-width='1.5'/><text x='23' y='12.5' font-family='system-ui,Arial,sans-serif' font-size='" + (count > 9 ? "8.5" : "10") + "' font-weight='800' fill='white' text-anchor='middle'>" + (count > 9 ? "9+" : count) + "</text>" : "";
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><radialGradient id='sky' cx='50%' cy='40%' r='65%'><stop offset='0%' stop-color='#1f1d2a'/><stop offset='100%' stop-color='#0a0a12'/></radialGradient><radialGradient id='glow' cx='50%' cy='50%' r='50%'><stop offset='0%' stop-color='#fbc678' stop-opacity='0.75'/><stop offset='100%' stop-color='#fbc678' stop-opacity='0'/></radialGradient></defs><rect width='32' height='32' rx='7' fill='url(#sky)'/><circle cx='16' cy='16' r='9' fill='none' stroke='#fff' stroke-width='0.7' opacity='0.4'/><circle cx='16' cy='16' r='1.2' fill='#fff' opacity='0.85'/><circle cx='22.36' cy='9.64' r='4' fill='url(#glow)'/><circle cx='22.36' cy='9.64' r='1.9' fill='#fbc678'/>" + badge + "</svg>";
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 }
-
 function updateTabBadge() {
-  const pending = todos.filter((t) => !t.done).length;
-
-  document.title = pending > 0 ? '(' + pending + ') ' + SITE_NAME : SITE_NAME;
+  const pending = todos.filter((td) => !td.done).length;
+  document.title = pending > 0 ? "(" + pending + ") " + SITE_NAME : SITE_NAME;
   const link = document.querySelector("link[rel='icon']");
-
   if (link) link.href = buildFavicon(pending);
 }
-
-let showDoneTodos = localStorage.getItem('todo-show-done') === '1';
-// Todo categories injected at build time from atlas.toml ([todo].categories);
-// tabs, labels and filter all derive from them.
+let showDoneTodos = localStorage.getItem("todo-show-done") === "1";
 const TODO_CATEGORIES = __TODO_CATEGORIES_JSON__;
 const TODO_CATS = TODO_CATEGORIES.map((c) => c.cat);
-const TODO_FILTER_LABELS = Object.fromEntries(TODO_CATEGORIES.map((c) => [c.cat, c.label]));
-// An unknown cat (todo from a category removed from the config) falls back to the
-// first configured category (the default), instead of a hard-coded "work".
-const tcat = (t) => (TODO_CATS.includes(t.cat) ? t.cat : TODO_CATS[0]);
-let todoFilter = localStorage.getItem('todo-filter');
-
-if (!TODO_CATS.includes(todoFilter)) todoFilter = TODO_CATS[0];
+const TODO_FILTER_LABELS = Object.fromEntries(
+  TODO_CATEGORIES.map((c) => [c.cat, c.label])
+);
+function tcat(td) {
+  return TODO_CATS.includes(td.cat) ? td.cat : TODO_CATS[0];
+}
+let todoFilter = localStorage.getItem("todo-filter");
+if (!todoFilter || !TODO_CATS.includes(todoFilter)) todoFilter = TODO_CATS[0];
 (function buildTodoFilterTabs() {
-  const wrap = document.getElementById('todo-filter');
-
+  const wrap = document.getElementById("todo-filter");
   if (!wrap) return;
   wrap.innerHTML = TODO_CATEGORIES.map(
-    (c) =>
-      `<button type="button" data-cat="${escapeHtml(c.cat)}" class="todo-filter-btn flex-1 px-3 py-2 transition hover:bg-white/5 text-ink-500">${escapeHtml(c.label)}</button>`,
-  ).join('');
+    (c) => `<button type="button" data-cat="${escapeHtml(c.cat)}" class="todo-filter-btn flex-1 px-3 py-2 transition hover:bg-white/5 text-ink-500">${escapeHtml(c.label)}</button>`
+  ).join("");
 })();
-
 function renderTodoFilterTabs() {
-  document.querySelectorAll('.todo-filter-btn').forEach((btn) => {
+  document.querySelectorAll(".todo-filter-btn").forEach((btn) => {
     const cat = btn.dataset.cat;
     const active = cat === todoFilter;
-    const pending = todos.filter((t) => tcat(t) === cat && !t.done).length;
-
-    btn.classList.toggle('text-accent', active);
-    btn.classList.toggle('bg-accent/10', active);
-    btn.classList.toggle('text-ink-500', !active);
-    btn.textContent =
-      pending > 0 ? `${TODO_FILTER_LABELS[cat]} (${pending})` : TODO_FILTER_LABELS[cat];
+    const pending = todos.filter((td) => tcat(td) === cat && !td.done).length;
+    btn.classList.toggle("text-accent", active);
+    btn.classList.toggle("bg-accent/10", active);
+    btn.classList.toggle("text-ink-500", !active);
+    btn.textContent = pending > 0 ? `${TODO_FILTER_LABELS[cat]} (${pending})` : TODO_FILTER_LABELS[cat];
   });
 }
-
-// ── Read-only demo banner ────────────────────────────────────────────────────
-// Shown ONLY on the static/offline build (the demo) — the live server has working
-// write features, so it never appears there. Dismissible per tab session: a new
-// visitor still sees it, but it doesn't nag while browsing.
-(function () {
+(function() {
   if (!IS_OFFLINE_BUILD || window.__viewerMode) return;
-  // Don't nag inside an embed: the landing page iframes the demo (./demo/#mind) as
-  // a live hero, where the banner would be noise. Any iframe → skip it.
   try {
     if (window.self !== window.top) return;
   } catch (e) {
-    return; // cross-origin embed (can't read window.top) → definitely embedded
+    return;
   }
-  const banner = document.getElementById('demo-banner');
+  const banner = document.getElementById("demo-banner");
   if (!banner) return;
   try {
-    if (sessionStorage.getItem('demoBannerDismissed') === '1') return;
+    if (sessionStorage.getItem("demoBannerDismissed") === "1") return;
   } catch (e) {
-    /* sessionStorage unavailable (file://, private mode) → just show it */
   }
-  banner.classList.remove('hidden');
-  document.getElementById('demo-banner-close')?.addEventListener('click', () => {
-    banner.classList.add('hidden');
+  banner.classList.remove("hidden");
+  document.getElementById("demo-banner-close")?.addEventListener("click", () => {
+    banner.classList.add("hidden");
     try {
-      sessionStorage.setItem('demoBannerDismissed', '1');
+      sessionStorage.setItem("demoBannerDismissed", "1");
     } catch (e) {
-      /* ignore */
     }
   });
 })();
 
-// ── Atlas combobox — one reusable "search + create" field ───────────────────
-// Factory (the viewer is concatenated IIFEs, not ES modules):
-// AtlasCombobox(input, opts) -> controller.
-//
-//   opts.source     : () => string[] | async () => string[]   current suggestions
-//   opts.creatable  : bool   offer « Créer "X" » when the typed value has no match
-//   opts.multi      : bool   chips mode (tags, group members); getValue() -> array
-//   opts.separator  : ','    serialize/parse a CSV string (setValue in multi)
-//   opts.normalize  : v=>v   e.g. lowercase emails (ACL)
-//   opts.format     : v=>html  row rendering (default escapeHtml)
-//   opts.maxItems   : 50     display cap
-//   opts.onSelect   : v=>{}  callback on pick (else writes to the input)
-//
-// controller: getValue/setValue/refresh/clear/focus/open/close/destroy.
-
-// Shared dialog/button class tokens (design system) — used by the combobox AND to
-// stop duplicating Tailwind strings in confirmDialog / acl grant-rows / history.
-window.AtlasUI = {
-  btnPrimary: 'px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium',
-  btnDanger: 'px-3 py-1.5 text-sm bg-rose-500/80 hover:bg-rose-500 text-white rounded font-medium',
-  btnSecondary: 'px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded',
-  input: 'w-full px-3 py-2 text-sm bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent',
-  label: 'text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block',
-};
-
-(function () {
-  function AtlasCombobox(input, opts) {
-    opts = opts || {};
-    input.removeAttribute('list'); // kill the native datalist
-    input.setAttribute('autocomplete', 'off');
-    input.setAttribute('role', 'combobox');
-    input.setAttribute('aria-expanded', 'false');
-
-    const pop = document.createElement('div');
-    pop.className =
-      'atlas-cb-pop fixed hidden max-h-64 overflow-y-auto scrollbar-thin ' +
-      'rounded-md border subtle-border shadow-2xl shadow-black/70 text-sm';
-    // z-index inline: an arbitrary Tailwind z-[..] in a JS string isn't compiled (see 03-panels.css).
-    pop.style.zIndex = '80';
-    document.body.appendChild(pop);
-
-    const norm = opts.normalize || ((v) => v);
-    const fmt = opts.format || ((v) => escapeHtml(v));
-    let all = [];
-    let items = []; // strings, plus an optional {__create} sentinel at the end
-    let active = 0;
-    let isOpen = false;
-    let chipBox = null;
-    let values = []; // multi mode
-
-    async function load() {
-      try {
-        all = (await (opts.source ? opts.source() : [])) || [];
-      } catch (_) {
-        all = [];
+class KeyboardRouter {
+  constructor() {
+    document.addEventListener("keydown", (e) => this.onKey(e));
+  }
+  // App-wide keyboard router. Ctrl/Cmd+K opens the palette; Escape closes the topmost open overlay
+  // (history → tasks → graph, the owners' priority); the rest are global shortcuts, suppressed while
+  // an input/textarea is focused.
+  onKey(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      commandPalette.open();
+      return;
+    }
+    if (e.key === "Escape" && !historyOverlay.classList.contains("hidden")) {
+      closeHistory();
+      return;
+    }
+    if (e.key === "Escape" && tasksOverlay.isOpen()) {
+      tasksOverlay.close();
+      return;
+    }
+    if (e.key === "Escape" && mindGraph.isOpen()) {
+      mindGraph.close();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "g") {
+      e.preventDefault();
+      mindGraph.open();
+      return;
+    }
+    const active = document.activeElement;
+    if (active && ["INPUT", "TEXTAREA"].includes(active.tagName)) {
+      if (e.key === "Escape" && active === searchEl) {
+        searchEl.value = "";
+        searchEl.dispatchEvent(new Event("input"));
+        searchEl.blur();
       }
+      return;
     }
+    if (e.key === "/") {
+      e.preventDefault();
+      searchEl.focus();
+    }
+    if (e.key === "e" && currentFile && !editMode && !window.__viewerMode) {
+      e.preventDefault();
+      enterEditMode();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+      e.preventDefault();
+      toggleSidebar();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "j") {
+      e.preventDefault();
+      toggleToc();
+    }
+  }
+}
+const keyboardRouter = new KeyboardRouter();
 
-    function compute() {
-      const raw = input.value.trim();
-      const q = raw.toLowerCase();
-      let res = q ? all.filter((v) => String(v).toLowerCase().includes(q)) : all.slice();
-      if (q) {
-        const rk = (v) => (String(v).toLowerCase().startsWith(q) ? 0 : 1);
-        res.sort((a, b) => rk(a) - rk(b));
-      }
-      res = res.slice(0, opts.maxItems || 50).filter((v) => !(opts.multi && values.includes(v)));
-      const exact = all.some((v) => String(v).toLowerCase() === q);
-      return { res, create: opts.creatable && raw && !exact ? raw : null };
-    }
+const mindGraph = new MindGraph();
+function openGraph() {
+  mindGraph.open();
+}
+if (EMBED_MIND) {
+  const gc = document.getElementById("graph-controls");
+  if (gc) gc.style.display = "none";
+  mindGraph.open();
+}
 
-    function render() {
-      const { res, create } = compute();
-      items = res.slice();
-      let html = res
-        .map(
-          (v, i) =>
-            '<div class="atlas-cb-opt px-3 py-1.5 cursor-pointer hover:bg-white/5 ' +
-            (i === active ? 'bg-white/10' : '') +
-            '" data-i="' + i + '">' + fmt(v) + '</div>',
-        )
-        .join('');
-      if (create) {
-        const ci = res.length;
-        html +=
-          '<div class="atlas-cb-create px-3 py-1.5 cursor-pointer hover:bg-white/5 text-accent ' +
-          'flex items-center gap-2 ' + (active === ci ? 'bg-white/10' : '') +
-          '" data-create="1"><span class="text-base leading-none">+</span>' +
-          escapeHtml(t('comboCreate', create)) + '</div>';
-        items.push({ __create: create });
-      }
-      if (!items.length) {
-        pop.innerHTML = '<div class="px-3 py-1.5 text-ink-500">' + escapeHtml(t('comboNoResults')) + '</div>';
-      } else {
-        pop.innerHTML = html;
-      }
-      const r = input.getBoundingClientRect();
-      pop.style.left = r.left + 'px';
-      pop.style.top = r.bottom + 4 + 'px';
-      pop.style.width = r.width + 'px';
-      pop.classList.remove('hidden');
-      isOpen = true;
-      input.setAttribute('aria-expanded', 'true');
-      const a = pop.children[active];
-      if (a && a.scrollIntoView) a.scrollIntoView({ block: 'nearest' });
-    }
-
-    function close() {
-      pop.classList.add('hidden');
-      isOpen = false;
-      input.setAttribute('aria-expanded', 'false');
-    }
-
-    function choose(it) {
-      if (it == null) return;
-      const val = norm(typeof it === 'object' && it.__create != null ? it.__create : it);
-      if (opts.multi) {
-        addChip(val);
-        input.value = '';
-      } else {
-        input.value = val;
-      }
-      close();
-      if (opts.onSelect) opts.onSelect(val);
-    }
-
-    // chips (multi) — reuse the existing .doc-tag / .doc-tag-x styling.
-    function ensureChipBox() {
-      if (opts.multi && !chipBox) {
-        chipBox = document.createElement('div');
-        chipBox.className = 'flex flex-wrap gap-1.5 mb-1.5 empty:hidden';
-        input.parentNode.insertBefore(chipBox, input);
-        chipBox.addEventListener('click', (e) => {
-          const b = e.target.closest('[data-rm]');
-          if (b) {
-            values = values.filter((x) => x !== b.dataset.rm);
-            renderChips();
-          }
-        });
-      }
-    }
-    function renderChips() {
-      if (!chipBox) return;
-      chipBox.innerHTML = values
-        .map(
-          (v) =>
-            '<span class="doc-tag">' + escapeHtml(v) +
-            '<button type="button" class="doc-tag-x ml-1" data-rm="' + escapeHtml(v) + '">×</button></span>',
-        )
-        .join('');
-    }
-    function addChip(v) {
-      ensureChipBox();
-      if (!v || values.includes(v)) return;
-      values.push(v);
-      renderChips();
-    }
-
-    input.addEventListener('focus', async () => {
-      await load();
-      active = 0;
-      render();
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class Combobox {
+  // multi mode
+  constructor(input, opts) {
+    __publicField(this, "input");
+    __publicField(this, "opts");
+    __publicField(this, "pop");
+    __publicField(this, "norm");
+    __publicField(this, "fmt");
+    __publicField(this, "all", []);
+    __publicField(this, "items", []);
+    // strings, plus an optional create sentinel at the end
+    __publicField(this, "active", 0);
+    __publicField(this, "isOpen", false);
+    __publicField(this, "chipBox", null);
+    __publicField(this, "values", []);
+    this.input = input;
+    this.opts = opts;
+    this.norm = opts.normalize || ((v) => v);
+    this.fmt = opts.format || ((v) => escapeHtml(v));
+    this.input.removeAttribute("list");
+    this.input.setAttribute("autocomplete", "off");
+    this.input.setAttribute("role", "combobox");
+    this.input.setAttribute("aria-expanded", "false");
+    this.pop = document.createElement("div");
+    this.pop.className = "atlas-cb-pop fixed hidden max-h-64 overflow-y-auto scrollbar-thin rounded-md border subtle-border shadow-2xl shadow-black/70 text-sm";
+    this.pop.style.zIndex = "80";
+    document.body.appendChild(this.pop);
+    this.wire();
+  }
+  wire() {
+    this.input.addEventListener("focus", async () => {
+      await this.load();
+      this.active = 0;
+      this.render();
     });
-    input.addEventListener('input', () => {
-      active = 0;
-      render();
+    this.input.addEventListener("input", () => {
+      this.active = 0;
+      this.render();
     });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Backspace' && opts.multi && !input.value && values.length) {
-        values.pop();
-        renderChips();
-        return;
-      }
-      if (!isOpen) return;
-      if (e.key === 'ArrowDown') {
+    this.input.addEventListener("keydown", (e) => this.onKeydown(e));
+    this.pop.addEventListener("mousedown", (e) => this.onPopMousedown(e));
+    this.input.addEventListener("blur", () => setTimeout(() => this.close(), 120));
+  }
+  async load() {
+    try {
+      this.all = await this.opts.source() || [];
+    } catch (_) {
+      this.all = [];
+    }
+  }
+  compute() {
+    const raw = this.input.value.trim();
+    const q = raw.toLowerCase();
+    let res = q ? this.all.filter((v) => String(v).toLowerCase().includes(q)) : this.all.slice();
+    if (q) {
+      const rk = (v) => String(v).toLowerCase().startsWith(q) ? 0 : 1;
+      res.sort((a, b) => rk(a) - rk(b));
+    }
+    res = res.slice(0, this.opts.maxItems || 50).filter((v) => !(this.opts.multi && this.values.includes(v)));
+    const exact = this.all.some((v) => String(v).toLowerCase() === q);
+    return { res, create: this.opts.creatable && raw && !exact ? raw : null };
+  }
+  render() {
+    const { res, create } = this.compute();
+    this.items = res.slice();
+    let html = res.map(
+      (v, i) => '<div class="atlas-cb-opt px-3 py-1.5 cursor-pointer hover:bg-white/5 ' + (i === this.active ? "bg-white/10" : "") + '" data-i="' + i + '">' + this.fmt(v) + "</div>"
+    ).join("");
+    if (create) {
+      const ci = res.length;
+      html += '<div class="atlas-cb-create px-3 py-1.5 cursor-pointer hover:bg-white/5 text-accent flex items-center gap-2 ' + (this.active === ci ? "bg-white/10" : "") + '" data-create="1"><span class="text-base leading-none">+</span>' + escapeHtml(t("comboCreate", create)) + "</div>";
+      this.items.push({ __create: create });
+    }
+    if (!this.items.length) {
+      this.pop.innerHTML = '<div class="px-3 py-1.5 text-ink-500">' + escapeHtml(t("comboNoResults")) + "</div>";
+    } else {
+      this.pop.innerHTML = html;
+    }
+    const r = this.input.getBoundingClientRect();
+    this.pop.style.left = r.left + "px";
+    this.pop.style.top = r.bottom + 4 + "px";
+    this.pop.style.width = r.width + "px";
+    this.pop.classList.remove("hidden");
+    this.isOpen = true;
+    this.input.setAttribute("aria-expanded", "true");
+    const a = this.pop.children[this.active];
+    if (a) a.scrollIntoView({ block: "nearest" });
+  }
+  choose(it) {
+    if (it == null) return;
+    const val = this.norm(typeof it === "string" ? it : it.__create);
+    if (this.opts.multi) {
+      this.addChip(val);
+      this.input.value = "";
+    } else {
+      this.input.value = val;
+    }
+    this.close();
+    if (this.opts.onSelect) this.opts.onSelect(val);
+  }
+  // chips (multi) — reuse the existing .doc-tag / .doc-tag-x styling.
+  ensureChipBox() {
+    if (this.opts.multi && !this.chipBox) {
+      this.chipBox = document.createElement("div");
+      this.chipBox.className = "flex flex-wrap gap-1.5 mb-1.5 empty:hidden";
+      this.input.parentNode.insertBefore(this.chipBox, this.input);
+      this.chipBox.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-rm]");
+        if (b) {
+          this.values = this.values.filter((x) => x !== b.dataset.rm);
+          this.renderChips();
+        }
+      });
+    }
+  }
+  renderChips() {
+    if (!this.chipBox) return;
+    this.chipBox.innerHTML = this.values.map(
+      (v) => '<span class="doc-tag">' + escapeHtml(v) + '<button type="button" class="doc-tag-x ml-1" data-rm="' + escapeHtml(v) + '">×</button></span>'
+    ).join("");
+  }
+  addChip(v) {
+    this.ensureChipBox();
+    if (!v || this.values.includes(v)) return;
+    this.values.push(v);
+    this.renderChips();
+  }
+  onKeydown(e) {
+    if (e.key === "Backspace" && this.opts.multi && !this.input.value && this.values.length) {
+      this.values.pop();
+      this.renderChips();
+      return;
+    }
+    if (!this.isOpen) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      this.active = Math.min(this.active + 1, this.items.length - 1);
+      this.render();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      this.active = Math.max(this.active - 1, 0);
+      this.render();
+    } else if (e.key === "Enter") {
+      if (this.items[this.active] != null) {
         e.preventDefault();
-        active = Math.min(active + 1, items.length - 1);
-        render();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        active = Math.max(active - 1, 0);
-        render();
-      } else if (e.key === 'Enter') {
-        if (items[active] != null) {
-          e.preventDefault();
-          choose(items[active]);
-        }
-      } else if (e.key === 'Escape') {
-        e.stopPropagation(); // close the dropdown, NOT the dialog
-        close();
+        this.choose(this.items[this.active]);
       }
-    });
-    pop.addEventListener('mousedown', (e) => {
-      const el = e.target.closest('[data-i],[data-create]');
-      if (!el) return;
-      e.preventDefault(); // keep focus on the input
-      choose(el.dataset.create ? items[items.length - 1] : items[+el.dataset.i]);
-    });
-    input.addEventListener('blur', () => setTimeout(close, 120));
-
-    return {
-      getValue: () => (opts.multi ? values.slice() : input.value.trim()),
-      setValue: (v) => {
-        if (opts.multi) {
-          values = Array.isArray(v)
-            ? v.slice()
-            : String(v || '').split(opts.separator || ',').map((s) => s.trim()).filter(Boolean);
-          ensureChipBox();
-          renderChips();
-        } else {
-          input.value = v || '';
-        }
-      },
-      refresh: async () => {
-        await load();
-        if (isOpen) render();
-      },
-      clear: () => {
-        if (opts.multi) {
-          values = [];
-          renderChips();
-        } else {
-          input.value = '';
-        }
-      },
-      focus: () => input.focus(),
-      open: () => render(),
-      close,
-      destroy: () => {
-        pop.remove();
-        if (chipBox) chipBox.remove();
-      },
-    };
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      this.close();
+    }
   }
-
-  window.AtlasCombobox = AtlasCombobox;
-})();
-
-function renderTodos() {
-  const inCat = todos.filter((t) => tcat(t) === todoFilter);
-  const total = inCat.length;
-  const done = inCat.filter((t) => t.done).length;
-  const pendingAll = todos.filter((t) => !t.done).length;
-
-  // Title shows the cumulative total across both categories; the per-category
-  // remaining count already lives on the Work/Personal tabs.
-  todoCount.textContent = pendingAll ? t('nPending', pendingAll) : '';
-  todoBubbleCount.textContent = pendingAll > 9 ? '9+' : String(pendingAll);
-  todoBubbleCount.classList.toggle('empty', pendingAll === 0);
-  renderTodoFilterTabs();
-
-  if (todoInput) todoInput.placeholder = t('addTodoIn', TODO_FILTER_LABELS[todoFilter]);
-  updateHomeTodoStat();
-  updateTabBadge();
-
-  const controls = document.getElementById('todo-controls');
-  const toggleLabel = document.getElementById('todo-toggle-label');
-  const toggleIcon = document.getElementById('todo-toggle-icon');
-
-  if (done > 0) {
-    controls.classList.remove('hidden');
-    controls.classList.add('flex');
-    toggleLabel.textContent = showDoneTodos ? t('hideDone', done) : t('showDone', done);
-    toggleIcon.style.transform = showDoneTodos ? 'rotate(180deg)' : '';
-  } else {
-    controls.classList.add('hidden');
-    controls.classList.remove('flex');
+  onPopMousedown(e) {
+    const el = e.target.closest("[data-i],[data-create]");
+    if (!el) return;
+    e.preventDefault();
+    this.choose(el.dataset.create ? this.items[this.items.length - 1] : this.items[+el.dataset.i]);
   }
-
-  if (inCat.length === 0) {
-    todoList.innerHTML = `<li class="px-3 py-4 text-center text-xs text-ink-500">${t('noTasksIn', TODO_FILTER_LABELS[todoFilter])}</li>`;
-
-    return;
+  getValue() {
+    return this.opts.multi ? this.values.slice() : this.input.value.trim();
   }
-
-  const visible = showDoneTodos ? inCat : inCat.filter((t) => !t.done);
-
-  if (visible.length === 0) {
-    todoList.innerHTML = `<li class="px-3 py-4 text-center text-xs text-ink-500">${t('allDone', done)}</li>`;
-
-    return;
+  setValue(value) {
+    if (this.opts.multi) {
+      this.values = String(value || "").split(this.opts.separator || ",").map((s) => s.trim()).filter(Boolean);
+      this.ensureChipBox();
+      this.renderChips();
+    } else {
+      this.input.value = value || "";
+    }
   }
+  async refresh() {
+    await this.load();
+    if (this.isOpen) this.render();
+  }
+  clear() {
+    if (this.opts.multi) {
+      this.values = [];
+      this.renderChips();
+    } else {
+      this.input.value = "";
+    }
+  }
+  focus() {
+    this.input.focus();
+  }
+  open() {
+    this.render();
+  }
+  close() {
+    this.pop.classList.add("hidden");
+    this.isOpen = false;
+    this.input.setAttribute("aria-expanded", "false");
+  }
+  destroy() {
+    this.pop.remove();
+    if (this.chipBox) this.chipBox.remove();
+  }
+}
+function AtlasCombobox(input, opts) {
+  return new Combobox(input, opts);
+}
 
-  todoList.innerHTML = visible
-    .map(
+class Todos {
+  constructor() {
+    todoForm.addEventListener("submit", (e) => this.onSubmit(e));
+    todoList.addEventListener("click", (e) => this.onListClick(e));
+    document.getElementById("todo-filter").addEventListener("click", (e) => this.onFilterClick(e));
+    document.getElementById("todo-toggle-done").addEventListener("click", () => this.onToggleDone());
+    document.getElementById("todo-clear-done").addEventListener("click", () => this.onClearDone());
+  }
+  render() {
+    const inCat = todos.filter((it) => tcat(it) === todoFilter);
+    const done = inCat.filter((it) => it.done).length;
+    const pendingAll = todos.filter((it) => !it.done).length;
+    todoCount.textContent = pendingAll ? t("nPending", pendingAll) : "";
+    todoBubbleCount.textContent = pendingAll > 9 ? "9+" : String(pendingAll);
+    todoBubbleCount.classList.toggle("empty", pendingAll === 0);
+    renderTodoFilterTabs();
+    if (todoInput) todoInput.placeholder = t("addTodoIn", TODO_FILTER_LABELS[todoFilter]);
+    updateHomeTodoStat();
+    updateTabBadge();
+    const controls = document.getElementById("todo-controls");
+    const toggleLabel = document.getElementById("todo-toggle-label");
+    const toggleIcon = document.getElementById("todo-toggle-icon");
+    if (done > 0) {
+      controls.classList.remove("hidden");
+      controls.classList.add("flex");
+      toggleLabel.textContent = showDoneTodos ? t("hideDone", done) : t("showDone", done);
+      toggleIcon.style.transform = showDoneTodos ? "rotate(180deg)" : "";
+    } else {
+      controls.classList.add("hidden");
+      controls.classList.remove("flex");
+    }
+    if (inCat.length === 0) {
+      todoList.innerHTML = `<li class="px-3 py-4 text-center text-xs text-ink-500">${t("noTasksIn", TODO_FILTER_LABELS[todoFilter])}</li>`;
+      return;
+    }
+    const visible = showDoneTodos ? inCat : inCat.filter((it) => !it.done);
+    if (visible.length === 0) {
+      todoList.innerHTML = `<li class="px-3 py-4 text-center text-xs text-ink-500">${t("allDone", done)}</li>`;
+      return;
+    }
+    todoList.innerHTML = visible.map(
       (item) => `
     <li class="todo-row group flex items-start gap-2 px-3 py-2 hover:bg-navy-800/40" data-id="${item.id}">
-      <input type="checkbox" ${item.done ? 'checked' : ''}
+      <input type="checkbox" ${item.done ? "checked" : ""}
         class="todo-check mt-0.5 w-4 h-4 rounded border-navy-600 bg-navy-900 text-blue-500 focus:ring-blue-400/40 cursor-pointer accent-blue-500">
-      <span class="todo-text flex-1 text-sm leading-snug ${item.done ? 'line-through text-ink-500' : 'text-ink-100'} cursor-pointer">${escapeHtml(item.text)}</span>
-      <button class="todo-del opacity-0 group-hover:opacity-100 text-ink-500 hover:text-rose-400 text-base leading-none transition-opacity" title="${escapeHtml(t('del'))}">&times;</button>
+      <span class="todo-text flex-1 text-sm leading-snug ${item.done ? "line-through text-ink-500" : "text-ink-100"} cursor-pointer">${escapeHtml(item.text)}</span>
+      <button class="todo-del opacity-0 group-hover:opacity-100 text-ink-500 hover:text-rose-400 text-base leading-none transition-opacity" title="${escapeHtml(t("del"))}">&times;</button>
     </li>
-  `,
-    )
-    .join('');
-}
-
-function startInlineEdit(row) {
-  const id = parseInt(row.dataset.id);
-  const item = todos.find((t) => t.id === id);
-
-  if (!item) return;
-  const textSpan = row.querySelector('.todo-text');
-
-  if (!textSpan) return;
-  const input = document.createElement('input');
-
-  input.type = 'text';
-  input.value = item.text;
-  input.className =
-    'todo-edit flex-1 px-2 py-0.5 text-sm bg-navy-900 border border-blue-400 rounded text-ink-100 focus:outline-none focus:ring-1 focus:ring-blue-400/40';
-  textSpan.replaceWith(input);
-  input.focus();
-  input.select();
-  let committed = false;
-  const commit = async (save) => {
-    if (committed) return;
-    committed = true;
-    const newText = input.value.trim();
-
-    if (save && newText && newText !== item.text) {
-      try {
-        todos = await api('PATCH', '/api/todos/' + id, { text: newText });
-        renderTodos();
-        setStatus(t('updated'), 'ok');
-
-        return;
-      } catch (e) {
-        setStatus(t('err', e.message), 'err');
-      }
-    }
-
-    renderTodos();
-  };
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commit(true);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      commit(false);
-    }
-  });
-  input.addEventListener('blur', () => commit(true));
-}
-
-function setStatus(msg, kind) {
-  const colors = { ok: 'text-emerald-400', err: 'text-rose-400', info: 'text-ink-500' };
-
-  todoStatus.innerHTML = `<span class="${colors[kind] || colors.info}">${msg}</span><span class="text-ink-600">${location.host}</span>`;
-}
-
-async function api(method, path, body) {
-  const opts = { method, headers: {} };
-
-  if (body) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
+  `
+    ).join("");
   }
-
-  const res = await fetch(path, opts);
-
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-
-  return res.json();
+  async onSubmit(e) {
+    e.preventDefault();
+    const input = todoInput;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    if (!isServerMode) {
+      setStatus(t("fileModeTodoStatus"), "err");
+      return;
+    }
+    try {
+      setStatus(t("adding"), "info");
+      todos = await api("POST", "/api/todos", { text, cat: todoFilter });
+      this.render();
+      setStatus(t("added"), "ok");
+    } catch (err) {
+      setStatus(t("err", err.message), "err");
+    }
+  }
+  async onListClick(e) {
+    const target = e.target;
+    const row = target.closest(".todo-row");
+    if (!row) return;
+    const id = parseInt(row.dataset.id);
+    const check = target.closest(".todo-check");
+    if (check) {
+      try {
+        todos = await api("PATCH", "/api/todos/" + id, { done: check.checked });
+        this.render();
+        setStatus(check.checked ? t("doneStatus") : t("reopened"), "ok");
+      } catch (err) {
+        setStatus(t("err", err.message), "err");
+        check.checked = !check.checked;
+      }
+      return;
+    }
+    if (target.closest(".todo-del")) {
+      try {
+        todos = await api("DELETE", "/api/todos/" + id);
+        this.render();
+        setStatus(t("deletedStatus"), "ok");
+      } catch (err) {
+        setStatus(t("err", err.message), "err");
+      }
+      return;
+    }
+    if (target.closest(".todo-text")) {
+      this.startInlineEdit(row);
+    }
+  }
+  onFilterClick(e) {
+    const btn = e.target.closest(".todo-filter-btn");
+    if (!btn || btn.dataset.cat === todoFilter) return;
+    todoFilter = btn.dataset.cat;
+    localStorage.setItem("todo-filter", todoFilter);
+    this.render();
+  }
+  onToggleDone() {
+    showDoneTodos = !showDoneTodos;
+    localStorage.setItem("todo-show-done", showDoneTodos ? "1" : "0");
+    this.render();
+  }
+  async onClearDone() {
+    const doneTodos = todos.filter((it) => it.done && tcat(it) === todoFilter);
+    if (doneTodos.length === 0) return;
+    const ok = await confirmDialog({
+      title: t("clearDoneConfirmTitle", doneTodos.length),
+      message: t("clearDoneConfirmMsg"),
+      confirmLabel: t("clearBtn"),
+      destructive: true
+    });
+    if (!ok) return;
+    const idsDesc = doneTodos.map((it) => it.id).sort((a, b) => b - a);
+    try {
+      setStatus(t("clearing"), "info");
+      for (const id of idsDesc) {
+        todos = await api("DELETE", "/api/todos/" + id);
+      }
+      this.render();
+      setStatus(t("nCleared", idsDesc.length), "ok");
+    } catch (err) {
+      setStatus(t("err", err.message), "err");
+    }
+  }
+  // Swap the row's text span for a live <input>, commit on Enter/blur, revert on Escape. A 99-bootstrap
+  // poll that re-renders mid-edit destroys this input — the keyed runtime port fixes that later.
+  startInlineEdit(row) {
+    const id = parseInt(row.dataset.id);
+    const item = todos.find((it) => it.id === id);
+    if (!item) return;
+    const textSpan = row.querySelector(".todo-text");
+    if (!textSpan) return;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = item.text;
+    input.className = "todo-edit flex-1 px-2 py-0.5 text-sm bg-navy-900 border border-blue-400 rounded text-ink-100 focus:outline-none focus:ring-1 focus:ring-blue-400/40";
+    textSpan.replaceWith(input);
+    input.focus();
+    input.select();
+    let committed = false;
+    const commit = async (save) => {
+      if (committed) return;
+      committed = true;
+      const newText = input.value.trim();
+      if (save && newText && newText !== item.text) {
+        try {
+          todos = await api("PATCH", "/api/todos/" + id, { text: newText });
+          this.render();
+          setStatus(t("updated"), "ok");
+          return;
+        } catch (err) {
+          setStatus(t("err", err.message), "err");
+        }
+      }
+      this.render();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        commit(false);
+      }
+    });
+    input.addEventListener("blur", () => commit(true));
+  }
 }
-
+const todosWidget = new Todos();
 async function refresh() {
   if (!isServerMode) return;
-
   try {
-    todos = await api('GET', '/api/todos');
-    renderTodos();
-    setStatus(t('synced'), 'info');
-  } catch (e) {
-    setStatus(t('offlinePrefix', e.message), 'err');
+    todos = await api("GET", "/api/todos");
+    todosWidget.render();
+    setStatus(t("synced"), "info");
+  } catch (err) {
+    setStatus(t("offlinePrefix", err.message), "err");
   }
 }
 
-todoForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = todoInput.value.trim();
-
-  if (!text) return;
-  todoInput.value = '';
-
-  if (!isServerMode) {
-    setStatus(t('fileModeTodoStatus'), 'err');
-
-    return;
-  }
-
-  try {
-    setStatus(t('adding'), 'info');
-    todos = await api('POST', '/api/todos', { text, cat: todoFilter });
-    renderTodos();
-    setStatus(t('added'), 'ok');
-  } catch (e) {
-    setStatus(t('err', e.message), 'err');
-  }
-});
-
-todoList.addEventListener('click', async (e) => {
-  const row = e.target.closest('.todo-row');
-
-  if (!row) return;
-  const id = parseInt(row.dataset.id);
-
-  if (e.target.closest('.todo-check')) {
-    const check = e.target.closest('.todo-check');
-
-    try {
-      todos = await api('PATCH', '/api/todos/' + id, { done: check.checked });
-      renderTodos();
-      setStatus(check.checked ? t('doneStatus') : t('reopened'), 'ok');
-    } catch (e) {
-      setStatus(t('err', e.message), 'err');
-      check.checked = !check.checked;
-    }
-
-    return;
-  }
-
-  if (e.target.closest('.todo-del')) {
-    try {
-      todos = await api('DELETE', '/api/todos/' + id);
-      renderTodos();
-      setStatus(t('deletedStatus'), 'ok');
-    } catch (e) {
-      setStatus(t('err', e.message), 'err');
-    }
-
-    return;
-  }
-
-  if (e.target.closest('.todo-text')) {
-    startInlineEdit(row);
-  }
-});
-
-document.getElementById('todo-filter').addEventListener('click', (e) => {
-  const btn = e.target.closest('.todo-filter-btn');
-
-  if (!btn || btn.dataset.cat === todoFilter) return;
-  todoFilter = btn.dataset.cat;
-  localStorage.setItem('todo-filter', todoFilter);
-  renderTodos();
-});
-
-document.getElementById('todo-toggle-done').addEventListener('click', () => {
-  showDoneTodos = !showDoneTodos;
-  localStorage.setItem('todo-show-done', showDoneTodos ? '1' : '0');
-  renderTodos();
-});
-
-document.getElementById('todo-clear-done').addEventListener('click', async () => {
-  const doneTodos = todos.filter((t) => t.done && tcat(t) === todoFilter);
-
-  if (doneTodos.length === 0) return;
-  const ok = await confirmDialog({
-    title: t('clearDoneConfirmTitle', doneTodos.length),
-    message: t('clearDoneConfirmMsg'),
-    confirmLabel: t('clearBtn'),
-    destructive: true,
-  });
-
-  if (!ok) return;
-  // Delete largest id first: the server indexes by position, so deleting N shifts
-  // all > N; descending order keeps the remaining indices valid.
-  const idsDesc = doneTodos.map((t) => t.id).sort((a, b) => b - a);
-
-  try {
-    setStatus(t('clearing'), 'info');
-
-    for (const id of idsDesc) {
-      todos = await api('DELETE', '/api/todos/' + id);
-    }
-
-    renderTodos();
-    setStatus(t('nCleared', idsDesc.length), 'ok');
-  } catch (e) {
-    setStatus(t('err', e.message), 'err');
-  }
-});
-
-// ── More actions menu + Rename modal (admin) ─────────────────────────────────
-const btnMore = document.getElementById('btn-more');
-const btnMoreMenu = document.getElementById('btn-more-menu');
-const renameBackdrop = document.getElementById('rename-backdrop');
-const renameForm = document.getElementById('rename-form');
-const renameTitle = document.getElementById('rename-title');
-const renameDir = document.getElementById('rename-dir');
-const renameDirWrap = document.getElementById('rename-dir-wrap');
-const renameName = document.getElementById('rename-name');
-const renameDirCb = AtlasCombobox(renameDir, { source: getAllDirs, creatable: true });
-const renameError = document.getElementById('rename-error');
-const renameCancel = document.getElementById('rename-cancel');
-
-let renameMode = null;
-
-function openRenameModal(mode) {
-  if (!currentFile || window.__viewerMode) return;
-  renameMode = mode;
-  renameError.classList.add('hidden');
-  const parts = currentFile.path.split('/');
-  const currentName = parts.pop().replace(/\.(md|html)$/i, '');
-  const currentDir = parts.join('/');
-
-  renameName.value = currentName;
-  renameDir.value = currentDir;
-
-  if (mode === 'rename') {
-    renameTitle.textContent = t('renameDocTitle');
-    renameDirWrap.classList.add('hidden');
-  } else {
-    renameTitle.textContent = t('moveDocTitle');
-    renameDirWrap.classList.remove('hidden');
-  }
-
-  renameBackdrop.classList.remove('hidden');
-  setTimeout(() => (mode === 'rename' ? renameName : renameDir).focus(), 50);
-}
-
-function closeRenameModal() {
-  renameBackdrop.classList.add('hidden');
-}
-
-btnMore.addEventListener('click', (e) => {
-  e.stopPropagation();
-  btnMoreMenu.classList.toggle('hidden');
-});
-document.addEventListener('click', () => btnMoreMenu.classList.add('hidden'));
-btnMoreMenu.addEventListener('click', async (e) => {
-  const btn = e.target.closest('button[data-action]');
-
-  if (!btn) return;
-  btnMoreMenu.classList.add('hidden');
-  const action = btn.dataset.action;
-
-  if (action === 'rename') return openRenameModal('rename');
-
-  if (action === 'move') return openRenameModal('move');
-
-  if (action === 'delete') {
-    const ok = await confirmDialog({
-      title: t('deleteDocTitle'),
-      message: t('deleteDocMsg', currentFile.path),
-      confirmLabel: t('del'),
-      destructive: true,
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _Dialogs = class _Dialogs {
+  static confirm(opts) {
+    return new Promise((resolve) => {
+      const o = typeof opts === "string" ? { message: opts } : opts || {};
+      _Dialogs.titleEl.textContent = o.title || t("confirm");
+      _Dialogs.messageEl.textContent = o.message || "";
+      _Dialogs.okBtn.textContent = o.confirmLabel || t("confirm");
+      _Dialogs.cancelBtn.textContent = o.cancelLabel || t("cancel");
+      _Dialogs.okBtn.className = o.destructive ? "px-3 py-1.5 text-sm bg-rose-500/80 hover:bg-rose-500 text-white rounded font-medium" : "px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium";
+      _Dialogs.backdrop.classList.remove("hidden");
+      setTimeout(() => _Dialogs.okBtn.focus(), 50);
+      const cleanup = () => {
+        _Dialogs.backdrop.classList.add("hidden");
+        _Dialogs.okBtn.removeEventListener("click", onOk);
+        _Dialogs.cancelBtn.removeEventListener("click", onCancel);
+        _Dialogs.backdrop.removeEventListener("click", onBackdrop);
+        document.removeEventListener("keydown", onKey);
+      };
+      const onOk = () => {
+        cleanup();
+        resolve(true);
+      };
+      const onCancel = () => {
+        cleanup();
+        resolve(false);
+      };
+      const onBackdrop = (e) => {
+        if (e.target === _Dialogs.backdrop) onCancel();
+      };
+      const onKey = (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          onOk();
+        }
+      };
+      _Dialogs.okBtn.addEventListener("click", onOk);
+      _Dialogs.cancelBtn.addEventListener("click", onCancel);
+      _Dialogs.backdrop.addEventListener("click", onBackdrop);
+      document.addEventListener("keydown", onKey);
     });
-
-    if (!ok) return;
-
-    try {
-      const res = await fetch('/api/file', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: currentFile.path }),
-      });
-
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      location.hash = '';
-      setStatus(t('docDeleted'), 'ok');
-      await refreshTreeOrReload();
-    } catch (e) {
-      notifyError('err', e.message);
-    }
   }
-});
-
-renameCancel.addEventListener('click', closeRenameModal);
-document.getElementById('rename-close')?.addEventListener('click', closeRenameModal);
-renameBackdrop.addEventListener('click', (e) => {
-  if (e.target === renameBackdrop) closeRenameModal();
-});
-
-renameForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  renameError.classList.add('hidden');
-  let name = renameName.value.trim();
-
-  if (!name) {
-    renameError.textContent = t('nameRequired');
-    renameError.classList.remove('hidden');
-
-    return;
-  }
-
-  if (/[\\\/]/.test(name)) {
-    renameError.textContent = t('noSlashes');
-    renameError.classList.remove('hidden');
-
-    return;
-  }
-
-  // Preserve the original extension if the user didn't type it.
-  if (!/\.(md|html)$/i.test(name)) {
-    const ext = (/\.(md|html)$/i.exec(currentFile.path) || [, 'md'])[1].toLowerCase();
-
-    name += '.' + ext;
-  }
-
-  const dir = (
-    renameMode === 'move'
-      ? renameDir.value.trim()
-      : currentFile.path.split('/').slice(0, -1).join('/')
-  ).replace(/^\/+|\/+$/g, '');
-  const newPath = dir ? dir + '/' + name : name;
-
-  if (newPath === currentFile.path) {
-    closeRenameModal();
-
-    return;
-  }
-
-  if (fileMap[newPath]) {
-    renameError.textContent = t('fileExistsAt');
-    renameError.classList.remove('hidden');
-
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/file/move', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: currentFile.path, to: newPath }),
+  // A single-OK notice reusing the confirm chrome (so it matches every other modal). Fire-and-forget:
+  // callers don't await it.
+  static alert(opts) {
+    const o = typeof opts === "string" ? { message: opts } : opts || {};
+    return new Promise((resolve) => {
+      _Dialogs.titleEl.textContent = o.title || t("errorTitle");
+      _Dialogs.messageEl.textContent = o.message || "";
+      _Dialogs.okBtn.textContent = o.okLabel || t("ok");
+      _Dialogs.okBtn.className = "px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium";
+      _Dialogs.cancelBtn.classList.add("hidden");
+      _Dialogs.backdrop.classList.remove("hidden");
+      setTimeout(() => _Dialogs.okBtn.focus(), 50);
+      const cleanup = () => {
+        _Dialogs.backdrop.classList.add("hidden");
+        _Dialogs.cancelBtn.classList.remove("hidden");
+        _Dialogs.okBtn.removeEventListener("click", done);
+        _Dialogs.backdrop.removeEventListener("click", onBackdrop);
+        document.removeEventListener("keydown", onKey);
+      };
+      const done = () => {
+        cleanup();
+        resolve();
+      };
+      const onBackdrop = (e) => {
+        if (e.target === _Dialogs.backdrop) done();
+      };
+      const onKey = (e) => {
+        if (e.key === "Escape" || e.key === "Enter") {
+          e.preventDefault();
+          done();
+        }
+      };
+      _Dialogs.okBtn.addEventListener("click", done);
+      _Dialogs.backdrop.addEventListener("click", onBackdrop);
+      document.addEventListener("keydown", onKey);
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-
-      throw new Error(err.error || 'HTTP ' + res.status);
-    }
-
-    closeRenameModal();
-    // Move the content cache to the new path to avoid a needless re-fetch.
-    const cached = contentCache.get(currentFile.path);
-
-    if (cached !== undefined) {
-      contentCache.delete(currentFile.path);
-      contentCache.set(newPath, cached);
-    }
-
-    currentFile.path = newPath;
-    location.hash = '#' + encodeURIComponent(newPath);
-    setStatus(renameMode === 'move' ? t('docMoved') : t('docRenamed'), 'ok');
-    await refreshTreeOrReload();
-  } catch (e) {
-    renameError.textContent = t('err', e.message);
-    renameError.classList.remove('hidden');
   }
-});
-
-// ── Confirm dialog (replaces native confirm()) ───────────────────────────────
-const confirmBackdrop = document.getElementById('confirm-backdrop');
-const confirmTitle = document.getElementById('confirm-title');
-const confirmMessage = document.getElementById('confirm-message');
-const confirmOk = document.getElementById('confirm-ok');
-const confirmCancel = document.getElementById('confirm-cancel');
-
+  // In an OFFLINE build every server-backed action is disabled, so show one clear "disabled offline"
+  // notice (in the UI language) rather than leaking a raw network error; online, show `key`'s message.
+  static notifyError(key, ...args) {
+    if (IS_OFFLINE_BUILD) {
+      return _Dialogs.alert({ title: t("offlineTitle"), message: t("offlineDisabled") });
+    }
+    return _Dialogs.alert({ title: t("errorTitle"), message: t(key, ...args) });
+  }
+  // Input modal. Resolves the entered value (trimmed) or null if cancelled/empty.
+  static prompt(opts) {
+    const o = opts || {};
+    const backdrop = document.getElementById("prompt-backdrop");
+    const input = document.getElementById("prompt-input");
+    document.getElementById("prompt-title").textContent = o.title || "";
+    document.getElementById("prompt-message").textContent = o.message || "";
+    input.placeholder = o.placeholder || "";
+    input.value = o.value || "";
+    const okBtn = document.getElementById("prompt-ok");
+    const cancelBtn = document.getElementById("prompt-cancel");
+    okBtn.textContent = o.confirmLabel || t("confirm");
+    return new Promise((resolve) => {
+      backdrop.classList.remove("hidden");
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 50);
+      const cleanup = () => {
+        backdrop.classList.add("hidden");
+        okBtn.removeEventListener("click", onOk);
+        cancelBtn.removeEventListener("click", onCancel);
+        backdrop.removeEventListener("click", onBackdrop);
+        document.removeEventListener("keydown", onKey);
+      };
+      const onOk = () => {
+        const v = input.value.trim();
+        cleanup();
+        resolve(v || null);
+      };
+      const onCancel = () => {
+        cleanup();
+        resolve(null);
+      };
+      const onBackdrop = (e) => {
+        if (e.target === backdrop) onCancel();
+      };
+      const onKey = (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          onOk();
+        }
+      };
+      okBtn.addEventListener("click", onOk);
+      cancelBtn.addEventListener("click", onCancel);
+      backdrop.addEventListener("click", onBackdrop);
+      document.addEventListener("keydown", onKey);
+    });
+  }
+};
+// Confirm + alert share this one chrome (alert reuses it as a single-OK notice).
+__publicField(_Dialogs, "backdrop", document.getElementById("confirm-backdrop"));
+__publicField(_Dialogs, "titleEl", document.getElementById("confirm-title"));
+__publicField(_Dialogs, "messageEl", document.getElementById("confirm-message"));
+__publicField(_Dialogs, "okBtn", document.getElementById("confirm-ok"));
+__publicField(_Dialogs, "cancelBtn", document.getElementById("confirm-cancel"));
+let Dialogs = _Dialogs;
 function confirmDialog(opts) {
-  return new Promise((resolve) => {
-    const o = typeof opts === 'string' ? { message: opts } : opts || {};
-
-    confirmTitle.textContent = o.title || t('confirm');
-    confirmMessage.textContent = o.message || '';
-    confirmOk.textContent = o.confirmLabel || t('confirm');
-    confirmCancel.textContent = o.cancelLabel || t('cancel');
-    confirmOk.className = o.destructive
-      ? 'px-3 py-1.5 text-sm bg-rose-500/80 hover:bg-rose-500 text-white rounded font-medium'
-      : 'px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium';
-    confirmBackdrop.classList.remove('hidden');
-    setTimeout(() => confirmOk.focus(), 50);
-    const cleanup = () => {
-      confirmBackdrop.classList.add('hidden');
-      confirmOk.removeEventListener('click', onOk);
-      confirmCancel.removeEventListener('click', onCancel);
-      confirmBackdrop.removeEventListener('click', onBackdrop);
-      document.removeEventListener('keydown', onKey);
-    };
-
-    const onOk = () => {
-      cleanup();
-      resolve(true);
-    };
-
-    const onCancel = () => {
-      cleanup();
-      resolve(false);
-    };
-
-    const onBackdrop = (e) => {
-      if (e.target === confirmBackdrop) onCancel();
-    };
-
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        onOk();
-      }
-    };
-
-    confirmOk.addEventListener('click', onOk);
-    confirmCancel.addEventListener('click', onCancel);
-    confirmBackdrop.addEventListener('click', onBackdrop);
-    document.addEventListener('keydown', onKey);
-  });
+  return Dialogs.confirm(opts);
 }
-
-// ── Alert popup (replaces the native alert()) ────────────────────────────────
-// A single-button notice reusing the confirm dialog's chrome, so it matches every
-// other modal. Fire-and-forget: callers don't await it.
 function alertDialog(opts) {
-  const o = typeof opts === 'string' ? { message: opts } : (opts || {});
-  return new Promise((resolve) => {
-    confirmTitle.textContent = o.title || t('errorTitle');
-    confirmMessage.textContent = o.message || '';
-    confirmOk.textContent = o.okLabel || t('ok');
-    confirmOk.className = 'px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium';
-    confirmCancel.classList.add('hidden');   // alert = one OK button only
-    confirmBackdrop.classList.remove('hidden');
-    setTimeout(() => confirmOk.focus(), 50);
-    const cleanup = () => {
-      confirmBackdrop.classList.add('hidden');
-      confirmCancel.classList.remove('hidden');   // restore for confirmDialog
-      confirmOk.removeEventListener('click', done);
-      confirmBackdrop.removeEventListener('click', onBackdrop);
-      document.removeEventListener('keydown', onKey);
-    };
-    const done = () => { cleanup(); resolve(); };
-    const onBackdrop = (e) => { if (e.target === confirmBackdrop) done(); };
-    const onKey = (e) => {
-      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); done(); }
-    };
-    confirmOk.addEventListener('click', done);
-    confirmBackdrop.addEventListener('click', onBackdrop);
-    document.addEventListener('keydown', onKey);
-  });
+  return Dialogs.alert(opts);
 }
-
-// Error notice. In an OFFLINE build every server-backed action is disabled, so we
-// always show one clear "disabled offline" message (in the UI language) rather
-// than leaking a raw network error; online we show the specific message for `key`.
-function notifyError(key, ...args) {
-  if (IS_OFFLINE_BUILD) {
-    return alertDialog({ title: t('offlineTitle'), message: t('offlineDisabled') });
-  }
-  return alertDialog({ title: t('errorTitle'), message: t(key, ...args) });
-}
-
-// Input modal (replaces the native prompt, banned from the viewer). Resolves the
-// entered value (trimmed) or null if cancelled/empty.
 function promptDialog(opts) {
-  const o = opts || {};
-  const backdrop = document.getElementById('prompt-backdrop');
-  const input = document.getElementById('prompt-input');
-
-  document.getElementById('prompt-title').textContent = o.title || '';
-  document.getElementById('prompt-message').textContent = o.message || '';
-  input.placeholder = o.placeholder || '';
-  input.value = o.value || '';
-  const okBtn = document.getElementById('prompt-ok');
-  const cancelBtn = document.getElementById('prompt-cancel');
-
-  okBtn.textContent = o.confirmLabel || t('confirm');
-
-  return new Promise((resolve) => {
-    backdrop.classList.remove('hidden');
-    setTimeout(() => {
-      input.focus();
-      input.select();
-    }, 50);
-    const cleanup = () => {
-      backdrop.classList.add('hidden');
-      okBtn.removeEventListener('click', onOk);
-      cancelBtn.removeEventListener('click', onCancel);
-      backdrop.removeEventListener('click', onBackdrop);
-      document.removeEventListener('keydown', onKey);
-    };
-
-    const onOk = () => {
-      const v = input.value.trim();
-
-      cleanup();
-      resolve(v || null);
-    };
-
-    const onCancel = () => {
-      cleanup();
-      resolve(null);
-    };
-
-    const onBackdrop = (e) => {
-      if (e.target === backdrop) onCancel();
-    };
-
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        onOk();
+  return Dialogs.prompt(opts);
+}
+function notifyError(key, ...args) {
+  return Dialogs.notifyError(key, ...args);
+}
+const btnMore = document.getElementById("btn-more");
+const btnMoreMenu = document.getElementById("btn-more-menu");
+const renameBackdrop = document.getElementById("rename-backdrop");
+const renameForm = document.getElementById("rename-form");
+const renameTitle = document.getElementById("rename-title");
+const renameDir = document.getElementById("rename-dir");
+const renameDirWrap = document.getElementById("rename-dir-wrap");
+const renameName = document.getElementById("rename-name");
+const renameError = document.getElementById("rename-error");
+const renameCancel = document.getElementById("rename-cancel");
+let renameMode = null;
+AtlasCombobox(renameDir, { source: getAllDirs, creatable: true });
+class RenameModal {
+  constructor() {
+    renameCancel.addEventListener("click", () => this.close());
+    document.getElementById("rename-close")?.addEventListener("click", () => this.close());
+    renameBackdrop.addEventListener("click", (e) => {
+      if (e.target === renameBackdrop) this.close();
+    });
+    renameForm.addEventListener("submit", (e) => this.onSubmit(e));
+  }
+  open(mode) {
+    if (!currentFile || window.__viewerMode) return;
+    renameMode = mode;
+    renameError.classList.add("hidden");
+    const parts = currentFile.path.split("/");
+    const currentName = parts.pop().replace(/\.(md|html)$/i, "");
+    const currentDir = parts.join("/");
+    renameName.value = currentName;
+    renameDir.value = currentDir;
+    if (mode === "rename") {
+      renameTitle.textContent = t("renameDocTitle");
+      renameDirWrap.classList.add("hidden");
+    } else {
+      renameTitle.textContent = t("moveDocTitle");
+      renameDirWrap.classList.remove("hidden");
+    }
+    renameBackdrop.classList.remove("hidden");
+    setTimeout(() => (mode === "rename" ? renameName : renameDir).focus(), 50);
+  }
+  close() {
+    renameBackdrop.classList.add("hidden");
+  }
+  async onSubmit(e) {
+    e.preventDefault();
+    renameError.classList.add("hidden");
+    let name = renameName.value.trim();
+    if (!name) {
+      renameError.textContent = t("nameRequired");
+      renameError.classList.remove("hidden");
+      return;
+    }
+    if (/[\\\/]/.test(name)) {
+      renameError.textContent = t("noSlashes");
+      renameError.classList.remove("hidden");
+      return;
+    }
+    if (!/\.(md|html)$/i.test(name)) {
+      const ext = (/\.(md|html)$/i.exec(currentFile.path)?.[1] || "md").toLowerCase();
+      name += "." + ext;
+    }
+    const dir = (renameMode === "move" ? renameDir.value.trim() : currentFile.path.split("/").slice(0, -1).join("/")).replace(/^\/+|\/+$/g, "");
+    const newPath = dir ? dir + "/" + name : name;
+    if (newPath === currentFile.path) {
+      this.close();
+      return;
+    }
+    if (fileMap[newPath]) {
+      renameError.textContent = t("fileExistsAt");
+      renameError.classList.remove("hidden");
+      return;
+    }
+    try {
+      const res = await fetch("/api/file/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: currentFile.path, to: newPath })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "HTTP " + res.status);
       }
-    };
-
-    okBtn.addEventListener('click', onOk);
-    cancelBtn.addEventListener('click', onCancel);
-    backdrop.addEventListener('click', onBackdrop);
-    document.addEventListener('keydown', onKey);
-  });
+      this.close();
+      const cached = contentCache.get(currentFile.path);
+      if (cached !== void 0) {
+        contentCache.delete(currentFile.path);
+        contentCache.set(newPath, cached);
+      }
+      currentFile.path = newPath;
+      location.hash = "#" + encodeURIComponent(newPath);
+      setStatus(renameMode === "move" ? t("docMoved") : t("docRenamed"), "ok");
+      await refreshTreeOrReload();
+    } catch (err) {
+      renameError.textContent = t("err", err.message);
+      renameError.classList.remove("hidden");
+    }
+  }
+}
+const renameModal = new RenameModal();
+function openRenameModal(mode) {
+  renameModal.open(mode);
+}
+function closeRenameModal() {
+  renameModal.close();
 }
 
-// ── Reset password modal (admin + cloud) ─────────────────────────────────────
-// Replaces the native prompt: entry + confirmation, length validation (min 8),
-// live equality check, show/hide toggle, inline success.
-const RESET_PW_MIN = 8;
-const resetPwBackdrop = document.getElementById('reset-pw-backdrop');
-const resetPwForm = document.getElementById('reset-pw-form');
-const resetPwEmail = document.getElementById('reset-pw-email');
-const resetPwInput = document.getElementById('reset-pw-input');
-const resetPwConfirm = document.getElementById('reset-pw-confirm');
-const resetPwToggle = document.getElementById('reset-pw-toggle');
-const resetPwEye = document.getElementById('reset-pw-eye');
-const resetPwEyeOff = document.getElementById('reset-pw-eye-off');
-const resetPwError = document.getElementById('reset-pw-error');
-const resetPwSuccess = document.getElementById('reset-pw-success');
-const resetPwSubmit = document.getElementById('reset-pw-submit');
-const resetPwCancel = document.getElementById('reset-pw-cancel');
-const resetPwClose = document.getElementById('reset-pw-close');
-let resetPwTargetEmail = null;
-let resetPwCloseTimer = null;
+class MoreActionsMenu {
+  constructor() {
+    btnMore.addEventListener("click", (e) => {
+      e.stopPropagation();
+      btnMoreMenu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", () => btnMoreMenu.classList.add("hidden"));
+    btnMoreMenu.addEventListener("click", (e) => this.onMenuClick(e));
+  }
+  async onMenuClick(e) {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    btnMoreMenu.classList.add("hidden");
+    const action = btn.dataset.action;
+    if (action === "rename") {
+      renameModal.open("rename");
+      return;
+    }
+    if (action === "move") {
+      renameModal.open("move");
+      return;
+    }
+    if (action === "delete") {
+      const ok = await Dialogs.confirm({
+        title: t("deleteDocTitle"),
+        message: t("deleteDocMsg", currentFile.path),
+        confirmLabel: t("del"),
+        destructive: true
+      });
+      if (!ok) return;
+      try {
+        const res = await fetch("/api/file", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: currentFile.path })
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        location.hash = "";
+        setStatus(t("docDeleted"), "ok");
+        await refreshTreeOrReload();
+      } catch (err) {
+        Dialogs.notifyError("err", err.message);
+      }
+    }
+  }
+}
+const moreActionsMenu = new MoreActionsMenu();
 
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const RESET_PW_MIN = 8;
+const resetPwBackdrop = document.getElementById("reset-pw-backdrop");
+const resetPwForm = document.getElementById("reset-pw-form");
+const resetPwEmail = document.getElementById("reset-pw-email");
+const resetPwInput = document.getElementById("reset-pw-input");
+const resetPwConfirm = document.getElementById("reset-pw-confirm");
+const resetPwToggle = document.getElementById("reset-pw-toggle");
+const resetPwEye = document.getElementById("reset-pw-eye");
+const resetPwEyeOff = document.getElementById("reset-pw-eye-off");
+const resetPwError = document.getElementById("reset-pw-error");
+const resetPwSuccess = document.getElementById("reset-pw-success");
+const resetPwSubmit = document.getElementById("reset-pw-submit");
+const resetPwCancel = document.getElementById("reset-pw-cancel");
+const resetPwClose = document.getElementById("reset-pw-close");
 function resetPwValidationError() {
   const pw = resetPwInput.value;
   const confirm = resetPwConfirm.value;
-
-  if (pw.length < RESET_PW_MIN) return t('settingsPasswordTooShort');
-
-  if (pw !== confirm) return t('settingsPasswordMismatch');
-
+  if (pw.length < RESET_PW_MIN) return t("settingsPasswordTooShort");
+  if (pw !== confirm) return t("settingsPasswordMismatch");
   return null;
 }
-
 function refreshResetPwState() {
-  resetPwError.classList.add('hidden');
-  // Disable only while the 1st field is too short (immediate signal, doesn't block
-  // typing the confirmation); otherwise stay enabled and show the precise error on submit.
+  resetPwError.classList.add("hidden");
   const tooShort = resetPwInput.value.length < RESET_PW_MIN;
-
   resetPwSubmit.disabled = tooShort || resetPwConfirm.value.length === 0;
 }
-
 function setResetPwVisibility(show) {
-  resetPwInput.type = show ? 'text' : 'password';
-  resetPwConfirm.type = show ? 'text' : 'password';
-  resetPwEye.classList.toggle('hidden', show);
-  resetPwEyeOff.classList.toggle('hidden', !show);
-  resetPwToggle.setAttribute('aria-pressed', show ? 'true' : 'false');
+  resetPwInput.type = show ? "text" : "password";
+  resetPwConfirm.type = show ? "text" : "password";
+  resetPwEye.classList.toggle("hidden", show);
+  resetPwEyeOff.classList.toggle("hidden", !show);
+  resetPwToggle.setAttribute("aria-pressed", show ? "true" : "false");
 }
-
-function openResetPassword(email) {
-  if (resetPwCloseTimer) {
-    clearTimeout(resetPwCloseTimer);
-    resetPwCloseTimer = null;
-  }
-
-  resetPwTargetEmail = email || '';
-  resetPwEmail.textContent = resetPwTargetEmail;
-  resetPwInput.value = '';
-  resetPwConfirm.value = '';
-  resetPwError.classList.add('hidden');
-  resetPwSuccess.classList.add('hidden');
-  setResetPwVisibility(false);
-  refreshResetPwState();
-  resetPwBackdrop.classList.remove('hidden');
-  document.addEventListener('keydown', onResetPwKey, true);
-  setTimeout(() => resetPwInput.focus(), 50);
-}
-
-function closeResetPassword() {
-  if (resetPwCloseTimer) {
-    clearTimeout(resetPwCloseTimer);
-    resetPwCloseTimer = null;
-  }
-
-  resetPwBackdrop.classList.add('hidden');
-  document.removeEventListener('keydown', onResetPwKey, true);
-  resetPwTargetEmail = null;
-}
-
-function onResetPwKey(e) {
-  // Capture-phase + stopPropagation so Esc closes ONLY this modal (stacked over
-  // Settings), not the panel beneath, and runs before the global handler.
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    e.stopPropagation();
-    closeResetPassword();
-  }
-}
-
-resetPwInput.addEventListener('input', refreshResetPwState);
-resetPwConfirm.addEventListener('input', refreshResetPwState);
-resetPwToggle.addEventListener('click', () =>
-  setResetPwVisibility(resetPwInput.type === 'password'),
-);
-resetPwCancel.addEventListener('click', closeResetPassword);
-resetPwClose.addEventListener('click', closeResetPassword);
-resetPwBackdrop.addEventListener('click', (e) => {
-  if (e.target === resetPwBackdrop) closeResetPassword();
-});
-
-resetPwForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  resetPwError.classList.add('hidden');
-  resetPwSuccess.classList.add('hidden');
-  const validationError = resetPwValidationError();
-
-  if (validationError) {
-    resetPwError.textContent = validationError;
-    resetPwError.classList.remove('hidden');
-
-    return;
-  }
-
-  const email = resetPwTargetEmail;
-
-  resetPwSubmit.disabled = true;
-
-  try {
-    await settingsFetch('/api/admin/users/password', {
-      method: 'POST',
-      body: JSON.stringify({ email, password: resetPwInput.value }),
+class ResetPwModal {
+  constructor() {
+    __publicField(this, "targetEmail", null);
+    __publicField(this, "closeTimer", null);
+    // Capture-phase + stopPropagation so Esc closes ONLY this modal (stacked over Settings), not the
+    // panel beneath, and runs before the global handler. Arrow field: a stable ref for add/remove.
+    __publicField(this, "onKey", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        this.close();
+      }
     });
-    clearSettingsError();
-    resetPwSuccess.classList.remove('hidden');
-    resetPwCloseTimer = setTimeout(closeResetPassword, 1200);
-  } catch (err) {
-    resetPwError.textContent = err.message;
-    resetPwError.classList.remove('hidden');
-    resetPwSubmit.disabled = false;
+    resetPwInput.addEventListener("input", refreshResetPwState);
+    resetPwConfirm.addEventListener("input", refreshResetPwState);
+    resetPwToggle.addEventListener(
+      "click",
+      () => setResetPwVisibility(resetPwInput.type === "password")
+    );
+    resetPwCancel.addEventListener("click", () => this.close());
+    resetPwClose.addEventListener("click", () => this.close());
+    resetPwBackdrop.addEventListener("click", (e) => {
+      if (e.target === resetPwBackdrop) this.close();
+    });
+    resetPwForm.addEventListener("submit", (e) => this.submit(e));
   }
-});
+  open(email) {
+    if (this.closeTimer) {
+      clearTimeout(this.closeTimer);
+      this.closeTimer = null;
+    }
+    this.targetEmail = email || "";
+    resetPwEmail.textContent = this.targetEmail;
+    resetPwInput.value = "";
+    resetPwConfirm.value = "";
+    resetPwError.classList.add("hidden");
+    resetPwSuccess.classList.add("hidden");
+    setResetPwVisibility(false);
+    refreshResetPwState();
+    resetPwBackdrop.classList.remove("hidden");
+    document.addEventListener("keydown", this.onKey, true);
+    setTimeout(() => resetPwInput.focus(), 50);
+  }
+  close() {
+    if (this.closeTimer) {
+      clearTimeout(this.closeTimer);
+      this.closeTimer = null;
+    }
+    resetPwBackdrop.classList.add("hidden");
+    document.removeEventListener("keydown", this.onKey, true);
+    this.targetEmail = null;
+  }
+  async submit(e) {
+    e.preventDefault();
+    resetPwError.classList.add("hidden");
+    resetPwSuccess.classList.add("hidden");
+    const validationError = resetPwValidationError();
+    if (validationError) {
+      resetPwError.textContent = validationError;
+      resetPwError.classList.remove("hidden");
+      return;
+    }
+    const email = this.targetEmail;
+    resetPwSubmit.disabled = true;
+    try {
+      await settingsFetch("/api/admin/users/password", {
+        method: "POST",
+        body: JSON.stringify({ email, password: resetPwInput.value })
+      });
+      clearSettingsError();
+      resetPwSuccess.classList.remove("hidden");
+      this.closeTimer = setTimeout(() => this.close(), 1200);
+    } catch (err) {
+      resetPwError.textContent = err.message;
+      resetPwError.classList.remove("hidden");
+      resetPwSubmit.disabled = false;
+    }
+  }
+}
+const resetPwModal = new ResetPwModal();
+function openResetPassword(email) {
+  resetPwModal.open(email);
+}
 
-// ── Share modal (admin + server mode) ────────────────────────────────────────
-const btnShare = document.getElementById('btn-share');
-const shareBackdrop = document.getElementById('share-backdrop');
-const sharePath = document.getElementById('share-path');
-const shareStep1 = document.getElementById('share-step1');
-const shareStep2 = document.getElementById('share-step2');
-const shareUrl = document.getElementById('share-url');
-const shareCopy = document.getElementById('share-copy');
-const shareExpiry = document.getElementById('share-expiry');
-const shareError = document.getElementById('share-error');
-const shareCancel = document.getElementById('share-cancel');
-const shareClose = document.getElementById('share-close');
-const shareNew = document.getElementById('share-new');
-const shareExisting = document.getElementById('share-existing');
-const shareExistingList = document.getElementById('share-existing-list');
-const shareExistingCount = document.getElementById('share-existing-count');
-
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const btnShare = document.getElementById("btn-share");
+const shareBackdrop = document.getElementById("share-backdrop");
+const sharePath = document.getElementById("share-path");
+const shareStep1 = document.getElementById("share-step1");
+const shareStep2 = document.getElementById("share-step2");
+const shareUrl = document.getElementById("share-url");
+const shareCopy = document.getElementById("share-copy");
+const shareExpiry = document.getElementById("share-expiry");
+const shareError = document.getElementById("share-error");
+const shareCancel = document.getElementById("share-cancel");
+const shareClose = document.getElementById("share-close");
+const shareNew = document.getElementById("share-new");
+const shareExisting = document.getElementById("share-existing");
+const shareExistingList = document.getElementById("share-existing-list");
+const shareExistingCount = document.getElementById("share-existing-count");
 function shareFormatDate(ts) {
-  if (!ts) return '';
-
-  return new Date(ts * 1000).toLocaleDateString(LANG, {
-    day: 'numeric',
-    month: 'short',
-    year: '2-digit',
+  if (!ts) return "";
+  return new Date(ts * 1e3).toLocaleDateString(LANG, {
+    day: "numeric",
+    month: "short",
+    year: "2-digit"
   });
 }
-
 async function refreshShareList() {
-  if (!currentFile) return;
-  shareExisting.classList.add('hidden');
-  shareExistingList.innerHTML = '';
-
+  const file = currentFile;
+  if (!file) return;
+  shareExisting.classList.add("hidden");
+  shareExistingList.innerHTML = "";
   try {
-    const res = await fetch('/api/share/list?path=' + encodeURIComponent(currentFile.path));
-
+    const res = await fetch("/api/share/list?path=" + encodeURIComponent(file.path));
     if (!res.ok) return;
     const items = await res.json();
-
     if (!Array.isArray(items) || items.length === 0) return;
-    shareExisting.classList.remove('hidden');
-    shareExistingCount.textContent = t('nLinks', items.length);
-    shareExistingList.innerHTML = items
-      .map((item) => {
-        const url = location.origin + '/s/' + item.token;
-        const exp = item.expires_at
-          ? t('expiresShort', shareFormatDate(item.expires_at))
-          : t('noExpiry');
-        const created = item.created_at ? t('createdShort', shareFormatDate(item.created_at)) : '';
-
-        return (
-          '<li class="bg-navy-900 border subtle-border rounded p-2 flex items-center gap-2 text-xs">' +
-          '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-300 font-mono truncate" title="' +
-          escapeHtml(url) +
-          '">' +
-          escapeHtml(url) +
-          '</div>' +
-          '<div class="text-ink-500 text-[10px] mt-0.5">' +
-          created +
-          ' &middot; ' +
-          exp +
-          '</div>' +
-          '</div>' +
-          '<button class="share-existing-copy px-2 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-url="' +
-          escapeHtml(url) +
-          '" title="' +
-          escapeHtml(t('copy')) +
-          '">' +
-          t('copy') +
-          '</button>' +
-          '<button class="share-existing-del px-2 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
-          escapeHtml(item.id) +
-          '" title="' +
-          escapeHtml(t('revokeTitle')) +
-          '">&times;</button>' +
-          '</li>'
-        );
-      })
-      .join('');
-  } catch (e) {}
+    shareExisting.classList.remove("hidden");
+    shareExistingCount.textContent = t("nLinks", items.length);
+    shareExistingList.innerHTML = items.map((item) => {
+      const url = location.origin + "/s/" + item.token;
+      const exp = item.expires_at ? t("expiresShort", shareFormatDate(item.expires_at)) : t("noExpiry");
+      const created = item.created_at ? t("createdShort", shareFormatDate(item.created_at)) : "";
+      return '<li class="bg-navy-900 border subtle-border rounded p-2 flex items-center gap-2 text-xs"><div class="flex-1 min-w-0"><div class="text-ink-300 font-mono truncate" title="' + escapeHtml(url) + '">' + escapeHtml(url) + '</div><div class="text-ink-500 text-[10px] mt-0.5">' + created + " &middot; " + exp + '</div></div><button class="share-existing-copy px-2 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-url="' + escapeHtml(url) + '" title="' + escapeHtml(t("copy")) + '">' + t("copy") + '</button><button class="share-existing-del px-2 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' + escapeHtml(item.id) + '" title="' + escapeHtml(t("revokeTitle")) + '">&times;</button></li>';
+    }).join("");
+  } catch (e) {
+  }
 }
-
 function openShareModal() {
-  if (!currentFile || window.__viewerMode) return;
-  sharePath.textContent = currentFile.path;
-  shareStep1.classList.remove('hidden');
-  shareStep2.classList.add('hidden');
-  shareError.classList.add('hidden');
-  shareBackdrop.classList.remove('hidden');
+  const file = currentFile;
+  if (!file || window.__viewerMode) return;
+  sharePath.textContent = file.path;
+  shareStep1.classList.remove("hidden");
+  shareStep2.classList.add("hidden");
+  shareError.classList.add("hidden");
+  shareBackdrop.classList.remove("hidden");
   refreshShareList();
 }
-
 function closeShareModal() {
-  shareBackdrop.classList.add('hidden');
+  shareBackdrop.classList.add("hidden");
 }
-
-shareExistingList.addEventListener('click', async (e) => {
-  const copyBtn = e.target.closest('.share-existing-copy');
-
+shareExistingList.addEventListener("click", async (e) => {
+  const copyBtn = e.target.closest(".share-existing-copy");
   if (copyBtn) {
     try {
-      await navigator.clipboard.writeText(copyBtn.dataset.url);
-      copyBtn.textContent = t('copied');
-      setTimeout(() => (copyBtn.textContent = t('copy')), 1200);
-    } catch (e) {}
-
+      await navigator.clipboard.writeText(copyBtn.dataset.url || "");
+      copyBtn.textContent = t("copied");
+      setTimeout(() => copyBtn.textContent = t("copy"), 1200);
+    } catch (e2) {
+    }
     return;
   }
-
-  const delBtn = e.target.closest('.share-existing-del');
-
+  const delBtn = e.target.closest(".share-existing-del");
   if (delBtn) {
     const ok = await confirmDialog({
-      title: t('revokeConfirmTitle'),
-      message: t('revokeConfirmMsg'),
-      confirmLabel: t('revoke'),
-      destructive: true,
+      title: t("revokeConfirmTitle"),
+      message: t("revokeConfirmMsg"),
+      confirmLabel: t("revoke"),
+      destructive: true
     });
-
     if (!ok) return;
-    shareError.classList.add('hidden');
-
+    shareError.classList.add("hidden");
     try {
-      const res = await fetch('/api/share/' + delBtn.dataset.id, { method: 'DELETE' });
-
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const res = await fetch("/api/share/" + delBtn.dataset.id, { method: "DELETE" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
       refreshShareList();
-    } catch (e) {
-      shareError.textContent = t('err', e.message);
-      shareError.classList.remove('hidden');
+    } catch (e2) {
+      shareError.textContent = t("err", e2.message);
+      shareError.classList.remove("hidden");
     }
   }
 });
-
-btnShare.addEventListener('click', openShareModal);
-shareCancel.addEventListener('click', closeShareModal);
-shareClose.addEventListener('click', closeShareModal);
-document.getElementById('share-close-x')?.addEventListener('click', closeShareModal);
-shareBackdrop.addEventListener('click', (e) => {
+btnShare.addEventListener("click", openShareModal);
+shareCancel.addEventListener("click", closeShareModal);
+shareClose.addEventListener("click", closeShareModal);
+document.getElementById("share-close-x")?.addEventListener("click", closeShareModal);
+shareBackdrop.addEventListener("click", (e) => {
   if (e.target === shareBackdrop) closeShareModal();
 });
-shareNew.addEventListener('click', () => {
-  shareStep2.classList.add('hidden');
-  shareStep1.classList.remove('hidden');
+shareNew.addEventListener("click", () => {
+  shareStep2.classList.add("hidden");
+  shareStep1.classList.remove("hidden");
 });
-
-document.querySelectorAll('.share-dur').forEach((btn) => {
-  btn.addEventListener('click', async () => {
-    if (!currentFile) return;
-    shareError.classList.add('hidden');
+document.querySelectorAll(".share-dur").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const file = currentFile;
+    if (!file) return;
+    shareError.classList.add("hidden");
     const days = parseInt(btn.dataset.days, 10);
-
     btn.disabled = true;
-
     try {
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: currentFile.path, expires_days: days }),
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: file.path, expires_days: days })
       });
-
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
-      const fullUrl = location.origin + '/s/' + data.token;
-
+      const fullUrl = location.origin + "/s/" + data.token;
       shareUrl.value = fullUrl;
-      shareExpiry.textContent = data.expires_at
-        ? t('expiresAt', new Date(data.expires_at * 1000).toLocaleString(LANG))
-        : t('neverExpires');
-      shareStep1.classList.add('hidden');
-      shareStep2.classList.remove('hidden');
+      shareExpiry.textContent = data.expires_at ? t("expiresAt", new Date(data.expires_at * 1e3).toLocaleString(LANG)) : t("neverExpires");
+      shareStep1.classList.add("hidden");
+      shareStep2.classList.remove("hidden");
       setTimeout(() => {
         shareUrl.select();
       }, 50);
       refreshShareList();
     } catch (e) {
-      shareError.textContent = t('err', e.message);
-      shareError.classList.remove('hidden');
+      shareError.textContent = t("err", e.message);
+      shareError.classList.remove("hidden");
     } finally {
       btn.disabled = false;
     }
   });
 });
-
-shareCopy.addEventListener('click', async () => {
+shareCopy.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(shareUrl.value);
-    shareCopy.textContent = t('copiedBang');
+    shareCopy.textContent = t("copiedBang");
     setTimeout(() => {
-      shareCopy.textContent = t('copy');
+      shareCopy.textContent = t("copy");
     }, 1500);
   } catch (e) {
     shareUrl.select();
-    document.execCommand('copy');
+    document.execCommand("copy");
   }
 });
-
-// ── Settings panel (admin + cloud mode) ──────────────────────────────────────
-// Entry point: user-bar gear, visible only when body.admin-cloud is set. All
-// mutations go through fetch() on /api/admin/* and /api/share/* (JSON, same origin).
-const settingsBtn = document.getElementById('settings-btn');
-const settingsBackdrop = document.getElementById('settings-backdrop');
-const settingsClose = document.getElementById('settings-close');
-const settingsError = document.getElementById('settings-error');
-const settingsUsersList = document.getElementById('settings-users-list');
-const settingsTokensList = document.getElementById('settings-tokens-list');
-const settingsSharesList = document.getElementById('settings-shares-list');
-const settingsUserForm = document.getElementById('settings-user-form');
-const settingsTokenForm = document.getElementById('settings-token-form');
-const settingsTokenResult = document.getElementById('settings-token-result');
-const settingsInviteResult = document.getElementById('settings-invite-result');
-const settingsNodesList = document.getElementById('settings-nodes-list');
-const settingsNodeForm = document.getElementById('settings-node-form');
-const settingsNodeResult = document.getElementById('settings-node-result');
-const settingsRemotesList = document.getElementById('settings-remotes-list');
-const settingsRemoteForm = document.getElementById('settings-remote-form');
-
-// HTTP status → human message (never the raw technical detail).
 function settingsHttpMessage(status) {
-  if (status === 403 || status === 401) return t('settingsErrForbidden');
-
-  if (status === 409) return t('settingsErrConflict');
-
-  return t('settingsErrGeneric');
+  if (status === 403 || status === 401) return t("settingsErrForbidden");
+  if (status === 409) return t("settingsErrConflict");
+  return t("settingsErrGeneric");
 }
-
-function showSettingsError(message) {
-  settingsError.textContent = message;
-  settingsError.classList.remove('hidden');
-}
-
-function clearSettingsError() {
-  settingsError.classList.add('hidden');
-}
-
-// Shared JSON fetch for admin mutations: adds Content-Type, parses the body and
-// raises a readable message (not the server detail) on failure.
 async function settingsFetch(url, options) {
-  const opts = Object.assign({ headers: {} }, options || {});
-
-  if (opts.body) opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers);
+  const opts = { ...options };
+  const headers = { ...opts.headers };
+  if (opts.body) opts.headers = { "Content-Type": "application/json", ...headers };
+  else opts.headers = headers;
   const res = await fetch(url, opts);
   let payload = null;
-
   try {
     payload = await res.json();
-  } catch (_) {}
-
+  } catch (_) {
+  }
   if (!res.ok) {
-    const human =
-      payload && payload.error === 'cannot delete the last admin'
-        ? t('settingsLastAdmin')
-        : settingsHttpMessage(res.status);
+    const human = payload && payload.error === "cannot delete the last admin" ? t("settingsLastAdmin") : settingsHttpMessage(res.status);
     const err = new Error(human);
-
     err.status = res.status;
     throw err;
   }
-
   return payload;
 }
-
-function settingsSelectTab(name) {
-  document.querySelectorAll('.settings-tab').forEach((tab) => {
-    tab.classList.toggle('is-active', tab.dataset.tab === name);
-  });
-  document.querySelectorAll('.settings-pane').forEach((pane) => {
-    pane.classList.add('hidden');
-  });
-  document.getElementById('settings-pane-' + name).classList.remove('hidden');
-  clearSettingsError();
-
-  if (name === 'users') loadSettingsUsers();
-  else if (name === 'tokens') loadSettingsTokens();
-  else if (name === 'shares') loadSettingsShares();
-  else if (name === 'nodes') {
-    loadSettingsNodes();
-    loadSettingsRemotes();
-  } else if (name === 'groups') loadSettingsGroups();
-  else if (name === 'security') {
-    refreshSecurityState();
-    loadAccountProfile();
-  }
-}
-
-// Node name from a path: last segment, slugified.
 function suggestNodeName(path) {
-  const base = (String(path).split('/').pop() || path).replace(/\.(md|html)$/i, '');
-
-  return (
-    base
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 60) || 'noeud'
-  );
+  const base = (String(path).split("/").pop() || path).replace(/\.(md|html)$/i, "");
+  return base.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "noeud";
 }
-
-// Opens Settings → Nodes with the path pre-filled (from the tree button).
-function openPublishNode(path) {
-  openSettings();
-  settingsSelectTab('nodes');
-  hideNodeResult();
-  const pathEl = document.getElementById('settings-node-path');
-  const nameEl = document.getElementById('settings-node-name');
-
-  if (pathEl) pathEl.value = path;
-
-  if (nameEl) {
-    nameEl.value = suggestNodeName(path);
-    nameEl.focus();
-    nameEl.select();
-  }
-}
-
-// Info about the remote node a mirror doc belongs to (remotes/<name>/…).
 function remoteNodeInfo(path) {
-  const parts = (path || '').split('/');
-
-  if (parts[0] !== 'remotes' || parts.length < 3) return null;
+  const parts = (path || "").split("/");
+  if (parts[0] !== "remotes" || parts.length < 3) return null;
   const name = parts[1];
-  const prefix = 'remotes/' + name + '/';
+  const prefix = "remotes/" + name + "/";
   const fileCount = Object.keys(fileMap).filter((p) => p.startsWith(prefix)).length;
-
-  return { name, sourceRel: parts.slice(2).join('/'), fileCount };
+  return { name, sourceRel: parts.slice(2).join("/"), fileCount };
 }
-
-// Appropriate from a mirror doc: node's only file → whole node, otherwise just
-// that file. Produces a detached, editable copy in your documents.
-document.getElementById('btn-node-appropriate').addEventListener('click', async () => {
-  if (!currentFile) return;
-  const info = remoteNodeInfo(currentFile.path);
-
-  if (!info) return;
-  const whole = info.fileCount <= 1;
-  const dest = await promptDialog({
-    title: t('nodeAppropriateBtn'),
-    message: whole
-      ? t('nodeAppropriateWholePrompt', info.name)
-      : t('nodeAppropriateFilePrompt', currentFile.name),
-    value: whole ? info.name : currentFile.name || '',
-    confirmLabel: t('nodeAppropriateBtn'),
-  });
-
-  if (!dest) return;
-
-  try {
-    const res = await settingsFetch('/api/admin/remotes/appropriate', {
-      method: 'POST',
-      body: JSON.stringify({ name: info.name, source: whole ? '' : info.sourceRel, dest }),
-    });
-
-    setStatus(t('settingsRemoteAppropriated', String(res.copied || 0)), 'ok');
-    await refreshTreeOrReload();
-  } catch (e) {
-    setStatus(t('err', e.message), 'err');
-  }
-});
-
-// Remove from a mirror doc = unsubscribe entirely: a single removed file would
-// just come back on the next sync, so we drop the whole subscription.
-document.getElementById('btn-node-remove').addEventListener('click', async () => {
-  if (!currentFile) return;
-  const info = remoteNodeInfo(currentFile.path);
-
-  if (!info) return;
-  const ok = await confirmDialog({
-    title: t('nodeRemoveTitle'),
-    message: t('settingsRemoteRemoveMsg', info.name),
-    confirmLabel: t('settingsRemoteRemove'),
-    destructive: true,
-  });
-
-  if (!ok) return;
-
-  try {
-    await settingsFetch('/api/admin/remotes', {
-      method: 'DELETE',
-      body: JSON.stringify({ name: info.name }),
-    });
-    showWelcome();
-    await refreshTreeOrReload();
-  } catch (e) {
-    setStatus(t('err', e.message), 'err');
-  }
-});
-
-// ── Users ──
-async function loadSettingsUsers() {
-  settingsUsersList.innerHTML = '';
-
-  try {
-    const users = await settingsFetch('/api/admin/users');
-
-    if (!Array.isArray(users) || users.length === 0) {
-      settingsUsersList.innerHTML =
-        '<li class="text-sm text-ink-500">' + t('settingsNoUsers') + '</li>';
-
-      return;
-    }
-
-    settingsUsersList.innerHTML = users
-      .map((u) => {
-        const roleLabel = u.role === 'admin' ? t('settingsRoleAdmin') : t('settingsRoleViewer');
-        const roleCls = u.role === 'admin' ? 'text-accent' : 'text-ink-400';
-        const emailEsc = escapeHtml(u.email);
-        const fullName = [u.first_name, u.last_name].map((p) => (p || '').trim()).filter(Boolean).join(' ');
-        const nameLine = fullName
-          ? '<div class="text-ink-100 font-medium truncate" title="' +
-            escapeHtml(fullName) +
-            '">' +
-            escapeHtml(fullName) +
-            '</div>'
-          : '';
-        // A pending account was invited but hasn't set a password yet: show a
-        // badge, and offer "resend invite" instead of "reset password" (which 404s
-        // on a pending account — the password is set via the invite link).
-        const pendingBadge = u.pending
-          ? ' <span class="settings-pending-badge">' +
-            escapeHtml(t('settingsInvitePending')) +
-            '</span>'
-          : '';
-        const actionBtn = u.pending
-          ? '<button class="settings-user-resend px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
-            emailEsc +
-            '" data-role="' +
-            escapeHtml(u.role || '') +
-            '">' +
-            escapeHtml(t('settingsResendInvite')) +
-            '</button>'
-          : '<button class="settings-user-reset px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' +
-            emailEsc +
-            '" title="' +
-            escapeHtml(t('settingsResetPassword')) +
-            '">' +
-            escapeHtml(t('settingsResetPasswordShort')) +
-            '</button>';
-        return (
-          '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
-          '<div class="admin-row">' +
-          '<div class="flex-shrink-0 mr-2.5">' + constellationSvg(avatarSeed(u.first_name, u.last_name, u.email), 28) + '</div>' +
-          '<div class="flex-1 min-w-0">' +
-          nameLine +
-          '<div class="' +
-          (fullName ? 'text-ink-400 text-xs' : 'text-ink-100 font-medium') +
-          ' truncate" title="' +
-          emailEsc +
-          '">' +
-          emailEsc +
-          '</div>' +
-          '<div class="' +
-          roleCls +
-          ' text-xs uppercase tracking-wider font-semibold mt-0.5">' +
-          escapeHtml(roleLabel) +
-          pendingBadge +
-          '</div>' +
-          '</div>' +
-          '<div class="admin-row__actions">' +
-          actionBtn +
-          '<button class="settings-user-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-email="' +
-          emailEsc +
-          '" data-role="' +
-          escapeHtml(u.role || '') +
-          '">' +
-          t('settingsDeleteUser') +
-          '</button>' +
-          '</div>' +
-          '</div>' +
-          '</li>'
-        );
-      })
-      .join('');
-  } catch (e) {
-    showSettingsError(e.message);
-  }
-}
-
-settingsUserForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  clearSettingsError();
-  const email = document.getElementById('settings-user-email').value.trim();
-  const role = document.getElementById('settings-user-role').value;
-
-  try {
-    const data = await settingsFetch('/api/admin/users', {
-      method: 'POST',
-      body: JSON.stringify({ email, role }),
-    });
-    // One-time display: the invite link is returned once and never again.
-    showInviteResult(data.invite_url);
-    settingsUserForm.reset();
-    loadSettingsUsers();
-  } catch (err) {
-    showSettingsError(err.message);
-  }
-});
-
-settingsUsersList.addEventListener('click', async (e) => {
-  const resendBtn = e.target.closest('.settings-user-resend');
-
-  if (resendBtn) {
-    try {
-      const data = await settingsFetch('/api/admin/users', {
-        method: 'POST',
-        body: JSON.stringify({ email: resendBtn.dataset.email, role: resendBtn.dataset.role }),
-      });
-      showInviteResult(data.invite_url);
-      loadSettingsUsers();
-    } catch (err) {
-      showSettingsError(err.message);
-    }
-
-    return;
-  }
-
-  const resetBtn = e.target.closest('.settings-user-reset');
-
-  if (resetBtn) {
-    openResetPassword(resetBtn.dataset.email);
-
-    return;
-  }
-
-  const delBtn = e.target.closest('.settings-user-del');
-
-  if (delBtn) {
-    const ok = await confirmDialog({
-      title: t('settingsDeleteUserTitle'),
-      message: t('settingsDeleteUserMsg', delBtn.dataset.email),
-      confirmLabel: t('settingsDeleteUser'),
-      destructive: true,
-    });
-
-    if (!ok) return;
-
-    try {
-      await settingsFetch('/api/admin/users', {
-        method: 'DELETE',
-        body: JSON.stringify({ email: delBtn.dataset.email }),
-      });
-      loadSettingsUsers();
-    } catch (err) {
-      showSettingsError(err.message);
-    }
-  }
-});
-
-// ── Tokens ──
-async function loadSettingsTokens() {
-  settingsTokensList.innerHTML = '';
-
-  try {
-    const tokens = await settingsFetch('/api/tokens');
-    const active = Array.isArray(tokens) ? tokens.filter((tk) => !tk.revoked) : [];
-
-    if (active.length === 0) {
-      settingsTokensList.innerHTML =
-        '<li class="text-sm text-ink-500">' + t('settingsNoTokens') + '</li>';
-
-      return;
-    }
-
-    settingsTokensList.innerHTML = active
-      .map((tk) => {
-        const created = tk.created_at ? t('createdShort', shareFormatDate(tk.created_at)) : '';
-        const labelText = tk.label || tk.email || '';
-        const labelEsc = escapeHtml(labelText);
-
-        return (
-          '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
-          '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-100 font-medium font-mono truncate" title="' +
-          labelEsc +
-          '">' +
-          labelEsc +
-          '</div>' +
-          '<div class="text-ink-500 text-xs mt-0.5">' +
-          escapeHtml(created) +
-          '</div>' +
-          '</div>' +
-          '<div class="admin-row__actions">' +
-          '<button class="settings-token-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
-          escapeHtml(tk.id || '') +
-          '" data-label="' +
-          labelEsc +
-          '">' +
-          t('settingsRevokeToken') +
-          '</button>' +
-          '</div>' +
-          '</li>'
-        );
-      })
-      .join('');
-  } catch (e) {
-    showSettingsError(e.message);
-  }
-}
-
-settingsTokenForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  clearSettingsError();
-  const labelInput = document.getElementById('settings-token-label');
-  const label = labelInput.value.trim();
-
-  if (!label) return;
-
-  try {
-    const data = await settingsFetch('/api/tokens', {
-      method: 'POST',
-      body: JSON.stringify({ label }),
-    });
-
-    // One-time display: the plaintext token NEVER comes back after this point.
-    document.getElementById('settings-token-plain').value = data.token || '';
-    document.getElementById('settings-token-mcp').value = data.mcp_url || '';
-    settingsTokenResult.classList.remove('hidden');
-    labelInput.value = '';
-    loadSettingsTokens();
-  } catch (err) {
-    showSettingsError(err.message);
-  }
-});
-
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
-
     return true;
   } catch (_) {
     return false;
   }
 }
-
-function flashCopied(btn) {
-  btn.textContent = t('copied');
-  btn.classList.add('is-copied');
-  setTimeout(() => {
-    btn.textContent = t('copy');
-    btn.classList.remove('is-copied');
-  }, 1200);
-}
-
-document.getElementById('settings-token-copy').addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  const input = document.getElementById('settings-token-plain');
-  const ok = await copyToClipboard(input.value);
-
-  if (!ok) {
-    input.select();
-    document.execCommand('copy');
+class SettingsContext {
+  constructor() {
+    __publicField(this, "errorEl", document.getElementById("settings-error"));
+    // The shared admin/share JSON fetch (declared above as a cross-file global).
+    __publicField(this, "fetch", settingsFetch);
   }
-
-  flashCopied(btn);
-  // Hide the secret after the flash — it's in the clipboard and never reappears.
-  setTimeout(hideTokenResult, 1400);
-});
-document.getElementById('settings-token-mcp-copy').addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  const input = document.getElementById('settings-token-mcp');
-  const ok = await copyToClipboard(input.value);
-
-  if (!ok) {
-    input.select();
-    document.execCommand('copy');
+  showError(message) {
+    this.errorEl.textContent = message;
+    this.errorEl.classList.remove("hidden");
   }
-
-  flashCopied(btn);
-});
-
-function hideTokenResult() {
-  settingsTokenResult.classList.add('hidden');
-  // Clear the secret from the DOM — no residue in the inspector.
-  document.getElementById('settings-token-plain').value = '';
-  document.getElementById('settings-token-mcp').value = '';
-}
-
-document.getElementById('settings-token-close').addEventListener('click', hideTokenResult);
-
-// ── Invite link one-time display (mirror of the token result) ──
-function showInviteResult(url) {
-  if (!url) return;
-  document.getElementById('settings-invite-link').value = url;
-  settingsInviteResult.classList.remove('hidden');
-}
-
-function hideInviteResult() {
-  settingsInviteResult.classList.add('hidden');
-  document.getElementById('settings-invite-link').value = '';
-}
-
-document.getElementById('settings-invite-copy').addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  const input = document.getElementById('settings-invite-link');
-  const ok = await copyToClipboard(input.value);
-
-  if (!ok) {
-    input.select();
-    document.execCommand('copy');
+  clearError() {
+    this.errorEl.classList.add("hidden");
   }
-
-  flashCopied(btn);
-});
-
-document.getElementById('settings-invite-close').addEventListener('click', hideInviteResult);
-
-settingsTokensList.addEventListener('click', async (e) => {
-  const revokeBtn = e.target.closest('.settings-token-revoke');
-
-  if (!revokeBtn) return;
-  const ok = await confirmDialog({
-    title: t('settingsRevokeTokenTitle'),
-    message: t('settingsRevokeTokenMsg', revokeBtn.dataset.label),
-    confirmLabel: t('settingsRevokeToken'),
-    destructive: true,
-  });
-
-  if (!ok) return;
-
-  try {
-    // Prefer id over label: the label may be reused after revocation.
-    const body = revokeBtn.dataset.id
-      ? { id: revokeBtn.dataset.id }
-      : { label: revokeBtn.dataset.label };
-
-    await settingsFetch('/api/tokens', {
-      method: 'DELETE',
-      body: JSON.stringify(body),
-    });
-    loadSettingsTokens();
-  } catch (err) {
-    showSettingsError(err.message);
+  flashCopied(btn) {
+    btn.textContent = t("copied");
+    btn.classList.add("is-copied");
+    setTimeout(() => {
+      btn.textContent = t("copy");
+      btn.classList.remove("is-copied");
+    }, 1200);
   }
-});
-
-// ── Shares ──
-async function loadSettingsShares() {
-  settingsSharesList.innerHTML = '';
-
-  try {
-    const shares = await settingsFetch('/api/share/list');
-
-    if (!Array.isArray(shares) || shares.length === 0) {
-      settingsSharesList.innerHTML =
-        '<li class="text-sm text-ink-500">' + t('settingsNoShares') + '</li>';
-
-      return;
+  // Copy an input's value to the clipboard (with execCommand fallback) and flash the button.
+  async copyFromInput(btn, inputId) {
+    const input = document.getElementById(inputId);
+    const ok = await copyToClipboard(input.value);
+    if (!ok) {
+      input.select();
+      document.execCommand("copy");
     }
-
-    settingsSharesList.innerHTML = shares
-      .map((item) => {
-        const exp = item.expires_at
-          ? t('expiresShort', shareFormatDate(item.expires_at))
-          : t('noExpiry');
-        const created = item.created_at ? t('createdShort', shareFormatDate(item.created_at)) : '';
-        const pathEsc = escapeHtml(item.path || '');
-        const broken = item.file_exists === false;
-        const url = item.token ? location.origin + '/s/' + item.token : '';
-        const urlEsc = escapeHtml(url);
-        const urlLine = url
-          ? '<div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' +
-            urlEsc +
-            '">' +
-            urlEsc +
-            '</div>'
-          : '';
-        const copyBtn = url
-          ? '<button class="settings-share-copy px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-url="' +
-            urlEsc +
-            '" title="' +
-            escapeHtml(t('copy')) +
-            '">' +
-            t('copy') +
-            '</button>'
-          : '';
-
-        return (
-          '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
-          '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-100 font-medium truncate" title="' +
-          pathEsc +
-          '">' +
-          pathEsc +
-          (broken
-            ? ' <span class="text-rose-300 text-xs font-normal">' + t('shareBroken') + '</span>'
-            : '') +
-          '</div>' +
-          urlLine +
-          '<div class="text-ink-500 text-xs mt-0.5">' +
-          escapeHtml(created) +
-          ' &middot; ' +
-          escapeHtml(exp) +
-          '</div>' +
-          '</div>' +
-          '<div class="admin-row__actions">' +
-          copyBtn +
-          (broken
-            ? '<button class="settings-share-reactivate px-3 py-1.5 text-sm bg-navy-700 hover:bg-emerald-500/30 hover:text-emerald-300 text-ink-200 rounded" data-id="' +
-              escapeHtml(item.id || '') +
-              '" data-path="' +
-              pathEsc +
-              '" data-suggested="' +
-              escapeHtml(item.suggested_path || '') +
-              '">' +
-              t('shareReactivate') +
-              '</button>'
-            : '') +
-          '<button class="settings-share-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
-          escapeHtml(item.id || '') +
-          '">' +
-          t('revoke') +
-          '</button>' +
-          '</div>' +
-          '</li>'
-        );
-      })
-      .join('');
-  } catch (e) {
-    showSettingsError(e.message);
+    this.flashCopied(btn);
+  }
+  // The clicked element matching a delegated selector (data-* row buttons).
+  hit(e, selector) {
+    return e.target.closest(selector);
   }
 }
 
-settingsSharesList.addEventListener('click', async (e) => {
-  const copyBtn = e.target.closest('.settings-share-copy');
-
-  if (copyBtn) {
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class SettingsUsers {
+  constructor(ctx) {
+    this.ctx = ctx;
+    __publicField(this, "list", document.getElementById("settings-users-list"));
+    __publicField(this, "form", document.getElementById("settings-user-form"));
+    __publicField(this, "inviteResult", document.getElementById("settings-invite-result"));
+    this.form.addEventListener("submit", (e) => this.submit(e));
+    this.list.addEventListener("click", (e) => this.onClick(e));
+    document.getElementById("settings-invite-copy").addEventListener(
+      "click",
+      (e) => this.ctx.copyFromInput(e.currentTarget, "settings-invite-link")
+    );
+    document.getElementById("settings-invite-close").addEventListener("click", () => this.hideInviteResult());
+  }
+  async load() {
+    this.list.innerHTML = "";
     try {
-      await navigator.clipboard.writeText(copyBtn.dataset.url);
-      copyBtn.textContent = t('copied');
-      setTimeout(() => (copyBtn.textContent = t('copy')), 1200);
-    } catch (_) {}
-
-    return;
-  }
-
-  const reactivateBtn = e.target.closest('.settings-share-reactivate');
-
-  if (reactivateBtn) {
-    // Doc moved/disappeared: point the link at its new path (URL stays the same).
-    const newPath = await promptDialog({
-      title: t('shareReactivateTitle'),
-      message: t('shareReactivateMsg', reactivateBtn.dataset.path || ''),
-      value: reactivateBtn.dataset.suggested || '',
-      placeholder: t('shareReactivatePlaceholder'),
-      confirmLabel: t('shareReactivate'),
-    });
-
-    if (!newPath) return;
-
-    try {
-      await settingsFetch('/api/share/' + reactivateBtn.dataset.id, {
-        method: 'PATCH',
-        body: JSON.stringify({ path: newPath.trim() }),
-      });
-      loadSettingsShares();
-    } catch (err) {
-      showSettingsError(err.message);
-    }
-
-    return;
-  }
-
-  const revokeBtn = e.target.closest('.settings-share-revoke');
-
-  if (!revokeBtn || !revokeBtn.dataset.id) return;
-  const ok = await confirmDialog({
-    title: t('revokeConfirmTitle'),
-    message: t('revokeConfirmMsg'),
-    confirmLabel: t('revoke'),
-    destructive: true,
-  });
-
-  if (!ok) return;
-
-  try {
-    await settingsFetch('/api/share/' + revokeBtn.dataset.id, { method: 'DELETE' });
-    loadSettingsShares();
-  } catch (err) {
-    showSettingsError(err.message);
-  }
-});
-
-// ── Nodes (hive) ──
-async function loadSettingsNodes() {
-  settingsNodesList.innerHTML = '';
-
-  try {
-    const nodes = await settingsFetch('/api/admin/nodes');
-    const active = Array.isArray(nodes) ? nodes.filter((n) => !n.revoked) : [];
-
-    if (active.length === 0) {
-      settingsNodesList.innerHTML =
-        '<li class="text-sm text-ink-500">' + t('settingsNoNodes') + '</li>';
-
-      return;
-    }
-
-    settingsNodesList.innerHTML = active
-      .map((n) => {
-        const created = n.created_at ? t('createdShort', shareFormatDate(n.created_at)) : '';
-        const nameEsc = escapeHtml(n.name || '');
-        const pathEsc = escapeHtml(n.path || '');
-
-        return (
-          '<li class="admin-row bg-navy-900 border subtle-border rounded p-3 text-sm">' +
-          '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-100 font-medium font-mono truncate" title="' +
-          nameEsc +
-          '">' +
-          nameEsc +
-          '</div>' +
-          '<div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' +
-          pathEsc +
-          '">' +
-          pathEsc +
-          '</div>' +
-          '<div class="text-ink-500 text-xs mt-0.5">' +
-          escapeHtml(created) +
-          '</div>' +
-          '</div>' +
-          '<div class="admin-row__actions">' +
-          '<button class="settings-node-relink px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
-          nameEsc +
-          '" data-path="' +
-          pathEsc +
-          '" title="' +
-          escapeHtml(t('settingsNodeRelinkTitle')) +
-          '">' +
-          t('settingsNodeRelink') +
-          '</button>' +
-          '<button class="settings-node-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
-          nameEsc +
-          '">' +
-          t('revoke') +
-          '</button>' +
-          '</div>' +
-          '</li>'
-        );
-      })
-      .join('');
-  } catch (e) {
-    showSettingsError(e.message);
-  }
-}
-
-async function publishNode(name, path) {
-  // One-time display: the link (which carries the token) NEVER comes back after.
-  const data = await settingsFetch('/api/admin/nodes', {
-    method: 'POST',
-    body: JSON.stringify({ name, path }),
-  });
-
-  document.getElementById('settings-node-link').value = data.link || '';
-  settingsNodeResult.classList.remove('hidden');
-  loadSettingsNodes();
-}
-
-settingsNodeForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  clearSettingsError();
-  const name = document.getElementById('settings-node-name').value.trim();
-  const path = document.getElementById('settings-node-path').value.trim();
-
-  if (!name || !path) return;
-
-  try {
-    await publishNode(name, path);
-    settingsNodeForm.reset();
-  } catch (err) {
-    showSettingsError(err.message);
-  }
-});
-
-document.getElementById('settings-node-copy').addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  const input = document.getElementById('settings-node-link');
-  const ok = await copyToClipboard(input.value);
-
-  if (!ok) {
-    input.select();
-    document.execCommand('copy');
-  }
-
-  flashCopied(btn);
-});
-
-function hideNodeResult() {
-  settingsNodeResult.classList.add('hidden');
-  document.getElementById('settings-node-link').value = '';
-}
-
-document.getElementById('settings-node-close').addEventListener('click', hideNodeResult);
-
-settingsNodesList.addEventListener('click', async (e) => {
-  const relinkBtn = e.target.closest('.settings-node-relink');
-
-  if (relinkBtn) {
-    // Re-publishing regenerates the token (old link dies), but it's the only way
-    // to get a copyable link back — hence the warning.
-    const ok = await confirmDialog({
-      title: t('settingsNodeRelinkTitle'),
-      message: t('settingsNodeRelinkMsg', relinkBtn.dataset.name),
-      confirmLabel: t('settingsNodeRelink'),
-    });
-
-    if (!ok) return;
-
-    try {
-      await publishNode(relinkBtn.dataset.name, relinkBtn.dataset.path);
-    } catch (err) {
-      showSettingsError(err.message);
-    }
-
-    return;
-  }
-
-  const revokeBtn = e.target.closest('.settings-node-revoke');
-
-  if (!revokeBtn || !revokeBtn.dataset.name) return;
-  const ok = await confirmDialog({
-    title: t('settingsRevokeNodeTitle'),
-    message: t('settingsRevokeNodeMsg', revokeBtn.dataset.name),
-    confirmLabel: t('revoke'),
-    destructive: true,
-  });
-
-  if (!ok) return;
-
-  try {
-    await settingsFetch('/api/admin/nodes', {
-      method: 'DELETE',
-      body: JSON.stringify({ name: revokeBtn.dataset.name }),
-    });
-    loadSettingsNodes();
-  } catch (err) {
-    showSettingsError(err.message);
-  }
-});
-
-// ── Subscriptions (followed remote nodes) ──
-async function loadSettingsRemotes() {
-  settingsRemotesList.innerHTML = '';
-
-  try {
-    const remotes = await settingsFetch('/api/admin/remotes');
-
-    if (!Array.isArray(remotes) || remotes.length === 0) {
-      settingsRemotesList.innerHTML =
-        '<li class="text-sm text-ink-500">' + t('settingsNoRemotes') + '</li>';
-
-      return;
-    }
-
-    settingsRemotesList.innerHTML = remotes
-      .map((r) => {
-        const nameEsc = escapeHtml(r.name || '');
-        const pathEsc = escapeHtml(r.path || '');
-        const synced = r.last_sync_at
-          ? t('settingsRemoteSynced', shareFormatDate(r.last_sync_at))
-          : t('settingsRemoteNeverSynced');
-        const originHost = (r.url || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-        const originLine = originHost
-          ? '<div class="text-xs text-sky-300/70 mt-0.5 truncate" title="' +
-            escapeHtml(r.url || '') +
-            '">' +
-            escapeHtml(t('settingsRemoteFrom', originHost)) +
-            '</div>'
-          : '';
-        const errLine = r.last_error
-          ? '<div class="text-rose-400 text-xs mt-0.5 truncate" title="' +
-            escapeHtml(r.last_error) +
-            '">' +
-            escapeHtml(t('settingsRemoteError', r.last_error)) +
-            '</div>'
-          : '';
-
-        return (
-          '<li class="admin-row bg-navy-900 border subtle-border rounded p-3 text-sm">' +
-          '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-100 font-medium font-mono truncate" title="' +
-          nameEsc +
-          '">' +
-          nameEsc +
-          '</div>' +
-          '<div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' +
-          pathEsc +
-          '">' +
-          pathEsc +
-          '</div>' +
-          originLine +
-          '<div class="text-ink-500 text-xs mt-0.5">' +
-          escapeHtml(synced) +
-          '</div>' +
-          errLine +
-          '</div>' +
-          '<div class="admin-row__actions">' +
-          '<button class="settings-remote-sync px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
-          nameEsc +
-          '">' +
-          t('settingsRemoteSync') +
-          '</button>' +
-          '<button class="settings-remote-appropriate px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
-          nameEsc +
-          '" title="' +
-          escapeHtml(t('settingsRemoteAppropriateTitle')) +
-          '">' +
-          t('settingsRemoteAppropriate') +
-          '</button>' +
-          '<button class="settings-remote-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
-          nameEsc +
-          '">' +
-          t('settingsRemoteRemove') +
-          '</button>' +
-          '</div>' +
-          '</li>'
-        );
-      })
-      .join('');
-  } catch (e) {
-    showSettingsError(e.message);
-  }
-}
-
-settingsRemoteForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  clearSettingsError();
-  const input = document.getElementById('settings-remote-link');
-  const link = input.value.trim();
-
-  if (!link) return;
-
-  try {
-    const res = await settingsFetch('/api/admin/remotes', {
-      method: 'POST',
-      body: JSON.stringify({ link }),
-    });
-
-    input.value = '';
-
-    // Issuer unreachable: sync fails but the subscription is created — report
-    // without blocking (the periodic sync retries).
-    if (res && res.sync && res.sync.ok === false) {
-      showSettingsError(t('settingsRemoteSyncFailed', res.sync.error || ''));
-    }
-
-    loadSettingsRemotes();
-  } catch (err) {
-    showSettingsError(err.message);
-  }
-});
-
-settingsRemotesList.addEventListener('click', async (e) => {
-  const syncBtn = e.target.closest('.settings-remote-sync');
-
-  if (syncBtn) {
-    syncBtn.disabled = true;
-
-    try {
-      const res = await settingsFetch('/api/admin/remotes/sync', {
-        method: 'POST',
-        body: JSON.stringify({ name: syncBtn.dataset.name }),
-      });
-      const r = res && res.results ? res.results[syncBtn.dataset.name] : null;
-
-      if (r && r.ok === false) showSettingsError(t('settingsRemoteSyncFailed', r.error || ''));
-    } catch (err) {
-      showSettingsError(err.message);
-    }
-
-    loadSettingsRemotes();
-
-    return;
-  }
-
-  const apprBtn = e.target.closest('.settings-remote-appropriate');
-
-  if (apprBtn) {
-    const name = apprBtn.dataset.name;
-    // Free-form destination via modal. Default = node name, at the root of your documents.
-    const dest = await promptDialog({
-      title: t('settingsRemoteAppropriate'),
-      message: t('settingsRemoteAppropriatePrompt', name),
-      value: name,
-      placeholder: t('appropriateDestPlaceholder'),
-      confirmLabel: t('settingsRemoteAppropriate'),
-    });
-
-    if (!dest) return;
-
-    try {
-      const res = await settingsFetch('/api/admin/remotes/appropriate', {
-        method: 'POST',
-        body: JSON.stringify({ name, source: '', dest }),
-      });
-
-      showSettingsError(t('settingsRemoteAppropriated', String(res.copied || 0)));
-    } catch (err) {
-      showSettingsError(err.message);
-    }
-
-    return;
-  }
-
-  const delBtn = e.target.closest('.settings-remote-del');
-
-  if (!delBtn || !delBtn.dataset.name) return;
-  const ok = await confirmDialog({
-    title: t('settingsRemoteRemoveTitle'),
-    message: t('settingsRemoteRemoveMsg', delBtn.dataset.name),
-    confirmLabel: t('settingsRemoteRemove'),
-    destructive: true,
-  });
-
-  if (!ok) return;
-
-  try {
-    await settingsFetch('/api/admin/remotes', {
-      method: 'DELETE',
-      body: JSON.stringify({ name: delBtn.dataset.name }),
-    });
-    loadSettingsRemotes();
-  } catch (err) {
-    showSettingsError(err.message);
-  }
-});
-
-// ── Groups (principals group:<name>) ──
-async function loadSettingsGroups() {
-  const list = document.getElementById('settings-groups-list');
-
-  if (!list) return;
-  list.innerHTML = '';
-
-  try {
-    const groups = await settingsFetch('/api/admin/groups'); // { name: [emails] }
-    const names = Object.keys(groups || {}).sort();
-
-    if (!names.length) {
-      list.innerHTML = '<li class="text-sm text-ink-500">' + t('settingsNoGroups') + '</li>';
-
-      return;
-    }
-
-    list.innerHTML = names
-      .map((name) => {
-        const members = groups[name] || [];
-        const nameEsc = escapeHtml(name);
-        const membersEsc = escapeHtml(members.join(', '));
-
-        return (
-          '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
-          '<div class="admin-row">' +
-          '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-100 font-medium font-mono truncate">' +
-          nameEsc +
-          '</div>' +
-          '<div class="text-ink-400 text-xs mt-0.5 truncate" title="' +
-          membersEsc +
-          '">' +
-          (members.length
-            ? membersEsc
-            : '<span class="text-ink-500">' + t('settingsGroupEmpty') + '</span>') +
-          '</div>' +
-          '</div>' +
-          '<div class="admin-row__actions">' +
-          '<button class="settings-group-edit px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' +
-          nameEsc +
-          '" data-members="' +
-          membersEsc +
-          '">' +
-          t('settingsGroupEdit') +
-          '</button>' +
-          '<button class="settings-group-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' +
-          nameEsc +
-          '">' +
-          t('settingsGroupDelete') +
-          '</button>' +
-          '</div>' +
-          '</div>' +
-          '</li>'
-        );
-      })
-      .join('');
-  } catch (e) {
-    showSettingsError(e.message);
-  }
-}
-
-// Node path = a creatable combobox over the mind's existing folders (publish an existing
-// folder as a federation node, or type a new path) — like the new-file folder field.
-const settingsNodePathEl = document.getElementById('settings-node-path');
-if (settingsNodePathEl) AtlasCombobox(settingsNodePathEl, { source: getAllDirs, creatable: true });
-
-const settingsGroupForm = document.getElementById('settings-group-form');
-
-if (settingsGroupForm) {
-  // Members = a creatable multi/chips combobox (pick known accounts via /api/directory
-  // or type a new email), replacing the bare comma-separated input.
-  const groupMembersCb = AtlasCombobox(document.getElementById('settings-group-members'), {
-    source: async () => {
-      try {
-        const r = await fetch('/api/directory');
-        return r.ok ? (await r.json()).users || [] : [];
-      } catch (_) {
-        return [];
+      const users = await this.ctx.fetch("/api/admin/users");
+      if (!Array.isArray(users) || users.length === 0) {
+        this.list.innerHTML = '<li class="text-sm text-ink-500">' + t("settingsNoUsers") + "</li>";
+        return;
       }
-    },
-    creatable: true,
-    multi: true,
-    separator: ',',
-  });
-
-  settingsGroupForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    clearSettingsError();
-    const name = document.getElementById('settings-group-name').value.trim();
-    const members = groupMembersCb.getValue();
-
-    try {
-      await settingsFetch('/api/admin/groups', {
-        method: 'POST',
-        body: JSON.stringify({ name, members }),
-      });
-      settingsGroupForm.reset();
-      groupMembersCb.clear();
-      loadSettingsGroups();
-    } catch (err) {
-      showSettingsError(err.message);
+      this.list.innerHTML = users.map((u) => {
+        const roleLabel = u.role === "admin" ? t("settingsRoleAdmin") : t("settingsRoleViewer");
+        const roleCls = u.role === "admin" ? "text-accent" : "text-ink-400";
+        const emailEsc = escapeHtml(u.email);
+        const fullName = [u.first_name, u.last_name].map((p) => (p || "").trim()).filter(Boolean).join(" ");
+        const nameLine = fullName ? '<div class="text-ink-100 font-medium truncate" title="' + escapeHtml(fullName) + '">' + escapeHtml(fullName) + "</div>" : "";
+        const pendingBadge = u.pending ? ' <span class="settings-pending-badge">' + escapeHtml(t("settingsInvitePending")) + "</span>" : "";
+        const actionBtn = u.pending ? '<button class="settings-user-resend px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' + emailEsc + '" data-role="' + escapeHtml(u.role || "") + '">' + escapeHtml(t("settingsResendInvite")) + "</button>" : '<button class="settings-user-reset px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-email="' + emailEsc + '" title="' + escapeHtml(t("settingsResetPassword")) + '">' + escapeHtml(t("settingsResetPasswordShort")) + "</button>";
+        return '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm"><div class="admin-row"><div class="flex-shrink-0 mr-2.5">' + constellationSvg(avatarSeed(u.first_name, u.last_name, u.email), 28) + '</div><div class="flex-1 min-w-0">' + nameLine + '<div class="' + (fullName ? "text-ink-400 text-xs" : "text-ink-100 font-medium") + ' truncate" title="' + emailEsc + '">' + emailEsc + '</div><div class="' + roleCls + ' text-xs uppercase tracking-wider font-semibold mt-0.5">' + escapeHtml(roleLabel) + pendingBadge + '</div></div><div class="admin-row__actions">' + actionBtn + '<button class="settings-user-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-email="' + emailEsc + '" data-role="' + escapeHtml(u.role || "") + '">' + t("settingsDeleteUser") + "</button></div></div></li>";
+      }).join("");
+    } catch (e) {
+      this.ctx.showError(e.message);
     }
-  });
-
-  document.getElementById('settings-groups-list').addEventListener('click', async (e) => {
-    const editBtn = e.target.closest('.settings-group-edit');
-
-    if (editBtn) {
-      document.getElementById('settings-group-name').value = editBtn.dataset.name;
-      groupMembersCb.setValue(editBtn.dataset.members);
-      document.getElementById('settings-group-name').focus();
-
+  }
+  async submit(e) {
+    e.preventDefault();
+    this.ctx.clearError();
+    const email = document.getElementById("settings-user-email").value.trim();
+    const role = document.getElementById("settings-user-role").value;
+    try {
+      const data = await this.ctx.fetch("/api/admin/users", {
+        method: "POST",
+        body: JSON.stringify({ email, role })
+      });
+      this.showInviteResult(data.invite_url);
+      this.form.reset();
+      this.load();
+    } catch (err) {
+      this.ctx.showError(err.message);
+    }
+  }
+  async onClick(e) {
+    const resendBtn = this.ctx.hit(e, ".settings-user-resend");
+    if (resendBtn) {
+      try {
+        const data = await this.ctx.fetch("/api/admin/users", {
+          method: "POST",
+          body: JSON.stringify({ email: resendBtn.dataset.email, role: resendBtn.dataset.role })
+        });
+        this.showInviteResult(data.invite_url);
+        this.load();
+      } catch (err) {
+        this.ctx.showError(err.message);
+      }
       return;
     }
-
-    const delBtn = e.target.closest('.settings-group-del');
-
+    const resetBtn = this.ctx.hit(e, ".settings-user-reset");
+    if (resetBtn) {
+      openResetPassword(resetBtn.dataset.email);
+      return;
+    }
+    const delBtn = this.ctx.hit(e, ".settings-user-del");
     if (delBtn) {
       const ok = await confirmDialog({
-        title: t('settingsGroupDeleteTitle'),
-        message: t('settingsGroupDeleteMsg', delBtn.dataset.name),
-        confirmLabel: t('settingsGroupDelete'),
-        destructive: true,
+        title: t("settingsDeleteUserTitle"),
+        message: t("settingsDeleteUserMsg", delBtn.dataset.email),
+        confirmLabel: t("settingsDeleteUser"),
+        destructive: true
       });
-
       if (!ok) return;
-
       try {
-        await settingsFetch('/api/admin/groups', {
-          method: 'DELETE',
-          body: JSON.stringify({ name: delBtn.dataset.name }),
+        await this.ctx.fetch("/api/admin/users", {
+          method: "DELETE",
+          body: JSON.stringify({ email: delBtn.dataset.email })
         });
-        loadSettingsGroups();
+        this.load();
       } catch (err) {
-        showSettingsError(err.message);
+        this.ctx.showError(err.message);
       }
     }
-  });
-}
-
-async function refreshUpdateBanner() {
-  // Admin-only, best-effort: never block Settings if the check fails/offline.
-  const banner = document.getElementById('settings-update-banner');
-
-  if (!banner) return;
-  banner.classList.add('hidden');
-
-  try {
-    const data = await settingsFetch('/api/admin/update-check');
-
-    if (data && data.update_available && data.latest) {
-      banner.textContent = t('settingsUpdateAvailable')
-        .replace('{latest}', data.latest)
-        .replace('{current}', data.current || '?');
-      banner.href = data.url || 'https://pypi.org/project/atlas-mind/';
-      banner.classList.remove('hidden');
-    }
-  } catch (_) {
-    /* best-effort */
+  }
+  // ── Invite link one-time display (mirror of the token result) ──
+  showInviteResult(url) {
+    if (!url) return;
+    document.getElementById("settings-invite-link").value = url;
+    this.inviteResult.classList.remove("hidden");
+  }
+  hideInviteResult() {
+    this.inviteResult.classList.add("hidden");
+    document.getElementById("settings-invite-link").value = "";
   }
 }
 
-function openSettings() {
-  hideTokenResult();
-  settingsBackdrop.classList.remove('hidden');
-  // Everyone lands on Profile (the per-account tab, first in the bar); admin-only
-  // tabs are one click away.
-  const isAdmin = document.body.classList.contains('admin-cloud');
-
-  settingsSelectTab('security');
-
-  if (isAdmin) refreshUpdateBanner();
-}
-
-function closeSettings() {
-  settingsBackdrop.classList.add('hidden');
-}
-
-settingsBtn.addEventListener('click', openSettings);
-settingsClose.addEventListener('click', closeSettings);
-settingsBackdrop.addEventListener('click', (e) => {
-  if (e.target === settingsBackdrop) closeSettings();
-});
-document.querySelectorAll('.settings-tab').forEach((tab) => {
-  tab.addEventListener('click', () => settingsSelectTab(tab.dataset.tab));
-});
-
-// ── Your name (self-service, Profil tab) ──────────────────────────────────────
-// The form is static in 05-settings.html; here we just prefill + save it.
-async function loadAccountProfile() {
-  const form = document.getElementById('account-profile-form');
-  const first = document.getElementById('account-profile-first');
-  const last = document.getElementById('account-profile-last');
-  if (!form || !first || !last) return;
-  if (!form.dataset.wired) {
-    form.dataset.wired = '1';
-    form.addEventListener('submit', saveAccountProfile);
-  }
-  try {
-    const data = await settingsFetch('/api/account/profile');
-    first.value = data.first_name || '';
-    last.value = data.last_name || '';
-    const avatar = document.getElementById('account-profile-avatar');
-    if (avatar && data.email) avatar.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 64);
-  } catch (e) {
-    showSettingsError(e.message);
-  }
-}
-
-async function saveAccountProfile(e) {
-  e.preventDefault();
-  clearSettingsError();
-  const btn = e.target.querySelector('button[type="submit"]');
-  const first = document.getElementById('account-profile-first').value.trim();
-  const last = document.getElementById('account-profile-last').value.trim();
-  btn.disabled = true;
-  try {
-    await settingsFetch('/api/account/profile', {
-      method: 'POST',
-      body: JSON.stringify({ first_name: first, last_name: last }),
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class SettingsTokens {
+  constructor(ctx) {
+    this.ctx = ctx;
+    __publicField(this, "list", document.getElementById("settings-tokens-list"));
+    __publicField(this, "form", document.getElementById("settings-token-form"));
+    __publicField(this, "result", document.getElementById("settings-token-result"));
+    this.form.addEventListener("submit", (e) => this.submit(e));
+    document.getElementById("settings-token-copy").addEventListener("click", async (e) => {
+      await this.ctx.copyFromInput(e.currentTarget, "settings-token-plain");
+      setTimeout(() => this.hideResult(), 1400);
     });
-    const status = document.getElementById('account-profile-status');
-    if (status) {
-      status.textContent = t('profileSaved');
-      status.classList.remove('hidden');
-      setTimeout(() => status.classList.add('hidden'), 2500);
+    document.getElementById("settings-token-mcp-copy").addEventListener(
+      "click",
+      (e) => this.ctx.copyFromInput(e.currentTarget, "settings-token-mcp")
+    );
+    document.getElementById("settings-token-close").addEventListener("click", () => this.hideResult());
+    this.list.addEventListener("click", (e) => this.onClick(e));
+  }
+  async load() {
+    this.list.innerHTML = "";
+    try {
+      const tokens = await this.ctx.fetch("/api/tokens");
+      const active = Array.isArray(tokens) ? tokens.filter((tk) => !tk.revoked) : [];
+      if (active.length === 0) {
+        this.list.innerHTML = '<li class="text-sm text-ink-500">' + t("settingsNoTokens") + "</li>";
+        return;
+      }
+      this.list.innerHTML = active.map((tk) => {
+        const created = tk.created_at ? t("createdShort", shareFormatDate(tk.created_at)) : "";
+        const labelText = tk.label || tk.email || "";
+        const labelEsc = escapeHtml(labelText);
+        return '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-sm"><div class="flex-1 min-w-0"><div class="text-ink-100 font-medium font-mono truncate" title="' + labelEsc + '">' + labelEsc + '</div><div class="text-ink-500 text-xs mt-0.5">' + escapeHtml(created) + '</div></div><div class="admin-row__actions"><button class="settings-token-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' + escapeHtml(tk.id || "") + '" data-label="' + labelEsc + '">' + t("settingsRevokeToken") + "</button></div></li>";
+      }).join("");
+    } catch (e) {
+      this.ctx.showError(e.message);
     }
-  } catch (err) {
-    showSettingsError(err.message);
-  } finally {
-    btn.disabled = false;
+  }
+  async submit(e) {
+    e.preventDefault();
+    this.ctx.clearError();
+    const labelInput = document.getElementById("settings-token-label");
+    const label = labelInput.value.trim();
+    if (!label) return;
+    try {
+      const data = await this.ctx.fetch("/api/tokens", {
+        method: "POST",
+        body: JSON.stringify({ label })
+      });
+      document.getElementById("settings-token-plain").value = data.token || "";
+      document.getElementById("settings-token-mcp").value = data.mcp_url || "";
+      this.result.classList.remove("hidden");
+      labelInput.value = "";
+      this.load();
+    } catch (err) {
+      this.ctx.showError(err.message);
+    }
+  }
+  hideResult() {
+    this.result.classList.add("hidden");
+    document.getElementById("settings-token-plain").value = "";
+    document.getElementById("settings-token-mcp").value = "";
+  }
+  async onClick(e) {
+    const revokeBtn = this.ctx.hit(e, ".settings-token-revoke");
+    if (!revokeBtn) return;
+    const ok = await confirmDialog({
+      title: t("settingsRevokeTokenTitle"),
+      message: t("settingsRevokeTokenMsg", revokeBtn.dataset.label),
+      confirmLabel: t("settingsRevokeToken"),
+      destructive: true
+    });
+    if (!ok) return;
+    try {
+      const body = revokeBtn.dataset.id ? { id: revokeBtn.dataset.id } : { label: revokeBtn.dataset.label };
+      await this.ctx.fetch("/api/tokens", {
+        method: "DELETE",
+        body: JSON.stringify(body)
+      });
+      this.load();
+    } catch (err) {
+      this.ctx.showError(err.message);
+    }
   }
 }
 
-// ── Minimal QR code generator (no external lib) ───────────────────────────────
-// QR Model 2, byte mode, EC level L — enough for an otpauth:// URI (~120 bytes →
-// version 6/7).
-// On encoding failure (improbably long URI) the caller falls back to the plaintext secret.
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class SettingsShares {
+  constructor(ctx) {
+    this.ctx = ctx;
+    __publicField(this, "list", document.getElementById("settings-shares-list"));
+    this.list.addEventListener("click", (e) => this.onClick(e));
+  }
+  async load() {
+    this.list.innerHTML = "";
+    try {
+      const shares = await this.ctx.fetch("/api/share/list");
+      if (!Array.isArray(shares) || shares.length === 0) {
+        this.list.innerHTML = '<li class="text-sm text-ink-500">' + t("settingsNoShares") + "</li>";
+        return;
+      }
+      this.list.innerHTML = shares.map((item) => {
+        const exp = item.expires_at ? t("expiresShort", shareFormatDate(item.expires_at)) : t("noExpiry");
+        const created = item.created_at ? t("createdShort", shareFormatDate(item.created_at)) : "";
+        const pathEsc = escapeHtml(item.path || "");
+        const broken = item.file_exists === false;
+        const url = item.token ? location.origin + "/s/" + item.token : "";
+        const urlEsc = escapeHtml(url);
+        const urlLine = url ? '<div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' + urlEsc + '">' + urlEsc + "</div>" : "";
+        const copyBtn = url ? '<button class="settings-share-copy px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-url="' + urlEsc + '" title="' + escapeHtml(t("copy")) + '">' + t("copy") + "</button>" : "";
+        return '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-sm"><div class="flex-1 min-w-0"><div class="text-ink-100 font-medium truncate" title="' + pathEsc + '">' + pathEsc + (broken ? ' <span class="text-rose-300 text-xs font-normal">' + t("shareBroken") + "</span>" : "") + "</div>" + urlLine + '<div class="text-ink-500 text-xs mt-0.5">' + escapeHtml(created) + " &middot; " + escapeHtml(exp) + '</div></div><div class="admin-row__actions">' + copyBtn + (broken ? '<button class="settings-share-reactivate px-3 py-1.5 text-sm bg-navy-700 hover:bg-emerald-500/30 hover:text-emerald-300 text-ink-200 rounded" data-id="' + escapeHtml(item.id || "") + '" data-path="' + pathEsc + '" data-suggested="' + escapeHtml(item.suggested_path || "") + '">' + t("shareReactivate") + "</button>" : "") + '<button class="settings-share-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' + escapeHtml(item.id || "") + '">' + t("revoke") + "</button></div></li>";
+      }).join("");
+    } catch (e) {
+      this.ctx.showError(e.message);
+    }
+  }
+  async onClick(e) {
+    const copyBtn = this.ctx.hit(e, ".settings-share-copy");
+    if (copyBtn) {
+      try {
+        await navigator.clipboard.writeText(copyBtn.dataset.url || "");
+        copyBtn.textContent = t("copied");
+        setTimeout(() => copyBtn.textContent = t("copy"), 1200);
+      } catch (_) {
+      }
+      return;
+    }
+    const reactivateBtn = this.ctx.hit(e, ".settings-share-reactivate");
+    if (reactivateBtn) {
+      const newPath = await promptDialog({
+        title: t("shareReactivateTitle"),
+        message: t("shareReactivateMsg", reactivateBtn.dataset.path || ""),
+        value: reactivateBtn.dataset.suggested || "",
+        placeholder: t("shareReactivatePlaceholder"),
+        confirmLabel: t("shareReactivate")
+      });
+      if (!newPath) return;
+      try {
+        await this.ctx.fetch("/api/share/" + reactivateBtn.dataset.id, {
+          method: "PATCH",
+          body: JSON.stringify({ path: newPath.trim() })
+        });
+        this.load();
+      } catch (err) {
+        this.ctx.showError(err.message);
+      }
+      return;
+    }
+    const revokeBtn = this.ctx.hit(e, ".settings-share-revoke");
+    if (!revokeBtn || !revokeBtn.dataset.id) return;
+    const ok = await confirmDialog({
+      title: t("revokeConfirmTitle"),
+      message: t("revokeConfirmMsg"),
+      confirmLabel: t("revoke"),
+      destructive: true
+    });
+    if (!ok) return;
+    try {
+      await this.ctx.fetch("/api/share/" + revokeBtn.dataset.id, { method: "DELETE" });
+      this.load();
+    } catch (err) {
+      this.ctx.showError(err.message);
+    }
+  }
+}
+
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class SettingsNodes {
+  constructor(ctx) {
+    this.ctx = ctx;
+    __publicField(this, "list", document.getElementById("settings-nodes-list"));
+    __publicField(this, "form", document.getElementById("settings-node-form"));
+    __publicField(this, "result", document.getElementById("settings-node-result"));
+    this.form.addEventListener("submit", (e) => this.submit(e));
+    document.getElementById("settings-node-copy").addEventListener(
+      "click",
+      (e) => this.ctx.copyFromInput(e.currentTarget, "settings-node-link")
+    );
+    document.getElementById("settings-node-close").addEventListener("click", () => this.hideResult());
+    this.list.addEventListener("click", (e) => this.onClick(e));
+  }
+  async load() {
+    this.list.innerHTML = "";
+    try {
+      const nodes = await this.ctx.fetch("/api/admin/nodes");
+      const active = Array.isArray(nodes) ? nodes.filter((n) => !n.revoked) : [];
+      if (active.length === 0) {
+        this.list.innerHTML = '<li class="text-sm text-ink-500">' + t("settingsNoNodes") + "</li>";
+        return;
+      }
+      this.list.innerHTML = active.map((n) => {
+        const created = n.created_at ? t("createdShort", shareFormatDate(n.created_at)) : "";
+        const nameEsc = escapeHtml(n.name || "");
+        const pathEsc = escapeHtml(n.path || "");
+        return '<li class="admin-row bg-navy-900 border subtle-border rounded p-3 text-sm"><div class="flex-1 min-w-0"><div class="text-ink-100 font-medium font-mono truncate" title="' + nameEsc + '">' + nameEsc + '</div><div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' + pathEsc + '">' + pathEsc + '</div><div class="text-ink-500 text-xs mt-0.5">' + escapeHtml(created) + '</div></div><div class="admin-row__actions"><button class="settings-node-relink px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' + nameEsc + '" data-path="' + pathEsc + '" title="' + escapeHtml(t("settingsNodeRelinkTitle")) + '">' + t("settingsNodeRelink") + '</button><button class="settings-node-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' + nameEsc + '">' + t("revoke") + "</button></div></li>";
+      }).join("");
+    } catch (e) {
+      this.ctx.showError(e.message);
+    }
+  }
+  // Opens with the path pre-filled, suggesting a node name (from the tree's "share as node" button).
+  prefill(path) {
+    this.hideResult();
+    const pathEl = document.getElementById("settings-node-path");
+    const nameEl = document.getElementById("settings-node-name");
+    if (pathEl) pathEl.value = path;
+    if (nameEl) {
+      nameEl.value = suggestNodeName(path);
+      nameEl.focus();
+      nameEl.select();
+    }
+  }
+  async publishNode(name, path) {
+    const data = await this.ctx.fetch("/api/admin/nodes", {
+      method: "POST",
+      body: JSON.stringify({ name, path })
+    });
+    document.getElementById("settings-node-link").value = data.link || "";
+    this.result.classList.remove("hidden");
+    this.load();
+  }
+  async submit(e) {
+    e.preventDefault();
+    this.ctx.clearError();
+    const name = document.getElementById("settings-node-name").value.trim();
+    const path = document.getElementById("settings-node-path").value.trim();
+    if (!name || !path) return;
+    try {
+      await this.publishNode(name, path);
+      this.form.reset();
+    } catch (err) {
+      this.ctx.showError(err.message);
+    }
+  }
+  hideResult() {
+    this.result.classList.add("hidden");
+    document.getElementById("settings-node-link").value = "";
+  }
+  async onClick(e) {
+    const relinkBtn = this.ctx.hit(e, ".settings-node-relink");
+    if (relinkBtn) {
+      const ok2 = await confirmDialog({
+        title: t("settingsNodeRelinkTitle"),
+        message: t("settingsNodeRelinkMsg", relinkBtn.dataset.name),
+        confirmLabel: t("settingsNodeRelink")
+      });
+      if (!ok2) return;
+      try {
+        await this.publishNode(relinkBtn.dataset.name || "", relinkBtn.dataset.path || "");
+      } catch (err) {
+        this.ctx.showError(err.message);
+      }
+      return;
+    }
+    const revokeBtn = this.ctx.hit(e, ".settings-node-revoke");
+    if (!revokeBtn || !revokeBtn.dataset.name) return;
+    const ok = await confirmDialog({
+      title: t("settingsRevokeNodeTitle"),
+      message: t("settingsRevokeNodeMsg", revokeBtn.dataset.name),
+      confirmLabel: t("revoke"),
+      destructive: true
+    });
+    if (!ok) return;
+    try {
+      await this.ctx.fetch("/api/admin/nodes", {
+        method: "DELETE",
+        body: JSON.stringify({ name: revokeBtn.dataset.name })
+      });
+      this.load();
+    } catch (err) {
+      this.ctx.showError(err.message);
+    }
+  }
+}
+
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class SettingsRemotes {
+  constructor(ctx) {
+    this.ctx = ctx;
+    __publicField(this, "list", document.getElementById("settings-remotes-list"));
+    __publicField(this, "form", document.getElementById("settings-remote-form"));
+    document.getElementById("btn-node-appropriate").addEventListener("click", () => this.appropriateFromDoc());
+    document.getElementById("btn-node-remove").addEventListener("click", () => this.removeFromDoc());
+    this.form.addEventListener("submit", (e) => this.submit(e));
+    this.list.addEventListener("click", (e) => this.onClick(e));
+  }
+  async load() {
+    this.list.innerHTML = "";
+    try {
+      const remotes = await this.ctx.fetch("/api/admin/remotes");
+      if (!Array.isArray(remotes) || remotes.length === 0) {
+        this.list.innerHTML = '<li class="text-sm text-ink-500">' + t("settingsNoRemotes") + "</li>";
+        return;
+      }
+      this.list.innerHTML = remotes.map((r) => {
+        const nameEsc = escapeHtml(r.name || "");
+        const pathEsc = escapeHtml(r.path || "");
+        const synced = r.last_sync_at ? t("settingsRemoteSynced", shareFormatDate(r.last_sync_at)) : t("settingsRemoteNeverSynced");
+        const originHost = (r.url || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+        const originLine = originHost ? '<div class="text-xs text-sky-300/70 mt-0.5 truncate" title="' + escapeHtml(r.url || "") + '">' + escapeHtml(t("settingsRemoteFrom", originHost)) + "</div>" : "";
+        const errLine = r.last_error ? '<div class="text-rose-400 text-xs mt-0.5 truncate" title="' + escapeHtml(r.last_error) + '">' + escapeHtml(t("settingsRemoteError", r.last_error)) + "</div>" : "";
+        return '<li class="admin-row bg-navy-900 border subtle-border rounded p-3 text-sm"><div class="flex-1 min-w-0"><div class="text-ink-100 font-medium font-mono truncate" title="' + nameEsc + '">' + nameEsc + '</div><div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' + pathEsc + '">' + pathEsc + "</div>" + originLine + '<div class="text-ink-500 text-xs mt-0.5">' + escapeHtml(synced) + "</div>" + errLine + '</div><div class="admin-row__actions"><button class="settings-remote-sync px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' + nameEsc + '">' + t("settingsRemoteSync") + '</button><button class="settings-remote-appropriate px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' + nameEsc + '" title="' + escapeHtml(t("settingsRemoteAppropriateTitle")) + '">' + t("settingsRemoteAppropriate") + '</button><button class="settings-remote-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' + nameEsc + '">' + t("settingsRemoteRemove") + "</button></div></li>";
+      }).join("");
+    } catch (e) {
+      this.ctx.showError(e.message);
+    }
+  }
+  async submit(e) {
+    e.preventDefault();
+    this.ctx.clearError();
+    const input = document.getElementById("settings-remote-link");
+    const link = input.value.trim();
+    if (!link) return;
+    try {
+      const res = await this.ctx.fetch("/api/admin/remotes", {
+        method: "POST",
+        body: JSON.stringify({ link })
+      });
+      input.value = "";
+      if (res && res.sync && res.sync.ok === false) {
+        this.ctx.showError(t("settingsRemoteSyncFailed", res.sync.error || ""));
+      }
+      this.load();
+    } catch (err) {
+      this.ctx.showError(err.message);
+    }
+  }
+  async onClick(e) {
+    const syncBtn = this.ctx.hit(e, ".settings-remote-sync");
+    if (syncBtn) {
+      syncBtn.disabled = true;
+      try {
+        const res = await this.ctx.fetch("/api/admin/remotes/sync", {
+          method: "POST",
+          body: JSON.stringify({ name: syncBtn.dataset.name })
+        });
+        const r = res && res.results ? res.results[syncBtn.dataset.name] : null;
+        if (r && r.ok === false) this.ctx.showError(t("settingsRemoteSyncFailed", r.error || ""));
+      } catch (err) {
+        this.ctx.showError(err.message);
+      }
+      this.load();
+      return;
+    }
+    const apprBtn = this.ctx.hit(e, ".settings-remote-appropriate");
+    if (apprBtn) {
+      const name = apprBtn.dataset.name;
+      const dest = await promptDialog({
+        title: t("settingsRemoteAppropriate"),
+        message: t("settingsRemoteAppropriatePrompt", name),
+        value: name,
+        placeholder: t("appropriateDestPlaceholder"),
+        confirmLabel: t("settingsRemoteAppropriate")
+      });
+      if (!dest) return;
+      try {
+        const res = await this.ctx.fetch("/api/admin/remotes/appropriate", {
+          method: "POST",
+          body: JSON.stringify({ name, source: "", dest })
+        });
+        this.ctx.showError(t("settingsRemoteAppropriated", String(res.copied || 0)));
+      } catch (err) {
+        this.ctx.showError(err.message);
+      }
+      return;
+    }
+    const delBtn = this.ctx.hit(e, ".settings-remote-del");
+    if (!delBtn || !delBtn.dataset.name) return;
+    const ok = await confirmDialog({
+      title: t("settingsRemoteRemoveTitle"),
+      message: t("settingsRemoteRemoveMsg", delBtn.dataset.name),
+      confirmLabel: t("settingsRemoteRemove"),
+      destructive: true
+    });
+    if (!ok) return;
+    try {
+      await this.ctx.fetch("/api/admin/remotes", {
+        method: "DELETE",
+        body: JSON.stringify({ name: delBtn.dataset.name })
+      });
+      this.load();
+    } catch (err) {
+      this.ctx.showError(err.message);
+    }
+  }
+  // Appropriate from a mirror doc: node's only file → whole node, otherwise just that file.
+  // Produces a detached, editable copy in your documents.
+  async appropriateFromDoc() {
+    const file = currentFile;
+    if (!file) return;
+    const info = remoteNodeInfo(file.path);
+    if (!info) return;
+    const whole = info.fileCount <= 1;
+    const dest = await promptDialog({
+      title: t("nodeAppropriateBtn"),
+      message: whole ? t("nodeAppropriateWholePrompt", info.name) : t("nodeAppropriateFilePrompt", file.name),
+      value: whole ? info.name : file.name || "",
+      confirmLabel: t("nodeAppropriateBtn")
+    });
+    if (!dest) return;
+    try {
+      const res = await this.ctx.fetch("/api/admin/remotes/appropriate", {
+        method: "POST",
+        body: JSON.stringify({ name: info.name, source: whole ? "" : info.sourceRel, dest })
+      });
+      setStatus(t("settingsRemoteAppropriated", String(res.copied || 0)), "ok");
+      await refreshTreeOrReload();
+    } catch (e) {
+      setStatus(t("err", e.message), "err");
+    }
+  }
+  // Remove from a mirror doc = unsubscribe entirely: a single removed file would just come back on
+  // the next sync, so we drop the whole subscription.
+  async removeFromDoc() {
+    const file = currentFile;
+    if (!file) return;
+    const info = remoteNodeInfo(file.path);
+    if (!info) return;
+    const ok = await confirmDialog({
+      title: t("nodeRemoveTitle"),
+      message: t("settingsRemoteRemoveMsg", info.name),
+      confirmLabel: t("settingsRemoteRemove"),
+      destructive: true
+    });
+    if (!ok) return;
+    try {
+      await this.ctx.fetch("/api/admin/remotes", {
+        method: "DELETE",
+        body: JSON.stringify({ name: info.name })
+      });
+      showWelcome();
+      await refreshTreeOrReload();
+    } catch (e) {
+      setStatus(t("err", e.message), "err");
+    }
+  }
+}
+
+class SettingsGroups {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.wire();
+  }
+  async load() {
+    const list = document.getElementById("settings-groups-list");
+    if (!list) return;
+    list.innerHTML = "";
+    try {
+      const groups = await this.ctx.fetch("/api/admin/groups");
+      const names = Object.keys(groups || {}).sort();
+      if (!names.length) {
+        list.innerHTML = '<li class="text-sm text-ink-500">' + t("settingsNoGroups") + "</li>";
+        return;
+      }
+      list.innerHTML = names.map((name) => {
+        const members = groups[name] || [];
+        const nameEsc = escapeHtml(name);
+        const membersEsc = escapeHtml(members.join(", "));
+        return '<li class="bg-navy-900 border subtle-border rounded p-2.5 text-sm"><div class="admin-row"><div class="flex-1 min-w-0"><div class="text-ink-100 font-medium font-mono truncate">' + nameEsc + '</div><div class="text-ink-400 text-xs mt-0.5 truncate" title="' + membersEsc + '">' + (members.length ? membersEsc : '<span class="text-ink-500">' + t("settingsGroupEmpty") + "</span>") + '</div></div><div class="admin-row__actions"><button class="settings-group-edit px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-name="' + nameEsc + '" data-members="' + membersEsc + '">' + t("settingsGroupEdit") + '</button><button class="settings-group-del px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-name="' + nameEsc + '">' + t("settingsGroupDelete") + "</button></div></div></li>";
+      }).join("");
+    } catch (e) {
+      this.ctx.showError(e.message);
+    }
+  }
+  // Node path = a creatable combobox over the mind's existing folders; members = a creatable
+  // multi/chips combobox (pick known accounts via /api/directory or type a new email). Both mount
+  // once on static inputs that never leave the DOM, so no per-render teardown is needed.
+  wire() {
+    const nodePathEl = document.getElementById("settings-node-path");
+    if (nodePathEl) AtlasCombobox(nodePathEl, { source: getAllDirs, creatable: true });
+    const groupForm = document.getElementById("settings-group-form");
+    if (!groupForm) return;
+    const membersCb = AtlasCombobox(document.getElementById("settings-group-members"), {
+      source: async () => {
+        try {
+          const r = await fetch("/api/directory");
+          return r.ok ? (await r.json()).users || [] : [];
+        } catch (_) {
+          return [];
+        }
+      },
+      creatable: true,
+      multi: true,
+      separator: ","
+    });
+    groupForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      this.ctx.clearError();
+      const name = document.getElementById("settings-group-name").value.trim();
+      const members = membersCb.getValue();
+      try {
+        await this.ctx.fetch("/api/admin/groups", {
+          method: "POST",
+          body: JSON.stringify({ name, members })
+        });
+        groupForm.reset();
+        membersCb.clear();
+        this.load();
+      } catch (err) {
+        this.ctx.showError(err.message);
+      }
+    });
+    document.getElementById("settings-groups-list").addEventListener("click", async (e) => {
+      const editBtn = this.ctx.hit(e, ".settings-group-edit");
+      if (editBtn) {
+        document.getElementById("settings-group-name").value = editBtn.dataset.name || "";
+        membersCb.setValue(editBtn.dataset.members || "");
+        document.getElementById("settings-group-name").focus();
+        return;
+      }
+      const delBtn = this.ctx.hit(e, ".settings-group-del");
+      if (delBtn) {
+        const ok = await confirmDialog({
+          title: t("settingsGroupDeleteTitle"),
+          message: t("settingsGroupDeleteMsg", delBtn.dataset.name),
+          confirmLabel: t("settingsGroupDelete"),
+          destructive: true
+        });
+        if (!ok) return;
+        try {
+          await this.ctx.fetch("/api/admin/groups", {
+            method: "DELETE",
+            body: JSON.stringify({ name: delBtn.dataset.name })
+          });
+          this.load();
+        } catch (err) {
+          this.ctx.showError(err.message);
+        }
+      }
+    });
+  }
+}
+
+class SettingsProfile {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+  async load() {
+    const form = document.getElementById("account-profile-form");
+    const first = document.getElementById("account-profile-first");
+    const last = document.getElementById("account-profile-last");
+    if (!form || !first || !last) return;
+    if (!form.dataset.wired) {
+      form.dataset.wired = "1";
+      form.addEventListener("submit", (e) => this.save(e));
+    }
+    try {
+      const data = await this.ctx.fetch("/api/account/profile");
+      first.value = data.first_name || "";
+      last.value = data.last_name || "";
+      const avatar = document.getElementById("account-profile-avatar");
+      if (avatar && data.email) avatar.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 64);
+    } catch (e) {
+      this.ctx.showError(e.message);
+    }
+  }
+  async save(e) {
+    e.preventDefault();
+    this.ctx.clearError();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const first = document.getElementById("account-profile-first").value.trim();
+    const last = document.getElementById("account-profile-last").value.trim();
+    btn.disabled = true;
+    try {
+      await this.ctx.fetch("/api/account/profile", {
+        method: "POST",
+        body: JSON.stringify({ first_name: first, last_name: last })
+      });
+      const status = document.getElementById("account-profile-status");
+      if (status) {
+        status.textContent = t("profileSaved");
+        status.classList.remove("hidden");
+        setTimeout(() => status.classList.add("hidden"), 2500);
+      }
+    } catch (err) {
+      this.ctx.showError(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+}
+
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class SettingsPanel {
+  constructor() {
+    __publicField(this, "settingsBtn", document.getElementById("settings-btn"));
+    __publicField(this, "settingsBackdrop", document.getElementById("settings-backdrop"));
+    __publicField(this, "settingsClose", document.getElementById("settings-close"));
+    // Shared services + the seven tab controllers. ctx is declared first so the controller field
+    // initializers below can read it.
+    __publicField(this, "ctx", new SettingsContext());
+    __publicField(this, "users", new SettingsUsers(this.ctx));
+    __publicField(this, "tokens", new SettingsTokens(this.ctx));
+    __publicField(this, "shares", new SettingsShares(this.ctx));
+    __publicField(this, "nodes", new SettingsNodes(this.ctx));
+    __publicField(this, "remotes", new SettingsRemotes(this.ctx));
+    __publicField(this, "groups", new SettingsGroups(this.ctx));
+    __publicField(this, "profile", new SettingsProfile(this.ctx));
+    this.settingsBtn.addEventListener("click", () => this.open());
+    this.settingsClose.addEventListener("click", () => this.close());
+    this.settingsBackdrop.addEventListener("click", (e) => {
+      if (e.target === this.settingsBackdrop) this.close();
+    });
+    document.querySelectorAll(".settings-tab").forEach((tab) => {
+      tab.addEventListener("click", () => this.selectTab(tab.dataset.tab));
+    });
+  }
+  // ── error banner (called cross-file via the showSettingsError/clearSettingsError wrappers) ──
+  showError(message) {
+    this.ctx.showError(message);
+  }
+  clearError() {
+    this.ctx.clearError();
+  }
+  // ── open / close / tabs ──
+  open() {
+    this.tokens.hideResult();
+    this.settingsBackdrop.classList.remove("hidden");
+    const isAdmin = document.body.classList.contains("admin-cloud");
+    this.selectTab("security");
+    if (isAdmin) this.refreshUpdateBanner();
+  }
+  close() {
+    this.settingsBackdrop.classList.add("hidden");
+  }
+  // Opens Settings → Nodes with the path pre-filled (from the tree button). Called cross-file via
+  // the openPublishNode wrapper (02-content-tree.ts).
+  openPublish(path) {
+    this.open();
+    this.selectTab("nodes");
+    this.nodes.prefill(path);
+  }
+  selectTab(name) {
+    document.querySelectorAll(".settings-tab").forEach((tab) => {
+      tab.classList.toggle("is-active", tab.dataset.tab === name);
+    });
+    document.querySelectorAll(".settings-pane").forEach((pane) => {
+      pane.classList.add("hidden");
+    });
+    document.getElementById("settings-pane-" + name).classList.remove("hidden");
+    this.ctx.clearError();
+    if (name === "users") this.users.load();
+    else if (name === "tokens") this.tokens.load();
+    else if (name === "shares") this.shares.load();
+    else if (name === "nodes") {
+      this.nodes.load();
+      this.remotes.load();
+    } else if (name === "groups") this.groups.load();
+    else if (name === "security") {
+      refreshSecurityState();
+      this.profile.load();
+    }
+  }
+  // Admin-only, best-effort: never block Settings if the check fails/offline.
+  async refreshUpdateBanner() {
+    const banner = document.getElementById("settings-update-banner");
+    if (!banner) return;
+    banner.classList.add("hidden");
+    try {
+      const data = await this.ctx.fetch("/api/admin/update-check");
+      if (data && data.update_available && data.latest) {
+        banner.textContent = t("settingsUpdateAvailable").replace("{latest}", data.latest).replace("{current}", data.current || "?");
+        banner.href = data.url || "https://pypi.org/project/atlas-mind/";
+        banner.classList.remove("hidden");
+      }
+    } catch (_) {
+    }
+  }
+}
+const settingsPanel = new SettingsPanel();
+function showSettingsError(message) {
+  settingsPanel.showError(message);
+}
+function clearSettingsError() {
+  settingsPanel.clearError();
+}
+function closeSettings() {
+  settingsPanel.close();
+}
+function openPublishNode(path) {
+  settingsPanel.openPublish(path);
+}
 
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
@@ -10292,1254 +8366,1362 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     9: [6, 26, 46],
     10: [6, 28, 50]
   });
-  let QrCode = _QrCode;
-  root.QrCode = QrCode;
+  let QrCode2 = _QrCode;
+  root.QrCode = QrCode2;
 })(typeof window !== "undefined" ? window : globalThis);
-
-// QR-to-canvas bridge + Security/2FA (TOTP) modal wiring. Split out of the old 17-qr.js:
-// the pure codec now lives in 17-qr.ts (the QrCode class); this is the DOM side. Stays
-// .js (migrated later). Sorts after 17-qr.ts and before 18-totp.js, which finishes the
-// 2FA flow and is the sole caller of renderQrCode (via the enable handler).
-
-// Renders an encoded QR into a container via a crisp <canvas> (square pixels).
-function renderQrCode(container, text, sizePx) {
+function renderQrCanvas(el, text, sizePx) {
   const matrix = new QrCode(text).matrix;
-
   if (!matrix) return false;
-  const n = matrix.length,
-    quiet = 4,
-    total = n + quiet * 2;
-  const scale = Math.max(2, Math.floor((sizePx || 180) / total));
+  const n = matrix.length;
+  const quiet = 4;
+  const total = n + quiet * 2;
+  const scale = Math.max(2, Math.floor(sizePx / total));
   const px = total * scale;
-  const canvas = document.createElement('canvas');
-
+  const canvas = document.createElement("canvas");
   canvas.width = px;
   canvas.height = px;
-  canvas.style.width = px + 'px';
-  canvas.style.height = px + 'px';
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#fff';
+  canvas.style.width = px + "px";
+  canvas.style.height = px + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, px, px);
-  ctx.fillStyle = '#000';
-
+  ctx.fillStyle = "#000";
   for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++) {
       if (matrix[r][c]) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
     }
-
-  container.innerHTML = '';
-  container.appendChild(canvas);
-
+  el.innerHTML = "";
+  el.appendChild(canvas);
   return true;
 }
 
-// ── Security: 2FA (TOTP) + sessions ──────────────────────────────────────────
-const securityTotpStatus = document.getElementById('security-totp-status');
-const securityTotpEnableBtn = document.getElementById('security-totp-enable');
-const securityTotpDisableBtn = document.getElementById('security-totp-disable');
-const securityLogoutAllBtn = document.getElementById('security-logout-all');
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const _TotpEnrollModal = class _TotpEnrollModal {
+  constructor() {
+    // a 6-digit code is a TOTP, anything else a recovery code
+    __publicField(this, "backdrop", document.getElementById("totp-backdrop"));
+    __publicField(this, "modalTitle", document.getElementById("totp-title"));
+    __publicField(this, "errorBox", document.getElementById("totp-error"));
+    __publicField(this, "closeBtn", document.getElementById("totp-close"));
+    __publicField(this, "stepEnroll", document.getElementById("totp-step-enroll"));
+    __publicField(this, "stepRecovery", document.getElementById("totp-step-recovery"));
+    __publicField(this, "stepDisable", document.getElementById("totp-step-disable"));
+    __publicField(this, "qr", document.getElementById("totp-qr"));
+    __publicField(this, "secretValue", document.getElementById("totp-secret-value"));
+    __publicField(this, "secretCopy", document.getElementById("totp-secret-copy"));
+    __publicField(this, "verifyForm", document.getElementById("totp-verify-form"));
+    __publicField(this, "verifyCode", document.getElementById("totp-verify-code"));
+    __publicField(this, "verifySubmit", document.getElementById("totp-verify-submit"));
+    __publicField(this, "enrollCancel", document.getElementById("totp-enroll-cancel"));
+    __publicField(this, "recoveryList", document.getElementById("totp-recovery-list"));
+    __publicField(this, "recoveryCopy", document.getElementById("totp-recovery-copy"));
+    __publicField(this, "recoveryDone", document.getElementById("totp-recovery-done"));
+    __publicField(this, "disableForm", document.getElementById("totp-disable-form"));
+    __publicField(this, "disableCode", document.getElementById("totp-disable-code"));
+    __publicField(this, "disableSubmit", document.getElementById("totp-disable-submit"));
+    // ---- state ----
+    __publicField(this, "recoveryCodes", []);
+    // shown ONCE after enable, held only until the modal closes
+    // Escape handler bound once: added in the CAPTURE phase so it closes only this modal, and removed
+    // by the same reference on close.
+    __publicField(this, "keyHandler", (e) => this.onKey(e));
+    this.wire();
+  }
+  // ---- modal open / close ----
+  openModal(mode) {
+    this.clearError();
+    this.stepEnroll.classList.toggle("hidden", mode !== "enroll");
+    this.stepRecovery.classList.add("hidden");
+    this.stepDisable.classList.toggle("hidden", mode !== "disable");
+    this.modalTitle.textContent = mode === "disable" ? t("totpModalDisableTitle") : t("totpModalTitle");
+    this.backdrop.classList.remove("hidden");
+    document.addEventListener("keydown", this.keyHandler, true);
+  }
+  closeModal() {
+    this.backdrop.classList.add("hidden");
+    document.removeEventListener("keydown", this.keyHandler, true);
+    this.recoveryCodes = [];
+  }
+  // Capture + stopPropagation so Escape closes only the 2FA modal, never the Settings panel
+  // underneath. While the recovery codes are shown, Escape is blocked (explicit "Done" required).
+  onKey(e) {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (this.stepRecovery.classList.contains("hidden")) this.closeModal();
+  }
+  showError(msg) {
+    this.errorBox.textContent = msg;
+    this.errorBox.classList.remove("hidden");
+  }
+  clearError() {
+    this.errorBox.classList.add("hidden");
+    this.errorBox.textContent = "";
+  }
+  // ---- enable: init (secret + URI) → show QR + secret → verification ----
+  // The Security pane keeps its enable button disabled for the round-trip; this owns only the flow.
+  async enroll() {
+    try {
+      const data = await settingsFetch("/api/account/totp/init", {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+      this.secretValue.value = data.secret || "";
+      this.verifyCode.value = "";
+      this.qr.innerHTML = "";
+      const ok = !!data.otpauth_uri && renderQrCanvas(this.qr, data.otpauth_uri, 184);
+      this.qr.classList.toggle("hidden", !ok);
+      this.openModal("enroll");
+      setTimeout(() => this.verifyCode.focus(), 60);
+    } catch (err) {
+      showSettingsError(err.message || t("settingsErrGeneric"));
+    }
+  }
+  async verifyEnable(e) {
+    e.preventDefault();
+    this.clearError();
+    const code = this.verifyCode.value.trim();
+    if (!code) {
+      this.showError(t("totpCodeRequired"));
+      return;
+    }
+    this.verifySubmit.disabled = true;
+    try {
+      const data = await settingsFetch("/api/account/totp/enable", {
+        method: "POST",
+        body: JSON.stringify({ code })
+      });
+      setCsrfToken(readCsrfCookie());
+      totpEnabled = true;
+      refreshSecurityState();
+      this.recoveryCodes = Array.isArray(data.recovery_codes) ? data.recovery_codes : [];
+      this.recoveryList.innerHTML = this.recoveryCodes.map(
+        (c) => '<li class="bg-black/40 border subtle-border rounded px-2 py-1.5 text-center select-all">' + escapeHtml(c) + "</li>"
+      ).join("");
+      this.stepEnroll.classList.add("hidden");
+      this.stepRecovery.classList.remove("hidden");
+      setStatus(t("totpEnabledToast"), "ok");
+    } catch (err) {
+      const fail = err;
+      this.showError(fail.status === 400 ? t("totpInvalidCode") : fail.message || t("settingsErrGeneric"));
+    } finally {
+      this.verifySubmit.disabled = false;
+    }
+  }
+  async copySecret() {
+    try {
+      await navigator.clipboard.writeText(this.secretValue.value);
+      this.secretCopy.textContent = t("copied");
+      setTimeout(() => this.secretCopy.textContent = t("copy"), 1200);
+    } catch (e) {
+      this.secretValue.select();
+    }
+  }
+  async copyRecovery() {
+    try {
+      await navigator.clipboard.writeText(this.recoveryCodes.join("\n"));
+      this.recoveryCopy.textContent = t("copied");
+      setTimeout(() => this.recoveryCopy.textContent = t("totpRecoveryCopy"), 1200);
+    } catch (e) {
+    }
+  }
+  // ---- disable: asks for a code (TOTP or recovery) ----
+  openDisable() {
+    this.disableCode.value = "";
+    this.openModal("disable");
+    setTimeout(() => this.disableCode.focus(), 60);
+  }
+  async disable(e) {
+    e.preventDefault();
+    this.clearError();
+    const code = this.disableCode.value.trim();
+    if (!code) {
+      this.showError(t("totpCodeRequired"));
+      return;
+    }
+    this.disableSubmit.disabled = true;
+    try {
+      const body = _TotpEnrollModal.SIX_DIGITS.test(code) ? { code } : { recovery: code };
+      await settingsFetch("/api/account/totp/disable", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      setCsrfToken(readCsrfCookie());
+      totpEnabled = false;
+      refreshSecurityState();
+      this.closeModal();
+      setStatus(t("totpDisabledToast"), "ok");
+    } catch (err) {
+      const fail = err;
+      this.showError(fail.status === 400 ? t("totpInvalidCode") : fail.message || t("settingsErrGeneric"));
+    } finally {
+      this.disableSubmit.disabled = false;
+    }
+  }
+  wire() {
+    this.verifyForm.addEventListener("submit", (e) => this.verifyEnable(e));
+    this.secretCopy.addEventListener("click", () => this.copySecret());
+    this.recoveryCopy.addEventListener("click", () => this.copyRecovery());
+    this.enrollCancel.addEventListener("click", () => this.closeModal());
+    this.recoveryDone.addEventListener("click", () => this.closeModal());
+    this.closeBtn.addEventListener("click", () => {
+      if (this.stepRecovery.classList.contains("hidden")) this.closeModal();
+    });
+    this.backdrop.addEventListener("click", (e) => {
+      if (e.target === this.backdrop && this.stepRecovery.classList.contains("hidden")) this.closeModal();
+    });
+    this.disableForm.addEventListener("submit", (e) => this.disable(e));
+  }
+};
+__publicField(_TotpEnrollModal, "SIX_DIGITS", /^[0-9]{6}$/);
+let TotpEnrollModal = _TotpEnrollModal;
+const totpModal = new TotpEnrollModal();
 
-const totpBackdrop = document.getElementById('totp-backdrop');
-const totpTitle = document.getElementById('totp-title');
-const totpError = document.getElementById('totp-error');
-const totpClose = document.getElementById('totp-close');
-const totpStepEnroll = document.getElementById('totp-step-enroll');
-const totpStepRecovery = document.getElementById('totp-step-recovery');
-const totpStepDisable = document.getElementById('totp-step-disable');
-const totpQr = document.getElementById('totp-qr');
-const totpSecretValue = document.getElementById('totp-secret-value');
-const totpSecretCopy = document.getElementById('totp-secret-copy');
-const totpVerifyForm = document.getElementById('totp-verify-form');
-const totpVerifyCode = document.getElementById('totp-verify-code');
-const totpVerifySubmit = document.getElementById('totp-verify-submit');
-const totpEnrollCancel = document.getElementById('totp-enroll-cancel');
-const totpRecoveryList = document.getElementById('totp-recovery-list');
-const totpRecoveryCopy = document.getElementById('totp-recovery-copy');
-const totpRecoveryDone = document.getElementById('totp-recovery-done');
-const totpDisableForm = document.getElementById('totp-disable-form');
-const totpDisableCode = document.getElementById('totp-disable-code');
-const totpDisableSubmit = document.getElementById('totp-disable-submit');
-const totpDisableCancel = document.getElementById('totp-disable-cancel');
-let pendingRecoveryCodes = [];
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class SecurityPane {
+  constructor() {
+    __publicField(this, "statusBadge", document.getElementById("security-totp-status"));
+    __publicField(this, "enableBtn", document.getElementById("security-totp-enable"));
+    __publicField(this, "disableBtn", document.getElementById("security-totp-disable"));
+    __publicField(this, "logoutAllBtn", document.getElementById("security-logout-all"));
+    this.wire();
+  }
+  // totpEnabled is updated by /api/me and by the enable/disable actions.
+  refreshState() {
+    this.statusBadge.textContent = totpEnabled ? t("securityTotpStatusOn") : t("securityTotpStatusOff");
+    this.statusBadge.classList.toggle("bg-emerald-500/20", totpEnabled);
+    this.statusBadge.classList.toggle("text-emerald-300", totpEnabled);
+    this.statusBadge.classList.toggle("bg-ink-500/15", !totpEnabled);
+    this.statusBadge.classList.toggle("text-ink-400", !totpEnabled);
+    this.enableBtn.classList.toggle("hidden", totpEnabled);
+    this.disableBtn.classList.toggle("hidden", !totpEnabled);
+  }
+  // The enable button stays disabled for the whole init round-trip (no double-submit); the modal owns
+  // the enrollment flow itself.
+  async enable() {
+    this.enableBtn.disabled = true;
+    try {
+      await totpModal.enroll();
+    } finally {
+      this.enableBtn.disabled = false;
+    }
+  }
+  // ---- log out all my sessions: in-app confirmation then redirect to /login ----
+  async logoutAll() {
+    const ok = await confirmDialog({
+      title: t("securityLogoutAllConfirmTitle"),
+      message: t("securityLogoutAllConfirmMsg"),
+      confirmLabel: t("securityLogoutAllConfirm"),
+      destructive: true
+    });
+    if (!ok) return;
+    this.logoutAllBtn.disabled = true;
+    try {
+      await settingsFetch("/api/account/logout-all", { method: "POST", body: JSON.stringify({}) });
+      window.location.href = "/login";
+    } catch (err) {
+      showSettingsError(err.message || t("settingsErrGeneric"));
+      this.logoutAllBtn.disabled = false;
+    }
+  }
+  wire() {
+    this.enableBtn.addEventListener("click", () => this.enable());
+    this.disableBtn.addEventListener("click", () => totpModal.openDisable());
+    this.logoutAllBtn.addEventListener("click", () => this.logoutAll());
+  }
+}
+const securityPane = new SecurityPane();
 
 function refreshSecurityState() {
-  // totpEnabled is updated by /api/me and by the enable/disable actions.
-  securityTotpStatus.textContent = totpEnabled
-    ? t('securityTotpStatusOn')
-    : t('securityTotpStatusOff');
-  securityTotpStatus.classList.toggle('bg-emerald-500/20', totpEnabled);
-  securityTotpStatus.classList.toggle('text-emerald-300', totpEnabled);
-  securityTotpStatus.classList.toggle('bg-ink-500/15', !totpEnabled);
-  securityTotpStatus.classList.toggle('text-ink-400', !totpEnabled);
-  securityTotpEnableBtn.classList.toggle('hidden', totpEnabled);
-  securityTotpDisableBtn.classList.toggle('hidden', !totpEnabled);
+  securityPane.refreshState();
 }
 
-function showTotpError(msg) {
-  totpError.textContent = msg;
-  totpError.classList.remove('hidden');
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const qcBtn = document.getElementById("quick-capture-btn");
+const qcBackdrop = document.getElementById("quick-capture-backdrop");
+const qcForm = document.getElementById("quick-capture-form");
+const qcTitle = document.getElementById("quick-capture-title");
+const qcBody = document.getElementById("quick-capture-body");
+const qcCancel = document.getElementById("quick-capture-cancel");
+const qcError = document.getElementById("quick-capture-error");
+class QuickCaptureModal extends Modal {
+  constructor() {
+    super(qcBackdrop);
+    // qc* are the nullable getElementById consts above; assert/cast to the precise type here.
+    __publicField(this, "title", qcTitle);
+    __publicField(this, "body", qcBody);
+    __publicField(this, "error", qcError);
+    qcBtn.addEventListener("click", () => this.open());
+    qcCancel.addEventListener("click", () => this.close());
+    document.getElementById("quick-capture-close")?.addEventListener("click", () => this.close());
+    qcForm.addEventListener("submit", (e) => this.submit(e));
+  }
+  open() {
+    if (window.__viewerMode) return;
+    this.error.classList.add("hidden");
+    this.title.value = "";
+    this.body.value = "";
+    this.reveal();
+    setTimeout(() => this.title.focus(), 50);
+  }
+  async submit(e) {
+    e.preventDefault();
+    this.error.classList.add("hidden");
+    const title = this.title.value.trim();
+    if (!title) {
+      this.error.textContent = t("titleRequired");
+      this.error.classList.remove("hidden");
+      return;
+    }
+    const body = this.body.value.trim();
+    const now = /* @__PURE__ */ new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const dateStr = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) + "-" + pad(now.getHours()) + pad(now.getMinutes());
+    const slug = (slugify(title) || "note").slice(0, 50);
+    const path = "inbox/" + dateStr + "-" + slug + ".md";
+    const content = "# " + title + "\n\n_Capture : " + now.toLocaleString("fr-FR") + "_\n\n" + body + "\n";
+    try {
+      const res = await fetch("/api/file", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, content })
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      this.close();
+      setStatus(t("noteSaved"), "ok");
+    } catch (e2) {
+      this.error.textContent = t("err", e2.message);
+      this.error.classList.remove("hidden");
+    }
+  }
+}
+const quickCaptureModal = new QuickCaptureModal();
+
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class TemplateRegistry {
+  constructor(template, name, dir) {
+    this.template = template;
+    this.name = name;
+    this.dir = dir;
+    __publicField(this, "extArea", document.getElementById("new-file-ext-area"));
+    // Extension templates, keyed by select value. Null prototype: `for..in` yields only real entries.
+    __publicField(this, "providers", /* @__PURE__ */ Object.create(null));
+    this.populateOptions();
+  }
+  // Fills a DOC_TEMPLATES skeleton: tokens {{title}}, {{date}} (UI-locale long form), {{isoDate}}
+  // (YYYY-MM-DD). Unknown kind (incl. 'blank') → title only.
+  static buildContent(kind, title) {
+    const template = DOC_TEMPLATES[kind];
+    if (!template) return "# " + title + "\n\n";
+    const locale = LANG === "en" ? "en-GB" : "fr-FR";
+    const today = (/* @__PURE__ */ new Date()).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" });
+    const isoDate = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    return template.replaceAll("{{title}}", title).replaceAll("{{date}}", today).replaceAll("{{isoDate}}", isoDate);
+  }
+  // The provider bound to the current select value, or null for a built-in skeleton / 'blank'.
+  activeProvider() {
+    return this.providers[this.template.value] || null;
+  }
+  // Run every registered provider's onOpen() hook (NewFileModal.open). A thrown hook is logged, never fatal.
+  runOpenHooks() {
+    for (const value in this.providers) {
+      const provider = this.providers[value];
+      if (provider.onOpen) {
+        try {
+          provider.onOpen();
+        } catch (err) {
+          console.warn("[extension] onOpen", value, err);
+        }
+      }
+    }
+  }
+  updateExtras() {
+    const active = this.activeProvider();
+    for (const value in this.providers) {
+      const provider = this.providers[value];
+      if (provider.block) provider.block.classList.toggle("hidden", provider !== active);
+    }
+    this.name.placeholder = active && active.namePlaceholder || t("docNamePlaceholder");
+    if (active && active.defaultDir && !this.dir.value.trim()) {
+      this.dir.value = active.defaultDir;
+    }
+  }
+  // "Blank" stays the reserved first option; skeleton names cannot override it.
+  populateOptions() {
+    for (const skelName of Object.keys(DOC_TEMPLATES).sort()) {
+      if (skelName === "blank") continue;
+      const option = document.createElement("option");
+      option.value = skelName;
+      option.textContent = skelName;
+      this.template.appendChild(option);
+    }
+  }
+  // window.Atlas.registerTemplate. Rejected: a falsy value/provider or one without generate(),
+  // 'blank', a DOC_TEMPLATES skeleton of the same name, or an already-registered value.
+  registerTemplate(value, provider) {
+    if (!value || !provider || typeof provider.generate !== "function") return false;
+    if (value === "blank" || this.providers[value] || DOC_TEMPLATES[value]) return false;
+    this.providers[value] = provider;
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = provider.label || value;
+    this.template.appendChild(option);
+    if (provider.block) {
+      provider.block.classList.add("hidden");
+      this.extArea.appendChild(provider.block);
+    }
+    return true;
+  }
 }
 
-function clearTotpError() {
-  totpError.classList.add('hidden');
-  totpError.textContent = '';
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class DirRenameModal extends Modal {
+  constructor() {
+    super(dirRenameBackdrop);
+    __publicField(this, "form", document.getElementById("dir-rename-form"));
+    __publicField(this, "input", document.getElementById("dir-rename-input"));
+    __publicField(this, "current", document.getElementById("dir-rename-current"));
+    __publicField(this, "error", document.getElementById("dir-rename-error"));
+    __publicField(this, "cancel", document.getElementById("dir-rename-cancel"));
+    __publicField(this, "sourcePath", null);
+    this.cancel.addEventListener("click", () => this.close());
+    document.getElementById("dir-rename-close")?.addEventListener("click", () => this.close());
+    this.form.addEventListener("submit", (e) => this.submit(e));
+  }
+  open(path) {
+    if (window.__viewerMode || !path) return;
+    this.sourcePath = path;
+    const parts = path.split("/");
+    this.current.textContent = path;
+    this.input.value = parts[parts.length - 1];
+    this.error.classList.add("hidden");
+    this.reveal();
+    setTimeout(() => {
+      this.input.focus();
+      this.input.select();
+    }, 50);
+  }
+  close() {
+    super.close();
+    this.sourcePath = null;
+  }
+  async submit(e) {
+    e.preventDefault();
+    this.error.classList.add("hidden");
+    if (!this.sourcePath) return;
+    const newName = this.input.value.trim().replace(/^\/+|\/+$/g, "");
+    if (!newName) {
+      this.error.textContent = t("nameRequired");
+      this.error.classList.remove("hidden");
+      return;
+    }
+    if (/[\\\/]/.test(newName)) {
+      this.error.textContent = t("noSlashes");
+      this.error.classList.remove("hidden");
+      return;
+    }
+    const parts = this.sourcePath.split("/");
+    parts[parts.length - 1] = newName;
+    const newPath = parts.join("/");
+    if (newPath === this.sourcePath) {
+      this.close();
+      return;
+    }
+    try {
+      const res = await fetch("/api/dir/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: this.sourcePath, to: newPath })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "HTTP " + res.status);
+      }
+      this.close();
+      setStatus(t("folderRenamed"), "ok");
+      await refreshTreeOrReload();
+    } catch (err) {
+      this.error.textContent = t("errSp", err.message);
+      this.error.classList.remove("hidden");
+    }
+  }
 }
 
-function closeTotpModal() {
-  totpBackdrop.classList.add('hidden');
-  document.removeEventListener('keydown', onTotpKey, true);
-  pendingRecoveryCodes = [];
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const newFileBtn = document.getElementById("new-file-btn");
+const newFileBackdrop = document.getElementById("new-file-backdrop");
+const dirRenameBackdrop = document.getElementById("dir-rename-backdrop");
+function getAllDirs() {
+  const dirs = /* @__PURE__ */ new Set();
+  (function walk(node, prefix) {
+    const children = node.type === "dir" ? node.children : [];
+    for (const c of children) {
+      if (c.type === "dir") {
+        const path = prefix ? prefix + "/" + c.name : c.name;
+        dirs.add(path);
+        walk(c, path);
+      }
+    }
+  })(TREE, "");
+  return Array.from(dirs).sort();
 }
-
-function onTotpKey(e) {
-  // Capture + stopPropagation so Escape closes only the 2FA modal, never the
-  // Settings panel underneath. While recovery codes are shown, Escape is blocked
-  // entirely (explicit "Done" required).
-  if (e.key !== 'Escape') return;
-  e.preventDefault();
-  e.stopPropagation();
-
-  if (totpStepRecovery.classList.contains('hidden')) closeTotpModal();
-}
-
-function openTotpModal(mode) {
-  clearTotpError();
-  totpStepEnroll.classList.toggle('hidden', mode !== 'enroll');
-  totpStepRecovery.classList.add('hidden');
-  totpStepDisable.classList.toggle('hidden', mode !== 'disable');
-  totpTitle.textContent = mode === 'disable' ? t('totpModalDisableTitle') : t('totpModalTitle');
-  totpBackdrop.classList.remove('hidden');
-  document.addEventListener('keydown', onTotpKey, true);
-}
-
-// Enable 2FA: init (secret + URI) → show QR + secret → verification.
-securityTotpEnableBtn.addEventListener('click', async () => {
-  securityTotpEnableBtn.disabled = true;
-
-  try {
-    const data = await settingsFetch('/api/account/totp/init', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-
-    totpSecretValue.value = data.secret || '';
-    totpVerifyCode.value = '';
-    // QR rendered client-side; silent fallback to the plaintext secret if the
-    // URI is too long for our encoder.
-    totpQr.innerHTML = '';
-    const ok = data.otpauth_uri && renderQrCode(totpQr, data.otpauth_uri, 184);
-
-    totpQr.classList.toggle('hidden', !ok);
-    openTotpModal('enroll');
-    setTimeout(() => totpVerifyCode.focus(), 60);
-  } catch (err) {
-    showSettingsError(err.message || t('settingsErrGeneric'));
-  } finally {
-    securityTotpEnableBtn.disabled = false;
-  }
-});
-
-totpVerifyForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  clearTotpError();
-  const code = totpVerifyCode.value.trim();
-
-  if (!code) {
-    showTotpError(t('totpCodeRequired'));
-
-    return;
-  }
-
-  totpVerifySubmit.disabled = true;
-
-  try {
-    const data = await settingsFetch('/api/account/totp/enable', {
-      method: 'POST',
-      body: JSON.stringify({ code }),
-    });
-
-    // enable bumps the epoch → fresh session + kb_csrf cookies; reload the CSRF
-    // token so the next mutating requests don't break.
-    setCsrfToken(readCsrfCookie());
-    totpEnabled = true;
-    refreshSecurityState();
-    // Recovery codes are shown ONCE.
-    pendingRecoveryCodes = Array.isArray(data.recovery_codes) ? data.recovery_codes : [];
-    totpRecoveryList.innerHTML = pendingRecoveryCodes
-      .map(
-        (c) =>
-          '<li class="bg-black/40 border subtle-border rounded px-2 py-1.5 text-center select-all">' +
-          escapeHtml(c) +
-          '</li>',
-      )
-      .join('');
-    totpStepEnroll.classList.add('hidden');
-    totpStepRecovery.classList.remove('hidden');
-    setStatus(t('totpEnabledToast'), 'ok');
-  } catch (err) {
-    showTotpError(
-      err.status === 400 ? t('totpInvalidCode') : err.message || t('settingsErrGeneric'),
-    );
-  } finally {
-    totpVerifySubmit.disabled = false;
-  }
-});
-
-totpSecretCopy.addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(totpSecretValue.value);
-    totpSecretCopy.textContent = t('copied');
-    setTimeout(() => (totpSecretCopy.textContent = t('copy')), 1200);
-  } catch (e) {
-    totpSecretValue.select();
-  }
-});
-totpRecoveryCopy.addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(pendingRecoveryCodes.join('\n'));
-    totpRecoveryCopy.textContent = t('copied');
-    setTimeout(() => (totpRecoveryCopy.textContent = t('totpRecoveryCopy')), 1200);
-  } catch (e) {}
-});
-totpEnrollCancel.addEventListener('click', closeTotpModal);
-totpRecoveryDone.addEventListener('click', closeTotpModal);
-totpClose.addEventListener('click', () => {
-  if (totpStepRecovery.classList.contains('hidden')) closeTotpModal();
-});
-totpBackdrop.addEventListener('click', (e) => {
-  if (e.target === totpBackdrop && totpStepRecovery.classList.contains('hidden')) closeTotpModal();
-});
-
-// Disable 2FA: asks for a code (TOTP or recovery).
-securityTotpDisableBtn.addEventListener('click', () => {
-  totpDisableCode.value = '';
-  openTotpModal('disable');
-  setTimeout(() => totpDisableCode.focus(), 60);
-});
-totpDisableForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  clearTotpError();
-  const code = totpDisableCode.value.trim();
-
-  if (!code) {
-    showTotpError(t('totpCodeRequired'));
-
-    return;
-  }
-
-  totpDisableSubmit.disabled = true;
-
-  try {
-    // A 6-digit code = TOTP; otherwise treated as a recovery code.
-    const body = /^[0-9]{6}$/.test(code) ? { code } : { recovery: code };
-
-    await settingsFetch('/api/account/totp/disable', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-    setCsrfToken(readCsrfCookie());
-    totpEnabled = false;
-    refreshSecurityState();
-    closeTotpModal();
-    setStatus(t('totpDisabledToast'), 'ok');
-  } catch (err) {
-    showTotpError(
-      err.status === 400 ? t('totpInvalidCode') : err.message || t('settingsErrGeneric'),
-    );
-  } finally {
-    totpDisableSubmit.disabled = false;
-  }
-});
-
-// Log out all my sessions: in-app confirmation then redirect to /login.
-securityLogoutAllBtn.addEventListener('click', async () => {
-  const ok = await confirmDialog({
-    title: t('securityLogoutAllConfirmTitle'),
-    message: t('securityLogoutAllConfirmMsg'),
-    confirmLabel: t('securityLogoutAllConfirm'),
-    destructive: true,
-  });
-
-  if (!ok) return;
-  securityLogoutAllBtn.disabled = true;
-
-  try {
-    await settingsFetch('/api/account/logout-all', { method: 'POST', body: JSON.stringify({}) });
-    // Epoch changed: current session is revoked (cookie cleared server-side) → /login.
-    window.location = '/login';
-  } catch (err) {
-    showSettingsError(err.message || t('settingsErrGeneric'));
-    securityLogoutAllBtn.disabled = false;
-  }
-});
-
-// ── Quick capture ────────────────────────────────────────────────────────────
-const qcBtn = document.getElementById('quick-capture-btn');
-const qcBackdrop = document.getElementById('quick-capture-backdrop');
-const qcForm = document.getElementById('quick-capture-form');
-const qcTitle = document.getElementById('quick-capture-title');
-const qcBody = document.getElementById('quick-capture-body');
-const qcCancel = document.getElementById('quick-capture-cancel');
-const qcError = document.getElementById('quick-capture-error');
-
-function openQuickCapture() {
-  if (window.__viewerMode) return;
-  qcError.classList.add('hidden');
-  qcTitle.value = '';
-  qcBody.value = '';
-  qcBackdrop.classList.remove('hidden');
-  setTimeout(() => qcTitle.focus(), 50);
-}
-
-function closeQuickCapture() {
-  qcBackdrop.classList.add('hidden');
-}
-
-qcBtn.addEventListener('click', openQuickCapture);
-qcCancel.addEventListener('click', closeQuickCapture);
-document.getElementById('quick-capture-close')?.addEventListener('click', closeQuickCapture);
-qcBackdrop.addEventListener('click', (e) => {
-  if (e.target === qcBackdrop) closeQuickCapture();
-});
-
-qcForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  qcError.classList.add('hidden');
-  const title = qcTitle.value.trim();
-
-  if (!title) {
-    qcError.textContent = t('titleRequired');
-    qcError.classList.remove('hidden');
-
-    return;
-  }
-
-  const body = qcBody.value.trim();
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const dateStr =
-    now.getFullYear() +
-    '-' +
-    pad(now.getMonth() + 1) +
-    '-' +
-    pad(now.getDate()) +
-    '-' +
-    pad(now.getHours()) +
-    pad(now.getMinutes());
-  const slug = (slugify(title) || 'note').slice(0, 50);
-  const path = 'inbox/' + dateStr + '-' + slug + '.md';
-  const content =
-    '# ' + title + '\n\n_Capture : ' + now.toLocaleString('fr-FR') + '_\n\n' + body + '\n';
-
-  try {
-    const res = await fetch('/api/file', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, content }),
-    });
-
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    closeQuickCapture();
-    setStatus(t('noteSaved'), 'ok');
-  } catch (e) {
-    qcError.textContent = t('err', e.message);
-    qcError.classList.remove('hidden');
-  }
-});
-
-// ── New file modal ───────────────────────────────────────────────────────────
-const newFileBtn = document.getElementById('new-file-btn');
-const newFileBackdrop = document.getElementById('new-file-backdrop');
-const newFileForm = document.getElementById('new-file-form');
-const newFileDir = document.getElementById('new-file-dir');
-const newFileName = document.getElementById('new-file-name');
-const newFileDirCb = AtlasCombobox(newFileDir, { source: getAllDirs, creatable: true });
-const newFileTemplate = document.getElementById('new-file-template');
-const newFileVisibility = document.getElementById('new-file-visibility');
-const newFileError = document.getElementById('new-file-error');
-const newFileCancel = document.getElementById('new-file-cancel');
-const newFileExtArea = document.getElementById('new-file-ext-area');
-
 async function refreshTreeOrReload() {
   if (window.softReload) await window.softReload();
   else location.reload();
 }
-
-// Fills a DOC_TEMPLATES skeleton: tokens {{title}}, {{date}} (UI locale long
-// form), {{isoDate}} (YYYY-MM-DD). Unknown kind (incl. 'blank') → title only.
-function buildTemplateContent(kind, title) {
-  const template = DOC_TEMPLATES && DOC_TEMPLATES[kind];
-
-  if (!template) {
-    return '# ' + title + '\n\n';
+class NewFileModal extends Modal {
+  constructor() {
+    super(newFileBackdrop);
+    __publicField(this, "form", document.getElementById("new-file-form"));
+    __publicField(this, "dir", document.getElementById("new-file-dir"));
+    __publicField(this, "name", document.getElementById("new-file-name"));
+    __publicField(this, "template", document.getElementById("new-file-template"));
+    __publicField(this, "visibility", document.getElementById("new-file-visibility"));
+    __publicField(this, "error", document.getElementById("new-file-error"));
+    __publicField(this, "cancel", document.getElementById("new-file-cancel"));
+    // The template <select> — its options, extension providers and content fill — is delegated here.
+    __publicField(this, "registry");
+    AtlasCombobox(this.dir, { source: getAllDirs, creatable: true });
+    this.registry = new TemplateRegistry(this.template, this.name, this.dir);
+    newFileBtn.addEventListener("click", () => this.open());
+    this.cancel.addEventListener("click", () => this.close());
+    document.getElementById("new-file-close")?.addEventListener("click", () => this.close());
+    this.template.addEventListener("change", () => this.registry.updateExtras());
+    this.form.addEventListener("submit", (e) => this.submit(e));
   }
-
-  const locale = LANG === 'en' ? 'en-GB' : 'fr-FR';
-  const today = new Date().toLocaleDateString(locale, {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-  const isoDate = new Date().toISOString().slice(0, 10);
-
-  return template
-    .replaceAll('{{title}}', title)
-    .replaceAll('{{date}}', today)
-    .replaceAll('{{isoDate}}', isoDate);
+  // window.Atlas.registerTemplate — delegated to the template registry.
+  registerTemplate(value, provider) {
+    return this.registry.registerTemplate(value, provider);
+  }
+  open(presetDir) {
+    if (window.__viewerMode) return;
+    this.error.classList.add("hidden");
+    this.dir.value = presetDir || "";
+    this.name.value = "";
+    this.template.value = "blank";
+    if (this.visibility) {
+      this.visibility.value = localStorage.getItem("atlas:newdoc-visibility") === "commons" ? "commons" : "private";
+    }
+    this.registry.runOpenHooks();
+    this.registry.updateExtras();
+    this.reveal();
+    setTimeout(() => (presetDir ? this.name : this.dir).focus(), 50);
+  }
+  showError(msg) {
+    this.error.textContent = msg;
+    this.error.classList.remove("hidden");
+  }
+  async submit(e) {
+    e.preventDefault();
+    this.error.classList.add("hidden");
+    const dir = this.dir.value.trim().replace(/^\/+|\/+$/g, "");
+    let name = this.name.value.trim();
+    const provider = this.registry.activeProvider();
+    let content;
+    if (provider) {
+      try {
+        const built = await provider.generate();
+        content = built.content;
+        if (!name) name = (built.slug || "").trim();
+      } catch (err) {
+        return this.showError(err.message);
+      }
+    }
+    if (!name) return this.showError(t("nameRequired"));
+    if (/[\\\/]/.test(name)) return this.showError(t("noSlashes"));
+    if (!name.endsWith(".md")) name += ".md";
+    const path = dir ? dir + "/" + name : name;
+    if (fileMap[path]) return this.showError(t("fileExists"));
+    if (!provider) {
+      const title = name.replace(/\.md$/, "").replace(/[-_]/g, " ").replace(/(?:^|\s)\S/g, (c) => c.toUpperCase());
+      content = TemplateRegistry.buildContent(this.template.value, title);
+    }
+    const visibility = this.visibility ? this.visibility.value : "private";
+    try {
+      localStorage.setItem("atlas:newdoc-visibility", visibility);
+    } catch (_) {
+    }
+    try {
+      const res = await fetch("/api/file", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, content, private: visibility === "private" })
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      this.close();
+      location.hash = "#" + encodeURIComponent(path);
+      setStatus(provider && provider.successMessage || t("docCreated"), "ok");
+      await refreshTreeOrReload();
+    } catch (err) {
+      this.showError(t("errSp", err.message));
+    }
+  }
 }
-
-// "Blank" stays the reserved first option; skeleton names cannot override it.
-(function populateTemplateOptions() {
-  for (const name of Object.keys(DOC_TEMPLATES || {}).sort()) {
-    if (name === 'blank') continue;
-    const option = document.createElement('option');
-
-    option.value = name;
-    option.textContent = name;
-    newFileTemplate.appendChild(option);
-  }
-})();
-
-// ─── Extension templates + window.Atlas API ───────────────────────────────────
-// Extensions (loaded after this script, inlined by build.py) register a
-// new-document template and drive the viewer via window.Atlas. Events emitted on
-// document: atlas:doc-rendered {path, markdown}, atlas:edit-enter.
-// A modal carrying [data-atlas-modal] blocks the soft-reload while visible.
-const templateProviders = Object.create(null);
-
-function updateTemplateExtras() {
-  const active = templateProviders[newFileTemplate.value] || null;
-
-  for (const value in templateProviders) {
-    const provider = templateProviders[value];
-
-    if (provider.block) provider.block.classList.toggle('hidden', provider !== active);
-  }
-
-  newFileName.placeholder = (active && active.namePlaceholder) || t('docNamePlaceholder');
-
-  if (active && active.defaultDir && !newFileDir.value.trim()) {
-    newFileDir.value = active.defaultDir;
-  }
-}
-
+const newFileModal = new NewFileModal();
+const dirRenameModal = new DirRenameModal();
 window.Atlas = {
   version: 1,
   t,
   escapeHtml,
   setStatus,
   refresh: refreshTreeOrReload,
-  // Markdown doc currently displayed ({path}) or null.
   currentDoc() {
     return currentFile ? { path: currentFile.path } : null;
   },
-  // Drop a doc's cache after a write outside the viewer → next display re-fetches.
   invalidateDoc(path) {
     contentCache.delete(path);
-
     if (currentFile && currentFile.path === path) {
-      currentFile.content = null;
+      currentFile.content = void 0;
       currentFile.mtime = 0;
     }
   },
-  // Registers a new-document template. provider:
-  //   label           : label of the select option (default: value)
-  //   generate()      : async → {content, slug?}; a thrown error is shown
-  //                     as-is to the user (message already localized)
-  //   block           : optional form element (shown when selected)
-  //   namePlaceholder : placeholder of the name field when selected
-  //   defaultDir      : suggested folder if the folder field is empty
-  //   successMessage  : status shown after creation (default: docCreated)
-  //   onOpen()        : called on every opening of the modal (resets the block)
-  // Rejected values: 'blank', a DOC_TEMPLATES skeleton with the same name, an
-  // extension template already registered.
   registerTemplate(value, provider) {
-    if (!value || !provider || typeof provider.generate !== 'function') return false;
-
-    if (value === 'blank' || templateProviders[value] || (DOC_TEMPLATES && DOC_TEMPLATES[value]))
-      return false;
-    templateProviders[value] = provider;
-    const option = document.createElement('option');
-
-    option.value = value;
-    option.textContent = provider.label || value;
-    newFileTemplate.appendChild(option);
-
-    if (provider.block) {
-      provider.block.classList.add('hidden');
-      newFileExtArea.appendChild(provider.block);
-    }
-
-    return true;
-  },
+    return newFileModal.registerTemplate(value, provider);
+  }
 };
-
-function getAllDirs() {
-  const dirs = new Set();
-
-  (function walk(node, prefix) {
-    for (const c of node.children || []) {
-      if (c.type === 'dir') {
-        const path = prefix ? prefix + '/' + c.name : c.name;
-
-        dirs.add(path);
-        walk(c, path);
-      }
-    }
-  })(TREE, '');
-
-  return Array.from(dirs).sort();
-}
-
 function openNewFileModal(presetDir) {
-  if (window.__viewerMode) return;
-  newFileError.classList.add('hidden');
-  newFileDir.value = presetDir || '';
-  newFileName.value = '';
-  newFileTemplate.value = 'blank';
-  if (newFileVisibility) {
-    // Default: PRIVATE (Notion sense), pre-selected to the user's last choice. A
-    // doc created inside a private folder is private regardless (server enforces).
-    newFileVisibility.value =
-      localStorage.getItem('atlas:newdoc-visibility') === 'commons' ? 'commons' : 'private';
-  }
-
-  for (const value in templateProviders) {
-    const provider = templateProviders[value];
-
-    if (provider.onOpen) {
-      try {
-        provider.onOpen();
-      } catch (err) {
-        console.warn('[extension] onOpen', value, err);
-      }
-    }
-  }
-
-  updateTemplateExtras();
-  newFileBackdrop.classList.remove('hidden');
-  setTimeout(() => (presetDir ? newFileName : newFileDir).focus(), 50);
+  newFileModal.open(presetDir);
 }
-
 function closeNewFileModal() {
-  newFileBackdrop.classList.add('hidden');
+  newFileModal.close();
 }
-
-newFileBtn.addEventListener('click', () => openNewFileModal());
-newFileCancel.addEventListener('click', closeNewFileModal);
-document.getElementById('new-file-close')?.addEventListener('click', closeNewFileModal);
-newFileBackdrop.addEventListener('click', (e) => {
-  if (e.target === newFileBackdrop) closeNewFileModal();
-});
-newFileTemplate.addEventListener('change', updateTemplateExtras);
-
-function showNewFileError(msg) {
-  newFileError.textContent = msg;
-  newFileError.classList.remove('hidden');
-}
-
-newFileForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  newFileError.classList.add('hidden');
-  const dir = newFileDir.value.trim().replace(/^\/+|\/+$/g, '');
-  let name = newFileName.value.trim();
-  const provider = templateProviders[newFileTemplate.value] || null;
-
-  let content;
-
-  if (provider) {
-    // Extension generator produces the content (+ fallback slug). Thrown error = user message.
-    try {
-      const built = await provider.generate();
-
-      content = built.content;
-
-      if (!name) name = (built.slug || '').trim();
-    } catch (err) {
-      return showNewFileError(err.message);
-    }
-  }
-
-  if (!name) return showNewFileError(t('nameRequired'));
-
-  if (/[\\\/]/.test(name)) return showNewFileError(t('noSlashes'));
-
-  if (!name.endsWith('.md')) name += '.md';
-  const path = dir ? dir + '/' + name : name;
-
-  if (fileMap[path]) return showNewFileError(t('fileExists'));
-
-  if (!provider) {
-    const title = name
-      .replace(/\.md$/, '')
-      .replace(/[-_]/g, ' ')
-      .replace(/(?:^|\s)\S/g, (c) => c.toUpperCase());
-
-    content = buildTemplateContent(newFileTemplate.value, title);
-  }
-
-  const visibility = newFileVisibility ? newFileVisibility.value : 'private';
-  try { localStorage.setItem('atlas:newdoc-visibility', visibility); } catch (_) { /* ignore */ }
-
-  try {
-    const res = await fetch('/api/file', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, content, private: visibility === 'private' }),
-    });
-
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    closeNewFileModal();
-    location.hash = '#' + encodeURIComponent(path);
-    setStatus((provider && provider.successMessage) || t('docCreated'), 'ok');
-    await refreshTreeOrReload();
-  } catch (err) {
-    showNewFileError(t('errSp', err.message));
-  }
-});
-
-// ── Dir rename modal ─────────────────────────────────────────────────────────
-const dirRenameBackdrop = document.getElementById('dir-rename-backdrop');
-const dirRenameForm = document.getElementById('dir-rename-form');
-const dirRenameInput = document.getElementById('dir-rename-input');
-const dirRenameCurrent = document.getElementById('dir-rename-current');
-const dirRenameError = document.getElementById('dir-rename-error');
-const dirRenameCancel = document.getElementById('dir-rename-cancel');
-let dirRenameSourcePath = null;
-
 function openDirRenameModal(path) {
-  if (window.__viewerMode || !path) return;
-  dirRenameSourcePath = path;
-  const parts = path.split('/');
-  const name = parts[parts.length - 1];
-
-  dirRenameCurrent.textContent = path;
-  dirRenameInput.value = name;
-  dirRenameError.classList.add('hidden');
-  dirRenameBackdrop.classList.remove('hidden');
-  setTimeout(() => {
-    dirRenameInput.focus();
-    dirRenameInput.select();
-  }, 50);
+  dirRenameModal.open(path);
 }
-
-function closeDirRenameModal() {
-  dirRenameBackdrop.classList.add('hidden');
-  dirRenameSourcePath = null;
-}
-
-dirRenameCancel.addEventListener('click', closeDirRenameModal);
-document.getElementById('dir-rename-close')?.addEventListener('click', closeDirRenameModal);
-dirRenameBackdrop.addEventListener('click', (e) => {
-  if (e.target === dirRenameBackdrop) closeDirRenameModal();
-});
-
-dirRenameForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  dirRenameError.classList.add('hidden');
-
-  if (!dirRenameSourcePath) return;
-  const newName = dirRenameInput.value.trim().replace(/^\/+|\/+$/g, '');
-
-  if (!newName) {
-    dirRenameError.textContent = t('nameRequired');
-    dirRenameError.classList.remove('hidden');
-
-    return;
-  }
-
-  if (/[\\\/]/.test(newName)) {
-    dirRenameError.textContent = t('noSlashes');
-    dirRenameError.classList.remove('hidden');
-
-    return;
-  }
-
-  const parts = dirRenameSourcePath.split('/');
-
-  parts[parts.length - 1] = newName;
-  const newPath = parts.join('/');
-
-  if (newPath === dirRenameSourcePath) {
-    closeDirRenameModal();
-
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/dir/rename', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: dirRenameSourcePath, to: newPath }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-
-      throw new Error(err.error || 'HTTP ' + res.status);
-    }
-
-    closeDirRenameModal();
-    // Re-key the content caches under the new prefix + update currentFile.
-    const oldPrefix = dirRenameSourcePath + '/';
-    const newPrefix = newPath + '/';
-    const toMove = [];
-
-    for (const k of contentCache.keys()) {
-      if (k.startsWith(oldPrefix)) toMove.push(k);
-    }
-
-    for (const oldK of toMove) {
-      const v = contentCache.get(oldK);
-
-      contentCache.delete(oldK);
-      contentCache.set(newPrefix + oldK.slice(oldPrefix.length), v);
-    }
-
-    if (currentFile && currentFile.path.startsWith(oldPrefix)) {
-      currentFile.path = newPrefix + currentFile.path.slice(oldPrefix.length);
-      location.hash = '#' + encodeURIComponent(currentFile.path);
-    }
-
-    setStatus(t('folderRenamed'), 'ok');
-    await refreshTreeOrReload();
-  } catch (err) {
-    dirRenameError.textContent = t('errSp', err.message);
-    dirRenameError.classList.remove('hidden');
-  }
-});
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    if (!settingsBackdrop.classList.contains('hidden')) {
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const settingsBackdrop = document.getElementById("settings-backdrop");
+    if (settingsBackdrop && !settingsBackdrop.classList.contains("hidden")) {
       closeSettings();
-
       return;
     }
-
-    if (!newFileBackdrop.classList.contains('hidden')) {
+    if (newFileModal.isOpen()) {
       closeNewFileModal();
-
       return;
     }
-
-    if (!dirRenameBackdrop.classList.contains('hidden')) {
-      closeDirRenameModal();
-
+    if (dirRenameModal.isOpen()) {
+      dirRenameModal.close();
       return;
     }
-
-    if (!qcBackdrop.classList.contains('hidden')) {
-      closeQuickCapture();
-
+    if (quickCaptureModal.isOpen()) {
+      quickCaptureModal.close();
       return;
     }
-
-    if (!shareBackdrop.classList.contains('hidden')) {
+    if (!shareBackdrop.classList.contains("hidden")) {
       closeShareModal();
-
       return;
     }
-
-    if (!renameBackdrop.classList.contains('hidden')) {
+    if (!renameBackdrop.classList.contains("hidden")) {
       closeRenameModal();
-
       return;
     }
   }
-
-  if (
-    e.key === 'n' &&
-    !window.__viewerMode &&
-    !editMode &&
-    !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)
-  ) {
+  if (e.key === "n" && !window.__viewerMode && !editMode && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName ?? "")) {
     e.preventDefault();
-    openNewFileModal();
+    newFileModal.open();
   }
 });
 
-// ── Access & sharing (per-document ACL) ──────────────────────────────────────
-// The "Accès" button on a doc opens a dialog to see/own/share it with users,
-// groups, or everyone — backed by /api/acl. Read-only for a non-manager.
-(function () {
-  const backdrop = document.getElementById('acl-backdrop');
-
-  if (!backdrop) return; // offline build without the dialog partial
-
-  const pathEl = document.getElementById('acl-path');
-  const statusEl = document.getElementById('acl-status');
-  const grantsEl = document.getElementById('acl-grants');
-  const manageEl = document.getElementById('acl-manage');
-  const form = document.getElementById('acl-grant-form');
-  const kindSel = document.getElementById('acl-kind');
-  const valueInp = document.getElementById('acl-value');
-  const levelSel = document.getElementById('acl-level');
-  const errEl = document.getElementById('acl-error');
-
-  let cur = null; // { path, owner, grants, can_manage }
-  let dir = null; // { users:[emails], groups:[names] } — cached for autocompletion
-
-  // The value field is a creatable combobox: pick a known user/group OR type a new
-  // one. Its source flips with the kind select (users vs groups) → refresh() on change.
-  const aclCb = AtlasCombobox(valueInp, {
-    source: () => (kindSel.value === 'group' ? (dir && dir.groups) || [] : (dir && dir.users) || []),
-    creatable: true,
-  });
-
-  async function loadDir() {
-    if (!dir) {
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class AccessDialog {
+  constructor() {
+    // ---- static partial DOM (the dialog markup ships as one unit; the backdrop guard above proved
+    // it present, so the rest are asserted) ----
+    __publicField(this, "backdrop", document.getElementById("acl-backdrop"));
+    __publicField(this, "pathEl", document.getElementById("acl-path"));
+    __publicField(this, "statusEl", document.getElementById("acl-status"));
+    __publicField(this, "grantsEl", document.getElementById("acl-grants"));
+    __publicField(this, "manageEl", document.getElementById("acl-manage"));
+    __publicField(this, "form", document.getElementById("acl-grant-form"));
+    __publicField(this, "kindSel", document.getElementById("acl-kind"));
+    __publicField(this, "valueInp", document.getElementById("acl-value"));
+    __publicField(this, "levelSel", document.getElementById("acl-level"));
+    __publicField(this, "errEl", document.getElementById("acl-error"));
+    // ---- state ----
+    __publicField(this, "cur", null);
+    __publicField(this, "dir", null);
+    // /api/directory, cached for autocompletion
+    // The value field is a creatable combobox: pick a known user/group OR type a new one. Its source
+    // flips with the kind select (users vs groups) → refresh() on change. Created once on the permanent
+    // partial input and never torn down.
+    __publicField(this, "aclCb", AtlasCombobox(this.valueInp, {
+      source: () => this.kindSel.value === "group" ? this.dir && this.dir.groups || [] : this.dir && this.dir.users || [],
+      creatable: true
+    }));
+    this.wire();
+  }
+  async loadDir() {
+    if (!this.dir) {
       try {
-        const r = await fetch('/api/directory');
-        if (r.ok) dir = await r.json();
+        const r = await fetch("/api/directory");
+        if (r.ok) this.dir = await r.json();
       } catch (_) {
-        /* best-effort */
       }
     }
-    return dir || { users: [], groups: [] };
+    return this.dir || { users: [], groups: [] };
   }
-
-  function myPrincipal() {
-    return meState && meState.email ? 'user:' + meState.email : null;
+  myPrincipal() {
+    return meState && meState.authenticated && meState.email ? "user:" + meState.email : null;
   }
-
-  function principalLabel(p) {
-    if (p === '*') return '🌐 ' + t('aclEveryone');
-    if (p.startsWith('user:')) return '👤 ' + p.slice(5);
-    if (p.startsWith('group:')) return '👥 ' + p.slice(6);
-    if (p.startsWith('anon:')) return '🔗 ' + t('aclLinkPrincipal');
-
+  principalLabel(p) {
+    if (p === "*") return "🌐 " + t("aclEveryone");
+    if (p.startsWith("user:")) return "👤 " + p.slice(5);
+    if (p.startsWith("group:")) return "👥 " + p.slice(6);
+    if (p.startsWith("anon:")) return "🔗 " + t("aclLinkPrincipal");
     return p;
   }
-
-  function levelLabel(l) {
-    if (l === 'edit') return t('aclLevelEdit');
-    if (l === 'comment') return t('aclLevelComment');
-
-    return t('aclLevelView');
+  levelLabel(l) {
+    if (l === "edit") return t("aclLevelEdit");
+    if (l === "comment") return t("aclLevelComment");
+    return t("aclLevelView");
   }
-
-  function render() {
-    pathEl.textContent = cur.path;
-
+  render() {
+    const cur = this.cur;
+    this.pathEl.textContent = cur.path;
     if (cur.owner) {
-      const mine = myPrincipal();
-      const who = mine && cur.owner === mine
-        ? t('aclYou')
-        : cur.owner.startsWith('user:') ? cur.owner.slice(5) : cur.owner;
-      statusEl.innerHTML =
-        '<span class="text-amber-300 font-medium">' + escapeHtml(t('aclPrivate')) + '</span> · ' +
-        escapeHtml(t('aclOwner')) + ' ' + escapeHtml(who);
+      const mine = this.myPrincipal();
+      const who = mine && cur.owner === mine ? t("aclYou") : cur.owner.startsWith("user:") ? cur.owner.slice(5) : cur.owner;
+      this.statusEl.innerHTML = '<span class="text-amber-300 font-medium">' + escapeHtml(t("aclPrivate")) + "</span> · " + escapeHtml(t("aclOwner")) + " " + escapeHtml(who);
     } else {
-      statusEl.innerHTML =
-        '<span class="text-emerald-300 font-medium">' + escapeHtml(t('aclCommons')) + '</span>';
+      this.statusEl.innerHTML = '<span class="text-emerald-300 font-medium">' + escapeHtml(t("aclCommons")) + "</span>";
     }
-
     if (cur.creator) {
-      const mine = myPrincipal();
-      const who = mine && cur.creator === mine
-        ? t('aclYou')
-        : cur.creator.startsWith('user:') ? cur.creator.slice(5) : cur.creator;
-      statusEl.innerHTML +=
-        ' <span class="text-ink-500">· ' + escapeHtml(t('aclCreatedBy')) + ' ' + escapeHtml(who) + '</span>';
+      const mine = this.myPrincipal();
+      const who = mine && cur.creator === mine ? t("aclYou") : cur.creator.startsWith("user:") ? cur.creator.slice(5) : cur.creator;
+      this.statusEl.innerHTML += ' <span class="text-ink-500">· ' + escapeHtml(t("aclCreatedBy")) + " " + escapeHtml(who) + "</span>";
     }
-
     const grants = cur.grants || [];
-
-    grantsEl.innerHTML = grants.length
-      ? grants
-          .map(
-            (g) =>
-              '<li class="flex items-center justify-between gap-2 bg-navy-900 border subtle-border rounded px-2.5 py-1.5 text-xs">' +
-              '<span class="truncate text-ink-200">' +
-              escapeHtml(principalLabel(g.principal)) +
-              ' · <span class="text-ink-400">' +
-              escapeHtml(levelLabel(g.level)) +
-              '</span></span>' +
-              (cur.can_manage
-                ? '<button class="acl-revoke text-ink-500 hover:text-rose-300 px-1 flex-shrink-0" data-principal="' +
-                  escapeHtml(g.principal) +
-                  '" title="' +
-                  escapeHtml(t('aclRemove')) +
-                  '">✕</button>'
-                : '') +
-              '</li>',
-          )
-          .join('')
-      : '<li class="text-[11px] text-ink-500">' + escapeHtml(t('aclNoGrants')) + '</li>';
-
-    manageEl.classList.toggle('hidden', !cur.can_manage);
-    errEl.classList.add('hidden');
+    this.grantsEl.innerHTML = grants.length ? grants.map(
+      (g) => '<li class="flex items-center justify-between gap-2 bg-navy-900 border subtle-border rounded px-2.5 py-1.5 text-xs"><span class="truncate text-ink-200">' + escapeHtml(this.principalLabel(g.principal)) + ' · <span class="text-ink-400">' + escapeHtml(this.levelLabel(g.level)) + "</span></span>" + (cur.can_manage ? '<button class="acl-revoke text-ink-500 hover:text-rose-300 px-1 flex-shrink-0" data-principal="' + escapeHtml(g.principal) + '" title="' + escapeHtml(t("aclRemove")) + '">✕</button>' : "") + "</li>"
+    ).join("") : '<li class="text-[11px] text-ink-500">' + escapeHtml(t("aclNoGrants")) + "</li>";
+    this.manageEl.classList.toggle("hidden", !cur.can_manage);
+    this.errEl.classList.add("hidden");
   }
-
-  async function refresh() {
-    const res = await fetch('/api/acl?path=' + encodeURIComponent(cur.path));
-
+  async refresh() {
+    const res = await fetch("/api/acl?path=" + encodeURIComponent(this.cur.path));
     if (res.ok) {
-      cur = await res.json();
-      render();
+      this.cur = await res.json();
+      this.render();
     }
   }
-
-  async function openAccessFor(path) {
+  async openAccessFor(path) {
     if (!path) return;
-
     try {
-      const res = await fetch('/api/acl?path=' + encodeURIComponent(path));
-
-      if (!res.ok) return; // not readable → nothing to show
-      cur = await res.json();
-      kindSel.value = 'user';
-      document.getElementById('acl-value-wrap').classList.remove('hidden');
-      aclCb.clear();
-      render();
-      backdrop.classList.remove('hidden');
-      loadDir().then(() => aclCb.refresh());
+      const res = await fetch("/api/acl?path=" + encodeURIComponent(path));
+      if (!res.ok) return;
+      this.cur = await res.json();
+      this.kindSel.value = "user";
+      document.getElementById("acl-value-wrap").classList.remove("hidden");
+      this.aclCb.clear();
+      this.render();
+      this.backdrop.classList.remove("hidden");
+      this.loadDir().then(() => this.aclCb.refresh());
     } catch (_) {
-      /* best-effort */
     }
   }
-
-  function close() {
-    backdrop.classList.add('hidden');
+  close() {
+    this.backdrop.classList.add("hidden");
   }
-
-  async function post(body) {
-    errEl.classList.add('hidden');
-
-    const res = await fetch('/api/acl', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+  async post(body) {
+    this.errEl.classList.add("hidden");
+    const res = await fetch("/api/acl", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
     });
-
     if (!res.ok) {
       const p = await res.json().catch(() => null);
-
-      errEl.textContent = (p && p.error) || 'HTTP ' + res.status;
-      errEl.classList.remove('hidden');
-
+      this.errEl.textContent = p && p.error || "HTTP " + res.status;
+      this.errEl.classList.remove("hidden");
       return false;
     }
-
-    await refresh();
-
+    await this.refresh();
     return true;
   }
-
-  window.openAccessFor = openAccessFor;
-
-  document.getElementById('btn-access')?.addEventListener('click', () => {
-    if (currentFile) openAccessFor(currentFile.path);
-  });
-  document.getElementById('acl-close').addEventListener('click', close);
-  document.getElementById('acl-close-x')?.addEventListener('click', close);
-  backdrop.addEventListener('click', (e) => {
-    if (e.target === backdrop) close();
-  });
-
-  kindSel.addEventListener('change', () => {
-    document.getElementById('acl-value-wrap').classList.toggle('hidden', kindSel.value === '*');
-    aclCb.refresh();
-  });
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    let principal;
-
-    if (kindSel.value === '*') {
-      principal = '*';
-    } else {
-      const v = aclCb.getValue();
-
-      if (!v) return;
-      principal = kindSel.value + ':' + (kindSel.value === 'user' ? v.toLowerCase() : v);
-    }
-
-    if (await post({ path: cur.path, action: 'grant', principal, level: levelSel.value })) {
-      aclCb.clear();
-      setStatus(t('aclSharedToast'), 'ok');
-    }
-  });
-
-  grantsEl.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.acl-revoke');
-
-    if (btn && (await post({ path: cur.path, action: 'revoke', principal: btn.dataset.principal }))) {
-      setStatus(t('aclRevokedToast'), 'ok');
-    }
-  });
-
-  document.getElementById('acl-make-private').addEventListener('click', async () => {
-    const mine = myPrincipal();
-
-    if (mine && (await post({ path: cur.path, action: 'set_owner', principal: mine }))) {
-      setStatus(t('aclNowPrivateToast'), 'ok');
-    }
-  });
-
-  document.getElementById('acl-make-commons').addEventListener('click', async () => {
-    // Destructive: removes the owner AND every grant of this doc → confirm first.
-    const ok = await confirmDialog({
-      title: t('aclMakeCommons'),
-      message: t('aclMakeCommonsConfirm'),
-      confirmLabel: t('aclMakeCommons'),
-      destructive: true,
+  wire() {
+    document.getElementById("btn-access")?.addEventListener("click", () => {
+      if (currentFile) this.openAccessFor(currentFile.path);
     });
+    document.getElementById("acl-close").addEventListener("click", () => this.close());
+    document.getElementById("acl-close-x")?.addEventListener("click", () => this.close());
+    this.backdrop.addEventListener("click", (e) => {
+      if (e.target === this.backdrop) this.close();
+    });
+    this.kindSel.addEventListener("change", () => {
+      document.getElementById("acl-value-wrap").classList.toggle("hidden", this.kindSel.value === "*");
+      this.aclCb.refresh();
+    });
+    this.form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      let principal;
+      if (this.kindSel.value === "*") {
+        principal = "*";
+      } else {
+        const v = this.aclCb.getValue();
+        if (!v) return;
+        principal = this.kindSel.value + ":" + (this.kindSel.value === "user" ? v.toLowerCase() : v);
+      }
+      if (await this.post({ path: this.cur.path, action: "grant", principal, level: this.levelSel.value })) {
+        this.aclCb.clear();
+        setStatus(t("aclSharedToast"), "ok");
+      }
+    });
+    this.grantsEl.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".acl-revoke");
+      if (btn && await this.post({ path: this.cur.path, action: "revoke", principal: btn.dataset.principal })) {
+        setStatus(t("aclRevokedToast"), "ok");
+      }
+    });
+    document.getElementById("acl-make-private").addEventListener("click", async () => {
+      const mine = this.myPrincipal();
+      if (mine && await this.post({ path: this.cur.path, action: "set_owner", principal: mine })) {
+        setStatus(t("aclNowPrivateToast"), "ok");
+      }
+    });
+    document.getElementById("acl-make-commons").addEventListener("click", async () => {
+      const ok = await confirmDialog({
+        title: t("aclMakeCommons"),
+        message: t("aclMakeCommonsConfirm"),
+        confirmLabel: t("aclMakeCommons"),
+        destructive: true
+      });
+      if (ok && await this.post({ path: this.cur.path, action: "make_commons" })) {
+        setStatus(t("aclNowCommonsToast"), "ok");
+      }
+    });
+  }
+}
+if (document.getElementById("acl-backdrop")) {
+  const dialog = new AccessDialog();
+  window.openAccessFor = (path) => dialog.openAccessFor(path);
+}
 
-    if (ok && (await post({ path: cur.path, action: 'make_commons' }))) {
-      setStatus(t('aclNowCommonsToast'), 'ok');
-    }
-  });
-})();
-
-// Activity card (home): Journal / Constellation / Santé views over the attributed git history.
-// Reads GET /api/activity (the read side of the attribution layer); reuses the real
-// constellation avatars. Hidden offline / when there is nothing to show.
-(function () {
-  const esc = escapeHtml;  // canonical (escapes ' too), from 01-i18n-state.js
-
-  // CDC event types -> display label + tint + Heroicons-v2 outline path (clean line
-  // icons, matching the rest of the app). Keyed by the type /api/activity returns.
-  const TYPES = {
-    create: { label: 'created', color: '#e8941c', d: 'M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z' },
-    edit: { label: 'edited', color: '#1d9bd1', d: 'm16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.931-8.931Zm0 0L19.5 7.125' },
-    move: { label: 'moved', color: '#1d9bd1', d: 'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5' },
-    delete: { label: 'deleted', color: '#868a90', d: 'm14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0' },
-    check: { label: 'checked', color: '#5fd0a6', d: 'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
-    revert: { label: 'reverted', color: '#e8941c', d: 'M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3' },
-    // Mental-node subscriptions: the share/nodes glyph, tinted green (added) / grey (removed).
-    node_add: { label: 'added node', color: '#5fd0a6', d: 'M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z' },
-    node_remove: { label: 'removed node', color: '#868a90', d: 'M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z' },
-  };
-  const TY = (t) => TYPES[t] || TYPES.edit;
-
-  // Verb labels by UI language (LANG from 01-i18n-state.js). A local map (vs t()) keeps
-  // them next to TYPES and avoids colliding with existing STRINGS keys (create/edit…).
-  const VERB = {
-    fr: { create: 'créé', edit: 'édité', move: 'déplacé', delete: 'supprimé', check: 'coché', revert: 'restauré', node_add: 'ajouté le nœud', node_remove: 'retiré le nœud' },
-    en: { create: 'created', edit: 'edited', move: 'moved', delete: 'deleted', check: 'checked', revert: 'reverted', node_add: 'added the node', node_remove: 'removed the node' },
-  };
-  const verb = (type) => (VERB[LANG] || VERB.fr)[type] || type;
-  // In a sentence ("Ludovic a créé X"), French wants the auxiliary; English doesn't.
-  // The bare verb() stays for the orrery legend, where chips read as labels, not sentences.
-  const verbPhrase = (type) => (LANG === 'en' ? '' : 'a ') + verb(type);
-  const docTitle = (p) => ((p || '').split('/').pop() || p).replace(/\.(md|html)$/i, '');
-
-  const AI = {
-    claude: 'M12 2.6l1.6 5.9 5.9 1.6-5.9 1.6L12 21.4l-1.6-7.7L4.5 12l5.9-1.6L12 2.6Z',
-    chatgpt: 'M12 3.2 18.5 7v8L12 18.8 5.5 15V7L12 3.2Z',
-    gemini: 'M12 3c.6 4.5 2.4 6.3 6.9 6.9-4.5.6-6.3 2.4-6.9 6.9-.6-4.5-2.4-6.3-6.9-6.9C9.6 9.3 11.4 7.5 12 3Z',
-    generic: 'M12 4l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6Z',
-  };
-
-  const iconSvg = (type, size) => {
-    const t = TY(type);
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${t.color}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${t.d}"/></svg>`;
-  };
-
-  const aiBadge = (family) =>
-    `<span class="activity-badge"><svg width="9" height="9" viewBox="0 0 24 24" fill="#e8941c"><path d="${AI[family] || AI.generic}"/></svg></span>`;
-
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class ActivityCard {
+  constructor() {
+    // ---- state ----
+    __publicField(this, "items", null);
+    __publicField(this, "aiOnly", false);
+    // 13d: filter the feed to AI-authored events only
+    __publicField(this, "digest", null);
+    // 13b: factual digest of the last 7 days
+    __publicField(this, "expanded", false);
+    // ---- views (each renders from the shared helper cluster + live state via the render context) ----
+    __publicField(this, "journalView");
+    __publicField(this, "orreryView");
+    __publicField(this, "healthView");
+    const self = this;
+    const ctx = {
+      shownItems: () => self.shownItems(),
+      get expanded() {
+        return self.expanded;
+      },
+      get aiOnly() {
+        return self.aiOnly;
+      },
+      TY: (type) => self.TY(type),
+      iconSvg: (type, size) => self.iconSvg(type, size),
+      verb: (type) => self.verb(type),
+      verbPhrase: (type) => self.verbPhrase(type),
+      avatar: (e, size) => self.avatar(e, size),
+      aiBadge: (family) => self.aiBadge(family),
+      rel: (min) => self.rel(min),
+      dayKey: (min) => self.dayKey(min),
+      docTitle: (p) => self.docTitle(p),
+      skelRows: (n) => self.skelRows(n),
+      openDocHistory: (path) => self.openDocHistory(path)
+    };
+    this.journalView = new ActivityJournal(ctx);
+    this.orreryView = new ActivityOrrery(ctx);
+    this.healthView = new ActivityHealth(ctx);
+  }
+  // ---- small render helpers (the shared cluster; the views reach these through the render context) ----
+  TY(type) {
+    return ActivityIcons.TYPES[type] || ActivityIcons.TYPES.edit;
+  }
+  verb(type) {
+    return (ActivityIcons.VERB[LANG] || ActivityIcons.VERB.fr)[type] || type;
+  }
+  // In a sentence ("Ludovic a créé X"), French wants the auxiliary; English doesn't. The bare
+  // verb() stays for the orrery legend, where chips read as labels, not sentences.
+  verbPhrase(type) {
+    return (LANG === "en" ? "" : "a ") + this.verb(type);
+  }
+  docTitle(p) {
+    return ((p || "").split("/").pop() || p).replace(/\.(md|html)$/i, "");
+  }
+  iconSvg(type, size) {
+    const ty = this.TY(type);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${ty.color}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${ty.d}"/></svg>`;
+  }
+  aiBadge(family) {
+    return `<span class="activity-badge"><svg width="9" height="9" viewBox="0 0 24 24" fill="#e8941c"><path d="${ActivityIcons.AI[family] || ActivityIcons.AI.generic}"/></svg></span>`;
+  }
   // Atlas Bot (the app's own automated writes) shows the application logo itself.
-  const botAvatar = (size) =>
-    `<img src="/icon.svg" width="${size}" height="${size}" alt="Atlas" style="display:block">`;
-
-  const avatar = (e, size) => {
-    // The bot shows the app logo, served at /icon.svg. That URL 404s in a
-    // single-file OFFLINE build (the img src is built at runtime, so the offline
-    // inliner can't rewrite it), so there we fall back to a constellation glyph
-    // rather than a broken image.
-    if (e.bot && !IS_OFFLINE_BUILD) return botAvatar(size);
+  botAvatar(size) {
+    return `<img src="/icon.svg" width="${size}" height="${size}" alt="Atlas" style="display:block">`;
+  }
+  avatar(e, size) {
+    if (e.bot && !IS_OFFLINE_BUILD) return this.botAvatar(size);
     try {
       return constellationSvg(avatarSeed(e.first, e.last, e.email), size);
     } catch (_) {
       return `<span class="inline-block rounded-lg" style="width:${size}px;height:${size}px;background:#23222a"></span>`;
     }
-  };
-
-  function rel(min) {
-    const en = LANG === 'en';
-    if (min < 1) return en ? 'just now' : "à l'instant";
-    if (min < 60) return Math.round(min) + ' min';
-    const h = Math.round(min / 60);
-    if (h < 24) return h + ' h';
-    const d = Math.round(min / 1440);
-    if (d === 1) return en ? 'yesterday' : 'hier';
-    return en ? d + 'd ago' : 'il y a ' + d + ' j';
   }
-  function dayKey(min) {
-    const d = new Date(Date.now() - min * 60000);
-    const now = new Date();
+  rel(min) {
+    const en = LANG === "en";
+    if (min < 1) return en ? "just now" : "à l'instant";
+    if (min < 60) return Math.round(min) + " min";
+    const hrs = Math.round(min / 60);
+    if (hrs < 24) return hrs + " h";
+    const d = Math.round(min / 1440);
+    if (d === 1) return en ? "yesterday" : "hier";
+    return en ? d + "d ago" : "il y a " + d + " j";
+  }
+  dayKey(min) {
+    const d = new Date(Date.now() - min * 6e4);
+    const now = /* @__PURE__ */ new Date();
     const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const b = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const diff = Math.round((a - b) / 86400000);
-    if (diff <= 0) return LANG === 'en' ? 'Today' : "Aujourd'hui";
-    if (diff === 1) return LANG === 'en' ? 'Yesterday' : 'Hier';
-    return d.toLocaleDateString(LANG === 'en' ? 'en-US' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const diff = Math.round((a.getTime() - b.getTime()) / 864e5);
+    if (diff <= 0) return LANG === "en" ? "Today" : "Aujourd'hui";
+    if (diff === 1) return LANG === "en" ? "Yesterday" : "Hier";
+    return d.toLocaleDateString(LANG === "en" ? "en-US" : "fr-FR", { weekday: "long", day: "numeric", month: "long" });
   }
-
-  function toItem(e) {
-    const author = (e.author || e.email || '').trim();
-    const parts = author.split(/\s+/);
-    const t = Date.parse(e.date);
-    return {
-      who: author,
-      first: parts[0] || e.email || '',
-      last: parts.slice(1).join(' '),
-      email: e.email || '',
-      ai: e.ai || null,
-      bot: /atlas bot/i.test(author),
-      type: e.type,
-      title: e.title || (e.paths && e.paths[0]) || '',
-      agoMin: isNaN(t) ? 0 : Math.max(0, Math.round((Date.now() - t) / 60000)),
-      sha: e.short_sha || (e.sha || '').slice(0, 7),
-      path: (e.paths && e.paths[0]) || '',
-      subject: e.subject || '',
-    };
+  // The feed honoring the AI-only filter — the source both the Journal and the Orrery index into.
+  shownItems() {
+    return this.aiOnly ? this.items.filter((i) => i.ai) : this.items;
   }
-
-  // Show the doc's history overlay in place ("voir les modifications"), no navigation,
-  // the activity feed stays put. No-ops if the doc no longer exists (deleted/moved).
-  function openDocHistory(path) {
-    if (!path || typeof fileMap === 'undefined' || typeof openHistory !== 'function') return;
+  // Show the doc's history overlay in place ("voir les modifications"), no navigation, the activity
+  // feed stays put. No-ops if the doc no longer exists (deleted/moved).
+  openDocHistory(path) {
+    if (!path || typeof fileMap === "undefined" || typeof openHistory !== "function") return;
     const f = fileMap[path];
     if (f) openHistory(f);
   }
-
-  let _items = null;
-  let _orreryItems = [];   // the list the constellation nodes index into (respects the filter)
-  let _aiOnly = false;     // 13d: filter the feed to AI-authored events only
-  let _digest = null;      // 13b: factual digest of the last 7 days (computed from the events)
-  let _health = null;      // 13c: { stale, cands } for the Santé view
-  let _healthExpanded = false;
-  let _candExpanded = false;
-  let _healthTab = (() => { try { return localStorage.getItem('atlas:healthTab') || 'stale'; } catch (_) { return 'stale'; } })();  // 13c: persisted Santé sub-view
-  const shownItems = () => (_aiOnly ? _items.filter((i) => i.ai) : _items);
-
-  async function load() {
-    // Offline build: read the activity snapshot frozen into the page at build
-    // time (public minds only) instead of hitting /api/activity.
-    if (IS_OFFLINE_BUILD) {
-      return EMBED_ACTIVITY ? EMBED_ACTIVITY.events.map(toItem) : null;
+  // ── Digest (the weekly summary above the Journal) ─────────────────────────
+  digestHtml() {
+    const d = this.digest;
+    if (!d) return "";
+    const ic = (path, color) => `<svg width="13" height="13" fill="none" stroke="${color}" stroke-width="1.9" viewBox="0 0 24 24" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
+    const pill = (icon, n, label) => `<span class="act-legend-chip">${icon}<span class="text-ink-100 font-semibold">${n}</span> ${label}</span>`;
+    const parts = [];
+    if (d.docs) parts.push(pill(ic("M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z", "#5e6066"), d.docs, t("digestDocs", d.docs)));
+    if (d.created) parts.push(pill(ic("M12 4v16m8-8H4", this.TY("create").color), d.created, t("digestCreated", d.created)));
+    if (d.checked) parts.push(pill(ic("M5 13l4 4L19 7", this.TY("check").color), d.checked, t("digestChecked", d.checked)));
+    if (d.contributors) parts.push(pill(ic("M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4z", "#5e6066"), d.contributors, t("digestContributors", d.contributors)));
+    if (d.ai) parts.push(pill(ic("M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z", "#e8941c"), d.ai, t("digestViaAi", d.ai)));
+    if (!parts.length) return "";
+    const hr = '<hr style="border:none;border-top:1px solid #2a2a32;margin:0">';
+    return `<div style="position:relative;margin-bottom:12px">
+        ${hr}
+        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 9px">${parts.join("")}</div>
+        ${hr}
+        <span class="act-digest-when text-ink-500" style="position:absolute;right:0;bottom:5px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;pointer-events:none">${t("digestWeek")}</span>
+      </div>`;
+  }
+  // ── Skeletons (first-load placeholder; also lent to the Health view via the context) ──────────────
+  skelRow() {
+    return '<div class="flex items-center gap-3 py-2"><div class="act-skel" style="width:30px;height:30px;border-radius:8px"></div><div class="flex-1"><div class="act-skel" style="width:42%;height:10px"></div><div class="act-skel" style="width:26%;height:8px;margin-top:6px"></div></div><div class="act-skel" style="width:38px;height:8px"></div></div>';
+  }
+  skelRows(n) {
+    let s = "";
+    for (let i = 0; i < n; i++) s += this.skelRow();
+    return s;
+  }
+  skeletonHtml() {
+    return '<div class="border subtle-border rounded-lg p-4 bg-black/15"><div class="flex items-center justify-between mb-4"><div class="act-skel" style="width:90px;height:18px"></div><div class="act-skel" style="width:150px;height:26px;border-radius:8px"></div></div>' + this.skelRows(4) + "</div>";
+  }
+  // ── Card shell + view switch ──────────────────────────────────────────
+  segClass(active) {
+    return "activity-seg px-3 py-1 text-xs font-medium " + (active ? "is-active bg-accent text-white" : "text-ink-300");
+  }
+  // A checkbox-style filter (small box + label), not a button, reads as "filter the feed".
+  aiFilterHtml() {
+    return `<button type="button" data-ai-filter class="flex items-center gap-1.5 text-xs transition ${this.aiOnly ? "text-accent" : "text-ink-400 hover:text-ink-200"}" title="${t("actAiOnly")}"><span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ${this.aiOnly ? "#1d9bd1" : "#5e6066"};background:${this.aiOnly ? "#1d9bd1" : "transparent"}">${this.aiOnly ? "✓" : ""}</span>${t("actAiOnly")}</button>`;
+  }
+  cardHtml() {
+    return `<div id="home-activity-card" class="border subtle-border rounded-lg p-4 bg-black/15">
+        <div class="act-card-head flex items-center justify-between gap-3 mb-3">
+          <h2 class="!mb-0 !mt-0">${t("actTitle")}</h2>
+          <div class="act-card-controls flex items-center gap-2 shrink-0">
+            ${this.aiFilterHtml()}
+            <div class="act-seg-group inline-flex rounded-lg border subtle-border overflow-hidden">
+              <button type="button" data-view="journal" class="${this.segClass(true)}">${t("actJournal")}</button>
+              <button type="button" data-view="orrery" class="${this.segClass(false)}">${t("actConstellation")}</button>
+              <button type="button" data-view="health" class="${this.segClass(false)}">${t("actHealth")}</button>
+              ${IS_OFFLINE_BUILD ? "" : `<button type="button" data-view="inbox" class="${this.segClass(false)}">${t("actInbox")} <span id="inbox-badge" class="act-ibadge hidden"></span></button>`}
+            </div>
+          </div>
+        </div>
+        <div id="activity-digest">${this.digestHtml()}</div>
+        <div id="activity-journal">${this.journalView.html()}</div>
+        <div id="activity-orrery" class="hidden"></div>
+        <div id="activity-health" class="hidden"></div>
+        <div id="activity-inbox" class="hidden"></div>
+      </div>`;
+  }
+  setView(card, v, persist) {
+    const journalEl = card.querySelector("#activity-journal");
+    const orreryEl = card.querySelector("#activity-orrery");
+    const healthEl = card.querySelector("#activity-health");
+    const inboxEl = card.querySelector("#activity-inbox");
+    const digestEl = card.querySelector("#activity-digest");
+    if (digestEl) digestEl.classList.toggle("hidden", v !== "journal");
+    if (v === "orrery") {
+      if (!orreryEl.dataset.rendered) {
+        orreryEl.innerHTML = this.orreryView.html();
+        orreryEl.dataset.rendered = "1";
+        this.orreryView.wireHover(orreryEl);
+        this.orreryView.wireSun(orreryEl);
+      }
+      orreryEl.querySelectorAll(".act-spin,.act-sun,.act-egg").forEach((el) => el.classList.remove("spinning", "pop", "show"));
+    } else if (v === "health" && !healthEl.dataset.rendered) {
+      healthEl.dataset.rendered = "1";
+      healthEl.innerHTML = this.healthView.html();
+      this.healthView.load(healthEl);
+    } else if (v === "inbox" && inboxEl && !inboxEl.dataset.rendered && window.AtlasInbox) {
+      inboxEl.dataset.rendered = "1";
+      window.AtlasInbox.mount(inboxEl);
     }
-    if (!location.protocol.startsWith('http')) return null;
+    journalEl.classList.toggle("hidden", v !== "journal");
+    orreryEl.classList.toggle("hidden", v !== "orrery");
+    healthEl.classList.toggle("hidden", v !== "health");
+    if (inboxEl) inboxEl.classList.toggle("hidden", v !== "inbox");
+    if (window.AtlasInbox) {
+      if (v === "inbox") window.AtlasInbox.show();
+      else window.AtlasInbox.hide();
+    }
+    card.querySelectorAll("[data-view]").forEach((b) => {
+      b.className = this.segClass(b.dataset.view === v);
+    });
+    if (persist) {
+      try {
+        localStorage.setItem("atlas:activityView", v);
+      } catch (_) {
+      }
+    }
+  }
+  wire(card) {
+    let saved = "journal";
     try {
-      const r = await fetch('/api/activity?since=60&limit=200');
+      saved = localStorage.getItem("atlas:activityView") || "journal";
+    } catch (_) {
+    }
+    const q = new URLSearchParams(location.search).get("view");
+    if (q === "journal" || q === "orrery" || q === "health" || q === "inbox") saved = q;
+    if (saved === "inbox" && IS_OFFLINE_BUILD) saved = "journal";
+    this.setView(card, saved, false);
+    card.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => this.setView(card, b.dataset.view, true)));
+    card.addEventListener("click", (ev) => {
+      const fbtn = ev.target.closest("[data-ai-filter]");
+      if (fbtn) {
+        this.aiOnly = !this.aiOnly;
+        this.expanded = false;
+        fbtn.outerHTML = this.aiFilterHtml();
+        card.querySelector("#activity-journal").innerHTML = this.journalView.html();
+        const orreryEl = card.querySelector("#activity-orrery");
+        if (orreryEl.dataset.rendered) {
+          orreryEl.innerHTML = this.orreryView.html();
+          this.orreryView.wireHover(orreryEl);
+          this.orreryView.wireSun(orreryEl);
+        }
+        return;
+      }
+      if (ev.target.closest("[data-view]")) return;
+      if (ev.target.closest(".act-seeall")) {
+        this.expanded = !this.expanded;
+        card.querySelector("#activity-journal").innerHTML = this.journalView.html();
+        return;
+      }
+      if (ev.target.closest(".act-hsee")) {
+        this.healthView.toggleStale(card.querySelector("#activity-health"));
+        return;
+      }
+      if (ev.target.closest(".act-csee")) {
+        this.healthView.toggleCand(card.querySelector("#activity-health"));
+        return;
+      }
+      const ht = ev.target.closest("[data-htab]");
+      if (ht) {
+        this.healthView.setTab(ht.dataset.htab, card.querySelector("#activity-health"));
+        return;
+      }
+      const cd = ev.target.closest(".act-cdismiss");
+      if (cd) {
+        this.healthView.dismiss(cd, card.querySelector("#activity-health"));
+        return;
+      }
+      const rowEl = ev.target.closest("[data-path]");
+      if (rowEl && rowEl.dataset.path) this.openDocHistory(rowEl.dataset.path);
+    });
+  }
+  // ── Data ──────────────────────────────────────────────────────────────
+  async load() {
+    if (IS_OFFLINE_BUILD) {
+      return EMBED_ACTIVITY ? EMBED_ACTIVITY.events.map(ActivityModel.toItem) : null;
+    }
+    if (!location.protocol.startsWith("http")) return null;
+    try {
+      const r = await fetch("/api/activity?since=60&limit=200");
       if (!r.ok) return null;
       const data = await r.json();
-      return Array.isArray(data.events) ? data.events.map(toItem) : null;
+      return Array.isArray(data.events) ? data.events.map(ActivityModel.toItem) : null;
     } catch (_) {
       return null;
     }
   }
+  // ── Public API (mountActivity / refreshActivityData) ──────────────────
+  // Fill the mount left by showWelcome(). Robust to load order (showWelcome may run at boot before
+  // this file defines the renderer, so we also mount on our own load).
+  async mount() {
+    const m = document.getElementById("home-activity-mount");
+    if (!m) return;
+    this.expanded = false;
+    if (this.items && this.items.length) {
+      m.innerHTML = this.cardHtml();
+      this.wire(m.querySelector("#home-activity-card"));
+    } else if (this.items === null) m.innerHTML = this.skeletonHtml();
+    const loaded = await this.load();
+    this.items = loaded ? ActivityModel.aggregate(loaded) : loaded;
+    this.digest = loaded ? ActivityModel.computeDigest(loaded) : null;
+    if (!this.items || !this.items.length) {
+      m.innerHTML = "";
+      return;
+    }
+    m.innerHTML = this.cardHtml();
+    this.wire(m.querySelector("#home-activity-card"));
+    if (!IS_OFFLINE_BUILD && window.AtlasInbox) window.AtlasInbox.refreshBadge();
+  }
+  // Live-reload refresh that does NOT re-mount the card: softReload() calls this so only the active
+  // tab updates in place. Dormant tabs and the self-managing Inbox are left untouched.
+  async refreshData() {
+    const card = document.getElementById("home-activity-card");
+    if (!card) return;
+    const inbox = card.querySelector("#activity-inbox");
+    if (inbox && !inbox.classList.contains("hidden")) return;
+    if (!IS_OFFLINE_BUILD && window.AtlasInbox) window.AtlasInbox.refreshBadge();
+    const loaded = await this.load();
+    if (!loaded) return;
+    this.items = ActivityModel.aggregate(loaded);
+    this.digest = ActivityModel.computeDigest(loaded);
+    const journal = card.querySelector("#activity-journal");
+    if (journal && !journal.classList.contains("hidden")) {
+      journal.innerHTML = this.journalView.html();
+      const dg = card.querySelector("#activity-digest");
+      if (dg && !dg.classList.contains("hidden")) dg.innerHTML = this.digestHtml();
+      return;
+    }
+    const orrery = card.querySelector("#activity-orrery");
+    if (orrery && !orrery.classList.contains("hidden") && orrery.dataset.rendered) {
+      orrery.innerHTML = this.orreryView.html();
+      this.orreryView.wireHover(orrery);
+      this.orreryView.wireSun(orrery);
+    }
+  }
+}
 
-  // Collapse a run of consecutive events on the SAME doc by the same actor + type into
-  // one entry with a count: a burst of edits to one doc shouldn't read as N identical
-  // lines (CDC §9). Events arrive newest-first, so the kept time is the most recent.
-  function aggregate(items) {
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class ActivityIcons {
+}
+// CDC event types -> display label + tint + Heroicons-v2 outline path (clean line
+// icons, matching the rest of the app). Keyed by the type /api/activity returns.
+__publicField(ActivityIcons, "TYPES", {
+  create: { label: "created", color: "#e8941c", d: "M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" },
+  edit: { label: "edited", color: "#1d9bd1", d: "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.931-8.931Zm0 0L19.5 7.125" },
+  move: { label: "moved", color: "#1d9bd1", d: "M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" },
+  delete: { label: "deleted", color: "#868a90", d: "m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" },
+  check: { label: "checked", color: "#5fd0a6", d: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
+  revert: { label: "reverted", color: "#e8941c", d: "M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" },
+  // Mental-node subscriptions: the share/nodes glyph, tinted green (added) / grey (removed).
+  node_add: { label: "added node", color: "#5fd0a6", d: "M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" },
+  node_remove: { label: "removed node", color: "#868a90", d: "M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" }
+});
+// Verb labels by UI language (LANG from 01-i18n.ts). A local map (vs t()) keeps them next to
+// TYPES and avoids colliding with existing STRINGS keys (create/edit…).
+__publicField(ActivityIcons, "VERB", {
+  fr: { create: "créé", edit: "édité", move: "déplacé", delete: "supprimé", check: "coché", revert: "restauré", node_add: "ajouté le nœud", node_remove: "retiré le nœud" },
+  en: { create: "created", edit: "edited", move: "moved", delete: "deleted", check: "checked", revert: "reverted", node_add: "added the node", node_remove: "removed the node" }
+});
+__publicField(ActivityIcons, "AI", {
+  claude: "M12 2.6l1.6 5.9 5.9 1.6-5.9 1.6L12 21.4l-1.6-7.7L4.5 12l5.9-1.6L12 2.6Z",
+  chatgpt: "M12 3.2 18.5 7v8L12 18.8 5.5 15V7L12 3.2Z",
+  gemini: "M12 3c.6 4.5 2.4 6.3 6.9 6.9-4.5.6-6.3 2.4-6.9 6.9-.6-4.5-2.4-6.3-6.9-6.9C9.6 9.3 11.4 7.5 12 3Z",
+  generic: "M12 4l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6Z"
+});
+__publicField(ActivityIcons, "ORRERY_CAP", 18);
+// aggregated entries (distinct doc-activities), not raw commits
+__publicField(ActivityIcons, "JOURNAL_PREVIEW", 8);
+// Easter egg: flick the orrery (one full orbit) + bounce the sun on click; every 5th click, a
+// little supernova line floats up. Pure fun; reduced-motion gets just the line.
+__publicField(ActivityIcons, "EGG_LINES", [
+  "✨ tu as trouvé le cœur du mind",
+  "🪐 Atlas porte le ciel… et ton bordel",
+  "☄️ supernova !",
+  "🌟 fais un vœu",
+  "🔭 continue d’explorer"
+]);
+
+class ActivityModel {
+  // ---- pure projections over the wire events ----
+  static toItem(e) {
+    const author = (e.author || e.email || "").trim();
+    const parts = author.split(/\s+/);
+    const ts = Date.parse(e.date);
+    return {
+      who: author,
+      first: parts[0] || e.email || "",
+      last: parts.slice(1).join(" "),
+      email: e.email || "",
+      ai: e.ai || null,
+      bot: /atlas bot/i.test(author),
+      type: e.type,
+      title: e.title || e.paths && e.paths[0] || "",
+      agoMin: isNaN(ts) ? 0 : Math.max(0, Math.round((Date.now() - ts) / 6e4)),
+      sha: e.short_sha || (e.sha || "").slice(0, 7),
+      path: e.paths && e.paths[0] || "",
+      subject: e.subject || ""
+    };
+  }
+  // Collapse a run of consecutive events on the SAME doc by the same actor + type into one entry
+  // with a count: a burst of edits to one doc shouldn't read as N identical lines (CDC §9). Events
+  // arrive newest-first, so the kept time is the most recent.
+  static aggregate(items) {
     const out = [];
     for (const e of items) {
       const last = out[out.length - 1];
-      if (last && last.path === e.path && last.who === e.who
-          && last.type === e.type && last.ai === e.ai) {
-        last.count += 1;
+      if (last && last.path === e.path && last.who === e.who && last.type === e.type && last.ai === e.ai) {
+        last.count = (last.count || 0) + 1;
       } else {
         out.push(Object.assign({ count: 1 }, e));
       }
     }
     return out;
   }
+  // 13b: factual digest over the last 7 days (deterministic, derived from the events; the narrative
+  // side is the AI via the existing `activity` MCP tool, on demand).
+  static computeDigest(items) {
+    const WIN = 7 * 24 * 60;
+    const docs = /* @__PURE__ */ new Set();
+    const authors = /* @__PURE__ */ new Set();
+    let created = 0;
+    let checked = 0;
+    let ai = 0;
+    for (const i of items) {
+      if (i.agoMin > WIN) continue;
+      if (i.path) docs.add(i.path);
+      if (i.who) authors.add(i.who);
+      if (i.type === "create") created += 1;
+      if (i.type === "check" && /^checked/i.test(i.subject || "")) checked += 1;
+      if (i.ai) ai += 1;
+    }
+    return { docs: docs.size, created, checked, contributors: authors.size, ai };
+  }
+}
 
-  // ── Journal ───────────────────────────────────────────────────────────
-  function row(e) {
-    const ty = TY(e.type);
-    const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${esc(e.ai)}</span>` : '';
-    return (
-      `<div class="act-row flex items-center gap-3" data-path="${esc(e.path)}" data-tip="${esc(t('actSeeChanges'))}">
-        <div class="relative shrink-0" style="line-height:0">${avatar(e, 30)}${e.ai ? aiBadge(e.ai) : ''}</div>
+class ActivityJournal {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+  row(e) {
+    const ty = this.ctx.TY(e.type);
+    const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${escapeHtml(e.ai)}</span>` : "";
+    return `<div class="act-row flex items-center gap-3" data-path="${escapeHtml(e.path)}" data-tip="${escapeHtml(t("actSeeChanges"))}">
+        <div class="relative shrink-0" style="line-height:0">${this.ctx.avatar(e, 30)}${e.ai ? this.ctx.aiBadge(e.ai) : ""}</div>
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-1.5"><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
+          <div class="flex items-center gap-1.5"><span class="text-sm font-semibold text-ink-100">${escapeHtml(e.who)}</span>${via}</div>
           <div class="flex items-center gap-1.5 text-sm mt-0.5">
-            <span class="shrink-0" style="line-height:0">${iconSvg(e.type, 14)}</span>
-            <span class="shrink-0" style="color:${ty.color};font-weight:600;white-space:nowrap">${verbPhrase(e.type)}</span>
-            <span class="text-ink-300 truncate min-w-0">${esc(e.title)}</span>
-            ${e.count > 1 ? `<span class="text-ink-500 text-xs shrink-0">×${e.count}</span>` : ''}
+            <span class="shrink-0" style="line-height:0">${this.ctx.iconSvg(e.type, 14)}</span>
+            <span class="shrink-0" style="color:${ty.color};font-weight:600;white-space:nowrap">${this.ctx.verbPhrase(e.type)}</span>
+            <span class="text-ink-300 truncate min-w-0">${escapeHtml(e.title)}</span>
+            ${e.count && e.count > 1 ? `<span class="text-ink-500 text-xs shrink-0">×${e.count}</span>` : ""}
           </div>
         </div>
-        <div class="shrink-0 text-xs text-ink-500 font-mono" title="${esc(e.sha)}">${rel(e.agoMin)}</div>
-      </div>`
-    );
+        <div class="shrink-0 text-xs text-ink-500 font-mono" title="${escapeHtml(e.sha)}">${this.ctx.rel(e.agoMin)}</div>
+      </div>`;
   }
-
-  const JOURNAL_PREVIEW = 8;
-  let _expanded = false;
-
-  function journalHtml() {
-    const all = shownItems();
-    if (!all.length) return `<div class="text-ink-500 text-sm py-4 text-center">${_aiOnly ? t('actEmptyAi') : t('actEmpty')}</div>`;
-    let out = '';
-    let day = '';
-    const shown = _expanded ? all : all.slice(0, JOURNAL_PREVIEW);
+  html() {
+    const all = this.ctx.shownItems();
+    if (!all.length) return `<div class="text-ink-500 text-sm py-4 text-center">${this.ctx.aiOnly ? t("actEmptyAi") : t("actEmpty")}</div>`;
+    let out = "";
+    let day = "";
+    const shown = this.ctx.expanded ? all : all.slice(0, ActivityIcons.JOURNAL_PREVIEW);
     shown.forEach((e) => {
-      const k = dayKey(e.agoMin);
+      const k = this.ctx.dayKey(e.agoMin);
       if (k !== day) {
         day = k;
-        out += `<div class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mt-3 mb-1 first:mt-0">${esc(day)}</div>`;
+        out += `<div class="text-[11px] uppercase tracking-wider text-ink-500 font-semibold mt-3 mb-1 first:mt-0">${escapeHtml(day)}</div>`;
       }
-      out += row(e);
+      out += this.row(e);
     });
-    // Toggle in place, no extra view to navigate to, the feed just unfolds.
-    if (all.length > JOURNAL_PREVIEW) {
-      out += `<div class="text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${_expanded ? t('actCollapse') : t('actSeeAll')}</a></div>`;
+    if (all.length > ActivityIcons.JOURNAL_PREVIEW) {
+      out += `<div class="text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${this.ctx.expanded ? t("actCollapse") : t("actSeeAll")}</a></div>`;
     }
     return out;
   }
+}
 
-  // ── Constellation ─────────────────────────────────────────────────────
-  const ORRERY_CAP = 18;  // aggregated entries (distinct doc-activities), not raw commits
-
-  function orreryNodes() {
-    const cx = 360, cy = 265;
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class ActivityOrrery {
+  // the list the constellation nodes index into (respects the filter)
+  constructor(ctx) {
+    this.ctx = ctx;
+    __publicField(this, "orreryItems", []);
+  }
+  orreryNodes() {
+    const cx = 360;
+    const cy = 265;
     const radii = [104, 172, 236];
-    // Cap + even split by recency RANK (not raw time): each ring gets a balanced share
-    // so a burst of recent edits can't pile onto one ring. Inner = most recent.
-    const items = (_orreryItems = shownItems()).slice(0, ORRERY_CAP).map((e, i) => ({ e, i }));
+    const items = (this.orreryItems = this.ctx.shownItems()).slice(0, ActivityIcons.ORRERY_CAP).map((e, i) => ({ e, i }));
     const perRing = Math.max(1, Math.ceil(items.length / 3));
     const rings = [[], [], []];
     items.forEach((it, idx) => rings[Math.min(2, Math.floor(idx / perRing))].push(it));
-    let nodes = '';
+    let nodes = "";
     rings.forEach((arr, ri) => {
       const r = radii[ri];
-      const off = ri * 0.7 + 0.15;  // stagger rings so nodes don't align radially
+      const off = ri * 0.7 + 0.15;
       arr.forEach((it, k) => {
         const ang = (k + 0.5) / arr.length * Math.PI * 2 - Math.PI / 2 + off;
-        const x = cx + r * Math.cos(ang), y = cy + r * Math.sin(ang);
-        const c = TY(it.e.type).color;
-        nodes +=
-          `<g class="act-node" data-i="${it.i}" tabindex="0" transform="translate(${x.toFixed(1)},${y.toFixed(1)})">
+        const x = cx + r * Math.cos(ang);
+        const y = cy + r * Math.sin(ang);
+        const c = this.ctx.TY(it.e.type).color;
+        nodes += `<g class="act-node" data-i="${it.i}" tabindex="0" transform="translate(${x.toFixed(1)},${y.toFixed(1)})">
             <g class="act-node-inner">
               <circle r="19" fill="#14131a" stroke="${c}" stroke-opacity=".6"/>
-              <svg x="-11" y="-11" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${TY(it.e.type).d}"/></svg>
-              ${it.e.ai ? '<circle cx="13" cy="-13" r="5" fill="#14131a" stroke="#e8941c" stroke-opacity=".8"/><circle cx="13" cy="-13" r="1.8" fill="#e8941c"/>' : ''}
+              <svg x="-11" y="-11" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${this.ctx.TY(it.e.type).d}"/></svg>
+              ${it.e.ai ? '<circle cx="13" cy="-13" r="5" fill="#14131a" stroke="#e8941c" stroke-opacity=".8"/><circle cx="13" cy="-13" r="1.8" fill="#e8941c"/>' : ""}
             </g>
           </g>`;
       });
     });
-    const ringSvg = radii
-      .map((r) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#6a7180" stroke-opacity=".4" stroke-width="1" stroke-dasharray="3 7"/>`)
-      .join('');
+    const ringSvg = radii.map((r) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#6a7180" stroke-opacity=".4" stroke-width="1" stroke-dasharray="3 7"/>`).join("");
     return { ringSvg, nodes, cx, cy };
   }
-
-  function orreryHtml() {
-    const { ringSvg, nodes, cx, cy } = orreryNodes();
-    const legend = Object.keys(TYPES)
-      .map((k) => `<span class="act-legend-chip">${iconSvg(k, 12)}<span>${verb(k)}</span></span>`)
-      .join('');
-    return (
-      `<div class="act-orrery flex items-start gap-4">
+  html() {
+    const { ringSvg, nodes, cx, cy } = this.orreryNodes();
+    const legend = Object.keys(ActivityIcons.TYPES).map((k) => `<span class="act-legend-chip">${this.ctx.iconSvg(k, 12)}<span>${this.ctx.verb(k)}</span></span>`).join("");
+    return `<div class="act-orrery flex items-start gap-4">
         <div class="act-sky relative flex-1 min-w-0">
           <svg viewBox="0 0 720 540" style="width:100%;height:auto;overflow:visible">
             <defs>
@@ -11569,983 +9751,782 @@ document.addEventListener('keydown', (e) => {
           <div class="act-egg"></div>
         </div>
         <div class="act-legend">${legend}</div>
-      </div>`
-    );
+      </div>`;
   }
-
-  function popHtml(e) {
-    const ty = TY(e.type);
-    const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${esc(e.ai)}</span>` : '';
-    return (
-      `<div class="flex items-center gap-2 mb-1.5"><span style="line-height:0">${avatar(e, 26)}</span><span class="text-sm font-semibold text-ink-100">${esc(e.who)}</span>${via}</div>
-       <div class="flex items-baseline gap-1.5 text-sm"><span style="color:${ty.color};font-weight:600;white-space:nowrap">${verbPhrase(e.type)}</span><span class="text-ink-300" style="min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(e.title)}</span>${e.count > 1 ? `<span class="text-ink-500 text-xs" style="white-space:nowrap">×${e.count}</span>` : ''}</div>
-       <div class="text-xs text-ink-500 font-mono mt-1.5">${rel(e.agoMin)} · ${esc(e.sha)}</div>`
-    );
+  popHtml(e) {
+    const ty = this.ctx.TY(e.type);
+    const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${escapeHtml(e.ai)}</span>` : "";
+    return `<div class="flex items-center gap-2 mb-1.5"><span style="line-height:0">${this.ctx.avatar(e, 26)}</span><span class="text-sm font-semibold text-ink-100">${escapeHtml(e.who)}</span>${via}</div>
+       <div class="flex items-baseline gap-1.5 text-sm"><span style="color:${ty.color};font-weight:600;white-space:nowrap">${this.ctx.verbPhrase(e.type)}</span><span class="text-ink-300" style="min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(e.title)}</span>${e.count && e.count > 1 ? `<span class="text-ink-500 text-xs" style="white-space:nowrap">×${e.count}</span>` : ""}</div>
+       <div class="text-xs text-ink-500 font-mono mt-1.5">${this.ctx.rel(e.agoMin)} · ${escapeHtml(e.sha)}</div>`;
   }
-
-  function wireOrreryHover(container) {
-    const wrap = container.querySelector('.act-sky');
-    const pop = container.querySelector('.act-pop');
+  wireHover(container) {
+    const wrap = container.querySelector(".act-sky");
+    const pop = container.querySelector(".act-pop");
     if (!wrap || !pop) return;
     const show = (node) => {
-      const e = _orreryItems[+node.dataset.i];
+      const e = this.orreryItems[Number(node.dataset.i)];
       if (!e) return;
-      pop.innerHTML = popHtml(e);
-      pop.classList.remove('hidden');
-      if (window.matchMedia('(max-width:767px)').matches) {
-        pop.style.left = pop.style.top = pop.style.transform = '';  // CSS bottom-sheet positions it
+      pop.innerHTML = this.popHtml(e);
+      pop.classList.remove("hidden");
+      if (window.matchMedia("(max-width:767px)").matches) {
+        pop.style.left = pop.style.top = pop.style.transform = "";
         return;
       }
-      const nb = node.getBoundingClientRect(), wb = wrap.getBoundingClientRect();
+      const nb = node.getBoundingClientRect();
+      const wb = wrap.getBoundingClientRect();
       let left = nb.left - wb.left + nb.width / 2;
       const half = pop.offsetWidth / 2;
       left = Math.max(half + 4, Math.min(wb.width - half - 4, left));
-      pop.style.left = left + 'px';
-      // flip below the node when there isn't room above (keeps it off the toggle / top edge)
+      pop.style.left = left + "px";
       if (nb.top - wb.top > pop.offsetHeight + 16) {
-        pop.style.top = (nb.top - wb.top - 10) + 'px';
-        pop.style.transform = 'translate(-50%, -100%)';
+        pop.style.top = nb.top - wb.top - 10 + "px";
+        pop.style.transform = "translate(-50%, -100%)";
       } else {
-        pop.style.top = (nb.bottom - wb.top + 10) + 'px';
-        pop.style.transform = 'translate(-50%, 0)';
+        pop.style.top = nb.bottom - wb.top + 10 + "px";
+        pop.style.transform = "translate(-50%, 0)";
       }
     };
-    const hide = () => pop.classList.add('hidden');
-    const noHover = window.matchMedia('(hover: none)').matches;  // touch: no hover → tap to reveal
+    const hide = () => pop.classList.add("hidden");
+    const noHover = window.matchMedia("(hover: none)").matches;
     let activeNode = null;
-    wrap.querySelectorAll('.act-node').forEach((n) => {
-      n.addEventListener('mouseenter', () => show(n));
-      n.addEventListener('mouseleave', hide);
-      n.addEventListener('focus', () => show(n));
-      n.addEventListener('blur', hide);
-      n.addEventListener('click', () => {
-        const e = _orreryItems[+n.dataset.i];
-        if (!noHover) { if (e) openDocHistory(e.path); return; }
-        if (activeNode === n) { if (e) openDocHistory(e.path); }   // 2nd tap on same node → open history
-        else { activeNode = n; show(n); }                          // 1st tap → reveal the popover
+    wrap.querySelectorAll(".act-node").forEach((n) => {
+      n.addEventListener("mouseenter", () => show(n));
+      n.addEventListener("mouseleave", hide);
+      n.addEventListener("focus", () => show(n));
+      n.addEventListener("blur", hide);
+      n.addEventListener("click", () => {
+        const e = this.orreryItems[Number(n.dataset.i)];
+        if (!noHover) {
+          if (e) this.ctx.openDocHistory(e.path);
+          return;
+        }
+        if (activeNode === n) {
+          if (e) this.ctx.openDocHistory(e.path);
+        } else {
+          activeNode = n;
+          show(n);
+        }
       });
     });
-    wrap.addEventListener('click', (ev) => {
-      if (!ev.target.closest('.act-node')) { hide(); activeNode = null; }  // tap the empty sky → dismiss
+    wrap.addEventListener("click", (ev) => {
+      if (!ev.target.closest(".act-node")) {
+        hide();
+        activeNode = null;
+      }
     });
   }
-
-  // Easter egg: flick the orrery (one full orbit) + bounce the sun on click; every 5th
-  // click, a little supernova line floats up. Pure fun; reduced-motion gets just the line.
-  const EGG_LINES = [
-    '✨ tu as trouvé le cœur du mind',
-    '🪐 Atlas porte le ciel… et ton bordel',
-    '☄️ supernova !',
-    '🌟 fais un vœu',
-    '🔭 continue d’explorer',
-  ];
-  function wireSun(container) {
-    const sun = container.querySelector('.act-sun');
-    const spin = container.querySelector('.act-spin');
-    const egg = container.querySelector('.act-egg');
+  wireSun(container) {
+    const sun = container.querySelector(".act-sun");
+    const spin = container.querySelector(".act-spin");
+    const egg = container.querySelector(".act-egg");
     if (!sun) return;
-    // Drop each one-shot class when its animation ends, so it doesn't persist and replay
-    // when the hidden orrery is shown again (Journal ⇄ Constellation switch re-displays it).
-    if (spin) spin.addEventListener('animationend', () => spin.classList.remove('spinning'));
-    sun.addEventListener('animationend', () => sun.classList.remove('pop'));
-    if (egg) egg.addEventListener('animationend', () => egg.classList.remove('show'));
+    if (spin) spin.addEventListener("animationend", () => spin.classList.remove("spinning"));
+    sun.addEventListener("animationend", () => sun.classList.remove("pop"));
+    if (egg) egg.addEventListener("animationend", () => egg.classList.remove("show"));
     let n = 0;
-    sun.addEventListener('click', () => {
+    sun.addEventListener("click", () => {
       n += 1;
-      if (spin) { spin.classList.remove('spinning'); void spin.getBBox(); spin.classList.add('spinning'); }
-      sun.classList.remove('pop'); void sun.getBBox(); sun.classList.add('pop');
+      if (spin) {
+        spin.classList.remove("spinning");
+        void spin.getBBox();
+        spin.classList.add("spinning");
+      }
+      sun.classList.remove("pop");
+      void sun.getBBox();
+      sun.classList.add("pop");
       if (n % 5 === 0 && egg) {
-        egg.textContent = EGG_LINES[(n / 5 - 1) % EGG_LINES.length];
-        egg.classList.remove('show'); void egg.offsetWidth; egg.classList.add('show');
+        egg.textContent = ActivityIcons.EGG_LINES[(n / 5 - 1) % ActivityIcons.EGG_LINES.length];
+        egg.classList.remove("show");
+        void egg.offsetWidth;
+        egg.classList.add("show");
       }
     });
   }
-
-  // ── Card shell + view switch ──────────────────────────────────────────
-  const segClass = (active) =>
-    'activity-seg px-3 py-1 text-xs font-medium ' + (active ? 'is-active bg-accent text-white' : 'text-ink-300');
-  // A checkbox-style filter (small box + label), not a button, reads as "filter the feed".
-  const aiFilterHtml = () =>
-    `<button type="button" data-ai-filter class="flex items-center gap-1.5 text-xs transition ${_aiOnly ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" title="${t('actAiOnly')}">` +
-    `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ${_aiOnly ? '#1d9bd1' : '#5e6066'};background:${_aiOnly ? '#1d9bd1' : 'transparent'}">${_aiOnly ? '✓' : ''}</span>` +
-    `${t('actAiOnly')}</button>`;
-
-  // 13b: factual digest over the last 7 days (deterministic, derived from the events;
-  // the narrative side is the AI via the existing `activity` MCP tool, on demand).
-  function computeDigest(items) {
-    const WIN = 7 * 24 * 60; // minutes in 7 days
-    const docs = new Set(), authors = new Set();
-    let created = 0, checked = 0, ai = 0;
-    for (const i of items) {
-      if (i.agoMin > WIN) continue;
-      if (i.path) docs.add(i.path);
-      if (i.who) authors.add(i.who);
-      if (i.type === 'create') created += 1;
-      if (i.type === 'check' && /^checked/i.test(i.subject || '')) checked += 1;
-      if (i.ai) ai += 1;
-    }
-    return { docs: docs.size, created, checked, contributors: authors.size, ai };
-  }
-
-  function digestHtml() {
-    const d = _digest;
-    if (!d) return '';
-    const ic = (path, color) =>
-      `<svg width="13" height="13" fill="none" stroke="${color}" stroke-width="1.9" viewBox="0 0 24 24" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
-    const pill = (icon, n, label) =>
-      `<span class="act-legend-chip">${icon}<span class="text-ink-100 font-semibold">${n}</span> ${label}</span>`;
-    const parts = [];
-    if (d.docs) parts.push(pill(ic('M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z', '#5e6066'), d.docs, t('digestDocs', d.docs)));
-    if (d.created) parts.push(pill(ic('M12 4v16m8-8H4', TY('create').color), d.created, t('digestCreated', d.created)));
-    if (d.checked) parts.push(pill(ic('M5 13l4 4L19 7', TY('check').color), d.checked, t('digestChecked', d.checked)));
-    if (d.contributors) parts.push(pill(ic('M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4z', '#5e6066'), d.contributors, t('digestContributors', d.contributors)));
-    if (d.ai) parts.push(pill(ic('M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z', '#e8941c'), d.ai, t('digestViaAi', d.ai)));
-    if (!parts.length) return '';
-    const hr = '<hr style="border:none;border-top:1px solid #2a2a32;margin:0">';
-    return (
-      `<div style="position:relative;margin-bottom:12px">
-        ${hr}
-        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 9px">${parts.join('')}</div>
-        ${hr}
-        <span class="act-digest-when text-ink-500" style="position:absolute;right:0;bottom:5px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;pointer-events:none">${t('digestWeek')}</span>
-      </div>`
-    );
-  }
-
-  // 13c: Santé, obsolescence (déterministe serveur) + candidats de contradiction (pré-filtre
-  // serveur ; l'IA juge via MCP). Les clics sur un doc rouvrent son historique.
-  async function loadHealth(h) {
-    let stale = [], cands = [];
-    if (IS_OFFLINE_BUILD) {
-      // Offline: from the embedded snapshot (same shape as /api/stale and the
-      // /api/contradictions candidates), no network.
-      stale = (EMBED_ACTIVITY && EMBED_ACTIVITY.stale) || [];
-      cands = (EMBED_ACTIVITY && EMBED_ACTIVITY.contradictions) || [];
-    } else {
-      try {
-        const [rs, rc] = await Promise.all([
-          fetch('/api/stale?months=6&limit=40'),
-          fetch('/api/contradictions?limit=50'),
-        ]);
-        if (rs.ok) stale = (await rs.json()).stale || [];
-        if (rc.ok) cands = (await rc.json()).candidates || [];
-      } catch (_) {}
-    }
-    _health = { stale, cands };
-    h.innerHTML = healthHtml();
-  }
-
-  function healthHtml() {
-    const tab = (active, v, label) =>
-      `<button type="button" data-htab="${v}" class="px-3 py-1.5 text-xs font-medium transition ${active ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" style="border-bottom:2px solid ${active ? '#1d9bd1' : 'transparent'};margin-bottom:-1px">${label}</button>`;
-    const toggle =
-      `<div class="flex mb-3" style="border-bottom:1px solid #2a2a32">`
-      + tab(_healthTab === 'stale', 'stale', t('healthTabStale'))
-      + tab(_healthTab === 'cont', 'cont', t('healthTabCont'))
-      + `</div>`;
-    // Keep the sub-toggle stable; only the body swaps skeleton → content on fetch.
-    const body = !_health ? skelRows(3) : (_healthTab === 'stale' ? staleHtml() : contHtml());
-    return toggle + body;
-  }
-
-  function staleHtml() {
-    const stale = _health.stale;
-    if (!stale.length) return `<div class="text-ink-500 text-sm py-1">${t('healthNoStale')}</div>`;
-    const shown = _healthExpanded ? stale : stale.slice(0, 8);
-    let out = shown.map((s) =>
-      `<div class="act-row" data-path="${esc(s.path)}" data-tip="${esc(t('healthOpenHist'))}"><div class="flex items-center justify-between gap-3">`
-      + `<div class="min-w-0"><div class="text-sm text-ink-200 truncate">${esc(docTitle(s.path))}</div>`
-      + `<div class="text-xs text-ink-500 truncate">${esc(s.path)}</div></div>`
-      + `<div class="shrink-0 text-xs text-ink-500">${t('healthMonthsAgo', Math.round(s.months_ago))}</div></div></div>`).join('');
-    if (stale.length > 8) {
-      out += `<div class="text-right mt-1"><a class="act-hsee text-sm text-accent hover:underline cursor-pointer">${_healthExpanded ? t('actCollapse') : t('actSeeAllN', stale.length)}</a></div>`;
-    }
-    return out;
-  }
-
-  function contHtml() {
-    const cands = _health.cands;
-    if (!cands.length) return `<div class="text-ink-500 text-sm py-1">${t('healthNoCand')}</div>`;
-    const shown = _candExpanded ? cands : cands.slice(0, 8);
-    let out = `<div class="text-xs text-ink-500 mb-2">${t('healthAskAi')}</div>`;
-    out += shown.map((c) => {
-      // Detector rows carry the conflicting values + their lines; cluster rows show the first
-      // "à vérifier" evidence line if any, else the shared subject.
-      const meta = c.kind === 'cluster'
-        ? esc((c.evidence && c.evidence.length && c.evidence[0].text) || c.subject || '')
-        : t('healthValueConflict', esc(c.subject || ''), esc(c.a_value || ''), esc(c.b_value || ''));
-      const confPill = c.confidence === 'high'
-        ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#1d3a5b;color:#9ecbff" data-tip="${esc(t('healthConfHighHint'))}">${t('healthConfHigh')}</span>`
-        : `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#2a2a32;color:#9a9aa5" data-tip="${esc(t('healthReviewHint'))}">${t('healthReview')}</span>`;
-      return `<div class="py-1.5"><div class="flex items-center gap-2 text-sm">`
-        + `<div class="flex items-center gap-2 min-w-0 flex-1">`
-        + (c.verdict === 'real' ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#5b1d1d;color:#ffb4b4">${t('healthReal')}</span>` : confPill)
-        + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${esc(c.a)}">${esc(docTitle(c.a))}</span>`
-        + `<span class="text-ink-500 shrink-0">⇄</span>`
-        + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${esc(c.b)}">${esc(docTitle(c.b))}</span></div>`
-        + `<button type="button" class="act-cdismiss shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-lg border subtle-border bg-navy-600 hover:bg-navy-500 text-ink-300 hover:text-ink-100 transition" data-a="${esc(c.a)}" data-b="${esc(c.b)}" data-aline="${c.a_line || ''}" data-bline="${c.b_line || ''}" data-tip="${esc(t('healthDismissHint'))}">✓ ${t('healthDismiss')}</button></div>`
-        + (meta ? `<div class="text-xs text-ink-500 mt-0.5 truncate">${meta}</div>` : '') + '</div>';
-    }).join('');
-    if (cands.length > 8) out += `<div class="text-right mt-1"><a class="act-csee text-sm text-accent hover:underline cursor-pointer">${_candExpanded ? t('actCollapse') : t('actSeeAllN', cands.length)}</a></div>`;
-    return out;
-  }
-
-  function skelRow() {
-    return '<div class="flex items-center gap-3 py-2">'
-      + '<div class="act-skel" style="width:30px;height:30px;border-radius:8px"></div>'
-      + '<div class="flex-1"><div class="act-skel" style="width:42%;height:10px"></div>'
-      + '<div class="act-skel" style="width:26%;height:8px;margin-top:6px"></div></div>'
-      + '<div class="act-skel" style="width:38px;height:8px"></div></div>';
-  }
-  function skelRows(n) {
-    let s = '';
-    for (let i = 0; i < n; i++) s += skelRow();
-    return s;
-  }
-  function skeletonHtml() {
-    return '<div class="border subtle-border rounded-lg p-4 bg-black/15">'
-      + '<div class="flex items-center justify-between mb-4">'
-      + '<div class="act-skel" style="width:90px;height:18px"></div>'
-      + '<div class="act-skel" style="width:150px;height:26px;border-radius:8px"></div></div>'
-      + skelRows(4) + '</div>';
-  }
-
-  function cardHtml() {
-    return (
-      `<div id="home-activity-card" class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="act-card-head flex items-center justify-between gap-3 mb-3">
-          <h2 class="!mb-0 !mt-0">${t('actTitle')}</h2>
-          <div class="act-card-controls flex items-center gap-2 shrink-0">
-            ${aiFilterHtml()}
-            <div class="act-seg-group inline-flex rounded-lg border subtle-border overflow-hidden">
-              <button type="button" data-view="journal" class="${segClass(true)}">${t('actJournal')}</button>
-              <button type="button" data-view="orrery" class="${segClass(false)}">${t('actConstellation')}</button>
-              <button type="button" data-view="health" class="${segClass(false)}">${t('actHealth')}</button>
-              ${IS_OFFLINE_BUILD ? '' : `<button type="button" data-view="inbox" class="${segClass(false)}">${t('actInbox')} <span id="inbox-badge" class="act-ibadge hidden"></span></button>`}
-            </div>
-          </div>
-        </div>
-        <div id="activity-digest">${digestHtml()}</div>
-        <div id="activity-journal">${journalHtml()}</div>
-        <div id="activity-orrery" class="hidden"></div>
-        <div id="activity-health" class="hidden"></div>
-        <div id="activity-inbox" class="hidden"></div>
-      </div>`
-    );
-  }
-
-  function setView(card, v, persist) {
-    const j = card.querySelector('#activity-journal');
-    const o = card.querySelector('#activity-orrery');
-    const h = card.querySelector('#activity-health');
-    const ib = card.querySelector('#activity-inbox');
-    const dg = card.querySelector('#activity-digest');  // the weekly digest belongs to Journal only
-    if (dg) dg.classList.toggle('hidden', v !== 'journal');
-    if (v === 'orrery') {
-      if (!o.dataset.rendered) { o.innerHTML = orreryHtml(); o.dataset.rendered = '1'; wireOrreryHover(o); wireSun(o); }
-      // clear leftover one-shot animation classes so re-showing the tab never replays them
-      o.querySelectorAll('.act-spin,.act-sun,.act-egg').forEach((el) => el.classList.remove('spinning', 'pop', 'show'));
-    } else if (v === 'health' && !h.dataset.rendered) {
-      h.dataset.rendered = '1'; h.innerHTML = healthHtml(); loadHealth(h);
-    } else if (v === 'inbox' && ib && !ib.dataset.rendered && window.AtlasInbox) {
-      ib.dataset.rendered = '1'; AtlasInbox.mount(ib);  // the Inbox is its own module (22-inbox.js)
-    }
-    j.classList.toggle('hidden', v !== 'journal');
-    o.classList.toggle('hidden', v !== 'orrery');
-    h.classList.toggle('hidden', v !== 'health');
-    if (ib) ib.classList.toggle('hidden', v !== 'inbox');
-    if (window.AtlasInbox) { if (v === 'inbox') AtlasInbox.show(); else AtlasInbox.hide(); }
-    card.querySelectorAll('[data-view]').forEach((b) => { b.className = segClass(b.dataset.view === v); });
-    if (persist) { try { localStorage.setItem('atlas:activityView', v); } catch (_) {} }
-  }
-
-  function wire(card) {
-    let saved = 'journal';
-    try { saved = localStorage.getItem('atlas:activityView') || 'journal'; } catch (_) {}
-    const q = new URLSearchParams(location.search).get('view');
-    if (q === 'journal' || q === 'orrery' || q === 'health' || q === 'inbox') saved = q;
-    if (saved === 'inbox' && IS_OFFLINE_BUILD) saved = 'journal';  // inbox tab is online-only
-    setView(card, saved, false);
-    card.querySelectorAll('[data-view]').forEach((b) =>
-      b.addEventListener('click', () => setView(card, b.dataset.view, true)));
-    card.addEventListener('click', (ev) => {
-      const fbtn = ev.target.closest('[data-ai-filter]');
-      if (fbtn) {
-        _aiOnly = !_aiOnly;
-        _expanded = false;
-        fbtn.outerHTML = aiFilterHtml();
-        card.querySelector('#activity-journal').innerHTML = journalHtml();
-        const o = card.querySelector('#activity-orrery');
-        if (o.dataset.rendered) { o.innerHTML = orreryHtml(); wireOrreryHover(o); wireSun(o); }
-        return;
-      }
-      if (ev.target.closest('[data-view]')) return;
-      if (ev.target.closest('.act-seeall')) {
-        _expanded = !_expanded;
-        card.querySelector('#activity-journal').innerHTML = journalHtml();
-        return;
-      }
-      if (ev.target.closest('.act-hsee')) {
-        _healthExpanded = !_healthExpanded;
-        card.querySelector('#activity-health').innerHTML = healthHtml();
-        return;
-      }
-      if (ev.target.closest('.act-csee')) {
-        _candExpanded = !_candExpanded;
-        card.querySelector('#activity-health').innerHTML = healthHtml();
-        return;
-      }
-      const ht = ev.target.closest('[data-htab]');
-      if (ht) {
-        _healthTab = ht.dataset.htab;
-        try { localStorage.setItem('atlas:healthTab', _healthTab); } catch (_) {}
-        card.querySelector('#activity-health').innerHTML = healthHtml();
-        return;
-      }
-      const cd = ev.target.closest('.act-cdismiss');
-      if (cd) {
-        // Human verdict "pas une contradiction" (13c) → POST none, drop the row. The global
-        // fetch wrapper injects the CSRF token. The pair resurfaces only if a doc is edited.
-        const { a, b, aline, bline } = cd.dataset;
-        cd.disabled = true;
-        // Pass the judged line numbers (value collisions carry them) so the verdict is
-        // span-bound (F1): it survives edits ELSEWHERE in either doc, not just any edit.
-        const body = { a, b, verdict: 'none' };
-        if (aline) body.a_line = Number(aline);
-        if (bline) body.b_line = Number(bline);
-        fetch('/api/contradiction', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        }).then((r) => {
-          if (r.ok) {
-            _health.cands = _health.cands.filter((c) => !((c.a === a && c.b === b) || (c.a === b && c.b === a)));
-            card.querySelector('#activity-health').innerHTML = healthHtml();
-          } else { cd.disabled = false; }
-        }).catch(() => { cd.disabled = false; });
-        return;
-      }
-      const row = ev.target.closest('[data-path]');
-      if (row && row.dataset.path) openDocHistory(row.dataset.path);
-    });
-  }
-
-  // Fill the mount left by showWelcome(). Robust to load order (showWelcome may run at
-  // boot before this file defines the renderer, so we also mount on our own load).
-  window.mountActivity = async function () {
-    const m = document.getElementById('home-activity-mount');
-    if (!m) return;
-    // Re-fetch on every mount: the feed must reflect edits made since the home was
-    // last shown (e.g. a task toggle), no caching, or it stays stale until reload.
-    _expanded = false;
-    // Don't leave the card slot blank while /api/activity fetches: cached card
-    // instantly on re-visit, a skeleton on the very first load.
-    if (_items && _items.length) { m.innerHTML = cardHtml(); wire(m.querySelector('#home-activity-card')); }
-    else if (_items === null) m.innerHTML = skeletonHtml();
-    const raw = await load();
-    _items = raw ? aggregate(raw) : raw;
-    _digest = raw ? computeDigest(raw) : null;
-    if (!_items || !_items.length) { m.innerHTML = ''; return; }  // offline / nothing → no card
-    m.innerHTML = cardHtml();
-    wire(m.querySelector('#home-activity-card'));
-    if (!IS_OFFLINE_BUILD && window.AtlasInbox) AtlasInbox.refreshBadge();  // light count without opening the tab
-  };
-
-  // Live-reload refresh that does NOT re-mount the card: softReload() calls this so only the active
-  // tab updates in place. Dormant tabs and the self-managing Inbox are left untouched.
-  window.refreshActivityData = async function () {
-    const card = document.getElementById('home-activity-card');
-    if (!card) return;
-    const inbox = card.querySelector('#activity-inbox');
-    if (inbox && !inbox.classList.contains('hidden')) return;  // Inbox active: it manages itself
-    if (!IS_OFFLINE_BUILD && window.AtlasInbox) AtlasInbox.refreshBadge();  // keep the home badge live
-    const raw = await load();
-    if (!raw) return;
-    _items = aggregate(raw);
-    _digest = computeDigest(raw);
-    const journal = card.querySelector('#activity-journal');
-    if (journal && !journal.classList.contains('hidden')) {
-      journal.innerHTML = journalHtml();
-      const dg = card.querySelector('#activity-digest');
-      if (dg && !dg.classList.contains('hidden')) dg.innerHTML = digestHtml();
-      return;
-    }
-    const orrery = card.querySelector('#activity-orrery');
-    if (orrery && !orrery.classList.contains('hidden') && orrery.dataset.rendered) {
-      orrery.innerHTML = orreryHtml(); wireOrreryHover(orrery); wireSun(orrery);
-    }
-  };
-  window.mountActivity();
-
-})();
+}
 
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-(function() {
-  if (typeof escapeHtml !== "function") return;
-  const esc = escapeHtml;
-  const _Inbox = class _Inbox {
-    constructor() {
-      // ---- state ----
-      __publicField(this, "inbox", null);
-      // the queue | []
-      __publicField(this, "total", 0);
-      // baseline length, for the "X / Y traités" progress
-      __publicField(this, "filter", null);
-      // enabled source keys (null = all on)
-      __publicField(this, "session", { kept: 0, trashed: 0, snoozed: 0 });
-      __publicField(this, "overrides", {});
-      // path -> edits, re-applied across reloads
-      __publicField(this, "leaving", false);
-      // an action is mid-flight (swipe-out guard)
-      __publicField(this, "pollTimer", null);
-      __publicField(this, "box", null);
-      // the #activity-inbox container, owned after mount
-      __publicField(this, "app", null);
-      __publicField(this, "keyHandler", null);
-      // inline-editor state — replaces the old DOM-sniffing editing() guard
-      __publicField(this, "editingDest", false);
-      __publicField(this, "editingTag", false);
-      __publicField(this, "cb", null);
-      // AtlasCombobox controller while the dest editor is open
-      __publicField(this, "destInput", null);
-      __publicField(this, "tagInput", null);
-      // the sub region snapshot, refreshed only while NOT editing (the don't-move-the-input invariant)
-      __publicField(this, "subSources", []);
-      __publicField(this, "subDone", 0);
-      __publicField(this, "subTotal", 0);
-      // toast state (a keyed vnode, not an appended node)
-      __publicField(this, "toastN", 0);
-      __publicField(this, "toastShow", false);
-      __publicField(this, "toastTimer", null);
-    }
-    editing() {
-      return this.editingDest || this.editingTag;
-    }
-    draw() {
-      if (this.app) this.app.render();
-    }
-    // ---- small helpers ----
-    svg(d) {
-      return raw('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>');
-    }
-    rel(min) {
-      if (min < 1) return t("relJustNow");
-      if (min < 60) return Math.round(min) + " min";
-      const h2 = Math.round(min / 60);
-      if (h2 < 24) return h2 + " h";
-      const d = Math.round(min / 1440);
-      if (d === 1) return t("relYesterday");
-      return t("relDaysAgo", d);
-    }
-    srcMeta(src) {
-      const s = _Inbox.ISRC[src];
-      return s ? { tint: s.tint, d: s.d } : { tint: "#868a90", d: _Inbox.IDOC };
-    }
-    srcIc(src) {
-      const m = this.srcMeta(src);
-      return h("span", { class: "ibx-ic", style: "background:" + m.tint + "22;color:" + m.tint }, this.svg(m.d));
-    }
-    tier(c) {
-      return c >= 0.75 ? "hi" : c >= 0.4 ? "md" : "lo";
-    }
-    tierLabel(c) {
-      return c >= 0.75 ? t("inboxConfHigh") : c >= 0.4 ? t("inboxConfMed") : t("inboxConfLow");
-    }
-    ago(it) {
-      return this.rel(it.captured_at ? Math.max(0, (Date.now() / 1e3 - it.captured_at) / 60) : 0);
-    }
-    // Destination Keep promotes to: your edited override, else the agent's suggest_dest, else the FOLDER
-    // of the top same-subject neighbour. Editable, and the promoted doc inherits the chosen folder's ACL.
-    suggestDest(it) {
-      if (it._dest != null) return it._dest;
-      if (it.suggest_dest) return it.suggest_dest;
-      const nb = it.neighbors && it.neighbors[0];
-      return nb && nb.indexOf("/") >= 0 ? nb.replace(/\/[^/]*$/, "") + "/" : "";
-    }
-    tags(it) {
-      return it._tags != null ? it._tags : it.suggest_tags || [];
-    }
-    storeOverride(it) {
-      this.overrides[it.path] = { dest: it._dest, tags: it._tags };
-    }
-    // Tags the destination folder auto-derives, so they aren't offered again (the folder IS a tag).
-    folderTags(it) {
-      const d = this.suggestDest(it);
-      return d && typeof folderTagsOf === "function" ? folderTagsOf(d.replace(/\/+$/, "") + "/_.md") : [];
-    }
-    queue() {
-      if (!this.inbox) return [];
-      return this.filter ? this.inbox.filter((i) => this.filter.has(i.source)) : this.inbox;
-    }
-    snoozeDate() {
-      const d = /* @__PURE__ */ new Date();
-      d.setDate(d.getDate() + 3);
-      return d.toISOString().slice(0, 10);
-    }
-    updateBadge() {
-      const b = document.getElementById("inbox-badge");
-      if (b) {
-        const n = this.queue().length;
-        b.textContent = String(n);
-        b.classList.toggle("hidden", !n);
+class ActivityHealth {
+  constructor(ctx) {
+    this.ctx = ctx;
+    __publicField(this, "health", null);
+    __publicField(this, "healthExpanded", false);
+    __publicField(this, "candExpanded", false);
+    // 13c: persisted Santé sub-view.
+    __publicField(this, "healthTab", (() => {
+      try {
+        return localStorage.getItem("atlas:healthTab") || "stale";
+      } catch (_) {
+        return "stale";
+      }
+    })());
+  }
+  // 13c: Santé, obsolescence (déterministe serveur) + candidats de contradiction (pré-filtre
+  // serveur ; l'IA juge via MCP). Les clics sur un doc rouvrent son historique.
+  async load(container) {
+    let stale = [];
+    let cands = [];
+    if (IS_OFFLINE_BUILD) {
+      stale = EMBED_ACTIVITY && EMBED_ACTIVITY.stale || [];
+      cands = EMBED_ACTIVITY && EMBED_ACTIVITY.contradictions || [];
+    } else {
+      try {
+        const [rs, rc] = await Promise.all([
+          fetch("/api/stale?months=6&limit=40"),
+          fetch("/api/contradictions?limit=50")
+        ]);
+        if (rs.ok) stale = (await rs.json()).stale || [];
+        if (rc.ok) cands = (await rc.json()).candidates || [];
+      } catch (_) {
       }
     }
-    // ---- views (vnode trees; the keyed reconciler reuses live nodes by key) ----
-    tagsView(it) {
-      const fset = new Set(this.folderTags(it));
-      const custom = this.tags(it).filter((tg) => !fset.has(tg));
-      const out = [];
-      for (const tg of fset) {
-        out.push(h("span", { key: "f:" + tg, class: "doc-tag doc-tag-folder", title: esc(t("folderTagTitle")) }, "#" + tg));
+    this.health = { stale, cands };
+    container.innerHTML = this.html();
+  }
+  html() {
+    const tab = (active, v, label) => `<button type="button" data-htab="${v}" class="px-3 py-1.5 text-xs font-medium transition ${active ? "text-accent" : "text-ink-400 hover:text-ink-200"}" style="border-bottom:2px solid ${active ? "#1d9bd1" : "transparent"};margin-bottom:-1px">${label}</button>`;
+    const toggle = `<div class="flex mb-3" style="border-bottom:1px solid #2a2a32">` + tab(this.healthTab === "stale", "stale", t("healthTabStale")) + tab(this.healthTab === "cont", "cont", t("healthTabCont")) + `</div>`;
+    const body = !this.health ? this.ctx.skelRows(3) : this.healthTab === "stale" ? this.staleHtml() : this.contHtml();
+    return toggle + body;
+  }
+  staleHtml() {
+    const stale = this.health.stale;
+    if (!stale.length) return `<div class="text-ink-500 text-sm py-1">${t("healthNoStale")}</div>`;
+    const shown = this.healthExpanded ? stale : stale.slice(0, 8);
+    let out = shown.map((s) => `<div class="act-row" data-path="${escapeHtml(s.path)}" data-tip="${escapeHtml(t("healthOpenHist"))}"><div class="flex items-center justify-between gap-3"><div class="min-w-0"><div class="text-sm text-ink-200 truncate">${escapeHtml(this.ctx.docTitle(s.path))}</div><div class="text-xs text-ink-500 truncate">${escapeHtml(s.path)}</div></div><div class="shrink-0 text-xs text-ink-500">${t("healthMonthsAgo", Math.round(s.months_ago))}</div></div></div>`).join("");
+    if (stale.length > 8) {
+      out += `<div class="text-right mt-1"><a class="act-hsee text-sm text-accent hover:underline cursor-pointer">${this.healthExpanded ? t("actCollapse") : t("actSeeAllN", stale.length)}</a></div>`;
+    }
+    return out;
+  }
+  contHtml() {
+    const cands = this.health.cands;
+    if (!cands.length) return `<div class="text-ink-500 text-sm py-1">${t("healthNoCand")}</div>`;
+    const shown = this.candExpanded ? cands : cands.slice(0, 8);
+    let out = `<div class="text-xs text-ink-500 mb-2">${t("healthAskAi")}</div>`;
+    out += shown.map((c) => {
+      const meta = c.kind === "cluster" ? escapeHtml(c.evidence && c.evidence.length && c.evidence[0].text || c.subject || "") : t("healthValueConflict", escapeHtml(c.subject || ""), escapeHtml(c.a_value || ""), escapeHtml(c.b_value || ""));
+      const confPill = c.confidence === "high" ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#1d3a5b;color:#9ecbff" data-tip="${escapeHtml(t("healthConfHighHint"))}">${t("healthConfHigh")}</span>` : `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#2a2a32;color:#9a9aa5" data-tip="${escapeHtml(t("healthReviewHint"))}">${t("healthReview")}</span>`;
+      return `<div class="py-1.5"><div class="flex items-center gap-2 text-sm"><div class="flex items-center gap-2 min-w-0 flex-1">` + (c.verdict === "real" ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#5b1d1d;color:#ffb4b4">${t("healthReal")}</span>` : confPill) + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${escapeHtml(c.a)}">${escapeHtml(this.ctx.docTitle(c.a))}</span><span class="text-ink-500 shrink-0">⇄</span><span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${escapeHtml(c.b)}">${escapeHtml(this.ctx.docTitle(c.b))}</span></div><button type="button" class="act-cdismiss shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-lg border subtle-border bg-navy-600 hover:bg-navy-500 text-ink-300 hover:text-ink-100 transition" data-a="${escapeHtml(c.a)}" data-b="${escapeHtml(c.b)}" data-aline="${c.a_line || ""}" data-bline="${c.b_line || ""}" data-tip="${escapeHtml(t("healthDismissHint"))}">✓ ${t("healthDismiss")}</button></div>` + (meta ? `<div class="text-xs text-ink-500 mt-0.5 truncate">${meta}</div>` : "") + "</div>";
+    }).join("");
+    if (cands.length > 8) out += `<div class="text-right mt-1"><a class="act-csee text-sm text-accent hover:underline cursor-pointer">${this.candExpanded ? t("actCollapse") : t("actSeeAllN", cands.length)}</a></div>`;
+    return out;
+  }
+  toggleStale(host) {
+    this.healthExpanded = !this.healthExpanded;
+    host.innerHTML = this.html();
+  }
+  toggleCand(host) {
+    this.candExpanded = !this.candExpanded;
+    host.innerHTML = this.html();
+  }
+  setTab(tab, host) {
+    this.healthTab = tab;
+    try {
+      localStorage.setItem("atlas:healthTab", this.healthTab);
+    } catch (_) {
+    }
+    host.innerHTML = this.html();
+  }
+  // Human verdict "pas une contradiction" (13c) → POST none, drop the row. The global fetch
+  // wrapper injects the CSRF token. The pair resurfaces only if a doc is edited.
+  dismiss(cd, host) {
+    const { a, b, aline, bline } = cd.dataset;
+    cd.disabled = true;
+    const body = { a, b, verdict: "none" };
+    if (aline) body.a_line = Number(aline);
+    if (bline) body.b_line = Number(bline);
+    fetch("/api/contradiction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then((r) => {
+      if (r.ok) {
+        this.health.cands = this.health.cands.filter((c) => !(c.a === a && c.b === b || c.a === b && c.b === a));
+        host.innerHTML = this.html();
+      } else {
+        cd.disabled = false;
       }
-      for (const tg of custom) {
-        out.push(
-          h(
-            "span",
-            { key: "c:" + tg, class: "doc-tag" },
-            "#" + tg,
-            h("button", { class: "doc-tag-x ibx-rmtag", title: esc(t("removeTag")), onClick: () => this.removeTag(it, tg) }, "×")
-          )
-        );
-      }
+    }).catch(() => {
+      cd.disabled = false;
+    });
+  }
+}
+
+const activityCard = new ActivityCard();
+window.mountActivity = () => activityCard.mount();
+window.refreshActivityData = () => activityCard.refreshData();
+window.mountActivity();
+
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+const esc = escapeHtml;
+const _Inbox = class _Inbox {
+  constructor() {
+    // ---- state ----
+    __publicField(this, "inbox", null);
+    // the queue | []
+    __publicField(this, "total", 0);
+    // baseline length, for the "X / Y traités" progress
+    __publicField(this, "filter", null);
+    // enabled source keys (null = all on)
+    __publicField(this, "session", { kept: 0, trashed: 0, snoozed: 0 });
+    __publicField(this, "overrides", {});
+    // path -> edits, re-applied across reloads
+    __publicField(this, "leaving", false);
+    // an action is mid-flight (swipe-out guard)
+    __publicField(this, "pollTimer", null);
+    __publicField(this, "box", null);
+    // the #activity-inbox container, owned after mount
+    __publicField(this, "app", null);
+    __publicField(this, "keyHandler", null);
+    // inline-editor state — replaces the old DOM-sniffing editing() guard
+    __publicField(this, "editingDest", false);
+    __publicField(this, "editingTag", false);
+    __publicField(this, "cb", null);
+    // AtlasCombobox controller while the dest editor is open
+    __publicField(this, "destInput", null);
+    __publicField(this, "tagInput", null);
+    // the sub region snapshot, refreshed only while NOT editing (the don't-move-the-input invariant)
+    __publicField(this, "subSources", []);
+    __publicField(this, "subDone", 0);
+    __publicField(this, "subTotal", 0);
+    // toast state (a keyed vnode, not an appended node)
+    __publicField(this, "toastN", 0);
+    __publicField(this, "toastShow", false);
+    __publicField(this, "toastTimer", null);
+  }
+  editing() {
+    return this.editingDest || this.editingTag;
+  }
+  draw() {
+    if (this.app) this.app.render();
+  }
+  // ---- small helpers ----
+  svg(d) {
+    return raw('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>');
+  }
+  rel(min) {
+    if (min < 1) return t("relJustNow");
+    if (min < 60) return Math.round(min) + " min";
+    const h2 = Math.round(min / 60);
+    if (h2 < 24) return h2 + " h";
+    const d = Math.round(min / 1440);
+    if (d === 1) return t("relYesterday");
+    return t("relDaysAgo", d);
+  }
+  srcMeta(src) {
+    const s = _Inbox.ISRC[src];
+    return s ? { tint: s.tint, d: s.d } : { tint: "#868a90", d: _Inbox.IDOC };
+  }
+  srcIc(src) {
+    const m = this.srcMeta(src);
+    return h("span", { class: "ibx-ic", style: "background:" + m.tint + "22;color:" + m.tint }, this.svg(m.d));
+  }
+  tier(c) {
+    return c >= 0.75 ? "hi" : c >= 0.4 ? "md" : "lo";
+  }
+  tierLabel(c) {
+    return c >= 0.75 ? t("inboxConfHigh") : c >= 0.4 ? t("inboxConfMed") : t("inboxConfLow");
+  }
+  ago(it) {
+    return this.rel(it.captured_at ? Math.max(0, (Date.now() / 1e3 - it.captured_at) / 60) : 0);
+  }
+  // Destination Keep promotes to: your edited override, else the agent's suggest_dest, else the FOLDER
+  // of the top same-subject neighbour. Editable, and the promoted doc inherits the chosen folder's ACL.
+  suggestDest(it) {
+    if (it._dest != null) return it._dest;
+    if (it.suggest_dest) return it.suggest_dest;
+    const nb = it.neighbors && it.neighbors[0];
+    return nb && nb.indexOf("/") >= 0 ? nb.replace(/\/[^/]*$/, "") + "/" : "";
+  }
+  tags(it) {
+    return it._tags != null ? it._tags : it.suggest_tags || [];
+  }
+  storeOverride(it) {
+    this.overrides[it.path] = { dest: it._dest, tags: it._tags };
+  }
+  // Tags the destination folder auto-derives, so they aren't offered again (the folder IS a tag).
+  folderTags(it) {
+    const d = this.suggestDest(it);
+    return d && typeof folderTagsOf === "function" ? folderTagsOf(d.replace(/\/+$/, "") + "/_.md") : [];
+  }
+  queue() {
+    if (!this.inbox) return [];
+    return this.filter ? this.inbox.filter((i) => this.filter.has(i.source)) : this.inbox;
+  }
+  snoozeDate() {
+    const d = /* @__PURE__ */ new Date();
+    d.setDate(d.getDate() + 3);
+    return d.toISOString().slice(0, 10);
+  }
+  updateBadge() {
+    const b = document.getElementById("inbox-badge");
+    if (b) {
+      const n = this.queue().length;
+      b.textContent = String(n);
+      b.classList.toggle("hidden", !n);
+    }
+  }
+  // ---- views (vnode trees; the keyed reconciler reuses live nodes by key) ----
+  tagsView(it) {
+    const fset = new Set(this.folderTags(it));
+    const custom = this.tags(it).filter((tg) => !fset.has(tg));
+    const out = [];
+    for (const tg of fset) {
+      out.push(h("span", { key: "f:" + tg, class: "doc-tag doc-tag-folder", title: esc(t("folderTagTitle")) }, "#" + tg));
+    }
+    for (const tg of custom) {
       out.push(
-        this.editingTag ? h("input", {
-          key: "tagedit",
-          class: "ibx-tagedit-input",
+        h(
+          "span",
+          { key: "c:" + tg, class: "doc-tag" },
+          "#" + tg,
+          h("button", { class: "doc-tag-x ibx-rmtag", title: esc(t("removeTag")), onClick: () => this.removeTag(it, tg) }, "×")
+        )
+      );
+    }
+    out.push(
+      this.editingTag ? h("input", {
+        key: "tagedit",
+        class: "ibx-tagedit-input",
+        autocomplete: "off",
+        placeholder: t("inboxNewTag"),
+        ref: (el) => {
+          this.tagInput = el;
+          if (el) el.focus();
+        },
+        onKeydown: (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            this.commitTag(it);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            this.endEdit();
+          }
+        },
+        onBlur: () => setTimeout(() => {
+          if (this.editingTag) this.commitTag(it);
+        }, 150)
+      }) : h("button", { key: "addtag", type: "button", class: "doc-tag-add ibx-addtag", title: esc(t("addTag")), onClick: () => {
+        this.editingTag = true;
+        this.draw();
+      } }, "+")
+    );
+    return out;
+  }
+  destView(it) {
+    if (this.editingDest) {
+      return [
+        h("span", { class: "ibx-lbl" }, t("inboxFileUnder")),
+        h("input", {
+          key: "destedit",
+          class: "ibx-destedit",
+          value: this.suggestDest(it),
           autocomplete: "off",
-          placeholder: t("inboxNewTag"),
-          ref: (el) => {
-            this.tagInput = el;
-            if (el) el.focus();
-          },
+          placeholder: t("inboxPickOrType"),
+          ref: (el) => this.destEditorRef(it, el),
           onKeydown: (e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              this.commitTag(it);
-            } else if (e.key === "Escape") {
+            if (e.key === "Escape") {
               e.preventDefault();
               this.endEdit();
             }
           },
           onBlur: () => setTimeout(() => {
-            if (this.editingTag) this.commitTag(it);
-          }, 150)
-        }) : h("button", { key: "addtag", type: "button", class: "doc-tag-add ibx-addtag", title: esc(t("addTag")), onClick: () => {
-          this.editingTag = true;
-          this.draw();
-        } }, "+")
-      );
-      return out;
-    }
-    destView(it) {
-      if (this.editingDest) {
-        return [
-          h("span", { class: "ibx-lbl" }, t("inboxFileUnder")),
-          h("input", {
-            key: "destedit",
-            class: "ibx-destedit",
-            value: this.suggestDest(it),
-            autocomplete: "off",
-            placeholder: t("inboxPickOrType"),
-            ref: (el) => this.destEditorRef(it, el),
-            onKeydown: (e) => {
-              if (e.key === "Escape") {
-                e.preventDefault();
-                this.endEdit();
-              }
-            },
-            onBlur: () => setTimeout(() => {
-              if (this.editingDest) this.commitDest(it);
-            }, 180)
-          })
-        ];
-      }
-      const sd = this.suggestDest(it);
-      const chip = sd ? h("span", { class: "ibx-destchip editable", onClick: () => this.openDest() }, this.svg(_Inbox.IDOC), sd, this.svg(_Inbox.IPENCIL)) : h("span", { class: "ibx-destchip editable empty", onClick: () => this.openDest() }, t("inboxChooseFolder"), this.svg(_Inbox.IPENCIL));
-      return [h("span", { class: "ibx-lbl" }, t("inboxFileUnder")), chip];
-    }
-    focusView(it) {
-      const tr = this.tier(it.confidence);
-      const sd = this.suggestDest(it);
-      const nb = it.neighbors && it.neighbors[0];
-      return h(
-        "div",
-        { key: "focus:" + it.path, class: "ibx-focus" + (this.leaving ? " ibx-leaving" : " ibx-entering"), id: "ibx-focus" },
-        h(
-          "div",
-          { class: "ibx-frow" },
-          h("span", { class: "ibx-src" }, this.srcIc(it.source), it.source),
-          h("span", { class: "ibx-pill " + tr, title: Math.round(it.confidence * 100) + "%" }, this.tierLabel(it.confidence)),
-          h("span", { class: "ibx-spacer" }),
-          h("span", { class: "ibx-ago" }, this.ago(it))
-        ),
-        h("div", { class: "ibx-title" }, it.title),
-        it.preview ? h("p", { class: "ibx-body" }, it.preview) : null,
-        nb ? h(
-          "div",
-          { class: "ibx-signal" },
-          h("span", { class: "sic" }, this.svg(_Inbox.ILINK)),
-          h("div", null, h("b", null, t("inboxSameSubject")), " ", h("span", { class: "doc" }, nb))
-        ) : null,
-        h("div", { class: "ibx-dest" }, this.destView(it), h("span", { class: "ibx-lbl" }, "tags"), h("span", { class: "ibx-tags" }, this.tagsView(it))),
-        h(
-          "div",
-          { class: "ibx-actions" },
-          h(
-            "button",
-            { type: "button", class: "ibx-btn keep" + (sd ? "" : " disabled"), disabled: !sd, title: sd ? null : t("inboxPickFolderFirst"), onClick: () => this.act("keep") },
-            this.svg(_Inbox.ICHECK),
-            t("inboxKeep") + " ",
-            h("span", { class: "k" }, "K")
-          ),
-          h(
-            "button",
-            { type: "button", class: "ibx-btn trash", onClick: () => this.act("trash") },
-            this.svg(_Inbox.ITRASH),
-            t("inboxTrash") + " ",
-            h("span", { class: "k" }, "X")
-          ),
-          h(
-            "button",
-            { type: "button", class: "ibx-btn snooze", onClick: () => this.act("snooze") },
-            this.svg(_Inbox.ISNOOZE),
-            t("inboxSnooze") + " ",
-            h("span", { class: "k" }, "S")
-          ),
-          h("span", { class: "ibx-spacer" }),
-          h("button", { type: "button", class: "ibx-btn ghost", onClick: () => this.act("next") }, t("inboxNext") + " ", h("span", { class: "k" }, "J"))
-        )
-      );
-    }
-    qRowView(it) {
-      return h(
-        "div",
-        { key: "row:" + it.path, class: "ibx-qrow", "data-ipath": it.path, onClick: () => this.select(it.path) },
-        this.srcIc(it.source),
-        h("span", { class: "ibx-qt" }, it.title),
-        h("span", { class: "ibx-mini " + this.tier(it.confidence), title: this.tierLabel(it.confidence) }),
-        h("span", { class: "ibx-qa" }, this.ago(it))
-      );
-    }
-    chipsView() {
-      return h(
-        "div",
-        { class: "ibx-chips" },
-        this.subSources.map((s) => {
-          const on = !this.filter || this.filter.has(s);
-          const m = this.srcMeta(s);
-          return h(
-            "button",
-            { key: s, type: "button", class: "ibx-chip " + (on ? "on" : ""), onClick: () => this.toggleFilter(s) },
-            h("span", { class: "g", style: "color:" + m.tint }, this.svg(m.d)),
-            s
-          );
+            if (this.editingDest) this.commitDest(it);
+          }, 180)
         })
-      );
+      ];
     }
-    subView() {
-      const pct = this.subTotal ? Math.round(this.subDone / this.subTotal * 100) : 0;
-      return h(
+    const sd = this.suggestDest(it);
+    const chip = sd ? h("span", { class: "ibx-destchip editable", onClick: () => this.openDest() }, this.svg(_Inbox.IDOC), sd, this.svg(_Inbox.IPENCIL)) : h("span", { class: "ibx-destchip editable empty", onClick: () => this.openDest() }, t("inboxChooseFolder"), this.svg(_Inbox.IPENCIL));
+    return [h("span", { class: "ibx-lbl" }, t("inboxFileUnder")), chip];
+  }
+  focusView(it) {
+    const tr = this.tier(it.confidence);
+    const sd = this.suggestDest(it);
+    const nb = it.neighbors && it.neighbors[0];
+    return h(
+      "div",
+      { key: "focus:" + it.path, class: "ibx-focus" + (this.leaving ? " ibx-leaving" : " ibx-entering"), id: "ibx-focus" },
+      h(
         "div",
-        { key: "sub", class: "ibx-sub", id: "ibx-sub" },
+        { class: "ibx-frow" },
+        h("span", { class: "ibx-src" }, this.srcIc(it.source), it.source),
+        h("span", { class: "ibx-pill " + tr, title: Math.round(it.confidence * 100) + "%" }, this.tierLabel(it.confidence)),
+        h("span", { class: "ibx-spacer" }),
+        h("span", { class: "ibx-ago" }, this.ago(it))
+      ),
+      h("div", { class: "ibx-title" }, it.title),
+      it.preview ? h("p", { class: "ibx-body" }, it.preview) : null,
+      nb ? h(
+        "div",
+        { class: "ibx-signal" },
+        h("span", { class: "sic" }, this.svg(_Inbox.ILINK)),
+        h("div", null, h("b", null, t("inboxSameSubject")), " ", h("span", { class: "doc" }, nb))
+      ) : null,
+      h("div", { class: "ibx-dest" }, this.destView(it), h("span", { class: "ibx-lbl" }, "tags"), h("span", { class: "ibx-tags" }, this.tagsView(it))),
+      h(
+        "div",
+        { class: "ibx-actions" },
         h(
-          "div",
-          { class: "ibx-progress" },
-          h("b", { id: "ibx-done" }, String(this.subDone)),
-          " / ",
-          h("span", { id: "ibx-total" }, String(this.subTotal)),
-          " " + t("inboxDone"),
-          h("span", { class: "track" }, h("span", { class: "fill", id: "ibx-fill", style: "width:" + pct + "%" }))
+          "button",
+          { type: "button", class: "ibx-btn keep" + (sd ? "" : " disabled"), disabled: !sd, title: sd ? null : t("inboxPickFolderFirst"), onClick: () => this.act("keep") },
+          this.svg(_Inbox.ICHECK),
+          t("inboxKeep") + " ",
+          h("span", { class: "k" }, "K")
         ),
-        h("div", { id: "ibx-chips-wrap" }, this.chipsView())
-      );
-    }
-    zeroView() {
-      const s = this.session;
-      const total = s.kept + s.trashed + s.snoozed;
-      const dp = (d, n, l, col) => h("span", { class: "ibx-dpill" }, h("span", { style: "color:" + col }, this.svg(d)), h("b", null, String(n)), " " + l);
-      return h(
-        "div",
-        { key: "zero", class: "ibx-zero" },
-        h("div", { class: "ibx-mark" }, this.svg(_Inbox.ICHECK)),
-        h("h3", null, t("inboxZeroTitle")),
-        h("p", null, t("inboxZeroSub")),
-        total ? h(
-          "div",
-          { class: "ibx-digest" },
-          dp(_Inbox.ICHECK, s.kept, t("inboxKept"), "#5fd0a6"),
-          dp(_Inbox.ITRASH, s.trashed, t("inboxTrashed"), "#868a90"),
-          dp(_Inbox.ISNOOZE, s.snoozed, t("inboxSnoozed"), "#e8941c")
-        ) : null
-      );
-    }
-    skelView() {
-      const row = (i) => h(
-        "div",
-        { key: "sk:" + i, class: "ibx-skelrow" },
-        h("div", { class: "ibx-skel", style: "width:30px;height:30px;border-radius:8px" }),
         h(
-          "div",
-          { style: "flex:1" },
-          h("div", { class: "ibx-skel", style: "width:42%;height:10px" }),
-          h("div", { class: "ibx-skel", style: "width:26%;height:8px;margin-top:6px" })
-        )
-      );
-      return h("div", { key: "skel" }, [0, 1, 2].map(row));
-    }
-    toastView() {
-      if (!this.toastN) return null;
-      return h("div", { key: "toast", id: "ibx-toast", class: "ibx-toast" + (this.toastShow ? " show" : "") }, t("inboxNew", this.toastN));
-    }
-    nextView(up) {
-      return h(
+          "button",
+          { type: "button", class: "ibx-btn trash", onClick: () => this.act("trash") },
+          this.svg(_Inbox.ITRASH),
+          t("inboxTrash") + " ",
+          h("span", { class: "k" }, "X")
+        ),
+        h(
+          "button",
+          { type: "button", class: "ibx-btn snooze", onClick: () => this.act("snooze") },
+          this.svg(_Inbox.ISNOOZE),
+          t("inboxSnooze") + " ",
+          h("span", { class: "k" }, "S")
+        ),
+        h("span", { class: "ibx-spacer" }),
+        h("button", { type: "button", class: "ibx-btn ghost", onClick: () => this.act("next") }, t("inboxNext") + " ", h("span", { class: "k" }, "J"))
+      )
+    );
+  }
+  qRowView(it) {
+    return h(
+      "div",
+      { key: "row:" + it.path, class: "ibx-qrow", "data-ipath": it.path, onClick: () => this.select(it.path) },
+      this.srcIc(it.source),
+      h("span", { class: "ibx-qt" }, it.title),
+      h("span", { class: "ibx-mini " + this.tier(it.confidence), title: this.tierLabel(it.confidence) }),
+      h("span", { class: "ibx-qa" }, this.ago(it))
+    );
+  }
+  chipsView() {
+    return h(
+      "div",
+      { class: "ibx-chips" },
+      this.subSources.map((s) => {
+        const on = !this.filter || this.filter.has(s);
+        const m = this.srcMeta(s);
+        return h(
+          "button",
+          { key: s, type: "button", class: "ibx-chip " + (on ? "on" : ""), onClick: () => this.toggleFilter(s) },
+          h("span", { class: "g", style: "color:" + m.tint }, this.svg(m.d)),
+          s
+        );
+      })
+    );
+  }
+  subView() {
+    const pct = this.subTotal ? Math.round(this.subDone / this.subTotal * 100) : 0;
+    return h(
+      "div",
+      { key: "sub", class: "ibx-sub", id: "ibx-sub" },
+      h(
         "div",
-        { key: "next", id: "ibx-next" },
-        h("div", { class: "ibx-next-h", id: "ibx-next-h", style: up.length ? null : "display:none" }, up.length ? t("inboxUpNext") + " · " + up.length : ""),
-        h("div", { id: "ibx-next-rows" }, up.map((it) => this.qRowView(it)))
-      );
+        { class: "ibx-progress" },
+        h("b", { id: "ibx-done" }, String(this.subDone)),
+        " / ",
+        h("span", { id: "ibx-total" }, String(this.subTotal)),
+        " " + t("inboxDone"),
+        h("span", { class: "track" }, h("span", { class: "fill", id: "ibx-fill", style: "width:" + pct + "%" }))
+      ),
+      h("div", { id: "ibx-chips-wrap" }, this.chipsView())
+    );
+  }
+  zeroView() {
+    const s = this.session;
+    const total = s.kept + s.trashed + s.snoozed;
+    const dp = (d, n, l, col) => h("span", { class: "ibx-dpill" }, h("span", { style: "color:" + col }, this.svg(d)), h("b", null, String(n)), " " + l);
+    return h(
+      "div",
+      { key: "zero", class: "ibx-zero" },
+      h("div", { class: "ibx-mark" }, this.svg(_Inbox.ICHECK)),
+      h("h3", null, t("inboxZeroTitle")),
+      h("p", null, t("inboxZeroSub")),
+      total ? h(
+        "div",
+        { class: "ibx-digest" },
+        dp(_Inbox.ICHECK, s.kept, t("inboxKept"), "#5fd0a6"),
+        dp(_Inbox.ITRASH, s.trashed, t("inboxTrashed"), "#868a90"),
+        dp(_Inbox.ISNOOZE, s.snoozed, t("inboxSnoozed"), "#e8941c")
+      ) : null
+    );
+  }
+  skelView() {
+    const row = (i) => h(
+      "div",
+      { key: "sk:" + i, class: "ibx-skelrow" },
+      h("div", { class: "ibx-skel", style: "width:30px;height:30px;border-radius:8px" }),
+      h(
+        "div",
+        { style: "flex:1" },
+        h("div", { class: "ibx-skel", style: "width:42%;height:10px" }),
+        h("div", { class: "ibx-skel", style: "width:26%;height:8px;margin-top:6px" })
+      )
+    );
+    return h("div", { key: "skel" }, [0, 1, 2].map(row));
+  }
+  toastView() {
+    if (!this.toastN) return null;
+    return h("div", { key: "toast", id: "ibx-toast", class: "ibx-toast" + (this.toastShow ? " show" : "") }, t("inboxNew", this.toastN));
+  }
+  nextView(up) {
+    return h(
+      "div",
+      { key: "next", id: "ibx-next" },
+      h("div", { class: "ibx-next-h", id: "ibx-next-h", style: up.length ? null : "display:none" }, up.length ? t("inboxUpNext") + " · " + up.length : ""),
+      h("div", { id: "ibx-next-rows" }, up.map((it) => this.qRowView(it)))
+    );
+  }
+  // Refresh the sub snapshot (source chips + progress). Skipped while editing so the input never shifts.
+  refreshSub() {
+    const srcs = [];
+    (this.inbox || []).forEach((i) => {
+      if (srcs.indexOf(i.source) < 0) srcs.push(i.source);
+    });
+    this.subSources = srcs;
+    this.subDone = Math.max(0, this.total - (this.inbox ? this.inbox.length : 0));
+    this.subTotal = this.total;
+  }
+  view() {
+    if (this.inbox === null) return this.skelView();
+    const q = this.queue();
+    if (!q.length) return this.zeroView();
+    if (!this.editing()) this.refreshSub();
+    return [this.subView(), this.focusView(q[0]), this.nextView(q.slice(1)), this.toastView()];
+  }
+  // ---- data + live poll ----
+  applyOverride(it) {
+    const o = this.overrides[it.path];
+    if (o) {
+      if (o.dest != null) it._dest = o.dest;
+      if (o.tags != null) it._tags = o.tags;
     }
-    // Refresh the sub snapshot (source chips + progress). Skipped while editing so the input never shifts.
-    refreshSub() {
-      const srcs = [];
-      (this.inbox || []).forEach((i) => {
-        if (srcs.indexOf(i.source) < 0) srcs.push(i.source);
-      });
-      this.subSources = srcs;
-      this.subDone = Math.max(0, this.total - (this.inbox ? this.inbox.length : 0));
-      this.subTotal = this.total;
-    }
-    view() {
-      if (this.inbox === null) return this.skelView();
-      const q = this.queue();
-      if (!q.length) return this.zeroView();
-      if (!this.editing()) this.refreshSub();
-      return [this.subView(), this.focusView(q[0]), this.nextView(q.slice(1)), this.toastView()];
-    }
-    // ---- data + live poll ----
-    applyOverride(it) {
-      const o = this.overrides[it.path];
-      if (o) {
-        if (o.dest != null) it._dest = o.dest;
-        if (o.tags != null) it._tags = o.tags;
-      }
-    }
-    async load(force) {
-      if (this.inbox && !force) {
-        this.draw();
-        return;
-      }
-      let inbox = [];
-      try {
-        const r = await fetch("/api/inbox?limit=200");
-        if (r.ok) inbox = (await r.json()).inbox || [];
-      } catch (_) {
-      }
-      inbox.forEach((it) => this.applyOverride(it));
-      this.inbox = inbox;
-      this.total = inbox.length;
-      this.session = { kept: 0, trashed: 0, snoozed: 0 };
-      this.filter = null;
+  }
+  async load(force) {
+    if (this.inbox && !force) {
       this.draw();
+      return;
     }
-    // Detect new items and grow ONLY the list; while an editor is open the sub region stays frozen, so
-    // the input never shifts and the combobox popup stays anchored.
-    poll() {
-      if (!this.box || this.box.classList.contains("hidden") || !this.inbox) return;
-      fetch("/api/inbox?limit=200").then((r) => r.ok ? r.json() : null).then((d) => {
-        if (!d) return;
-        const have = new Set(this.inbox.map((i) => i.path));
-        const fresh = (d.inbox || []).filter((i) => !have.has(i.path));
-        if (!fresh.length) return;
-        fresh.forEach((it) => this.applyOverride(it));
-        this.inbox = this.inbox.concat(fresh);
-        this.total += fresh.length;
-        this.updateBadge();
-        if (!this.editing()) this.showToast(fresh.length);
-        this.draw();
-      }).catch(() => {
-      });
+    let inbox = [];
+    try {
+      const r = await fetch("/api/inbox?limit=200");
+      if (r.ok) inbox = (await r.json()).inbox || [];
+    } catch (_) {
     }
-    startPoll() {
-      this.stopPoll();
-      this.poll();
-      this.pollTimer = setInterval(() => this.poll(), 5e3);
-    }
-    stopPoll() {
-      if (this.pollTimer) {
-        clearInterval(this.pollTimer);
-        this.pollTimer = null;
-      }
-    }
-    showToast(n) {
-      this.toastN = n;
-      this.toastShow = true;
+    inbox.forEach((it) => this.applyOverride(it));
+    this.inbox = inbox;
+    this.total = inbox.length;
+    this.session = { kept: 0, trashed: 0, snoozed: 0 };
+    this.filter = null;
+    this.draw();
+  }
+  // Detect new items and grow ONLY the list; while an editor is open the sub region stays frozen, so
+  // the input never shifts and the combobox popup stays anchored.
+  poll() {
+    if (!this.box || this.box.classList.contains("hidden") || !this.inbox) return;
+    fetch("/api/inbox?limit=200").then((r) => r.ok ? r.json() : null).then((d) => {
+      if (!d) return;
+      const have = new Set(this.inbox.map((i) => i.path));
+      const fresh = (d.inbox || []).filter((i) => !have.has(i.path));
+      if (!fresh.length) return;
+      fresh.forEach((it) => this.applyOverride(it));
+      this.inbox = this.inbox.concat(fresh);
+      this.total += fresh.length;
+      this.updateBadge();
+      if (!this.editing()) this.showToast(fresh.length);
       this.draw();
-      if (this.toastTimer) clearTimeout(this.toastTimer);
-      this.toastTimer = setTimeout(() => {
-        this.toastShow = false;
-        this.draw();
-      }, 3200);
+    }).catch(() => {
+    });
+  }
+  startPoll() {
+    this.stopPoll();
+    this.poll();
+    this.pollTimer = setInterval(() => this.poll(), 5e3);
+  }
+  stopPoll() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
     }
-    // ---- actions ----
-    act(kind) {
-      const q = this.queue();
-      if (!q.length || this.leaving) return;
-      const it = q[0];
-      if (kind === "next") {
-        this.inbox = this.inbox.filter((x) => x.path !== it.path).concat([it]);
-        this.draw();
-        return;
-      }
-      if (kind === "keep" && !this.suggestDest(it)) return;
-      const body = { action: kind, path: it.path };
-      if (kind === "keep") {
-        body.dest = this.suggestDest(it);
-        const fset = new Set(this.folderTags(it));
-        body.tags = this.tags(it).filter((tg) => !fset.has(tg));
-      }
-      if (kind === "snooze") body.until = this.snoozeDate();
-      this.leaving = true;
+  }
+  showToast(n) {
+    this.toastN = n;
+    this.toastShow = true;
+    this.draw();
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => {
+      this.toastShow = false;
       this.draw();
-      fetch("/api/inbox/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => {
-        if (r.ok) {
-          if (_Inbox.SKEY[kind]) this.session[_Inbox.SKEY[kind]]++;
-          setTimeout(() => {
-            this.inbox = this.inbox.filter((x) => x.path !== it.path);
-            delete this.overrides[it.path];
-            this.leaving = false;
-            this.draw();
-          }, 180);
-        } else {
+    }, 3200);
+  }
+  // ---- actions ----
+  act(kind) {
+    const q = this.queue();
+    if (!q.length || this.leaving) return;
+    const it = q[0];
+    if (kind === "next") {
+      this.inbox = this.inbox.filter((x) => x.path !== it.path).concat([it]);
+      this.draw();
+      return;
+    }
+    if (kind === "keep" && !this.suggestDest(it)) return;
+    const body = { action: kind, path: it.path };
+    if (kind === "keep") {
+      body.dest = this.suggestDest(it);
+      const fset = new Set(this.folderTags(it));
+      body.tags = this.tags(it).filter((tg) => !fset.has(tg));
+    }
+    if (kind === "snooze") body.until = this.snoozeDate();
+    this.leaving = true;
+    this.draw();
+    fetch("/api/inbox/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => {
+      if (r.ok) {
+        if (_Inbox.SKEY[kind]) this.session[_Inbox.SKEY[kind]]++;
+        setTimeout(() => {
+          this.inbox = this.inbox.filter((x) => x.path !== it.path);
+          delete this.overrides[it.path];
           this.leaving = false;
           this.draw();
-        }
-      }).catch(() => {
+        }, 180);
+      } else {
         this.leaving = false;
         this.draw();
-      });
-    }
-    select(path) {
-      const it = this.inbox && this.inbox.find((x) => x.path === path);
-      if (!it) return;
-      this.inbox = [it].concat(this.inbox.filter((x) => x.path !== path));
+      }
+    }).catch(() => {
+      this.leaving = false;
       this.draw();
-    }
-    toggleFilter(src) {
-      if (!this.filter) this.filter = new Set(this.inbox.map((i) => i.source));
-      if (this.filter.has(src) && this.filter.size > 1) this.filter.delete(src);
-      else this.filter.add(src);
-      this.draw();
-    }
-    // ---- inline editors ----
-    openDest() {
-      this.editingDest = true;
-      this.draw();
-    }
-    // Mount/tear the folder combobox on the dest input as it enters/leaves the DOM. ref fires after the
-    // node is attached, so getBoundingClientRect (the popup anchor) is valid.
-    destEditorRef(it, el) {
-      if (el) {
-        this.destInput = el;
-        if (typeof AtlasCombobox === "function" && typeof getAllDirs === "function") {
-          this.cb = AtlasCombobox(el, { source: getAllDirs, creatable: true, onSelect: (v) => this.commitDest(it, v) });
-        }
-        el.focus();
-        el.select();
-      } else {
-        this.destInput = null;
-        if (this.cb) {
-          this.cb.destroy();
-          this.cb = null;
-        }
+    });
+  }
+  select(path) {
+    const it = this.inbox && this.inbox.find((x) => x.path === path);
+    if (!it) return;
+    this.inbox = [it].concat(this.inbox.filter((x) => x.path !== path));
+    this.draw();
+  }
+  toggleFilter(src) {
+    if (!this.filter) this.filter = new Set(this.inbox.map((i) => i.source));
+    if (this.filter.has(src) && this.filter.size > 1) this.filter.delete(src);
+    else this.filter.add(src);
+    this.draw();
+  }
+  // ---- inline editors ----
+  openDest() {
+    this.editingDest = true;
+    this.draw();
+  }
+  // Mount/tear the folder combobox on the dest input as it enters/leaves the DOM. ref fires after the
+  // node is attached, so getBoundingClientRect (the popup anchor) is valid.
+  destEditorRef(it, el) {
+    if (el) {
+      this.destInput = el;
+      if (typeof AtlasCombobox === "function" && typeof getAllDirs === "function") {
+        this.cb = AtlasCombobox(el, { source: getAllDirs, creatable: true, onSelect: (v) => this.commitDest(it, v) });
+      }
+      el.focus();
+      el.select();
+    } else {
+      this.destInput = null;
+      if (this.cb) {
+        this.cb.destroy();
+        this.cb = null;
       }
     }
-    commitDest(it, v) {
-      it._dest = (v != null ? v : this.destInput ? this.destInput.value : "").trim();
-      this.storeOverride(it);
-      this.endEdit();
+  }
+  commitDest(it, v) {
+    it._dest = (v != null ? v : this.destInput ? this.destInput.value : "").trim();
+    this.storeOverride(it);
+    this.endEdit();
+  }
+  removeTag(it, tg) {
+    it._tags = this.tags(it).filter((x) => x !== tg);
+    this.storeOverride(it);
+    this.draw();
+  }
+  commitTag(it) {
+    const tg = (this.tagInput ? this.tagInput.value : "").trim().replace(/^#/, "");
+    const cur = this.tags(it);
+    it._tags = tg && cur.indexOf(tg) < 0 ? cur.concat([tg]) : cur.slice();
+    this.storeOverride(it);
+    this.endEdit();
+  }
+  // Close any open inline editor and re-render (the sub region catches up to the live state).
+  endEdit() {
+    this.editingDest = false;
+    this.editingTag = false;
+    this.draw();
+  }
+  // ---- document keyboard shortcuts (K/X/S/J) ----
+  onKey(ev) {
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
+    if (!this.box || this.box.classList.contains("hidden") || !this.queue().length) return;
+    const k = ev.key.toLowerCase();
+    const a = k === "k" ? "keep" : k === "x" ? "trash" : k === "s" ? "snooze" : k === "j" || ev.key === "ArrowDown" ? "next" : null;
+    if (!a) return;
+    ev.preventDefault();
+    this.act(a);
+  }
+  // ---- public API (called by the Activity card's setView) ----
+  mount(container) {
+    this.box = container;
+    this.app = createApp(container, () => this.view());
+    if (this.keyHandler) document.removeEventListener("keydown", this.keyHandler);
+    this.keyHandler = (ev) => this.onKey(ev);
+    document.addEventListener("keydown", this.keyHandler);
+    this.load(false);
+  }
+  show() {
+    this.startPoll();
+  }
+  hide() {
+    this.stopPoll();
+  }
+  // Keep the header count live without opening the tab. If the tab is on screen the poll owns the
+  // badge, so skip. Seeds inbox so a later open is instant. No-op offline (the fetch just fails).
+  async refreshBadge() {
+    const live = document.querySelector("#activity-inbox");
+    if (live && !live.classList.contains("hidden")) return;
+    try {
+      const r = await fetch("/api/inbox?limit=200");
+      if (!r.ok) return;
+      const fresh = (await r.json()).inbox || [];
+      fresh.forEach((it) => this.applyOverride(it));
+      this.inbox = fresh;
+      this.total = fresh.length;
+      this.updateBadge();
+    } catch (_) {
     }
-    removeTag(it, tg) {
-      it._tags = this.tags(it).filter((x) => x !== tg);
-      this.storeOverride(it);
-      this.draw();
-    }
-    commitTag(it) {
-      const tg = (this.tagInput ? this.tagInput.value : "").trim().replace(/^#/, "");
-      const cur = this.tags(it);
-      it._tags = tg && cur.indexOf(tg) < 0 ? cur.concat([tg]) : cur.slice();
-      this.storeOverride(it);
-      this.endEdit();
-    }
-    // Close any open inline editor and re-render (the sub region catches up to the live state).
-    endEdit() {
-      this.editingDest = false;
-      this.editingTag = false;
-      this.draw();
-    }
-    // ---- document keyboard shortcuts (K/X/S/J) ----
-    onKey(ev) {
-      const ae = document.activeElement;
-      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
-      if (!this.box || this.box.classList.contains("hidden") || !this.queue().length) return;
-      const k = ev.key.toLowerCase();
-      const a = k === "k" ? "keep" : k === "x" ? "trash" : k === "s" ? "snooze" : k === "j" || ev.key === "ArrowDown" ? "next" : null;
-      if (!a) return;
-      ev.preventDefault();
-      this.act(a);
-    }
-    // ---- public API (called by the Activity card's setView) ----
-    mount(container) {
-      this.box = container;
-      this.app = createApp(container, () => this.view());
-      if (this.keyHandler) document.removeEventListener("keydown", this.keyHandler);
-      this.keyHandler = (ev) => this.onKey(ev);
-      document.addEventListener("keydown", this.keyHandler);
-      this.load(false);
-    }
-    show() {
-      this.startPoll();
-    }
-    hide() {
-      this.stopPoll();
-    }
-    // Keep the header count live without opening the tab. If the tab is on screen the poll owns the
-    // badge, so skip. Seeds inbox so a later open is instant. No-op offline (the fetch just fails).
-    async refreshBadge() {
-      const live = document.querySelector("#activity-inbox");
-      if (live && !live.classList.contains("hidden")) return;
-      try {
-        const r = await fetch("/api/inbox?limit=200");
-        if (!r.ok) return;
-        const fresh = (await r.json()).inbox || [];
-        fresh.forEach((it) => this.applyOverride(it));
-        this.inbox = fresh;
-        this.total = fresh.length;
-        this.updateBadge();
-      } catch (_) {
-      }
-    }
-  };
-  // ---- icons (Heroicons v2 outline, the viewer's set) ----
-  __publicField(_Inbox, "ISRC", {
-    gmail: { tint: "#5db5e8", d: "M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" },
-    sentry: { tint: "#e8941c", d: "M14.857 17.082a23.85 23.85 0 0 0 5.454-1.31A8.97 8.97 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.97 8.97 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.26 24.26 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" },
-    scraper: { tint: "#5fd0a6", d: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0 0a8.95 8.95 0 0 0 0-18m0 18a8.95 8.95 0 0 1 0-18M3 12h18" },
-    webhook: { tint: "#b58be8", d: "M3.75 13.5 14.25 2.25 12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" },
-    slack: { tint: "#e85b8b", d: "M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.3 48.3 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.4 48.4 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" },
-    manual: { tint: "#b0b1b5", d: "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.931-8.931Zm0 0L19.5 7.125" }
-  });
-  __publicField(_Inbox, "IDOC", "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z");
-  __publicField(_Inbox, "ILINK", "M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244");
-  __publicField(_Inbox, "ICHECK", "M4.5 12.75l6 6 9-13.5");
-  __publicField(_Inbox, "ITRASH", "M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.1 48.1 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.1 48.1 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.96 51.96 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.67 48.67 0 0 0-7.5 0");
-  __publicField(_Inbox, "ISNOOZE", "M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5");
-  __publicField(_Inbox, "IPENCIL", "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.931-8.931Zm0 0L19.5 7.125");
-  __publicField(_Inbox, "SKEY", { keep: "kept", trash: "trashed", snooze: "snoozed" });
-  let Inbox = _Inbox;
+  }
+};
+// ---- icons (Heroicons v2 outline, the viewer's set) ----
+__publicField(_Inbox, "ISRC", {
+  gmail: { tint: "#5db5e8", d: "M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" },
+  sentry: { tint: "#e8941c", d: "M14.857 17.082a23.85 23.85 0 0 0 5.454-1.31A8.97 8.97 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.97 8.97 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.26 24.26 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" },
+  scraper: { tint: "#5fd0a6", d: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0 0a8.95 8.95 0 0 0 0-18m0 18a8.95 8.95 0 0 1 0-18M3 12h18" },
+  webhook: { tint: "#b58be8", d: "M3.75 13.5 14.25 2.25 12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" },
+  slack: { tint: "#e85b8b", d: "M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.3 48.3 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.4 48.4 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" },
+  manual: { tint: "#b0b1b5", d: "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.931-8.931Zm0 0L19.5 7.125" }
+});
+__publicField(_Inbox, "IDOC", "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z");
+__publicField(_Inbox, "ILINK", "M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244");
+__publicField(_Inbox, "ICHECK", "M4.5 12.75l6 6 9-13.5");
+__publicField(_Inbox, "ITRASH", "M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.1 48.1 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.1 48.1 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.96 51.96 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.67 48.67 0 0 0-7.5 0");
+__publicField(_Inbox, "ISNOOZE", "M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5");
+__publicField(_Inbox, "IPENCIL", "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.931-8.931Zm0 0L19.5 7.125");
+__publicField(_Inbox, "SKEY", { keep: "kept", trash: "trashed", snooze: "snoozed" });
+let Inbox = _Inbox;
+if (typeof escapeHtml === "function") {
   window.AtlasInbox = new Inbox();
-})();
+}
 
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
@@ -12613,8 +10594,7 @@ class Boot {
     if (!shareBackdrop.classList.contains("hidden")) return true;
     if (!dirRenameBackdrop.classList.contains("hidden")) return true;
     if (document.querySelector("[data-atlas-modal]:not(.hidden)")) return true;
-    const selfSave = _selfSaveUntil;
-    if (currentFile && selfSave[currentFile.path] && Date.now() < selfSave[currentFile.path]) return true;
+    if (currentFile && sse.isSelfSaveMuted(currentFile.path)) return true;
     return false;
   }
   async softReload() {
