@@ -43,6 +43,224 @@ function currentCsrfToken() {
   };
 })();
 
+(function(root) {
+  "use strict";
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const ROOTS = /* @__PURE__ */ new WeakMap();
+  let mountQueue = [];
+  function h(tag, props, ...children) {
+    const p = props || {};
+    return { tag, key: p.key, props: p, children: normalize(children) };
+  }
+  h.host = function host(tag, props) {
+    const p = props || {};
+    return { tag, key: p.key, props: p, children: [], managed: true };
+  };
+  function raw(html) {
+    return { tag: "#raw", props: {}, children: [], text: html };
+  }
+  function Show(cond, view) {
+    return cond ? view() : null;
+  }
+  function normalize(children) {
+    const out = [];
+    const walk = (c) => {
+      if (c === null || c === void 0 || typeof c === "boolean") return;
+      if (Array.isArray(c)) {
+        c.forEach(walk);
+        return;
+      }
+      if (typeof c === "string" || typeof c === "number") {
+        out.push({ tag: "#text", props: {}, children: [], text: String(c) });
+        return;
+      }
+      out.push(c);
+    };
+    children.forEach(walk);
+    return out;
+  }
+  function render(next, container) {
+    const arr = normalize([next]);
+    patchChildren(container, ROOTS.get(container) || [], arr, container.namespaceURI === SVG_NS);
+    ROOTS.set(container, arr);
+    const mounts = mountQueue;
+    mountQueue = [];
+    mounts.forEach((fn) => fn());
+  }
+  function createApp(container, view) {
+    return {
+      render(state) {
+        render(view(state), container);
+      },
+      unmount() {
+        patchChildren(container, ROOTS.get(container) || [], [], container.namespaceURI === SVG_NS);
+        ROOTS.delete(container);
+      }
+    };
+  }
+  function patchChildren(parent, old, next, svg) {
+    const keyed = /* @__PURE__ */ new Map();
+    const fifo = /* @__PURE__ */ new Map();
+    for (const o of old) {
+      if (o.key !== void 0) keyed.set(o.key, o);
+      else {
+        const q = fifo.get(o.tag);
+        if (q) q.push(o);
+        else fifo.set(o.tag, [o]);
+      }
+    }
+    const reused = /* @__PURE__ */ new Set();
+    for (const n of next) {
+      let match;
+      if (n.key !== void 0) {
+        const o = keyed.get(n.key);
+        if (o && o.tag === n.tag) match = o;
+      } else {
+        const q = fifo.get(n.tag);
+        if (q && q.length) match = q.shift();
+      }
+      if (match) {
+        reused.add(match);
+        patchNode(match, n, svg);
+      } else createNode(n, svg);
+    }
+    for (const o of old) if (!reused.has(o)) removeNode(o);
+    let cursor = parent.firstChild;
+    for (const n of next) {
+      const el = n.el;
+      if (el === cursor) cursor = cursor.nextSibling;
+      else parent.insertBefore(el, cursor);
+    }
+  }
+  function patchNode(old, next, svg) {
+    next.el = old.el;
+    if (next.tag === "#text") {
+      if (next.text !== old.text) next.el.data = next.text;
+      return;
+    }
+    if (next.tag === "#raw") {
+      if (next.text !== old.text) {
+        const fresh = rawToNode(next.text, svg);
+        old.el.replaceWith(fresh);
+        next.el = fresh;
+      }
+      return;
+    }
+    const el = next.el;
+    applyProps(el, old.props, next.props);
+    if (next.managed) return;
+    patchChildren(el, old.children, next.children, svg || next.tag === "svg");
+  }
+  function createNode(vnode, svg) {
+    if (vnode.tag === "#text") {
+      vnode.el = document.createTextNode(vnode.text);
+      return vnode.el;
+    }
+    if (vnode.tag === "#raw") {
+      vnode.el = rawToNode(vnode.text, svg);
+      return vnode.el;
+    }
+    const isSvg = svg || vnode.tag === "svg";
+    const el = isSvg ? document.createElementNS(SVG_NS, vnode.tag) : document.createElement(vnode.tag);
+    vnode.el = el;
+    applyProps(el, {}, vnode.props);
+    if (!vnode.managed) for (const child of vnode.children) el.appendChild(createNode(child, isSvg));
+    const ref = vnode.props.ref;
+    if (ref) mountQueue.push(() => ref(el));
+    return el;
+  }
+  function rawToNode(html, svg) {
+    const holder = svg ? document.createElementNS(SVG_NS, "g") : document.createElement("div");
+    holder.innerHTML = html;
+    return holder.firstChild || document.createTextNode("");
+  }
+  function applyProps(el, oldProps, newProps) {
+    for (const k in oldProps) {
+      if (k === "key" || k === "ref" || k in newProps) continue;
+      removeProp(el, k);
+    }
+    for (const k in newProps) {
+      if (k === "key" || k === "ref") continue;
+      const v = newProps[k];
+      if (k === "value" || k === "checked") applyValue(el, k, v);
+      else if (v !== oldProps[k]) setProp(el, k, v);
+    }
+  }
+  function applyValue(el, k, v) {
+    const applied = el.__applied || (el.__applied = {});
+    if (applied[k] === v) return;
+    if (document.activeElement === el) return;
+    el[k] = v;
+    applied[k] = v;
+  }
+  function setProp(el, k, v) {
+    if (k.length > 2 && k[0] === "o" && k[1] === "n") {
+      setEvent(el, k.slice(2).toLowerCase(), v);
+      return;
+    }
+    if (k === "disabled" || k === "selected") {
+      el[k] = !!v;
+      return;
+    }
+    if (k === "style") {
+      setStyle(el, v);
+      return;
+    }
+    if (v == null || v === false) el.removeAttribute(k);
+    else el.setAttribute(k, v === true ? "" : String(v));
+  }
+  function removeProp(el, k) {
+    if (k.length > 2 && k[0] === "o" && k[1] === "n") {
+      setEvent(el, k.slice(2).toLowerCase(), null);
+      return;
+    }
+    if (k === "value" || k === "checked") return;
+    if (k === "disabled" || k === "selected") {
+      el[k] = false;
+      return;
+    }
+    el.removeAttribute(k);
+  }
+  function setEvent(el, type, handler) {
+    const ev = el.__ev || (el.__ev = {});
+    if (!(type in ev)) {
+      el.addEventListener(type, (e) => {
+        const fn = el.__ev[type];
+        if (fn) fn(e);
+      });
+    }
+    if (handler) ev[type] = handler;
+    else delete ev[type];
+  }
+  function setStyle(el, v) {
+    if (v == null || v === false) {
+      el.removeAttribute("style");
+      return;
+    }
+    if (typeof v === "string") {
+      el.setAttribute("style", v);
+      return;
+    }
+    el.removeAttribute("style");
+    for (const k in v) el.style[k] = v[k];
+  }
+  function removeNode(vnode) {
+    cleanup(vnode);
+    const el = vnode.el;
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+  function cleanup(vnode) {
+    if (!vnode.managed) for (const c of vnode.children) cleanup(c);
+    const ref = vnode.props.ref;
+    if (ref) ref(null);
+  }
+  root.h = h;
+  root.raw = raw;
+  root.render = render;
+  root.createApp = createApp;
+  root.Show = Show;
+})(typeof window !== "undefined" ? window : globalThis);
+
 const treeEl = document.getElementById("tree");
 const contentEl = document.getElementById("content");
 const breadcrumbPath = document.getElementById("breadcrumb-path");

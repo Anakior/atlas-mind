@@ -21,3 +21,17 @@ declare const __SITE_PREFIX_JSON__: string;
 
 // Still owned by un-migrated .js modules (removed as each migrates to .ts).
 declare const TODO_CATEGORIES: Array<{ cat: string; label: string }>;
+
+// Atlas DOM runtime (00b-atlas-dom.ts): the keyed virtual-DOM exposed to the shared scope.
+// h/raw/render/createApp/Show are globals; the reconciler internals stay private to its IIFE.
+declare const h: {
+  (tag: string, props?: Record<string, any> | null, ...children: Child[]): VNode;
+  host(tag: string, props?: Record<string, any> | null): VNode;
+};
+declare function raw(html: string): VNode;
+declare function render(next: Child, container: Element): void;
+declare function createApp(
+  container: Element,
+  view: (state?: any) => Child,
+): { render(state?: any): void; unmount(): void };
+declare function Show(cond: any, view: () => Child): Child;
