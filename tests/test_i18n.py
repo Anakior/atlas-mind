@@ -89,7 +89,7 @@ class TestI18nEnglishViewerAndShare(unittest.TestCase):
         # Labels from the STRINGS.en dictionary embedded in the page.
         self.assertIn("Signed in as", text)
         self.assertIn("Recently modified", text)
-        self.assertIn("'Search…'", text)
+        self.assertRegex(text, "[\"']Search…[\"']")
         self.assertNotIn("__LANG__", text)
 
     def test_share_page_english(self):
@@ -178,7 +178,7 @@ class TestI18nEnglishDefault(unittest.TestCase):
             encoding="utf-8")
         self.assertIn('<html lang="en">', text)
         self.assertIn("Recently modified", text)
-        self.assertIn("'Search…'", text)
+        self.assertRegex(text, "[\"']Search…[\"']")
 
 
 class TestI18nViewerDictionaryConsistency(unittest.TestCase):
@@ -201,15 +201,28 @@ class TestI18nViewerDictionaryConsistency(unittest.TestCase):
                         parts.append(frag.read_text(encoding="utf-8"))
         cls.template = "\n".join(parts)
 
-    def _dict_keys(self, lang: str) -> set:
-        block = self.template.split("const STRINGS = {", 1)[1].split("\n};", 1)[0]
+    def _dict_key_list(self, lang: str) -> list:
+        # Tolerate a TS type annotation: `const STRINGS: Record<...> = {`.
+        block = re.split(r"const STRINGS\b[^=]*=\s*\{", self.template, 1)[1].split("\n};", 1)[0]
         section = block.split(f"  {lang}: {{", 1)[1].split("\n  },", 1)[0]
-        return set(re.findall(r"^    ([A-Za-z0-9_]+):", section, re.M))
+        return re.findall(r"^    ([A-Za-z0-9_]+):", section, re.M)
+
+    def _dict_keys(self, lang: str) -> set:
+        return set(self._dict_key_list(lang))
 
     def test_fr_and_en_have_identical_keys(self):
         fr, en = self._dict_keys("fr"), self._dict_keys("en")
         self.assertGreater(len(fr), 100)  # the dictionary is substantial
         self.assertEqual(fr, en)
+
+    def test_no_duplicate_keys(self):
+        # A duplicate object key silently keeps the LAST value (the noResults/closeEsc
+        # bug this split fixed). _dict_keys collapses to a set and would hide it, so
+        # check the raw list per language.
+        for lang in ("fr", "en"):
+            keys = self._dict_key_list(lang)
+            dupes = sorted({k for k in keys if keys.count(k) > 1})
+            self.assertEqual(dupes, [], f"duplicate {lang} keys: {dupes}")
 
     def test_every_data_i18n_attribute_resolves(self):
         fr = self._dict_keys("fr")

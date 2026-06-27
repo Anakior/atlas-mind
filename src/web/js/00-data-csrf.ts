@@ -1,6 +1,9 @@
 // ─── Data injected by build.py ───────────────────────────────────────────
 // Online: EMBED_* are null, loaded on demand from the server.
 // Offline: they hold the inline data (standalone HTML).
+// The __NAME__ barewords are JSON literals pasted by render.py (single regex pass); esbuild
+// strips the types but never touches them, so the Python substitution still lands. Foundation
+// layer: NOT wrapped in an IIFE — these are the shared globals the rest of the viewer reads.
 const TREE = __DATA__;
 const EMBED_CONTENT = __EMBED_CONTENT__;
 const EMBED_BACKLINKS = __EMBED_BACKLINKS__;
@@ -29,47 +32,43 @@ const SITE_PREFIX = __SITE_PREFIX_JSON__;
 //   2. else the kb_csrf cookie (readable, not HttpOnly) — for the first call
 //      before /api/me responds.
 // Refreshed via setCsrfToken() after any epoch bump (logout-all, TOTP enable/disable).
-let csrfToken = null;
-let meState = null; // latest /api/me (email, role, cloud, totp_enabled…)
+let csrfToken: string | null = null;
+let meState: MeResponse | null = null; // latest /api/me (email, role, cloud, totp_enabled…)
 let totpEnabled = false; // 2FA state of the current account (cloud)
 
-function readCsrfCookie() {
+function readCsrfCookie(): string | null {
   const m = document.cookie.match(/(?:^|;\s*)kb_csrf=([^;]+)/);
 
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-function setCsrfToken(token) {
+function setCsrfToken(token: string | null): void {
   if (token) csrfToken = token;
 }
 
-function currentCsrfToken() {
+function currentCsrfToken(): string | null {
   return csrfToken || readCsrfCookie();
 }
 
-(function installCsrfFetch() {
+(function installCsrfFetch(): void {
   const nativeFetch = window.fetch.bind(window);
-  const MUTATING = { POST: 1, PUT: 1, PATCH: 1, DELETE: 1 };
+  const MUTATING: Record<string, number> = { POST: 1, PUT: 1, PATCH: 1, DELETE: 1 };
 
-  window.fetch = function (input, init) {
+  window.fetch = function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     init = init || {};
-    const method = (
-      init.method ||
-      (typeof input !== 'string' && input && input.method) ||
-      'GET'
-    ).toUpperCase();
+    // A non-string input is a Request (or URL, which has no method/headers — read as undefined).
+    const req = typeof input === 'string' ? null : (input as Request);
+    const method = (init.method || (req && req.method) || 'GET').toUpperCase();
     // Only mutating requests to a relative (same-origin) URL: an absolute URL
     // (CDN, external) must never receive our token.
-    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const url = typeof input === 'string' ? input : (req && req.url) || '';
     const sameOrigin = url && !/^https?:\/\//i.test(url);
 
     if (MUTATING[method] && sameOrigin) {
       const token = currentCsrfToken();
 
       if (token) {
-        const headers = new Headers(
-          init.headers || (typeof input !== 'string' && input && input.headers) || {},
-        );
+        const headers = new Headers(init.headers || (req ? req.headers : undefined) || {});
 
         if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', token);
         init = Object.assign({}, init, { headers });
@@ -79,7 +78,3 @@ function currentCsrfToken() {
     return nativeFetch(input, init);
   };
 })();
-
-// ─── i18n (fr/en — language from atlas.toml, set by build.py on <html lang>) ───
-// All UI labels go through t(key, ...args). Technical values (CSS classes, API
-// keys, todo category data) are NOT translated.

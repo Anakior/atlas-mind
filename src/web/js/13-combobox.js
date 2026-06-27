@@ -90,7 +90,7 @@ window.AtlasUI = {
         items.push({ __create: create });
       }
       if (!items.length) {
-        pop.innerHTML = '<div class="px-3 py-1.5 text-ink-500">' + escapeHtml(t('noResults')) + '</div>';
+        pop.innerHTML = '<div class="px-3 py-1.5 text-ink-500">' + escapeHtml(t('comboNoResults')) + '</div>';
       } else {
         pop.innerHTML = html;
       }

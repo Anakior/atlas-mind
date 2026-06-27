@@ -38,6 +38,13 @@ VIEWER_EMAIL = "viewer@test.local"
 VIEWER_PASSWORD = "viewer-password-42"
 
 
+def _assert_i18n(tc, haystack, entry):
+    # The viewer STRINGS catalog ships from .ts now; esbuild re-quotes string literals
+    # (single→double) when bundling, so match each "key: 'value'" entry regardless of the
+    # surrounding quote style.
+    tc.assertRegex(haystack, re.escape(entry).replace("'", "[\"']"))
+
+
 def cloud_env() -> dict:
     return {
         "KB_AUTH_ENABLED": "1",
@@ -812,12 +819,12 @@ class TestAdminUiPanel(unittest.TestCase):
                          "settingsTabUsers: 'Utilisateurs'",
                          "settingsTabTokens: 'Tokens'",
                          "settingsTabShares: 'Partages'"):
-            self.assertIn(fr_value, self.index)
+            _assert_i18n(self, self.index, fr_value)
         for en_value in ("settingsTitle: 'Settings'",
                          "settingsTabUsers: 'Users'",
                          "settingsTabShares: 'Shares'",
                          "settingsMcpUrl: 'MCP connector URL'"):
-            self.assertIn(en_value, self.index)
+            _assert_i18n(self, self.index, en_value)
 
     def test_settings_entry_point_gated_on_admin_cloud(self):
         # Batch 2d change: the gear is now revealed for ANY authenticated account
@@ -878,11 +885,11 @@ class TestAdminUiPanel(unittest.TestCase):
         for fr_value in ("settingsConfirmPasswordLabel: 'Confirmer le mot de passe'",
                          "settingsPasswordMismatch:",
                          "settingsPasswordUpdated: 'Mot de passe mis à jour.'"):
-            self.assertIn(fr_value, self.index)
+            _assert_i18n(self, self.index, fr_value)
         for en_value in ("settingsConfirmPasswordLabel: 'Confirm password'",
                          "settingsPasswordMismatch:",
                          "settingsPasswordUpdated: 'Password updated.'"):
-            self.assertIn(en_value, self.index)
+            _assert_i18n(self, self.index, en_value)
 
     def test_token_reveal_has_close_and_warning(self):
         # The one-time token reveal: strong warning + Close button + the secret
@@ -968,12 +975,12 @@ class TestSecurityUi(unittest.TestCase):
                          "securityTotpEnable: 'Activer le 2FA'",
                          "securityLogoutAll: 'Déconnecter toutes mes sessions'",
                          "totpRecoveryWarn:"):
-            self.assertIn(fr_value, self.index)
+            _assert_i18n(self, self.index, fr_value)
         for en_value in ("settingsTabProfile: 'Profile'",
                          "securityTotpEnable: 'Enable 2FA'",
                          "securityLogoutAll: 'Sign out all my sessions'",
                          "totpRecoveryWarn:"):
-            self.assertIn(en_value, self.index)
+            _assert_i18n(self, self.index, en_value)
 
 
 class TestLoginPageTwoStepUi(unittest.TestCase):

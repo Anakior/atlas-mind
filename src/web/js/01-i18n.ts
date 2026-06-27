@@ -1,5 +1,15 @@
+// i18n: the fr/en string catalog + t() (the single translation entry point) +
+// applyStaticI18n (static [data-i18n] markup). Split out of the old 01-i18n-state.js.
+// Foundation layer: stays top-level so t()/LANG/STRINGS are shared globals (not module-
+// scoped). Language from <html lang>, set by the Python build.
 const LANG = (document.documentElement.lang || 'fr').toLowerCase().startsWith('en') ? 'en' : 'fr';
-const STRINGS = {
+
+// An i18n entry is either a literal label or a function that interpolates its args. The
+// any[] is deliberate: the per-key arities differ (err(m), statsLine(md, other), …) and the
+// bodies concatenate the args, which unknown[] would reject.
+type I18nValue = string | ((...args: any[]) => string);
+
+const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
   fr: {
     // Génériques
     cancel: 'Annuler',
@@ -456,8 +466,7 @@ const STRINGS = {
     aclOwner: 'propriétaire :',
     aclCreatedBy: 'créé par',
     comboCreate: (q) => 'Créer « ' + q + ' »',
-    noResults: 'Aucun résultat',
-    closeEsc: 'Fermer (Esc)',
+    comboNoResults: 'Aucun résultat',
     aclKindLabel: 'Type',
     aclLevelLabel: 'Niveau',
     aclValueLabel: 'Email ou groupe',
@@ -1015,8 +1024,7 @@ const STRINGS = {
     aclOwner: 'owner:',
     aclCreatedBy: 'created by',
     comboCreate: (q) => 'Create "' + q + '"',
-    noResults: 'No results',
-    closeEsc: 'Close (Esc)',
+    comboNoResults: 'No results',
     aclKindLabel: 'Type',
     aclLevelLabel: 'Level',
     aclValueLabel: 'Email or group',
@@ -1122,7 +1130,7 @@ const STRINGS = {
   },
 };
 
-function t(key, ...args) {
+function t(key: string, ...args: unknown[]): string {
   const dict = STRINGS[LANG] || STRINGS.fr;
   let entry = dict[key];
 
@@ -1135,107 +1143,16 @@ function t(key, ...args) {
 
 // Static HTML labels via data-i18n / -title / -placeholder. Single source of
 // truth = STRINGS; the FR text in the markup is only a fallback when JS is off.
-function applyStaticI18n() {
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
+function applyStaticI18n(): void {
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n!);
   });
-  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
-    el.title = t(el.dataset.i18nTitle);
+  document.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((el) => {
+    el.title = t(el.dataset.i18nTitle!);
   });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
-    el.placeholder = t(el.dataset.i18nPlaceholder);
+  document.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder!);
   });
 }
 
 applyStaticI18n();
-
-const treeEl = document.getElementById('tree');
-const contentEl = document.getElementById('content');
-const breadcrumbPath = document.getElementById('breadcrumb-path');
-const breadcrumbDate = document.getElementById('breadcrumb-date');
-const breadcrumbActions = document.getElementById('breadcrumb-actions');
-const btnEdit = document.getElementById('btn-edit');
-const btnSave = document.getElementById('btn-save');
-const btnCancel = document.getElementById('btn-cancel');
-const searchEl = document.getElementById('search');
-const searchResultsEl = document.getElementById('search-results');
-const recentSection = document.getElementById('recent-section');
-const recentList = document.getElementById('recent-list');
-const sharedSection = document.getElementById('shared-section');
-const sharedList = document.getElementById('shared-list');
-const statsEl = document.getElementById('stats');
-const tocPanel = document.getElementById('toc-panel');
-const tocList = document.getElementById('toc-list');
-const tocLinks = document.getElementById('toc-links');
-const tocNotes = document.getElementById('toc-notes');
-// The right panel shows up if it has a table of contents OR links OR notes.
-// renderBacklinksFor / renderNotesFor update these flags then call applyToc().
-let tocHasLinks = false;
-let tocHasNotes = false;
-
-let currentFile = null;
-let editMode = false;
-let editTextarea = null;
-
-function relativeDate(epoch) {
-  if (!epoch) return '';
-  const diff = Date.now() / 1000 - epoch;
-
-  if (diff < 60) return t('justNow');
-
-  if (diff < 3600) return t('minAgo', Math.floor(diff / 60));
-
-  if (diff < 86400) return t('hoursAgo', Math.floor(diff / 3600));
-
-  if (diff < 86400 * 7) return t('daysAgo', Math.floor(diff / 86400));
-
-  return new Date(epoch * 1000).toLocaleDateString(LANG, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-function slugify(s) {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function escapeHtml(s) {
-  return String(s).replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
-  );
-}
-
-let mdCount = 0,
-  otherCount = 0;
-const fileMap = {};
-
-function index(node) {
-  for (const c of node.children || []) {
-    if (c.type === 'file') {
-      fileMap[c.path] = c;
-
-      if (c.ext === '.md') mdCount++;
-      else otherCount++;
-    } else index(c);
-  }
-}
-
-// Offline build only: index the baked FULL tree into fileMap. In SERVER mode that
-// baked tree is the owner's complete build-time view, so indexing it here would
-// leak private doc names + the total count through every fileMap consumer (Recent,
-// search, the Mind, stats) BEFORE softReload() swaps in the per-account filtered
-// /api/tree. Gated on IS_OFFLINE_BUILD, NOT the protocol: a static offline build is
-// served over https on GitHub Pages, so a file:// check would wrongly skip it.
-if (IS_OFFLINE_BUILD) {
-  index(TREE);
-}
-statsEl.textContent = t('statsLine', mdCount, otherCount);
-
-// ─── Content loader (lazy fetch in online mode, embed in offline mode) ────────
