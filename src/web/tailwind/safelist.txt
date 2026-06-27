@@ -193,6 +193,7 @@ barre.
 basse
 be
 been
+before
 beforeend
 behavior:
 bend
@@ -410,6 +411,7 @@ connector
 const
 cont
 container
+container)
 content
 content.
 contenu
@@ -698,6 +700,7 @@ fill
 filter
 filter.
 find
+fires
 first
 fixed
 flash
@@ -749,6 +752,7 @@ fr-FR
 frame
 freshly-shown
 from
+frozen
 full
 fullscreen
 function
@@ -922,6 +926,7 @@ htmlDocBanner
 http
 http(s)
 http:
+http://www.w3.org/2000/svg
 https:
 https://pypi.org/project/atlas-mind/
 i--)
@@ -1050,6 +1055,7 @@ lien.
 liens
 liens,
 lieu
+life
 light
 ligne
 like
@@ -1187,6 +1193,7 @@ mt-3
 mt-6
 mt-8
 must
+mutate
 muted
 mx-auto
 my
@@ -1294,6 +1301,7 @@ now:
 nowrap
 ns
 null
+number
 numeric
 object
 of
@@ -1374,6 +1382,7 @@ paletteResultsCapped
 pan
 panel-divider
 par
+parent
 partage
 partager
 partages
@@ -1525,6 +1534,8 @@ recherche
 recherches
 reconnecter.
 recovery
+ref
+ref(null)
 referencedBy
 refused.
 regardless
@@ -1561,6 +1572,7 @@ rename-name
 rename-title
 renameDocTitle
 renamed
+render(view(state),
 renderTaskText(s)
 renderTasks(tasks)
 renderTodoFilterTabs()
@@ -1684,6 +1696,7 @@ securityLogoutAllConfirmMsg
 securityLogoutAllConfirmTitle
 securityTotpStatusOff
 securityTotpStatusOn
+selected
 selectionchange
 semaine
 separate
@@ -1899,6 +1912,7 @@ st.subAnchors[a.subKey])
 st.ticks
 stale
 start
+state,
 static
 stats
 statsLine
@@ -1916,6 +1930,7 @@ string
 stripped
 structured
 stuck
+style
 subfolder
 subject
 subject.
