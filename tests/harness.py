@@ -35,6 +35,7 @@ import json
 import os
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -91,7 +92,36 @@ DEFAULT_MIND: dict[str, str] = {
 # versioned (the server commits them via trigger_sync). .atlas/ (the
 # users/shares registry of ATLAS_STORE=file mode) must NEVER be committed: it
 # contains password and token hashes.
-TEST_GITIGNORE = "__pycache__/\n*.pyc\ndist/\n.atlas/\n"
+# /src/ and /pkg/ (the copied engine) are ignored too: the mind's git versions
+# CONTENT, never the engine — and `git add -A` over the ~6MB engine copy was the
+# single biggest per-test cost (~2.4s of git, vs ~0.3s once ignored).
+TEST_GITIGNORE = "__pycache__/\n*.pyc\ndist/\n.atlas/\n/src/\n/pkg/\n"
+
+
+def _rmtree_best_effort(path: Path) -> None:
+    """Remove a tmp mind, surviving Windows. Just after terminate() the child server can
+    still hold file handles for a beat, and copied git files keep the read-only bit
+    Windows refuses to unlink (WinError 5) — both make a plain rmtree leak the dir (the
+    suite was stranding thousands of them). Clear the bit and retry with a short backoff;
+    give up silently rather than fail a test's teardown (the OS temp cleaner gets the rest)."""
+    def _onexc(func, target, _exc):
+        try:
+            os.chmod(target, stat.S_IWRITE)
+        except OSError:
+            pass
+        func(target)
+
+    for attempt in range(4):
+        try:
+            if sys.version_info >= (3, 12):
+                shutil.rmtree(path, onexc=_onexc)
+            else:  # onexc replaced onerror in 3.12; older needs onerror.
+                shutil.rmtree(path, onerror=lambda f, p, _info: _onexc(f, p, None))
+            return
+        except OSError:
+            if attempt == 3:
+                return  # a stubborn handle; leave it rather than crash teardown
+            time.sleep(0.3)
 
 
 def find_free_port() -> int:
@@ -243,15 +273,20 @@ class AtlasServer:
             self._log_file.close()
             self._log_file = None
         if self.root is not None and not os.environ.get("ATLAS_TEST_KEEP"):
-            # ignore_errors: a git/build started by trigger_sync may still be
-            # writing during the rmtree right after the kill.
-            shutil.rmtree(self.root, ignore_errors=True)
+            # Robust retry: a git/build started by trigger_sync may still hold handles
+            # right after the kill, and read-only git files break a plain rmtree on
+            # Windows — both used to leak the tmp dir.
+            _rmtree_best_effort(self.root)
             self.root = None
 
     # ── internal setup ───────────────────────────────────────────────────────
 
     def _populate(self) -> None:
-        ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
+        # node_modules (esbuild/typescript/playwright tooling, ~50MB) is dev-only and the
+        # build gates on it by PRESENCE: excluding it cuts the per-test copy ~10x (58MB->6MB)
+        # AND makes _rebuild_js_bundle/_rebuild_tailwind skip, serving the committed
+        # bundle/css — the SAME artifact, far faster. Tests never edit web/js sources.
+        ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "node_modules")
         # web/ and templates/ now live INSIDE src/ (the package), so copying src/
         # brings the engine assets along — no separate copy needed. The destination
         # depends on the layout (flat src/ vs the installed atlas_mind/ package).

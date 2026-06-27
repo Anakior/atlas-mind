@@ -8,7 +8,7 @@
 // __DATA__/__EMBED_* barewords are substituted later by render.py, so nothing here may
 // rename or drop them (hence minify/treeShaking off on the .ts path).
 import { transformSync } from 'esbuild';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,5 +34,9 @@ const bundle = files
   })
   .join('\n');
 
-writeFileSync(out, bundle, 'utf8');
+// Atomic write: render.py reads this file, so it must never see a half-written bundle.
+// Write a pid-unique temp then rename (atomic on the same volume, replaces on Windows too).
+const tmp = `${out}.${process.pid}.tmp`;
+writeFileSync(tmp, bundle, 'utf8');
+renameSync(tmp, out);
 console.log(`[atlas-ts] ${files.length} sources -> web/vendor/app.bundle.js`);

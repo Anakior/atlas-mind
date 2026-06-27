@@ -25,7 +25,6 @@ absent
 absolute
 access
 access.
-accessible
 account
 account-profile-avatar
 account-profile-first
@@ -104,7 +103,6 @@ administrator
 afficher
 again
 again.
-agent
 agents
 ago
 aiBadge(e.ai)
@@ -128,7 +126,6 @@ annotation
 anon:
 another
 any
-any,
 anyone.
 app
 app).
@@ -170,7 +167,6 @@ au
 aucun
 authentication
 authenticator
-auto
 autocomplete
 automatically.
 automatiquement.
@@ -197,6 +193,7 @@ barre.
 basse
 be
 been
+beforeend
 behavior:
 bend
 bg-[#2a2a32]
@@ -227,6 +224,7 @@ blur
 body
 bold
 boolean
+boot
 bordel
 border
 border-b
@@ -347,9 +345,13 @@ checked)
 checked:/unchecked:
 chemin
 chercher
+choisir
+choisis
 choisit
+choose
 chrome-less.
 ci-dessus).
+classer
 claude,
 clavier)
 clearBtn
@@ -536,6 +538,7 @@ div
 divergentes
 do
 doc
+doc:
 docCreated
 docDeleted
 docMoved
@@ -590,10 +593,7 @@ e2
 e2.s._adj
 e2.t._adj
 each
-ease
 ease,
-ease,opacity
-ease-in-out
 edges
 edges)
 edges,
@@ -659,8 +659,8 @@ f.r
 facteurs
 fade
 failed
-failed,
 failed.
+failed:
 faint
 faire
 fais
@@ -668,7 +668,6 @@ fait
 faites
 faits
 fall
-fallback
 falls
 false
 family
@@ -880,6 +879,7 @@ hljs
 hm-tip
 hollow-tinted
 home
+home-activity-card
 home-activity-mount
 home-link
 hors
@@ -923,8 +923,8 @@ http:
 https:
 https://pypi.org/project/atlas-mind/
 i--)
-ibx-entering
 ibx-leaving
+ibx-tagedit-input
 ibx-toast
 ici
 id
@@ -944,6 +944,12 @@ inbox/
 inboxConfHigh
 inboxConfLow
 inboxConfMed
+inboxKept
+inboxNew
+inboxNewTag
+inboxSnoozed
+inboxTrashed
+inboxUpNext
 including
 index)
 index,
@@ -979,6 +985,7 @@ it
 it.
 italic
 item
+items
 items-baseline
 items-center
 items-start
@@ -1061,15 +1068,16 @@ links.
 linksTitle
 lire
 list
+live-reload
 lives.
 lo
 load
+load),
 loadError
 loadingDoc
 local
 location
 location.protocol
-location.reload
 long
 longer
 longs
@@ -1098,6 +1106,7 @@ match.
 matches
 matching
 matter
+matters.
 max-h-64
 max-w-4xl
 max-w-md
@@ -1275,6 +1284,7 @@ notesCopied
 notesTitle
 nothing
 nouveau
+nouveaux
 nouvelle
 now
 now,
@@ -1333,7 +1343,6 @@ ouvrir
 over
 overflow-hidden
 overflow-y-auto
-override
 own
 owner
 owner:
@@ -1401,6 +1410,7 @@ phText
 physics).
 physics,
 pi
+pick
 pin
 pinned-list
 pinned-section
@@ -1522,6 +1532,9 @@ regions)
 regions.
 regions[n.region]
 register
+relDaysAgo
+relJustNow
+relYesterday
 related
 relative
 reload
@@ -1834,6 +1847,7 @@ signal.
 signed
 sit
 skeletons.
+skipped
 smooth
 snooze
 snoozed
@@ -1900,7 +1914,6 @@ string
 stripped
 structured
 stuck
-style
 subfolder
 subject
 subject.
@@ -2035,7 +2048,6 @@ them.
 then
 there
 these
-they
 thin
 this
 thoughts
@@ -2173,6 +2185,7 @@ ul
 ul,
 un
 unavailable
+unavailable:
 undefined
 under
 une
@@ -2182,6 +2195,7 @@ unique
 unknown
 unpin
 unsanitized
+up
 updateGraphModeUI()
 updateHomeTodoStat()
 updateTabBadge()
@@ -2231,6 +2245,7 @@ w-px
 walks
 want
 was
+we
 weak
 week
 went
@@ -2268,6 +2283,7 @@ y,
 y:
 year)
 yesterday
+yet
 yet.
 you
 you.

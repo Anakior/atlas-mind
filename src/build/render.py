@@ -92,13 +92,23 @@ def _head_meta(*, site_name: str, description: str, site_url: str,
 def _read_app_bundle() -> str:
     """The viewer JS, read from the esbuild artifact web/vendor/app.bundle.js (built by
     web/ts/build.mjs, committed). Closing tags neutralised like the other inlined sources.
-    Missing is fatal: `atlas build`/`atlas dev` regenerate it when the node toolchain is
-    present, else run `npm run build` in web/ts."""
+    Missing OR stale (older than the newest web/js source) is fatal: `atlas build`/`atlas
+    dev` regenerate it when the node toolchain is present, else run `npm run build` in
+    web/ts."""
     bundle = WEB_DIR / "vendor" / "app.bundle.js"
     if not bundle.is_file():
         raise SystemExit(
             f"FATAL: {bundle} is missing. Run `npm run build` in web/ts (or `atlas "
             "build`, which regenerates it when the node toolchain is present).")
+    js_dir = WEB_DIR / "js"
+    newest_src = max((p.stat().st_mtime for p in (*js_dir.glob("*.js"), *js_dir.glob("*.ts"))),
+                     default=0.0)
+    # The 2s tolerance absorbs the mtime jitter of a fresh git checkout / file copy (every
+    # file lands within one instant); a genuine "forgot to rebuild" gap is far larger.
+    if newest_src > bundle.stat().st_mtime + 2.0:
+        raise SystemExit(
+            f"FATAL: {bundle} is stale (older than a web/js source). Run `npm run build` in "
+            "web/ts (or `atlas build`/`atlas dev`, which regenerate it when node is present).")
     return _escape_closing_tag(bundle.read_text(encoding="utf-8-sig"), _CLOSING_SCRIPT_RE)
 
 
