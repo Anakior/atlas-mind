@@ -50,3 +50,33 @@
      tailwind.css recompile. The mobile full-screen override lives in 06-mobile.css. */
   #history-card { width: 108rem; max-width: 94vw; max-height: 90vh; }
   #history-list { width: 19rem; }
+
+  /* Chrome icon-buttons (toolbar graph/tasks/new + sidebar toggles + TOC close) only had
+     :hover states — no visible keyboard focus. Give them the same branded accent ring the
+     form inputs use (focus:ring-2 focus:ring-accent/40). :focus-visible keeps mouse clicks
+     ring-free. box-shadow follows each button's border-radius, so the ring stays rounded. */
+  #sidebar-toggle:focus-visible,
+  #sidebar-show-inline:focus-visible,
+  #graph-btn:focus-visible,
+  #tasks-btn:focus-visible,
+  #new-file-btn:focus-visible,
+  #toc-close:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(29, 155, 209, 0.55);
+  }
+
+  /* Floating To-do widget (#todo-widget, fixed bottom-right) floats over the scrolling home
+     content; expanded, it can cover the constellation legend, the tag cloud and the inbox
+     Keep/Trash/Snooze actions on shorter (~900px-tall) screens. Bound its footprint so the
+     content underneath stays reachable. The collapse/expand toggle (todo-surface.ts) is
+     untouched — only the size + a content safe-area. Desktop-scoped so the mobile pill
+     overrides in 06-mobile.css are left intact. */
+  @media (min-width: 768px) {
+    #todo-widget { max-height: calc(100vh - 2.5rem); }
+    #todo-body { max-height: min(50vh, 26rem) !important; }
+    /* Bottom gutter so the last actionable rows can be scrolled clear of the widget. */
+    #content { padding-bottom: 5rem; }
+  }
+  @media (min-width: 768px) and (max-height: 900px) {
+    #todo-body { max-height: 38vh !important; }
+  }

@@ -16,6 +16,10 @@
 .act-node-inner { transform-box: fill-box; transform-origin: center; transition: transform .12s; }
 .act-node:hover .act-node-inner, .act-node:focus .act-node-inner { transform: scale(1.22); }
 .act-node:focus { outline: none; }
+/* Keyboard-only focus ring (mouse focus stays clean). `.act-node` is an SVG <g>, where
+   box-shadow doesn't paint — `outline` is the indicator SVG actually honours. Placed after
+   the :focus reset so it wins on equal specificity when keyboard-focused. */
+.act-node:focus-visible { outline: 2px solid #1d9bd1; outline-offset: 3px; }
 .act-pop { position: absolute; transform: translate(-50%, -100%); width: 280px; padding: 11px 13px; border-radius: 14px; pointer-events: none; z-index: 20; }
 .act-pop.hidden { display: none; }
 .act-legend { display: flex; flex-direction: column; gap: 7px; flex-shrink: 0; align-self: center; }

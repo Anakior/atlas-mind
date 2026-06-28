@@ -157,6 +157,10 @@ export class ContentTree {
   }
 
   rerender(): void {
+    // serverBoot fills treeEl with skeleton rows via innerHTML — foreign nodes the keyed runtime does
+    // not own, so they'd linger below the real tree. Drop them once before the first real render; once
+    // gone, later reloads reconcile in place (scroll + open folders survive).
+    if (treeEl.querySelector('.skeleton')) treeEl.replaceChildren();
     render(this.treeView(TREE, 0, ''), treeEl);
   }
 

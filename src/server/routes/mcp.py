@@ -37,12 +37,17 @@ def handle(handler):
         if "text/event-stream" not in accept:
             handler._send_json(405, {"error": "method not allowed (use Accept: text/event-stream)"})
             return
-        handler.send_response(200)
-        handler.send_header("Content-Type", "text/event-stream")
-        handler.send_header("Cache-Control", "no-cache")
-        handler.send_header("Connection", "keep-alive")
-        handler.end_headers()
+        # Bound the held-open SSE streams: refuse once the global cap is reached so a
+        # flood of never-closing connections can't pin a thread each (DoS).
+        if not _s.SSE_GATE.try_acquire():
+            handler._send_json(503, {"error": "SSE connection limit reached"})
+            return
         try:
+            handler.send_response(200)
+            handler.send_header("Content-Type", "text/event-stream")
+            handler.send_header("Cache-Control", "no-cache")
+            handler.send_header("Connection", "keep-alive")
+            handler.end_headers()
             handler.wfile.write(b": connected\n\n")
             handler.wfile.flush()
             while True:
@@ -54,6 +59,8 @@ def handle(handler):
                     break
         except Exception:
             pass
+        finally:
+            _s.SSE_GATE.release()
         return
 
     if handler.command == "POST":

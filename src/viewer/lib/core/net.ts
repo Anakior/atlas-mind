@@ -4,10 +4,25 @@
 // call time.
 import { todoStatus } from '../graph/todo-surface';
 
+// Static chrome (the two spans) is built once; setStatus only swaps the colour
+// class and the message text via textContent — never innerHTML — so a message
+// string can't inject HTML even if a server/doc value ever flows through here.
+let statusMsg: HTMLSpanElement | null = null;
+let statusHost: HTMLSpanElement | null = null;
+
 export function setStatus(msg: string, kind?: StatusKind): void {
   const colors: Record<StatusKind, string> = { ok: 'text-emerald-400', err: 'text-rose-400', info: 'text-ink-500' };
 
-  todoStatus!.innerHTML = `<span class="${colors[kind!] || colors.info}">${msg}</span><span class="text-ink-600">${location.host}</span>`;
+  if (!statusMsg || !statusHost) {
+    statusMsg = document.createElement('span');
+    statusHost = document.createElement('span');
+    statusHost.className = 'text-ink-600';
+  }
+
+  statusMsg.className = colors[kind!] || colors.info;
+  statusMsg.textContent = msg;
+  statusHost.textContent = location.host;
+  todoStatus!.replaceChildren(statusMsg, statusHost);
 }
 
 export async function api<T = any>(method: string, path: string, body?: unknown): Promise<T> {

@@ -93,8 +93,8 @@ def generate_recovery_codes(count: int = RECOVERY_CODE_COUNT):
     codes = []
     hashes = []
     for _ in range(count):
-        raw = secrets.token_hex(5)  # 10 hex
-        pretty = f"{raw[:5]}-{raw[5:]}"
+        raw = secrets.token_hex(8)  # 16 hex (64 bits of entropy)
+        pretty = f"{raw[:8]}-{raw[8:]}"
         codes.append(pretty)
         hashes.append(hashlib.sha256(pretty.encode()).hexdigest())
     return codes, hashes
