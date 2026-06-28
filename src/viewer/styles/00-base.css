@@ -1,3 +1,8 @@
+  /* Muted-text contrast: ink-500 was #5e6066 (~2.5:1 on cards, below WCAG AA), bumped to #868a90
+     (~4.5:1). Mirrors the tailwind.config ink-500 token here too so it applies without recompiling
+     the precompiled vendor/tailwind.css. */
+  .text-ink-500 { color: #868a90; }
+
   /* Read-only demo banner — floating pill, only shown on the static/offline build.
      `display` lives in :not(.hidden) so the `hidden` toggle still wins. */
   #demo-banner {

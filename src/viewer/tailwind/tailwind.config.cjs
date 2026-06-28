@@ -52,7 +52,7 @@ module.exports = {
           200: '#d1d2d3',
           300: '#b0b1b5',
           400: '#868a90',
-          500: '#5e6066',
+          500: '#868a90', // bumped from #5e6066 (~2.5:1 on cards, below AA) for muted-text contrast
         },
         accent: '#1d9bd1',
       },

@@ -57,7 +57,10 @@ log in immediately:
 - **login:** `dev@local` / `dev`
 - `--fresh` skips the seeded admin to exercise the first-boot `/setup` token flow
 - `--reset` wipes the dev mind (accounts + edits) and re-seeds it from the demo
-- `--port N` changes the port; `atlas dev <dir>` serves a mind elsewhere
+- `--port N` changes the port
+- `atlas dev seed` fills the mind with sample inbox items + attributed Activity
+  commits so the home Activity card and the Inbox render without real history
+  (DEV-ONLY — it mutates the mind; `atlas dev inbox "<title>"` drops one item)
 
 Edits are written to `.dev-mind/` and the viewer rebuilds, but **git is never
 touched**. Under the hood `dev` sets `ATLAS_DEV=1`; the server then forces auth

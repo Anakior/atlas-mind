@@ -120,7 +120,7 @@ export class HistoryPanel {
         'border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ' +
         (this.aiOnly ? '#1d9bd1' : '#5e6066') + ';background:' +
         (this.aiOnly ? '#1d9bd1' : 'transparent') + '">' + (this.aiOnly ? '✓' : '') + '</span>' +
-        escapeHtml(t('historyAiOnly')) + ' seulement';
+        escapeHtml(t('historyAiOnly'));
       tg.addEventListener('click', () => {
         this.aiOnly = !this.aiOnly;
         this.renderHistoryList(file);

@@ -106,7 +106,7 @@ def tree(handler):
                       None if ctx.superuser else ctx.principals)
         handler._send_json(200, tree)
     except Exception as e:
-        handler._send_json(500, {"error": str(e)})
+        _s.registry_503(handler, "[tree]", e)
 
 
 def search(handler):

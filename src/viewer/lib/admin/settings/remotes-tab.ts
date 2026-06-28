@@ -177,7 +177,7 @@ export class SettingsRemotes {
           body: JSON.stringify({ name, source: '', dest }),
         });
 
-        this.ctx.showError(t('settingsRemoteAppropriated', String(res.copied || 0)));
+        setStatus(t('settingsRemoteAppropriated', String(res.copied || 0)), 'ok');
       } catch (err) {
         this.ctx.showError((err as Error).message);
       }

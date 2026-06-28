@@ -1,5 +1,6 @@
 """Public REST API v1 (bearer-token) routes: search, file read/create, tree, recent."""
 import posixpath
+import sys
 
 import server as _s
 
@@ -35,7 +36,7 @@ def _v1_tree(handler, ctx, query):
         tree = _s._filter_tree(tree, lambda p: _s.can_read(p, ctx))
         handler._send_json(200, tree)
     except Exception as e:
-        handler._send_json(500, {"error": str(e)})
+        _s.registry_503(handler, "[api v1 tree]", e)
 
 
 def _v1_recent(handler, ctx, query):
@@ -96,7 +97,10 @@ def post(handler):
     if ctx.primary:  # stamp creator + default visibility (member → private, admin/api → commons)
         try:
             _s._stamp_new_doc(rel, ctx)
-        except Exception:
-            pass
+        except Exception as e:
+            # Warn and continue (matches the MCP/file_put twins): _stamp_new_doc assigns
+            # the creator's ownership, so a swallowed failure would silently leave a
+            # member's doc commons-by-default — a privacy inversion — instead of private.
+            print(f"[api create owner] {e}", file=sys.stderr)
     _s.commit_change(ctx, f"created: {target.stem}", target)
     handler._send_json(201, {"ok": True, "path": rel, "mtime": int(target.stat().st_mtime)})
