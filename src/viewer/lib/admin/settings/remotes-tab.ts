@@ -1,7 +1,17 @@
 // Settings › Remotes tab (followed remote nodes): subscribe to an issuer link, sync, appropriate
 // (detached editable copy) or unsubscribe. Also owns the two doc-level buttons (btn-node-appropriate
 // / btn-node-remove) that act on the currently-open mirror doc.
-class SettingsRemotes {
+
+import { t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
+import { currentFile } from '../../core/state';
+import { setStatus } from '../../core/net';
+import { Dialogs } from '../../modals/dialogs';
+import { refreshTreeOrReload } from '../../modals/new-file-modal';
+import { homeView } from '../../home/home-view';
+import { SettingsContext, remoteNodeInfo, shareFormatDate } from './settings-shared';
+
+export class SettingsRemotes {
   private readonly list = document.getElementById('settings-remotes-list')!;
   private readonly form = document.getElementById('settings-remote-form') as HTMLFormElement;
 
@@ -151,7 +161,7 @@ class SettingsRemotes {
     if (apprBtn) {
       const name = apprBtn.dataset.name;
       // Free-form destination via modal. Default = node name, at the root of your documents.
-      const dest = await promptDialog({
+      const dest = await Dialogs.prompt({
         title: t('settingsRemoteAppropriate'),
         message: t('settingsRemoteAppropriatePrompt', name),
         value: name,
@@ -178,7 +188,7 @@ class SettingsRemotes {
     const delBtn = this.ctx.hit(e, '.settings-remote-del');
 
     if (!delBtn || !delBtn.dataset.name) return;
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('settingsRemoteRemoveTitle'),
       message: t('settingsRemoteRemoveMsg', delBtn.dataset.name),
       confirmLabel: t('settingsRemoteRemove'),
@@ -208,7 +218,7 @@ class SettingsRemotes {
 
     if (!info) return;
     const whole = info.fileCount <= 1;
-    const dest = await promptDialog({
+    const dest = await Dialogs.prompt({
       title: t('nodeAppropriateBtn'),
       message: whole
         ? t('nodeAppropriateWholePrompt', info.name)
@@ -241,7 +251,7 @@ class SettingsRemotes {
     const info = remoteNodeInfo(file.path);
 
     if (!info) return;
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('nodeRemoveTitle'),
       message: t('settingsRemoteRemoveMsg', info.name),
       confirmLabel: t('settingsRemoteRemove'),
@@ -255,7 +265,7 @@ class SettingsRemotes {
         method: 'DELETE',
         body: JSON.stringify({ name: info.name }),
       });
-      showWelcome();
+      homeView.showWelcome();
       await refreshTreeOrReload();
     } catch (e) {
       setStatus(t('err', (e as Error).message), 'err');

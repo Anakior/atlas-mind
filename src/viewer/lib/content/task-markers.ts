@@ -2,7 +2,7 @@
 // markdown SOURCE. DOM-free, pure string ops — the render pipeline (Markdown, renderMd) stays in
 // 03-markdown.ts. Loads before its sole consumer wireTaskCheckboxes (04b-task-checkboxes), which calls the
 // toggleNthTaskMarker wrapper after a checkbox change.
-class TaskMarkers {
+export class TaskMarkers {
   private static readonly TASK_MARK_RE = /^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/;
   private static readonly FENCE_RE = /^(?:`{3,}|~{3,})/;
   private static readonly BQ_RE = /^\s*>[ \t]?/;
@@ -51,6 +51,6 @@ class TaskMarkers {
   }
 }
 
-function toggleNthTaskMarker(content: string, index: number, checked: boolean): string | null {
+export function toggleNthTaskMarker(content: string, index: number, checked: boolean): string | null {
   return TaskMarkers.toggleNthTaskMarker(content, index, checked);
 }

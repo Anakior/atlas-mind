@@ -2,15 +2,44 @@
 // the sidebar tree through the Atlas DOM runtime (contentTree.reload) — the keyed reconciler keeps
 // the open folders (state) and the scroll offset, so no DOM-sniff / save-restore crutch is needed.
 // The content branch (open doc / home / route) stays imperative until those modules migrate.
-class Boot {
+import { isServerMode, editMode, EMBED_MIND, currentFile, setCurrentFile, mdCount, setMdCount, otherCount, setOtherCount } from '../core/state';
+import { setCsrfToken, setMeState, setTotpEnabled, TREE } from '../core/data-csrf';
+import { treeEl, contentEl, statsEl } from '../core/dom-refs';
+import { t } from '../core/i18n';
+import { setStatus } from '../core/net';
+import { fileMap, index } from '../core/tree';
+import { sse } from '../core/sse-coord';
+import { avatarSeed, constellationSvg } from '../ui/avatar';
+import { contentTree, contentCache, setWlMaps } from '../content/content-tree';
+import { decorateTreeBadges } from '../content/notes/notes-index';
+import { setBacklinksIndex, setBacklinksLoading } from '../content/backlinks';
+import { docRenderer } from '../content/doc-renderer';
+import { setMiniSearch, setSearchInitPromise } from '../editor/search';
+import { homeView } from '../home/home-view';
+import { refresh } from '../graph/todos';
+import { todoList, todoInput, todoForm } from '../graph/todo-surface';
+import { newFileBtn, newFileBackdrop, dirRenameBackdrop } from '../modals/new-file-modal';
+import { qcBtn, qcBackdrop } from '../modals/quick-capture';
+import { shareBackdrop } from '../admin/settings/settings-shared';
+import { securityPane } from '../admin/totp/security-pane';
+
+export class Boot {
   private swReloading = false;
   private swUpdatePending = false;
   private swReg: ServiceWorkerRegistration | null = null;
   private hadController = false;
 
   start(): void {
-    if (isServerMode) this.serverBoot();
-    else this.fileBoot();
+    if (isServerMode) {
+      this.serverBoot();
+    } else {
+      this.fileBoot();
+      // Initial route (was the tail of the old pins module under the load-order bundle): the embed hero
+      // shows the welcome base view, otherwise route from the URL hash. Server mode routes from the hash
+      // in softReload once /api/tree has populated fileMap, so it needs nothing here.
+      if (EMBED_MIND) homeView.showWelcome();
+      else homeView.routeFromHash();
+    }
   }
 
   private serverBoot(): void {
@@ -28,11 +57,11 @@ class Boot {
     fetch('/api/me')
       .then((r) => r.json())
       .then((data: MeResponse) => {
-        meState = data;
+        setMeState(data);
         if (data.authenticated) {
           // Authoritative CSRF token for all mutating requests (cf. the fetch wrapper).
           if (data.csrf_token) setCsrfToken(data.csrf_token);
-          if (typeof data.totp_enabled === 'boolean') totpEnabled = data.totp_enabled;
+          if (typeof data.totp_enabled === 'boolean') setTotpEnabled(data.totp_enabled);
 
           if (data.cloud && data.email) {
             document.getElementById('user-email')!.textContent = data.name || data.email;
@@ -49,7 +78,7 @@ class Boot {
           // Security tab (2FA + sessions): any authenticated cloud account.
           if (data.cloud) {
             document.body.classList.add('cloud-authed');
-            refreshSecurityState();
+            securityPane.refreshState();
           }
         }
         // Render the per-account FILTERED tree (the baked tree is the full build-time view).
@@ -114,8 +143,8 @@ class Boot {
       TREE.name = newTree.name;
 
       for (const k in fileMap) delete fileMap[k];
-      mdCount = 0;
-      otherCount = 0;
+      setMdCount(0);
+      setOtherCount(0);
       index(TREE);
       statsEl.textContent = t('statsLine', mdCount, otherCount);
 
@@ -123,21 +152,21 @@ class Boot {
       contentTree.reload();
       decorateTreeBadges();
       contentTree.decorateRemoteOrigins();
-      renderRecent();
+      homeView.renderRecent();
 
       // Invalidate the lazy indexes: content / backlinks / search / wikilink maps may have changed.
-      backlinksIndex = null;
-      backlinksLoading = null;
-      miniSearch = null;
-      searchInitPromise = null;
-      _wlMaps = null;
+      setBacklinksIndex(null);
+      setBacklinksLoading(null);
+      setMiniSearch(null);
+      setSearchInitPromise(null);
+      setWlMaps(null);
 
       if (currentFile) {
         const newFile = fileMap[currentFile.path];
 
         if (!newFile) {
           // The open doc is gone from the viewer's filtered tree → clean not-found, not a home bounce.
-          showNotFound(currentFile.path);
+          homeView.showNotFound(currentFile.path);
         } else if (newFile.mtime !== currentFile.mtime) {
           // Re-fetch the open doc; save/restore main's scroll around the (still-imperative) re-render.
           contentCache.delete(newFile.path);
@@ -145,10 +174,10 @@ class Boot {
           const main = document.querySelector('main')!;
           const scrollPos = main.scrollTop;
 
-          await showMarkdown(newFile);
+          await docRenderer.show(newFile);
           main.scrollTop = scrollPos;
         } else {
-          currentFile = newFile;
+          setCurrentFile(newFile);
         }
       } else if (document.getElementById('home-activity-mount') && window.refreshActivityData) {
         // Home on screen: do NOT re-render it (that re-mounts the activity card and wipes its open
@@ -159,7 +188,7 @@ class Boot {
         const main = document.querySelector('main')!;
         const sp = main.scrollTop;
 
-        routeFromHash();
+        homeView.routeFromHash();
         main.scrollTop = sp;
       }
     } catch (e) {

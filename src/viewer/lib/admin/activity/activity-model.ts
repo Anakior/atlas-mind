@@ -3,7 +3,7 @@
 // run of same-doc/same-author/same-type events into one counted entry, and computeDigest rolls the
 // last 7 days into the factual ActivityDigest. No DOM, no state, no network — split out of ActivityCard
 // so the data layer stands on its own. Top-level (no IIFE) so it is a shared symbol in the concat scope.
-class ActivityModel {
+export class ActivityModel {
   // ---- pure projections over the wire events ----
   static toItem(e: ActivityRaw): ActivityItem {
     const author = (e.author || e.email || '').trim();

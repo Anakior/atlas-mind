@@ -9,7 +9,19 @@
 // and hands each view a render context (see ActivityRenderCtx) so the helpers are defined once and can
 // never diverge between views. The load-time instantiation lives at the end of the last-sorting file
 // (21e-activity-health.ts) so every class is defined before `new ActivityCard()` runs.
-class ActivityCard {
+
+import { EMBED_ACTIVITY, IS_OFFLINE_BUILD } from '../../core/data-csrf';
+import { LANG, t } from '../../core/i18n';
+import { fileMap } from '../../core/tree';
+import { avatarSeed, constellationSvg } from '../../ui/avatar';
+import { historyPanel } from '../../content/history-panel';
+import { ActivityIcons } from './activity-icons';
+import { ActivityModel } from './activity-model';
+import { ActivityJournal } from './activity-journal';
+import { ActivityOrrery } from './activity-orrery';
+import { ActivityHealth } from './activity-health';
+
+export class ActivityCard {
   // ---- state ----
   private items: ActivityItem[] | null = null;
   private aiOnly = false; // 13d: filter the feed to AI-authored events only
@@ -137,11 +149,11 @@ class ActivityCard {
   // Show the doc's history overlay in place ("voir les modifications"), no navigation, the activity
   // feed stays put. No-ops if the doc no longer exists (deleted/moved).
   private openDocHistory(path: string): void {
-    if (!path || typeof fileMap === 'undefined' || typeof openHistory !== 'function') return;
+    if (!path || typeof fileMap === 'undefined' || typeof historyPanel.open !== 'function') return;
 
     const f = fileMap[path];
 
-    if (f) openHistory(f);
+    if (f) historyPanel.open(f);
   }
 
   // ── Digest (the weekly summary above the Journal) ─────────────────────────

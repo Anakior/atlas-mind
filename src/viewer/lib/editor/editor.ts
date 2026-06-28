@@ -8,7 +8,30 @@
 // purpose: no vDOM reconciliation here. The [[wikilink]] autocomplete is composed in from
 // 09-autocomplete (WikilinkAutocomplete); full-text search is its own concern in 09-search.
 
-class Editor {
+import { t } from '../core/i18n';
+import { WikilinkAutocomplete } from './wikilink-autocomplete';
+import { btnEdit, btnSave, btnCancel, contentEl, tocPanel } from '../core/dom-refs';
+import {
+  editMode,
+  setEditMode,
+  editTextarea,
+  setEditTextarea,
+  currentFile,
+  isServerMode,
+} from '../core/state';
+import { mdInsertWrap, mdInsertLineStart, mdInsertAtCursor } from '../content/tags';
+import { loadContent, contentCache } from '../content/content-tree';
+import { Dialogs } from '../modals/dialogs';
+import { markdown } from '../content/markdown';
+import { docRenderer } from '../content/doc-renderer';
+import { attachCopyButtons } from '../content/content-decorators';
+import { taskCheckboxes } from '../content/task-checkboxes';
+import { renderBacklinksFor } from '../content/backlinks';
+import { toc } from '../content/toc';
+import { sse } from '../core/sse-coord';
+import { tocShow } from '../home/layout-chrome';
+
+export class Editor {
   // ---- markdown toolbar ----
   // Built once at class-definition time (same timing as the old module-level const); the strings
   // are localized via t(), so it must evaluate after 01-i18n.
@@ -142,12 +165,12 @@ class Editor {
     try {
       content = await loadContent(currentFile);
     } catch (e) {
-      notifyError('cantLoadDoc', (e as Error).message);
+      Dialogs.notifyError('cantLoadDoc', (e as Error).message);
 
       return;
     }
 
-    editMode = true;
+    setEditMode(true);
     contentEl.classList.remove('max-w-4xl', 'px-10', 'py-10', 'prose', 'prose-invert');
     contentEl.classList.add('max-w-none', 'px-4', 'py-4');
 
@@ -175,7 +198,7 @@ class Editor {
     ta.className =
       'min-w-0 p-5 bg-transparent text-ink-100 resize-none focus:outline-none scrollbar-thin';
     ta.style.flex = '1 1 0';
-    editTextarea = ta;
+    setEditTextarea(ta);
 
     const divider = document.createElement('div');
 
@@ -187,7 +210,7 @@ class Editor {
     preview.className =
       'min-w-0 px-8 py-6 overflow-y-auto scrollbar-thin prose prose-sm prose-invert max-w-none';
     preview.style.flex = '1 1 0';
-    preview.innerHTML = renderMd(content);
+    preview.innerHTML = markdown.render(content);
 
     splitWrap.appendChild(ta);
     splitWrap.appendChild(divider);
@@ -211,7 +234,7 @@ class Editor {
       this.wikilink.update();
       if (this.previewTimer) clearTimeout(this.previewTimer);
       this.previewTimer = setTimeout(() => {
-        preview.innerHTML = renderMd(ta.value);
+        preview.innerHTML = markdown.render(ta.value);
       }, 150);
     });
     ta.addEventListener('blur', () => {
@@ -270,7 +293,7 @@ class Editor {
     if (!editMode || !currentFile) return;
 
     if (!isServerMode) {
-      notifyError('fileModeNoEdit');
+      Dialogs.notifyError('fileModeNoEdit');
 
       return;
     }
@@ -301,7 +324,7 @@ class Editor {
       sse.muteSelfSave(file.path);
       this.exitEditMode(true);
     } catch (e) {
-      notifyError('err', (e as Error).message);
+      Dialogs.notifyError('err', (e as Error).message);
     } finally {
       (btnSave as HTMLButtonElement).disabled = false;
       btnSave.textContent = t('saveBtn');
@@ -310,12 +333,12 @@ class Editor {
 
   exitEditMode(reload?: boolean): void {
     this.teardownEditSession();
-    editMode = false;
-    editTextarea = null;
+    setEditMode(false);
+    setEditTextarea(null);
     contentEl.classList.add('max-w-4xl', 'px-10', 'py-10', 'prose', 'prose-invert');
     contentEl.classList.remove('max-w-none', 'px-4', 'py-4');
 
-    if (reload && currentFile) showMarkdown(currentFile);
+    if (reload && currentFile) docRenderer.show(currentFile);
     else if (currentFile) {
       btnEdit.classList.remove('hidden');
       btnSave.classList.add('hidden');
@@ -324,11 +347,11 @@ class Editor {
       const cached =
         currentFile.content != null ? currentFile.content : contentCache.get(currentFile.path);
 
-      contentEl.innerHTML = renderMd(cached || '');
+      contentEl.innerHTML = markdown.render(cached || '');
       attachCopyButtons();
-      wireTaskCheckboxes(currentFile, cached || '');
+      taskCheckboxes.wireTaskCheckboxes(currentFile, cached || '');
       renderBacklinksFor(currentFile);
-      buildToc();
+      toc.buildToc();
       document.dispatchEvent(
         new CustomEvent('atlas:doc-rendered', {
           detail: { path: currentFile.path, markdown: cached || '' },
@@ -348,14 +371,4 @@ class Editor {
   }
 }
 
-const editor = new Editor();
-
-// Thin global wrappers — other modules call these by bare name (enterEditMode: 11-palette,
-// 12b-shortcuts; exitEditMode: 06-view-history, 08-tags).
-function enterEditMode(): Promise<void> {
-  return editor.enterEditMode();
-}
-
-function exitEditMode(reload?: boolean): void {
-  editor.exitEditMode(reload);
-}
+export const editor = new Editor();

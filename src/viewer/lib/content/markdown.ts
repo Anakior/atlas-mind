@@ -2,7 +2,12 @@
 // marked config + the wikilink path maps live in 02-content-tree.ts (load order); this class adds the
 // wikilink inline extension and the render behaviour. The task-checkbox source toggle lives in
 // 03b-task-markers.ts.
-class Markdown {
+
+import { escapeHtml } from '../core/utils';
+import { t } from '../core/i18n';
+import { wlMaps, WL_TARGET_EXTS } from './content-tree';
+
+export class Markdown {
   constructor() {
     marked.use({ extensions: [this.wikilinkExtension()] });
   }
@@ -62,8 +67,4 @@ class Markdown {
   }
 }
 
-const markdown = new Markdown();
-
-function renderMd(md: string): string {
-  return markdown.render(md);
-}
+export const markdown = new Markdown();

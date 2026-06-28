@@ -1,7 +1,12 @@
 // Table of contents over the already-rendered content DOM (not the markdown source). buildToc stays a
 // top-level global — showMarkdown (06-view-history) and exitEditMode (09-editor) call it after setting
 // contentEl.innerHTML. readingTimeFromWords is a sibling pure util read by the same showMarkdown.
-class Toc {
+
+import { tocList, contentEl, tocPanel } from '../core/dom-refs';
+import { slugify } from '../core/utils';
+import { layoutChrome } from '../home/layout-chrome';
+
+export class Toc {
   // Build the right-panel TOC from the rendered h2/h3 (<2 headings → hide it); anchors smooth-scroll.
   buildToc(): void {
     tocList.innerHTML = '';
@@ -11,7 +16,7 @@ class Toc {
     if (headings.length < 2) {
       tocList.classList.add('hidden'); // no table of contents → no empty area
 
-      if (typeof applyToc === 'function') applyToc();
+      if (typeof layoutChrome.applyToc === 'function') layoutChrome.applyToc();
       else {
         tocPanel.classList.add('hidden');
         tocPanel.classList.remove('flex');
@@ -51,7 +56,7 @@ class Toc {
       tocList.appendChild(a);
     });
 
-    if (typeof applyToc === 'function') applyToc();
+    if (typeof layoutChrome.applyToc === 'function') layoutChrome.applyToc();
     else {
       tocPanel.classList.remove('hidden');
       tocPanel.classList.add('flex');
@@ -59,14 +64,10 @@ class Toc {
   }
 }
 
-const toc = new Toc();
-
-function buildToc(): void {
-  toc.buildToc();
-}
+export const toc = new Toc();
 
 // Reading-time estimate (≈220 wpm); shown in the breadcrumb by showMarkdown (06-view-history). Pure.
-function readingTimeFromWords(words: number | undefined): ReadingTime | null {
+export function readingTimeFromWords(words: number | undefined): ReadingTime | null {
   if (!words) return null;
 
   const minutes = Math.max(1, Math.round(words / 220));

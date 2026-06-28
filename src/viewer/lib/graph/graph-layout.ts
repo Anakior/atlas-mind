@@ -3,7 +3,13 @@
 // (structured "map" mode), and fits the camera. DOM-free except fitCamera, which reads the canvas
 // size to centre the view. Colors come from the injected GraphPalette (whose familyHue is re-seeded
 // here on every buildGraphModel); the controller owns the state object that every method mutates.
-class GraphLayout {
+
+import { fileMap } from '../core/tree';
+import { EMBED_MIND } from '../core/state';
+import { GraphPalette } from './graph-palette';
+import type { BacklinkEntry } from '../content/backlinks';
+
+export class GraphLayout {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly palette: GraphPalette,

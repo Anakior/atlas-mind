@@ -8,7 +8,9 @@
 // loaded earlier in the shared scope) decides a person's avatar, so it is fixed. The render
 // methods only turn that drawn state into SVG — no randomness, reorder-proof.
 
-class Avatar {
+import { Rng } from '../core/rng';
+
+export class Avatar {
   // Gold-forward brand band: the per-identity hue is picked from here, so it stays on-brand.
   private static readonly BAND: Hsl[] = [
     { h: 35, s: 82, l: 51 },   // deep-gold #e8941c (signature)
@@ -292,7 +294,7 @@ class Avatar {
 
 // Public bundle API: top-level in the shared concat scope so the consumers (user bar, admin lists,
 // profile, activity) read constellationSvg/avatarSeed as bare globals (loaded after this file).
-function constellationSvg(identity: string, size?: number): string {
+export function constellationSvg(identity: string, size?: number): string {
   return new Avatar(identity, size).render();
 }
-const avatarSeed = Avatar.seed;
+export const avatarSeed = Avatar.seed;

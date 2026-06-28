@@ -1,10 +1,9 @@
-"""QR codec (src/viewer/lib/17-qr.ts) — determinism + exact-matrix goldens, run through node.
+"""QR codec (src/viewer/lib/ui/qr-code.ts) — determinism + exact-matrix goldens, run through node.
 
-The .ts is transpiled to a require()-able .cjs by jsmod.requirable; the codec attaches
-QrCode to the global scope, so we read `new globalThis.QrCode(text).matrix` and sha256 it.
-The goldens were pinned from the original 17-qr.js BEFORE the TS refactor, so they prove
-the port is byte-identical (a wrong >>/<</^/& slips past tsc and the renderer but flips
-the matrix)."""
+The .ts is bundled to an importable .mjs by jsmod.requirable; we dynamic-import() it and read
+`new m.QrCode(text).matrix` (a named export) then sha256 it. The goldens were pinned from the
+original 17-qr.js BEFORE the TS refactor, so they prove the port is byte-identical (a wrong
+>>/<</^/& slips past tsc and the renderer but flips the matrix)."""
 import hashlib
 import json
 import shutil
@@ -28,12 +27,14 @@ GOLDENS = {
 
 
 def _matrix(text):
+    # Dynamic-import the bundled .mjs (as a file URL) and emit JSON of new QrCode(text).matrix.
     script = (
-        "require(process.argv[1]);"
-        "process.stdout.write(JSON.stringify(new globalThis.QrCode(process.argv[2]).matrix));"
+        "const {pathToFileURL}=require('url');"
+        "import(pathToFileURL(process.argv[1]).href).then(m=>"
+        "process.stdout.write(JSON.stringify(new m.QrCode(process.argv[2]).matrix)));"
     )
     out = subprocess.run(
-        ["node", "-e", script, str(requirable(QR, expose=("QrCode",))), text],
+        ["node", "-e", script, str(requirable(QR)), text],
         capture_output=True, text=True, check=True)
     return json.loads(out.stdout)
 

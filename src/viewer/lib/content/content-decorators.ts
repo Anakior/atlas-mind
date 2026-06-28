@@ -6,7 +6,10 @@
 // bareword top-level functions: their consumers (06/09/12) call them unqualified in the shared bundle
 // scope, and this file sorts before all of them (04c < 06/09/12).
 
-function attachCopyButtons(): void {
+import { contentEl } from '../core/dom-refs';
+import { t } from '../core/i18n';
+
+export function attachCopyButtons(): void {
   contentEl.querySelectorAll('pre').forEach((pre) => {
     if (pre.querySelector('.copy-btn')) return;
     pre.style.position = 'relative';
@@ -45,7 +48,7 @@ function attachCopyButtons(): void {
 // Highlights + scrolls to the 1st occurrence of a search term in the rendered doc. Walks text nodes
 // to avoid breaking marked's HTML. Case-insensitive; on an accent mismatch there's no match and the
 // scroll stays at the top.
-function highlightFirstMatch(container: Element, query: string): void {
+export function highlightFirstMatch(container: Element, query: string): void {
   const tokens = query
     .trim()
     .split(/\s+/)

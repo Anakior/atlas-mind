@@ -7,12 +7,24 @@
 // anti-race guards stay object-identity (this.file !== file): a slow load for doc A must not clobber
 // doc B. openHistory / historyAvailable / closeHistory stay shared top-level globals, and
 // historyOverlay stays a top-level const (11-palette-pins reads it for the Escape handler).
-const historyOverlay = document.getElementById('history-overlay')!;
-const historyList = document.getElementById('history-list')!;
-const historyDetail = document.getElementById('history-detail')!;
-const historyPathEl = document.getElementById('history-path')!;
 
-class HistoryPanel {
+import { IS_OFFLINE_BUILD } from '../core/data-csrf';
+import { LANG, t } from '../core/i18n';
+import { escapeHtml } from '../core/utils';
+import { api, setStatus } from '../core/net';
+import { currentFile } from '../core/state';
+import { Dialogs } from '../modals/dialogs';
+import { contentCache } from './content-tree';
+import { docRenderer } from './doc-renderer';
+import { markdown } from './markdown';
+import { stripFrontmatter } from './tags';
+
+export const historyOverlay = document.getElementById('history-overlay')!;
+export const historyList = document.getElementById('history-list')!;
+export const historyDetail = document.getElementById('history-detail')!;
+export const historyPathEl = document.getElementById('history-path')!;
+
+export class HistoryPanel {
   private file: FileNode | null = null;
   // AI-only filter state: showVersion always receives the FULL revisions array + the absolute index,
   // so the diff (parent = revisions[i+1]) stays correct when the list is filtered.
@@ -311,13 +323,13 @@ class HistoryPanel {
       return;
     }
 
-    wrap.innerHTML = renderMd(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
+    wrap.innerHTML = markdown.render(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
   }
 
   // Restore a doc to a past revision by writing that content back as a new, forward-moving change
   // (kept in git history). Admin-only server-side; CSRF is auto-injected by the global fetch wrapper.
   private async revertToRevision(file: FileNode, rev: Revision): Promise<void> {
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('historyRestore'),
       message: t('historyRestoreConfirm'),
       confirmLabel: t('historyRestoreBtn'),
@@ -334,9 +346,9 @@ class HistoryPanel {
     }
 
     contentCache.delete(file.path); // force a fresh load of the restored content
-    closeHistory();
+    this.close();
     setStatus(t('historyRestored'), 'info');
-    showMarkdown(file);
+    docRenderer.show(file);
   }
 
   private simpleNode(text: string): HTMLElement {
@@ -409,22 +421,10 @@ class HistoryPanel {
   }
 }
 
-const historyPanel = new HistoryPanel();
+export const historyPanel = new HistoryPanel();
 
-function historyAvailable(file: FileNode | null): boolean {
-  return historyPanel.available(file);
-}
-
-function openHistory(file?: FileNode): Promise<void> {
-  return historyPanel.open(file);
-}
-
-function closeHistory(): void {
-  historyPanel.close();
-}
-
-document.getElementById('btn-history')!.addEventListener('click', () => openHistory());
-document.getElementById('history-close')!.addEventListener('click', closeHistory);
+document.getElementById('btn-history')!.addEventListener('click', () => historyPanel.open());
+document.getElementById('history-close')!.addEventListener('click', () => historyPanel.close());
 historyOverlay.addEventListener('click', (e) => {
-  if (e.target === historyOverlay) closeHistory();
+  if (e.target === historyOverlay) historyPanel.close();
 });

@@ -3,7 +3,10 @@
 // rings). Owns the 2D context off the injected canvas and reads family colors from the injected
 // GraphPalette; it never mutates the state, only paints it — the rAF loop and all physics live
 // elsewhere (controller + GraphLayout).
-class GraphRenderer {
+
+import { GraphPalette } from './graph-palette';
+
+export class GraphRenderer {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly palette: GraphPalette,

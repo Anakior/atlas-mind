@@ -1,12 +1,10 @@
-"""Make a viewer source module require()-able from node, whether it is .js or .ts.
+"""Make a viewer source module importable from node as real ESM.
 
-The pure-codec modules (ui/avatar, ui/qr-code) are plain TOP-LEVEL declarations in the
-shared transform-concat bundle scope (no IIFE, no self-attach to a root). To exercise one
-in isolation under node, requirable() concatenates its `deps` (other bundle modules it
-relies on, e.g. core/rng for avatar) ahead of it, transpiles the whole through the project's
-esbuild (viewer/build/node_modules) into a temp .cjs once (cached), and re-attaches the named
-`expose` symbols to globalThis — so a test reads them off globalThis exactly as a later module
-in the bundle would reach them by bare name.
+The viewer modules are ordinary ES modules now (named `export`s, no globalThis self-attach),
+so to exercise one in isolation under node, requirable() esbuild-BUNDLES it (bundle:true,
+format:'esm') into a temp .mjs. Bundling resolves the module's own imports — e.g. ui/avatar.ts
+pulls core/rng.ts in automatically — so the .mjs is self-contained and re-exports the entry's
+named symbols. Callers `import()` that .mjs and read the exports directly.
 
 Used by the pure-module unit tests (test_avatar, test_qr)."""
 from __future__ import annotations
@@ -19,30 +17,23 @@ _ESBUILD = Path(__file__).resolve().parent.parent / "src" / "viewer" / "build" /
 _cache: dict[tuple, Path] = {}
 
 
-def requirable(module: Path, deps: tuple[Path, ...] = (), expose: tuple[str, ...] = ()) -> Path:
-    """A node-require()-able path for a viewer module: the file itself if .js with no
-    deps/expose, else a temp .cjs = `deps` + the .ts transpiled by esbuild, with the named
-    top-level `expose` symbols assigned onto globalThis. Cached per (module, deps, expose)."""
+def requirable(module: Path, expose: tuple[str, ...] = ()) -> Path:
+    """Path to a node-importable ESM build of a viewer module: esbuild bundles the .ts (with its
+    transitive imports inlined) into a temp .mjs that re-exports the entry's named symbols. The
+    caller `import()`s the returned .mjs and reads those exports. Cached per (module, expose)."""
     module = module.resolve()
-    deps = tuple(Path(d).resolve() for d in deps)
-    if module.suffix != ".ts" and not deps and not expose:
-        return module
-    key = (module, deps, tuple(expose))
+    key = (module, tuple(expose))
     if key not in _cache:
         tmpdir = Path(tempfile.mkdtemp(prefix="atlas-jsmod-"))
-        parts = [d.read_text("utf-8") for d in deps] + [module.read_text("utf-8")]
-        if expose:
-            parts.append("Object.assign(globalThis, { " + ", ".join(expose) + " });")
-        combined = tmpdir / (module.stem + ".src.ts")
-        combined.write_text("\n".join(parts), encoding="utf-8")
-        out = tmpdir / (module.stem + ".cjs")
-        # Strip TS types via esbuild (same transform the bundle uses).
+        out = tmpdir / (module.stem + ".mjs")
+        # Bundle the module + its imports into one ESM file (types stripped, side effects kept).
         script = (
-            "const esb=require(process.argv[1]),fs=require('fs');"
-            "fs.writeFileSync(process.argv[3],"
-            "esb.transformSync(fs.readFileSync(process.argv[2],'utf8'),{loader:'ts'}).code);"
+            "const esb=require(process.argv[1]);"
+            "esb.buildSync({entryPoints:[process.argv[2]],bundle:true,format:'esm',"
+            "target:'es2020',treeShaking:false,charset:'utf8',legalComments:'none',"
+            "outfile:process.argv[3],logLevel:'silent'});"
         )
-        subprocess.run(["node", "-e", script, str(_ESBUILD), str(combined), str(out)],
+        subprocess.run(["node", "-e", script, str(_ESBUILD), str(module), str(out)],
                        check=True, capture_output=True, text=True)
         _cache[key] = out
     return _cache[key]

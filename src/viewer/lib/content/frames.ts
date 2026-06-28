@@ -4,7 +4,16 @@
 // bundle-scope globals it calls by name. Plain innerHTML rendering — no
 // markdown pipeline, no editing chrome (TOC/backlinks/notes/todos are hidden, restored by the next
 // .md doc via showMarkdown).
-class Frames {
+
+import { IS_OFFLINE_BUILD, EMBED_CONTENT } from '../core/data-csrf';
+import { escapeHtml } from '../core/utils';
+import { t } from '../core/i18n';
+import { contentEl, btnEdit, btnSave, btnCancel, tocList, tocLinks, tocNotes, tocPanel } from '../core/dom-refs';
+import { currentFile } from '../core/state';
+import { tocShow } from '../home/layout-chrome';
+import { renderSkeleton } from './skeleton';
+
+export class Frames {
   // Shared iframe geometry: full-bleed minus the breadcrumb, dark backdrop.
   private static readonly FRAME_STYLE = 'width:100%;height:calc(100vh - 150px);border:0;display:block;background:#0b0d13';
   // mammoth.js (DOCX → HTML) is ~640 KB: loaded on demand, never in the <head>, since most sessions
@@ -138,16 +147,4 @@ class Frames {
 }
 
 // Not `frames` — that name collides with the DOM global `window.frames` (lib.dom `var frames`).
-const frameRenderer = new Frames();
-
-function renderHtmlFrame(file: FileNode): void {
-  frameRenderer.renderHtml(file);
-}
-
-function renderPdfFrame(file: FileNode): void {
-  frameRenderer.renderPdf(file);
-}
-
-function renderDocxFrame(file: FileNode): Promise<void> {
-  return frameRenderer.renderDocx(file);
-}
+export const frameRenderer = new Frames();

@@ -1,10 +1,23 @@
+import { fileMap } from '../core/tree';
+import { escapeHtml, relativeDate } from '../core/utils';
+import { recentSection, recentList, sharedSection, sharedList, contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, tocPanel } from '../core/dom-refs';
+import { IS_OFFLINE_BUILD, SITE_PREFIX, TAGLINE } from '../core/data-csrf';
+import { t, LANG } from '../core/i18n';
+import { currentFile, setCurrentFile, mdCount } from '../core/state';
+import { todos, loadContent } from '../content/content-tree';
+import { docRenderer } from '../content/doc-renderer';
+import { tagBrowsePage } from '../content/tag-browse';
+import { mindGraph } from '../graph/graph-boot';
+import { Dialogs } from '../modals/dialogs';
+import { tocShow } from './layout-chrome';
+
 // Home dashboard + the viewer's hash router. The home view stays imperative innerHTML, NOT the keyed
 // runtime: contentEl is co-owned by sibling modules (showMarkdown, renderHtmlFrame, openHistory), so a
 // render()-based home would desync the runtime's per-container child map. HomeView is stateless; the
 // bare-name entry points (showWelcome / routeFromHash / showNotFound / renderRecent) stay top-level
 // globals because sibling modules (11-palette, 11c-pins, 16f-settings-remotes, 99-bootstrap) call them
 // by name.
-class HomeView {
+export class HomeView {
   // ---- home renderers (imperative innerHTML; see file header) ----
   renderRecent(): void {
     const files = Object.values(fileMap)
@@ -31,7 +44,7 @@ class HomeView {
         const f = path ? fileMap[path] : undefined;
 
         if (f) {
-          showMarkdown(f);
+          docRenderer.show(f);
           history.replaceState(null, '', '#' + encodeURIComponent(f.path));
         }
       });
@@ -76,7 +89,7 @@ class HomeView {
         const f = path ? fileMap[path] : undefined;
 
         if (f) {
-          showMarkdown(f);
+          docRenderer.show(f);
           history.replaceState(null, '', '#' + encodeURIComponent(f.path));
         }
       });
@@ -87,7 +100,7 @@ class HomeView {
     // A doc the viewer can't reach (filtered out of the tree) or that doesn't exist: a clean in-app
     // page instead of silently bouncing to home. The wording is deliberately ambiguous (not-found OR
     // no-access) to keep the no-existence-oracle.
-    currentFile = null;
+    setCurrentFile(null);
     contentEl.style.maxWidth = '';
     contentEl.style.padding = '';
     document.getElementById('todo-widget')?.classList.remove('hidden');
@@ -126,7 +139,7 @@ class HomeView {
     const f = fileMap[hash];
 
     if (f && f.ext === '.md') {
-      showMarkdown(f);
+      docRenderer.show(f);
 
       return;
     }
@@ -143,7 +156,7 @@ class HomeView {
   }
 
   showWelcome(): void {
-    currentFile = null;
+    setCurrentFile(null);
     document.querySelector('main')!.scrollTop = 0; // a fresh home view starts at the top
     // Reset width/padding overrides left by a previous .html render (renderHtmlFrame), else the home
     // page inherits full-width; restore the todo widget hidden during the HTML preview.
@@ -353,7 +366,7 @@ class HomeView {
         const f = path ? fileMap[path] : undefined;
 
         if (f) {
-          showMarkdown(f);
+          docRenderer.show(f);
           history.replaceState(null, '', '#' + encodeURIComponent(f.path));
         }
       });
@@ -361,13 +374,13 @@ class HomeView {
     contentEl.querySelectorAll<HTMLElement>('[data-hometag]').forEach((b) =>
       b.addEventListener('click', (e) => {
         e.preventDefault();
-        if (b.dataset.hometag) showTag(b.dataset.hometag);
+        if (b.dataset.hometag) tagBrowsePage.showTag(b.dataset.hometag);
       }),
     );
 
     const homeGraphBtn = contentEl.querySelector('#home-graph-btn');
 
-    if (homeGraphBtn) homeGraphBtn.addEventListener('click', openGraph);
+    if (homeGraphBtn) homeGraphBtn.addEventListener('click', () => mindGraph.open());
     // The Activity island (#home-activity-mount) is owned by 21-activity.js: it fills the empty
     // mount and re-mounts on SSE. Home only leaves the slot for it.
     if (window.mountActivity) window.mountActivity();
@@ -382,26 +395,9 @@ class HomeView {
   }
 }
 
-const homeView = new HomeView();
+export const homeView = new HomeView();
 
-// Thin top-level wrappers: sibling modules call these by bare name.
-function renderRecent(): void {
-  homeView.renderRecent();
-}
-
-function showNotFound(path: string): void {
-  homeView.showNotFound(path);
-}
-
-function routeFromHash(): void {
-  homeView.routeFromHash();
-}
-
-function showWelcome(): void {
-  homeView.showWelcome();
-}
-
-renderRecent();
+homeView.renderRecent();
 homeView.renderSharedWithMe();
 
 document.getElementById('home-link')!.addEventListener('click', () => {
@@ -436,7 +432,7 @@ document.getElementById('btn-download')!.addEventListener('click', async () => {
   try {
     content = await loadContent(file);
   } catch (e) {
-    notifyError('cantLoadDoc', (e as Error).message);
+    Dialogs.notifyError('cantLoadDoc', (e as Error).message);
 
     return;
   }

@@ -2,7 +2,14 @@
 // menu chrome (toggle + outside-click dismiss) and the delete-doc fetch; rename and move are delegated to
 // RenameModal via renameModal.open(...). The element handles (btnMore, btnMoreMenu) and the renameModal
 // instance live in 14-dialogs.ts, concatenated first, so both exist when this wires up and dispatches.
-class MoreActionsMenu {
+
+import { btnMore, btnMoreMenu, renameModal, Dialogs } from './dialogs';
+import { t } from '../core/i18n';
+import { currentFile } from '../core/state';
+import { setStatus } from '../core/net';
+import { refreshTreeOrReload } from './new-file-modal';
+
+export class MoreActionsMenu {
   constructor() {
     btnMore!.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -59,4 +66,4 @@ class MoreActionsMenu {
   }
 }
 
-const moreActionsMenu = new MoreActionsMenu();
+export const moreActionsMenu = new MoreActionsMenu();

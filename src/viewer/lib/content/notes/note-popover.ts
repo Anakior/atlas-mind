@@ -2,7 +2,16 @@
 // create / read-edit popover it opens. Owns the selection → button → popover flow and its pending
 // anchor + rect; geometry is delegated to noteAnchor, persistence to notesStore. The button + popover
 // are stateful DOM islands kept outside the keyed runtime, guaranteed by the viewer markup.
-class NotePopover {
+
+import { IS_OFFLINE_BUILD } from '../../core/data-csrf';
+import { contentEl } from '../../core/dom-refs';
+import { escapeHtml, relativeDate } from '../../core/utils';
+import { t } from '../../core/i18n';
+import { editMode, currentFile } from '../../core/state';
+import { noteAnchor, type TextQuoteAnchor } from './note-anchor';
+import { notesStore } from './notes-store';
+
+export class NotePopover {
   // Anchor being created (selection -> popover), null when the create popover is closed.
   private pendingAnchor: TextQuoteAnchor | null = null;
   // selectionchange debounce handle.
@@ -212,4 +221,4 @@ class NotePopover {
   }
 }
 
-const notePopover = new NotePopover();
+export const notePopover = new NotePopover();

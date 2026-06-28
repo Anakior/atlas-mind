@@ -5,7 +5,15 @@
 // Settings Security tab and 99-bootstrap.ts (/api/me boot). Mutating requests go through settingsFetch
 // (16-settings.ts). Concatenates after 18-totp-modal.ts (filename order) so totpModal exists when the
 // enable / disable buttons are wired below.
-class SecurityPane {
+
+import { totpEnabled } from '../../core/data-csrf';
+import { t } from '../../core/i18n';
+import { Dialogs } from '../../modals/dialogs';
+import { settingsFetch } from '../settings/settings-shared';
+import { settingsPanel } from '../settings/settings-panel';
+import { totpModal } from './totp-enroll-modal';
+
+export class SecurityPane {
   private readonly statusBadge = document.getElementById('security-totp-status')!;
   private readonly enableBtn = document.getElementById('security-totp-enable') as HTMLButtonElement;
   private readonly disableBtn = document.getElementById('security-totp-disable') as HTMLButtonElement;
@@ -40,7 +48,7 @@ class SecurityPane {
 
   // ---- log out all my sessions: in-app confirmation then redirect to /login ----
   private async logoutAll(): Promise<void> {
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('securityLogoutAllConfirmTitle'),
       message: t('securityLogoutAllConfirmMsg'),
       confirmLabel: t('securityLogoutAllConfirm'),
@@ -55,7 +63,7 @@ class SecurityPane {
       // Epoch changed: the current session is revoked (cookie cleared server-side) → /login.
       window.location.href = '/login';
     } catch (err) {
-      showSettingsError((err as Error).message || t('settingsErrGeneric'));
+      settingsPanel.showError((err as Error).message || t('settingsErrGeneric'));
       this.logoutAllBtn.disabled = false;
     }
   }
@@ -67,4 +75,4 @@ class SecurityPane {
   }
 }
 
-const securityPane = new SecurityPane();
+export const securityPane = new SecurityPane();

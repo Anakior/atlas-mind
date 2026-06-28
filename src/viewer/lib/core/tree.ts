@@ -2,17 +2,22 @@
 // the old 01-i18n-state.js. Foundation layer, concatenated after dom-refs/i18n/state, so
 // statsEl, t, mdCount, otherCount (and TREE/IS_OFFLINE_BUILD from 00-data-csrf.ts) are all
 // defined when this runs.
-const fileMap: Record<string, FileNode> = {};
+import { IS_OFFLINE_BUILD, TREE } from './data-csrf';
+import { statsEl } from './dom-refs';
+import { t } from './i18n';
+import { mdCount, otherCount, setMdCount, setOtherCount } from './state';
 
-function index(node: TreeNode): void {
+export const fileMap: Record<string, FileNode> = {};
+
+export function index(node: TreeNode): void {
   const children = node.type === 'dir' ? node.children : [];
 
   for (const c of children) {
     if (c.type === 'file') {
       fileMap[c.path] = c;
 
-      if (c.ext === '.md') mdCount++;
-      else otherCount++;
+      if (c.ext === '.md') setMdCount(mdCount + 1);
+      else setOtherCount(otherCount + 1);
     } else index(c);
   }
 }

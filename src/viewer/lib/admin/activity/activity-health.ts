@@ -4,7 +4,12 @@
 // POST that used to live in the shell's wire(). Renders deterministic helpers (docTitle, skelRows)
 // through the ActivityRenderCtx; doc clicks are routed by the shell's delegated [data-path] handler.
 // Top-level (no IIFE) so it is a shared symbol in the concat scope.
-class ActivityHealth {
+
+import { EMBED_ACTIVITY, IS_OFFLINE_BUILD } from '../../core/data-csrf';
+import { t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
+
+export class ActivityHealth {
   private health: { stale: StaleDoc[]; cands: ContradictionCand[] } | null = null;
   private healthExpanded = false;
   private candExpanded = false;

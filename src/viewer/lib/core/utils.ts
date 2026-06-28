@@ -1,7 +1,9 @@
 // Pure helpers (no DOM, no network). Split out of the old 01-i18n-state.js. relativeDate
 // depends on i18n (t/LANG), concatenated before this file. Foundation layer: top-level so
 // these are shared globals used across the viewer.
-function relativeDate(epoch: number): string {
+import { LANG, t } from './i18n';
+
+export function relativeDate(epoch: number): string {
   if (!epoch) return '';
   const diff = Date.now() / 1000 - epoch;
 
@@ -20,7 +22,7 @@ function relativeDate(epoch: number): string {
   });
 }
 
-function slugify(s: string): string {
+export function slugify(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD')
@@ -29,7 +31,7 @@ function slugify(s: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function escapeHtml(s: unknown): string {
+export function escapeHtml(s: unknown): string {
   const map: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',

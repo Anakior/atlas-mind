@@ -3,7 +3,19 @@
 // behaviour with the pre-migration view. The app-wide keyboard router that opens it lives in
 // 12b-shortcuts.ts (it dispatches to overlays owned by 06/12, so it loads after them).
 
-class CommandPalette {
+import { t } from '../core/i18n';
+import { currentFile, editMode } from '../core/state';
+import { searchEl } from '../core/dom-refs';
+import { fileMap } from '../core/tree';
+import { escapeHtml } from '../core/utils';
+import { homeView } from '../home/home-view';
+import { layoutChrome } from '../home/layout-chrome';
+import { editor } from '../editor/editor';
+import { search } from '../editor/search';
+import { docRenderer } from '../content/doc-renderer';
+import { mindGraph } from './graph-boot';
+
+export class CommandPalette {
   private backdrop = document.getElementById('palette-backdrop')!;
   private input = document.getElementById('palette-input') as HTMLInputElement;
   private list = document.getElementById('palette-list')!;
@@ -42,19 +54,19 @@ class CommandPalette {
         hint: t('actHomeHint'),
         icon: 'home',
         action: () => {
-          showWelcome();
+          homeView.showWelcome();
           history.replaceState(null, '', location.pathname);
         },
       },
-      { kind: 'action', label: t('actSidebar'), hint: 'Ctrl+B', icon: 'sidebar', action: toggleSidebar },
-      { kind: 'action', label: t('actToc'), hint: 'Ctrl+J', icon: 'toc', action: toggleToc },
+      { kind: 'action', label: t('actSidebar'), hint: 'Ctrl+B', icon: 'sidebar', action: () => layoutChrome.toggleSidebar() },
+      { kind: 'action', label: t('actToc'), hint: 'Ctrl+J', icon: 'toc', action: () => layoutChrome.toggleToc() },
       {
         kind: 'action',
         label: t('actEdit'),
         hint: 'E',
         icon: 'edit',
         action: () => {
-          if (currentFile && !editMode) enterEditMode();
+          if (currentFile && !editMode) editor.enterEditMode();
         },
       },
       {
@@ -150,10 +162,10 @@ class CommandPalette {
 
     if (q.length >= 2) {
       this.searchDebounce = setTimeout(async () => {
-        let hits: Awaited<ReturnType<typeof getSearchHits>>;
+        let hits: Awaited<ReturnType<typeof search.getSearchHits>>;
 
         try {
-          hits = await getSearchHits(rawQuery);
+          hits = await search.getSearchHits(rawQuery);
         } catch (e) {
           return;
         }
@@ -232,7 +244,7 @@ class CommandPalette {
 
     if (item.kind === 'action') item.action!();
     else if (item.kind === 'file') {
-      showMarkdown(item.file!, item.query);
+      docRenderer.show(item.file!, item.query);
       history.replaceState(null, '', '#' + encodeURIComponent(item.file!.path));
     }
   }
@@ -256,4 +268,4 @@ class CommandPalette {
   }
 }
 
-const commandPalette = new CommandPalette();
+export const commandPalette = new CommandPalette();

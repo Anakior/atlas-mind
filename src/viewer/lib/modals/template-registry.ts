@@ -3,7 +3,11 @@
 // content fill. NewFileModal owns one instance and delegates here; window.Atlas.registerTemplate routes
 // through registerTemplate(). Concatenated before 19-newfile.ts so the class exists when NewFileModal
 // is constructed at module init.
-class TemplateRegistry {
+
+import { DOC_TEMPLATES } from '../core/data-csrf';
+import { LANG, t } from '../core/i18n';
+
+export class TemplateRegistry {
   private readonly extArea = document.getElementById('new-file-ext-area') as HTMLElement;
   // Extension templates, keyed by select value. Null prototype: `for..in` yields only real entries.
   private readonly providers: Record<string, TemplateProvider> = Object.create(null);

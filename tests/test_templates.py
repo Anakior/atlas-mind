@@ -39,7 +39,9 @@ ENGINE_TEMPLATES = {
     "lecture", "guide", "contact", "retro", "spec",
 }
 
-DOC_TEMPLATES_RE = re.compile(r"^const DOC_TEMPLATES = (.*);$", re.M)
+# esbuild emits the bundled symbol as an indented top-level `var` (the name is
+# preserved); tolerate const/let/var and leading indentation.
+DOC_TEMPLATES_RE = re.compile(r"^\s*(?:const|let|var) DOC_TEMPLATES = (.*);$", re.M)
 
 
 def make_mind(root: Path, *, templates: dict | None = None) -> None:
@@ -77,7 +79,7 @@ def extract_doc_templates(index_html: str) -> dict:
     """The JSON injected in place of __TEMPLATES__ (a single line)."""
     match = DOC_TEMPLATES_RE.search(index_html)
     if match is None:
-        raise AssertionError("const DOC_TEMPLATES not found in the generated HTML")
+        raise AssertionError("DOC_TEMPLATES not found in the generated HTML")
     return json.loads(match.group(1))
 
 

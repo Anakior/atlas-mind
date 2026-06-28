@@ -2,7 +2,13 @@
 // DOM (innerHTML + rebind). 06-view-history calls the updatePinButton wrapper when a doc opens to
 // refresh the header pin button.
 
-class Pins {
+import { fileMap } from '../core/tree';
+import { currentFile } from '../core/state';
+import { escapeHtml } from '../core/utils';
+import { t } from '../core/i18n';
+import { docRenderer } from '../content/doc-renderer';
+
+export class Pins {
   private section = document.getElementById('pinned-section')!;
   private list = document.getElementById('pinned-list')!;
   private btn = document.getElementById('btn-pin')!;
@@ -86,7 +92,7 @@ class Pins {
         const f = fileMap[(a as HTMLElement).dataset.pinpath!];
 
         if (f) {
-          showMarkdown(f);
+          docRenderer.show(f);
           history.replaceState(null, '', '#' + encodeURIComponent(f.path));
         }
       }),
@@ -101,17 +107,4 @@ class Pins {
   }
 }
 
-const pins = new Pins();
-
-// 06-view-history calls updatePinButton(file) when a doc opens.
-function updatePinButton(file: FileNode | null): void {
-  pins.updateButton(file);
-}
-
-// Embed mode (#mind): the landing page iframes this viewer as a chrome-less Mind hero — build the base
-// view here; the graph hero opens (controls hidden) in 12-tasks-graph.
-if (EMBED_MIND) {
-  showWelcome();
-} else {
-  routeFromHash();
-}
+export const pins = new Pins();

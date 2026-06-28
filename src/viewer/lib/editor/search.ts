@@ -8,12 +8,27 @@
 // Concatenated after 09-editor (09-search sorts last in the 09 family); no load-order coupling to the
 // Editor — just the agreed autocomplete < editor < search order.
 
+import { searchEl, searchResultsEl, treeEl, recentList, recentSection } from '../core/dom-refs';
+import { t } from '../core/i18n';
+import { fileMap } from '../core/tree';
+import { EMBED_CONTENT, IS_OFFLINE_BUILD } from '../core/data-csrf';
+import { escapeHtml } from '../core/utils';
+import { docRenderer } from '../content/doc-renderer';
+
 // MiniSearch index + its in-flight init promise. Top-level globals (NOT class state): 99-bootstrap
 // nulls both by name on softReload to invalidate the index. Lazy-loaded on the first offline search.
-let miniSearch: any = null;
-let searchInitPromise: Promise<any> | null = null;
+export let miniSearch: any = null;
+export let searchInitPromise: Promise<any> | null = null;
 
-class Search {
+export function setMiniSearch(v: any): void {
+  miniSearch = v;
+}
+
+export function setSearchInitPromise(v: Promise<any> | null): void {
+  searchInitPromise = v;
+}
+
+export class Search {
   private static readonly SEARCH_FIELDS = ['name', 'path', 'content'];
   private static readonly SEARCH_STORE = ['name', 'path', 'preview'];
 
@@ -182,7 +197,7 @@ class Search {
       if (file.ext === '.md' || file.ext === '.html') {
         a.addEventListener('click', (e) => {
           e.preventDefault();
-          showMarkdown(file, q);
+          docRenderer.show(file, q);
         });
       } else {
         a.href = encodeURI(file.path);
@@ -216,7 +231,7 @@ class Search {
 }
 
 // Pure: the highlighted excerpt around the first matching query word (or a head slice if none).
-function makeSnippet(preview: string, query: string): string {
+export function makeSnippet(preview: string, query: string): string {
   if (!preview) return '';
   const words = query
     .toLowerCase()
@@ -244,9 +259,4 @@ function makeSnippet(preview: string, query: string): string {
   return (start > 0 ? '…' : '') + preview.slice(start, end) + (end < preview.length ? '…' : '');
 }
 
-const search = new Search();
-
-// Thin global wrapper — 11-palette calls getSearchHits by bare name (same engine as the search bar).
-function getSearchHits(q: string): Promise<NormalizedHit[]> {
-  return search.getSearchHits(q);
-}
+export const search = new Search();

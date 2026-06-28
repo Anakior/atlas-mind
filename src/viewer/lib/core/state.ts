@@ -1,27 +1,59 @@
 // Mutable runtime state shared across the viewer. Split out of the old 01-i18n-state.js.
-// Foundation layer: these stay plain top-level `let`s (NOT an IIFE / state object) because
-// sibling .js modules reassign them by name (09-editor.js writes currentFile/editMode/
-// editTextarea; 05-backlinks/05b-notes-panel write tocHasLinks/tocHasNotes). The conversion to a
-// state object with setters is deferred to the ES-modules phase.
+// These stay module-level `let`s exposed through explicit setters: ES modules forbid reassigning
+// an imported binding, so cross-module writers (editor, backlinks, notes-panel, bootstrap, tree)
+// go through setX() while readers import the live binding.
+import { IS_OFFLINE_BUILD } from './data-csrf';
 
 // The right panel shows up if it has a table of contents OR links OR notes.
 // renderBacklinksFor / renderNotesFor update these flags then call applyToc().
-let tocHasLinks = false;
-let tocHasNotes = false;
+export let tocHasLinks = false;
 
-let currentFile: FileNode | null = null;
-let editMode = false;
-let editTextarea: HTMLTextAreaElement | null = null;
+export function setTocHasLinks(v: boolean): void {
+  tocHasLinks = v;
+}
+
+export let tocHasNotes = false;
+
+export function setTocHasNotes(v: boolean): void {
+  tocHasNotes = v;
+}
+
+export let currentFile: FileNode | null = null;
+
+export function setCurrentFile(v: FileNode | null): void {
+  currentFile = v;
+}
+
+export let editMode = false;
+
+export function setEditMode(v: boolean): void {
+  editMode = v;
+}
+
+export let editTextarea: HTMLTextAreaElement | null = null;
+
+export function setEditTextarea(v: HTMLTextAreaElement | null): void {
+  editTextarea = v;
+}
 
 // File counters for the stats line, populated by index() in 01-tree.ts.
-let mdCount = 0,
-  otherCount = 0;
+export let mdCount = 0;
+
+export function setMdCount(v: number): void {
+  mdCount = v;
+}
+
+export let otherCount = 0;
+
+export function setOtherCount(v: number): void {
+  otherCount = v;
+}
 
 // App-mode flags, decided once at load from the URL/build (read across the viewer).
 // EMBED_MIND: the landing page iframes this viewer as a chrome-less Mind hero (#mind in the URL).
-const EMBED_MIND = location.hash.replace(/^#/, '') === 'mind';
+export const EMBED_MIND = location.hash.replace(/^#/, '') === 'mind';
 // A static OFFLINE build (EMBED_CONTENT inlined) is NEVER in server mode, even when hosted over
 // http(s) — e.g. the GitHub Pages /demo/. Keying this on the protocol alone made such a build hit
 // /api/* endpoints and a service worker that don't exist there → 404s and a home stuck on skeletons.
 // Offline = read from the embed.
-const isServerMode = (location.protocol === 'http:' || location.protocol === 'https:') && !IS_OFFLINE_BUILD;
+export const isServerMode = (location.protocol === 'http:' || location.protocol === 'https:') && !IS_OFFLINE_BUILD;

@@ -6,22 +6,26 @@
 // getElementById returns HTMLElement | null, so the modal asserts/casts at use.
 
 // ── Reset password modal ─────────────────────────────────────────────────────
-const RESET_PW_MIN = 8;
-const resetPwBackdrop = document.getElementById('reset-pw-backdrop');
-const resetPwForm = document.getElementById('reset-pw-form');
-const resetPwEmail = document.getElementById('reset-pw-email');
-const resetPwInput = document.getElementById('reset-pw-input') as HTMLInputElement;
-const resetPwConfirm = document.getElementById('reset-pw-confirm') as HTMLInputElement;
-const resetPwToggle = document.getElementById('reset-pw-toggle');
-const resetPwEye = document.getElementById('reset-pw-eye');
-const resetPwEyeOff = document.getElementById('reset-pw-eye-off');
-const resetPwError = document.getElementById('reset-pw-error');
-const resetPwSuccess = document.getElementById('reset-pw-success');
-const resetPwSubmit = document.getElementById('reset-pw-submit') as HTMLButtonElement;
-const resetPwCancel = document.getElementById('reset-pw-cancel');
-const resetPwClose = document.getElementById('reset-pw-close');
+import { t } from '../core/i18n';
+import { settingsFetch } from '../admin/settings/settings-shared';
+import { settingsPanel } from '../admin/settings/settings-panel';
 
-function resetPwValidationError(): string | null {
+export const RESET_PW_MIN = 8;
+export const resetPwBackdrop = document.getElementById('reset-pw-backdrop');
+export const resetPwForm = document.getElementById('reset-pw-form');
+export const resetPwEmail = document.getElementById('reset-pw-email');
+export const resetPwInput = document.getElementById('reset-pw-input') as HTMLInputElement;
+export const resetPwConfirm = document.getElementById('reset-pw-confirm') as HTMLInputElement;
+export const resetPwToggle = document.getElementById('reset-pw-toggle');
+export const resetPwEye = document.getElementById('reset-pw-eye');
+export const resetPwEyeOff = document.getElementById('reset-pw-eye-off');
+export const resetPwError = document.getElementById('reset-pw-error');
+export const resetPwSuccess = document.getElementById('reset-pw-success');
+export const resetPwSubmit = document.getElementById('reset-pw-submit') as HTMLButtonElement;
+export const resetPwCancel = document.getElementById('reset-pw-cancel');
+export const resetPwClose = document.getElementById('reset-pw-close');
+
+export function resetPwValidationError(): string | null {
   const pw = resetPwInput.value;
   const confirm = resetPwConfirm.value;
 
@@ -32,7 +36,7 @@ function resetPwValidationError(): string | null {
   return null;
 }
 
-function refreshResetPwState(): void {
+export function refreshResetPwState(): void {
   resetPwError!.classList.add('hidden');
   // Disable only while the 1st field is too short (immediate signal, doesn't block typing the
   // confirmation); otherwise stay enabled and show the precise error on submit.
@@ -41,7 +45,7 @@ function refreshResetPwState(): void {
   resetPwSubmit.disabled = tooShort || resetPwConfirm.value.length === 0;
 }
 
-function setResetPwVisibility(show: boolean): void {
+export function setResetPwVisibility(show: boolean): void {
   resetPwInput.type = show ? 'text' : 'password';
   resetPwConfirm.type = show ? 'text' : 'password';
   resetPwEye!.classList.toggle('hidden', show);
@@ -49,7 +53,7 @@ function setResetPwVisibility(show: boolean): void {
   resetPwToggle!.setAttribute('aria-pressed', show ? 'true' : 'false');
 }
 
-class ResetPwModal {
+export class ResetPwModal {
   private targetEmail: string | null = null;
   private closeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -129,7 +133,7 @@ class ResetPwModal {
         method: 'POST',
         body: JSON.stringify({ email, password: (resetPwInput as HTMLInputElement).value }),
       });
-      clearSettingsError();
+      settingsPanel.clearError();
       resetPwSuccess!.classList.remove('hidden');
       this.closeTimer = setTimeout(() => this.close(), 1200);
     } catch (err) {
@@ -140,8 +144,4 @@ class ResetPwModal {
   }
 }
 
-const resetPwModal = new ResetPwModal();
-
-function openResetPassword(email?: string): void {
-  resetPwModal.open(email);
-}
+export const resetPwModal = new ResetPwModal();

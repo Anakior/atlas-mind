@@ -5,10 +5,18 @@
 // content delegation), the graph's tag nodes (12) and the home tag rows (10), all through the
 // top-level showTag wrapper. Self-contained: it shares no state with the tag-editing pieces.
 
-class TagBrowsePage {
+import { t } from '../core/i18n';
+import { escapeHtml } from '../core/utils';
+import { fileMap } from '../core/tree';
+import { contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, tocPanel } from '../core/dom-refs';
+import { editMode, setCurrentFile } from '../core/state';
+import { editor } from '../editor/editor';
+import { docRenderer } from './doc-renderer';
+
+export class TagBrowsePage {
   showTag(tag: string): void {
-    if (editMode) exitEditMode(false);
-    currentFile = null;
+    if (editMode) editor.exitEditMode(false);
+    setCurrentFile(null);
     document.querySelector('main')!.scrollTop = 0;
     const docs = Object.values(fileMap)
       .filter((f) => f.ext === '.md' && (f.tags || []).includes(tag))
@@ -42,7 +50,7 @@ class TagBrowsePage {
         const f = fileMap[(a as HTMLElement).dataset.tagdoc!];
 
         if (f) {
-          showMarkdown(f);
+          docRenderer.show(f);
           history.replaceState(null, '', '#' + encodeURIComponent(f.path));
         }
       }),
@@ -57,10 +65,4 @@ class TagBrowsePage {
   }
 }
 
-const tagBrowsePage = new TagBrowsePage();
-
-// Thin top-level wrapper — cross-module consumers (08-tags' delegation, 10, 12) call this bare in the
-// shared bundle scope.
-function showTag(tag: string): void {
-  tagBrowsePage.showTag(tag);
-}
+export const tagBrowsePage = new TagBrowsePage();

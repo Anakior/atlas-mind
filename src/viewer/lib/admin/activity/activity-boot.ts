@@ -7,7 +7,10 @@
 //
 // mountActivity stays a global (10-home-layout's showWelcome calls it); refreshActivityData is the SSE
 // soft-reload hook (99-bootstrap.ts). Both delegate to the single instance.
-const activityCard = new ActivityCard();
+
+import { ActivityCard } from './activity-card';
+
+export const activityCard = new ActivityCard();
 
 window.mountActivity = () => activityCard.mount();
 window.refreshActivityData = () => activityCard.refreshData();

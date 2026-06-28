@@ -2,14 +2,14 @@
 // applyStaticI18n (static [data-i18n] markup). Split out of the old 01-i18n-state.js.
 // Foundation layer: stays top-level so t()/LANG/STRINGS are shared globals (not module-
 // scoped). Language from <html lang>, set by the Python build.
-const LANG = (document.documentElement.lang || 'fr').toLowerCase().startsWith('en') ? 'en' : 'fr';
+export const LANG = (document.documentElement.lang || 'fr').toLowerCase().startsWith('en') ? 'en' : 'fr';
 
 // An i18n entry is either a literal label or a function that interpolates its args. The
 // any[] is deliberate: the per-key arities differ (err(m), statsLine(md, other), …) and the
 // bodies concatenate the args, which unknown[] would reject.
 type I18nValue = string | ((...args: any[]) => string);
 
-const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
+export const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
   fr: {
     // Génériques
     cancel: 'Annuler',
@@ -1130,7 +1130,7 @@ const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
   },
 };
 
-function t(key: string, ...args: unknown[]): string {
+export function t(key: string, ...args: unknown[]): string {
   const dict = STRINGS[LANG] || STRINGS.fr;
   let entry = dict[key];
 
@@ -1143,7 +1143,7 @@ function t(key: string, ...args: unknown[]): string {
 
 // Static HTML labels via data-i18n / -title / -placeholder. Single source of
 // truth = STRINGS; the FR text in the markup is only a fallback when JS is off.
-function applyStaticI18n(): void {
+export function applyStaticI18n(): void {
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n!);
   });

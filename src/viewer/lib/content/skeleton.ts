@@ -2,7 +2,9 @@
 // a per-path LCG so the same doc always shimmers the same shape; renderSkeleton paints it. Loaded
 // before both consumers.
 
-function hashStr(s: string): number {
+import { t } from '../core/i18n';
+
+export function hashStr(s: string): number {
   // djb2 — small stable fingerprint to seed the skeleton's LCG
   let h = 5381;
 
@@ -13,7 +15,7 @@ function hashStr(s: string): number {
 
 // Deterministic per-path skeleton (same doc → same layout). LCG seeded by hashStr(path). Pure +
 // cross-cutting: 07-frames also renders it before a .html/.pdf/.docx frame loads.
-function renderSkeleton(file: FileNode): string {
+export function renderSkeleton(file: FileNode): string {
   let state = (file && file.path ? hashStr(file.path) : 1) || 1;
   const next = (): number => (state = (state * 1664525 + 1013904223) >>> 0);
   const range = (min: number, max: number): number => min + (next() % (max - min + 1));

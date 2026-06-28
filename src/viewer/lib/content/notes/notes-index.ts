@@ -5,29 +5,35 @@
 // function declaration hoists script-wide so that early call resolves. Online: _notes-index.json ;
 // offline: EMBED_NOTES. notesIndex ({path: count}) is declared in 02-content-tree (early enough to be
 // initialized before that boot reads it).
-async function loadNotesIndex(): Promise<Record<string, number>> {
+
+import { IS_OFFLINE_BUILD, EMBED_NOTES } from '../../core/data-csrf';
+import { treeEl } from '../../core/dom-refs';
+import { t } from '../../core/i18n';
+import { notesIndex, setNotesIndex } from '../content-tree';
+
+export async function loadNotesIndex(): Promise<Record<string, number>> {
   if (notesIndex) return notesIndex;
 
   if (IS_OFFLINE_BUILD) {
-    notesIndex = {};
+    setNotesIndex({});
 
-    for (const p in EMBED_NOTES || {}) notesIndex[p] = EMBED_NOTES[p].length;
+    for (const p in EMBED_NOTES || {}) notesIndex![p] = EMBED_NOTES[p].length;
 
-    return notesIndex;
+    return notesIndex!;
   }
 
   try {
     const res = await fetch('/_notes-index.json', { cache: 'no-cache' });
 
-    notesIndex = res.ok ? await res.json() : {};
+    setNotesIndex(res.ok ? await res.json() : {});
   } catch (e) {
-    notesIndex = {};
+    setNotesIndex({});
   }
 
   return notesIndex!;
 }
 
-async function decorateTreeBadges(): Promise<void> {
+export async function decorateTreeBadges(): Promise<void> {
   const idx = await loadNotesIndex();
 
   document.querySelectorAll('.kb-tree-badge').forEach((b) => b.remove());

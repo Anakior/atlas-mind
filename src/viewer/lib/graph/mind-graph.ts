@@ -6,7 +6,18 @@
 //
 // Instantiated once in 12z-graph-boot.ts (built last, after the three pieces are concatenated) so every
 // class is in scope when `new MindGraph()` runs its field initializers — class declarations do not hoist.
-class MindGraph {
+
+import { t } from '../core/i18n';
+import { EMBED_MIND } from '../core/state';
+import { fileMap } from '../core/tree';
+import { loadBacklinksIndex } from '../content/backlinks';
+import { tagBrowsePage } from '../content/tag-browse';
+import { docRenderer } from '../content/doc-renderer';
+import { GraphPalette } from './graph-palette';
+import { GraphLayout } from './graph-layout';
+import { GraphRenderer } from './graph-renderer';
+
+export class MindGraph {
   private overlay = document.getElementById('graph-overlay')!;
   private canvas = document.getElementById('graph-canvas') as HTMLCanvasElement;
   private tooltip = document.getElementById('graph-tooltip')!;
@@ -179,7 +190,7 @@ class MindGraph {
     if (node && !moved) {
       if (node.kind === 'tag') {
         this.close();
-        showTag(node.tag!);
+        tagBrowsePage.showTag(node.tag!);
 
         return;
       }
@@ -189,7 +200,7 @@ class MindGraph {
       this.close();
 
       if (f) {
-        showMarkdown(f);
+        docRenderer.show(f);
         history.replaceState(null, '', '#' + encodeURIComponent(f.path));
       }
     }

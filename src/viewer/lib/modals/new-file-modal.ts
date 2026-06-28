@@ -14,13 +14,29 @@
 // free globals: cross-module consumers (02-content-tree, 13-todos, 14-dialogs, 16-settings,
 // 22-inbox) read them by name in the shared scope.
 
+import { Modal } from '../ui/modal-base';
+import { AtlasCombobox } from '../ui/combobox';
+import { TREE } from '../core/data-csrf';
+import { TemplateRegistry } from './template-registry';
+import { DirRenameModal } from './dir-rename-modal';
+import { t } from '../core/i18n';
+import { escapeHtml } from '../core/utils';
+import { setStatus } from '../core/net';
+import { currentFile, editMode } from '../core/state';
+import { contentCache } from '../content/content-tree';
+import { fileMap } from '../core/tree';
+import { renameBackdrop, renameModal } from './dialogs';
+import { shareBackdrop, closeShareModal } from '../admin/settings/settings-shared';
+import { settingsPanel } from '../admin/settings/settings-panel';
+import { quickCaptureModal } from './quick-capture';
+
 // Cross-file refs read by 99-bootstrap.ts; HTMLElement | null, so consumers assert with `!`.
-const newFileBtn = document.getElementById('new-file-btn');
-const newFileBackdrop = document.getElementById('new-file-backdrop');
-const dirRenameBackdrop = document.getElementById('dir-rename-backdrop');
+export const newFileBtn = document.getElementById('new-file-btn');
+export const newFileBackdrop = document.getElementById('new-file-backdrop');
+export const dirRenameBackdrop = document.getElementById('dir-rename-backdrop');
 
 // Distinct folders under TREE, sorted — feeds the new-file and inbox folder comboboxes.
-function getAllDirs(): string[] {
+export function getAllDirs(): string[] {
   const dirs = new Set<string>();
 
   (function walk(node: TreeNode, prefix: string): void {
@@ -40,12 +56,12 @@ function getAllDirs(): string[] {
 }
 
 // After a write: refresh the tree in place (SSE soft-reload) or fall back to a full reload.
-async function refreshTreeOrReload(): Promise<void> {
+export async function refreshTreeOrReload(): Promise<void> {
   if (window.softReload) await window.softReload();
   else location.reload();
 }
 
-class NewFileModal extends Modal {
+export class NewFileModal extends Modal {
   private readonly form = document.getElementById('new-file-form') as HTMLFormElement;
   private readonly dir = document.getElementById('new-file-dir') as HTMLInputElement;
   private readonly name = document.getElementById('new-file-name') as HTMLInputElement;
@@ -163,8 +179,8 @@ class NewFileModal extends Modal {
   }
 }
 
-const newFileModal = new NewFileModal();
-const dirRenameModal = new DirRenameModal();
+export const newFileModal = new NewFileModal();
+export const dirRenameModal = new DirRenameModal();
 
 // Extensions (inlined after this script by build.py) register templates and drive the viewer here.
 window.Atlas = {
@@ -189,19 +205,6 @@ window.Atlas = {
   },
 };
 
-// Public new-file/dir-rename entry points kept as globals (read by 02-content-tree.ts and others).
-function openNewFileModal(presetDir?: string): void {
-  newFileModal.open(presetDir);
-}
-
-function closeNewFileModal(): void {
-  newFileModal.close();
-}
-
-function openDirRenameModal(path: string): void {
-  dirRenameModal.open(path);
-}
-
 // One Escape-priority stack across every modal (some owned by other modules) + the `n` shortcut.
 // Order: settings → new-file → dir-rename → quick-capture → share → rename.
 document.addEventListener('keydown', (e) => {
@@ -210,13 +213,13 @@ document.addEventListener('keydown', (e) => {
     const settingsBackdrop = document.getElementById('settings-backdrop');
 
     if (settingsBackdrop && !settingsBackdrop.classList.contains('hidden')) {
-      closeSettings();
+      settingsPanel.close();
 
       return;
     }
 
     if (newFileModal.isOpen()) {
-      closeNewFileModal();
+      newFileModal.close();
 
       return;
     }
@@ -240,7 +243,7 @@ document.addEventListener('keydown', (e) => {
     }
 
     if (!renameBackdrop!.classList.contains('hidden')) {
-      closeRenameModal();
+      renameModal.close();
 
       return;
     }

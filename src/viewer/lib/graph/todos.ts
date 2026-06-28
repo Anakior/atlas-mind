@@ -7,7 +7,30 @@
 // global, not a class method. (setStatus + api — the app-wide status writer + fetch wrapper — live in
 // 01-net.ts.)
 
-class Todos {
+import { todos, setTodos } from '../content/content-tree';
+import {
+  tcat,
+  todoFilter,
+  setTodoFilter,
+  showDoneTodos,
+  setShowDoneTodos,
+  todoForm,
+  todoList,
+  todoCount,
+  todoBubbleCount,
+  todoInput,
+  TODO_FILTER_LABELS,
+  renderTodoFilterTabs,
+  updateHomeTodoStat,
+  updateTabBadge,
+} from './todo-surface';
+import { escapeHtml } from '../core/utils';
+import { t } from '../core/i18n';
+import { isServerMode } from '../core/state';
+import { setStatus, api } from '../core/net';
+import { Dialogs } from '../modals/dialogs';
+
+export class Todos {
   constructor() {
     todoForm!.addEventListener('submit', (e) => this.onSubmit(e));
     todoList!.addEventListener('click', (e) => this.onListClick(e));
@@ -90,7 +113,7 @@ class Todos {
 
     try {
       setStatus(t('adding'), 'info');
-      todos = await api('POST', '/api/todos', { text, cat: todoFilter });
+      setTodos(await api('POST', '/api/todos', { text, cat: todoFilter }));
       this.render();
       setStatus(t('added'), 'ok');
     } catch (err) {
@@ -108,7 +131,7 @@ class Todos {
 
     if (check) {
       try {
-        todos = await api('PATCH', '/api/todos/' + id, { done: check.checked });
+        setTodos(await api('PATCH', '/api/todos/' + id, { done: check.checked }));
         this.render();
         setStatus(check.checked ? t('doneStatus') : t('reopened'), 'ok');
       } catch (err) {
@@ -121,7 +144,7 @@ class Todos {
 
     if (target.closest('.todo-del')) {
       try {
-        todos = await api('DELETE', '/api/todos/' + id);
+        setTodos(await api('DELETE', '/api/todos/' + id));
         this.render();
         setStatus(t('deletedStatus'), 'ok');
       } catch (err) {
@@ -140,13 +163,13 @@ class Todos {
     const btn = (e.target as HTMLElement).closest('.todo-filter-btn') as HTMLElement | null;
 
     if (!btn || btn.dataset.cat === todoFilter) return;
-    todoFilter = btn.dataset.cat!;
-    localStorage.setItem('todo-filter', todoFilter);
+    setTodoFilter(btn.dataset.cat!);
+    localStorage.setItem('todo-filter', todoFilter!);
     this.render();
   }
 
   private onToggleDone(): void {
-    showDoneTodos = !showDoneTodos;
+    setShowDoneTodos(!showDoneTodos);
     localStorage.setItem('todo-show-done', showDoneTodos ? '1' : '0');
     this.render();
   }
@@ -155,7 +178,7 @@ class Todos {
     const doneTodos = todos.filter((it) => it.done && tcat(it) === todoFilter);
 
     if (doneTodos.length === 0) return;
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('clearDoneConfirmTitle', doneTodos.length),
       message: t('clearDoneConfirmMsg'),
       confirmLabel: t('clearBtn'),
@@ -171,7 +194,7 @@ class Todos {
       setStatus(t('clearing'), 'info');
 
       for (const id of idsDesc) {
-        todos = await api('DELETE', '/api/todos/' + id);
+        setTodos(await api('DELETE', '/api/todos/' + id));
       }
 
       this.render();
@@ -208,7 +231,7 @@ class Todos {
 
       if (save && newText && newText !== item.text) {
         try {
-          todos = await api('PATCH', '/api/todos/' + id, { text: newText });
+          setTodos(await api('PATCH', '/api/todos/' + id, { text: newText }));
           this.render();
           setStatus(t('updated'), 'ok');
 
@@ -234,13 +257,13 @@ class Todos {
   }
 }
 
-const todosWidget = new Todos();
+export const todosWidget = new Todos();
 
-async function refresh(): Promise<void> {
+export async function refresh(): Promise<void> {
   if (!isServerMode) return;
 
   try {
-    todos = await api('GET', '/api/todos');
+    setTodos(await api('GET', '/api/todos'));
     todosWidget.render();
     setStatus(t('synced'), 'info');
   } catch (err) {

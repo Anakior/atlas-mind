@@ -382,7 +382,6 @@ days
 daysAgo
 dd
 de
-declare
 definitivement
 deja
 del
@@ -953,6 +952,7 @@ made
 main
 maintenant
 make_commons
+manage
 manquant
 manually.
 manuellement.
@@ -1650,7 +1650,6 @@ statsLine
 stays
 stem
 stop
-strict
 strike
 string
 string,
@@ -1902,7 +1901,6 @@ updated
 updated.
 uppercase
 usage
-use
 user
 user-avatar
 user-bar
@@ -1958,6 +1956,7 @@ width
 width:
 wikilink
 will
+window.X
 window.frames
 with
 wl-autocomplete

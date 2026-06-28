@@ -7,17 +7,35 @@
 // is a bareword global: its consumers (06-view-history, 09-editor) call it unqualified, and
 // loadBacklinksIndex is read by 12-tasks-graph.
 
+import { IS_OFFLINE_BUILD, EMBED_BACKLINKS } from '../core/data-csrf';
+import { tocLinks } from '../core/dom-refs';
+import { currentFile, tocHasLinks, setTocHasLinks } from '../core/state';
+import { fileMap } from '../core/tree';
+import { escapeHtml } from '../core/utils';
+import { t } from '../core/i18n';
+import { layoutChrome } from '../home/layout-chrome';
+import { docRenderer } from './doc-renderer';
+
 // Value type of backlinksIndex; single-file, so not promoted to interface/.
-interface BacklinkEntry {
+export interface BacklinkEntry {
   out: string[];
   in: string[];
 }
 
 // Lazy caches, reset to null cross-file by 99-bootstrap on reload — hence top-level `let`s.
-let backlinksIndex: Record<string, BacklinkEntry> | null = null;
-let backlinksLoading: Promise<Record<string, BacklinkEntry>> | null = null;
+export let backlinksIndex: Record<string, BacklinkEntry> | null = null;
 
-async function loadBacklinksIndex(): Promise<Record<string, BacklinkEntry>> {
+export function setBacklinksIndex(v: Record<string, BacklinkEntry> | null): void {
+  backlinksIndex = v;
+}
+
+export let backlinksLoading: Promise<Record<string, BacklinkEntry>> | null = null;
+
+export function setBacklinksLoading(v: Promise<Record<string, BacklinkEntry>> | null): void {
+  backlinksLoading = v;
+}
+
+export async function loadBacklinksIndex(): Promise<Record<string, BacklinkEntry>> {
   if (backlinksIndex) return backlinksIndex;
 
   if (backlinksLoading) return backlinksLoading;
@@ -40,9 +58,9 @@ async function loadBacklinksIndex(): Promise<Record<string, BacklinkEntry>> {
   return backlinksLoading;
 }
 
-async function renderBacklinksFor(file: FileNode): Promise<void> {
+export async function renderBacklinksFor(file: FileNode): Promise<void> {
   // Synchronous reset (before the await): applyToc() from buildToc() will see a clean state.
-  tocHasLinks = false;
+  setTocHasLinks(false);
 
   if (tocLinks) {
     tocLinks.innerHTML = '';
@@ -68,11 +86,11 @@ async function renderBacklinksFor(file: FileNode): Promise<void> {
         .slice(0, 8)
     : [];
 
-  tocHasLinks = !!(incoming.length || outgoing.length || related.length);
+  setTocHasLinks(!!(incoming.length || outgoing.length || related.length));
   tocLinks.classList.toggle('hidden', !tocHasLinks); // empty section → no gap
 
   if (!tocHasLinks) {
-    applyToc();
+    layoutChrome.applyToc();
 
     return;
   }
@@ -109,10 +127,10 @@ async function renderBacklinksFor(file: FileNode): Promise<void> {
       const f = fileMap[(a as HTMLElement).dataset.conn!];
 
       if (f) {
-        showMarkdown(f);
+        docRenderer.show(f);
         history.replaceState(null, '', '#' + encodeURIComponent(f.path));
       }
     });
   });
-  applyToc();
+  layoutChrome.applyToc();
 }

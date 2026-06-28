@@ -1,6 +1,12 @@
 // Settings › Shares tab: list the public share links, copy/reactivate (re-point a broken one) or
 // revoke them.
-class SettingsShares {
+
+import { t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
+import { Dialogs } from '../../modals/dialogs';
+import { SettingsContext, shareFormatDate } from './settings-shared';
+
+export class SettingsShares {
   private readonly list = document.getElementById('settings-shares-list')!;
 
   constructor(private readonly ctx: SettingsContext) {
@@ -110,7 +116,7 @@ class SettingsShares {
 
     if (reactivateBtn) {
       // Doc moved/disappeared: point the link at its new path (URL stays the same).
-      const newPath = await promptDialog({
+      const newPath = await Dialogs.prompt({
         title: t('shareReactivateTitle'),
         message: t('shareReactivateMsg', reactivateBtn.dataset.path || ''),
         value: reactivateBtn.dataset.suggested || '',
@@ -136,7 +142,7 @@ class SettingsShares {
     const revokeBtn = this.ctx.hit(e, '.settings-share-revoke');
 
     if (!revokeBtn || !revokeBtn.dataset.id) return;
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('revokeConfirmTitle'),
       message: t('revokeConfirmMsg'),
       confirmLabel: t('revoke'),

@@ -8,8 +8,17 @@
 // The rename/move modal owns its element handles + `renameMode` below; the kebab "More actions" menu that
 // opens it lives in MoreActionsMenu (14a-more-menu.ts).
 
+import { t } from '../core/i18n';
+import { IS_OFFLINE_BUILD } from '../core/data-csrf';
+import { AtlasCombobox } from '../ui/combobox';
+import { currentFile } from '../core/state';
+import { fileMap } from '../core/tree';
+import { contentCache } from '../content/content-tree';
+import { setStatus } from '../core/net';
+import { getAllDirs, refreshTreeOrReload } from './new-file-modal';
+
 // ── Confirm / alert / prompt (the native-dialog replacements) ────────────────────────────────
-class Dialogs {
+export class Dialogs {
   // Confirm + alert share this one chrome (alert reuses it as a single-OK notice).
   private static readonly backdrop = document.getElementById('confirm-backdrop')!;
   private static readonly titleEl = document.getElementById('confirm-title')!;
@@ -185,44 +194,27 @@ class Dialogs {
   }
 }
 
-// Public globals — kept as top-level names (not class refs) because still-.js callers reach them by name.
-function confirmDialog(opts: string | DialogOptions): Promise<boolean> {
-  return Dialogs.confirm(opts);
-}
-
-function alertDialog(opts: string | DialogOptions): Promise<void> {
-  return Dialogs.alert(opts);
-}
-
-function promptDialog(opts?: DialogOptions): Promise<string | null> {
-  return Dialogs.prompt(opts);
-}
-
-function notifyError(key: string, ...args: unknown[]): Promise<void> {
-  return Dialogs.notifyError(key, ...args);
-}
-
 // ── Rename / move modal ──────────────────────────────────────────────────────────────────────
 // Element handles + the cross-file `renameMode`. RenameModal drives the rename/move form; the kebab
 // "More actions" menu (btn-more / btn-more-menu) that opens it lives in MoreActionsMenu (14a-more-menu.ts,
 // concatenated next). renameBackdrop is also probed by 19-newfile.ts's Escape stack and 99-bootstrap.
-const btnMore = document.getElementById('btn-more');
-const btnMoreMenu = document.getElementById('btn-more-menu');
-const renameBackdrop = document.getElementById('rename-backdrop');
-const renameForm = document.getElementById('rename-form');
-const renameTitle = document.getElementById('rename-title');
-const renameDir = document.getElementById('rename-dir');
-const renameDirWrap = document.getElementById('rename-dir-wrap');
-const renameName = document.getElementById('rename-name');
-const renameError = document.getElementById('rename-error');
-const renameCancel = document.getElementById('rename-cancel');
+export const btnMore = document.getElementById('btn-more');
+export const btnMoreMenu = document.getElementById('btn-more-menu');
+export const renameBackdrop = document.getElementById('rename-backdrop');
+export const renameForm = document.getElementById('rename-form');
+export const renameTitle = document.getElementById('rename-title');
+export const renameDir = document.getElementById('rename-dir');
+export const renameDirWrap = document.getElementById('rename-dir-wrap');
+export const renameName = document.getElementById('rename-name');
+export const renameError = document.getElementById('rename-error');
+export const renameCancel = document.getElementById('rename-cancel');
 
-let renameMode: string | null = null;
+export let renameMode: string | null = null;
 
 // Dir combobox (move mode): created once for its side effect — the controller is never read back.
 AtlasCombobox(renameDir!, { source: getAllDirs, creatable: true });
 
-class RenameModal {
+export class RenameModal {
   constructor() {
     renameCancel!.addEventListener('click', () => this.close());
     document.getElementById('rename-close')?.addEventListener('click', () => this.close());
@@ -338,13 +330,4 @@ class RenameModal {
   }
 }
 
-const renameModal = new RenameModal();
-
-function openRenameModal(mode: 'rename' | 'move'): void {
-  renameModal.open(mode);
-}
-
-// Called by 19-newfile.js's global Escape-stack handler (still .js) — keep it a top-level global.
-function closeRenameModal(): void {
-  renameModal.close();
-}
+export const renameModal = new RenameModal();

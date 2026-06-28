@@ -4,7 +4,10 @@
 // factory entry AtlasCombobox(input, opts) -> ComboboxController is a bareword global the still-.js
 // modules call. CSS lives in styles/03-panels.css. Opts/controller shapes: interface/Combobox*.ts.
 
-class Combobox implements ComboboxController {
+import { escapeHtml } from '../core/utils';
+import { t } from '../core/i18n';
+
+export class Combobox implements ComboboxController {
   private readonly input: HTMLInputElement;
   private readonly opts: ComboboxOptions;
   private readonly pop: HTMLDivElement;
@@ -260,6 +263,6 @@ class Combobox implements ComboboxController {
 }
 
 // Factory (the viewer is concatenated scripts, not ES modules): the bareword every consumer calls.
-function AtlasCombobox(input: HTMLElement, opts: ComboboxOptions): ComboboxController {
+export function AtlasCombobox(input: HTMLElement, opts: ComboboxOptions): ComboboxController {
   return new Combobox(input, opts);
 }

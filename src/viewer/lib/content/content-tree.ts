@@ -4,10 +4,23 @@
 // independent (golden B). Top-level: no IIFE — the content loader + the markdown setup are shared
 // globals other (still-.js) modules read; only the tree's internals are encapsulated in the class.
 
-// ─── Content loader (a small service; kept as functions for now, classed later) ───────────────
-const contentCache = new Map<string, string>();
+import { IS_OFFLINE_BUILD, EMBED_CONTENT, TREE } from '../core/data-csrf';
+import { t } from '../core/i18n';
+import { escapeHtml } from '../core/utils';
+import { fileMap } from '../core/tree';
+import { treeEl } from '../core/dom-refs';
+import { currentFile } from '../core/state';
+import { h, raw, render } from '../runtime/atlas-dom';
+import { renameModal } from '../modals/dialogs';
+import { dirRenameModal } from '../modals/new-file-modal';
+import { settingsPanel } from '../admin/settings/settings-panel';
+import { docRenderer } from './doc-renderer';
+import { decorateTreeBadges } from './notes/notes-index';
 
-async function loadContent(file: FileNode): Promise<string> {
+// ─── Content loader (a small service; kept as functions for now, classed later) ───────────────
+export const contentCache = new Map<string, string>();
+
+export async function loadContent(file: FileNode): Promise<string> {
   if (file.content != null) return file.content; // offline-baked or already loaded
 
   const cached = contentCache.get(file.path);
@@ -42,8 +55,17 @@ async function loadContent(file: FileNode): Promise<string> {
 
 // Shared with the todo widget + showWelcome; declared early to avoid TDZ. Relocated to their
 // owning modules (13-todos / 05b-notes-panel) when those migrate.
-let todos: any[] = [];
-let notesIndex: Record<string, number> | null = null;
+export let todos: any[] = [];
+
+export function setTodos(v: any[]): void {
+  todos = v;
+}
+
+export let notesIndex: Record<string, number> | null = null;
+
+export function setNotesIndex(v: Record<string, number> | null): void {
+  notesIndex = v;
+}
 
 // ─── Markdown pipeline (marked + hljs, wikilink maps) — stays here for load order, splits to
 // 03-markdown when it migrates. ──────────────────────────────────────────────────────────────
@@ -75,10 +97,16 @@ marked.use({
 
 // Wikilinks [[doc]]: target → path resolution (direct path, else stem). Maps built once over
 // fileMap; any openable doc is a valid target. Nulled on reload (was a latent stale-cache bug).
-const WL_TARGET_EXTS = ['.md', '.html', '.pdf', '.docx'];
-let _wlMaps: { byPath: Record<string, string>; byStem: Record<string, string> } | null = null;
+export const WL_TARGET_EXTS = ['.md', '.html', '.pdf', '.docx'];
+export let _wlMaps: { byPath: Record<string, string>; byStem: Record<string, string> } | null = null;
 
-function wlMaps(): { byPath: Record<string, string>; byStem: Record<string, string> } {
+export function setWlMaps(
+  v: { byPath: Record<string, string>; byStem: Record<string, string> } | null,
+): void {
+  _wlMaps = v;
+}
+
+export function wlMaps(): { byPath: Record<string, string>; byStem: Record<string, string> } {
   if (_wlMaps) return _wlMaps;
 
   const byPath: Record<string, string> = {};
@@ -97,7 +125,7 @@ function wlMaps(): { byPath: Record<string, string>; byStem: Record<string, stri
 }
 
 // ─── The tree ─────────────────────────────────────────────────────────────────────────────────
-class ContentTree {
+export class ContentTree {
   // Open folders, keyed on the FULL dir path (homonym independence). Top-level dirs are seeded
   // open on every reload (force-open after an SSE rebuild); a plain rerender keeps a user's closes.
   private openDirs = new Set<string>();
@@ -169,11 +197,11 @@ class ContentTree {
       );
     }
     btnChildren.push(
-      h('span', { class: 'dir-rename-btn tree-action-btn', title: t('renameFolder'), onClick: (e: Event) => { e.stopPropagation(); openDirRenameModal(childPath); } }, raw(ContentTree.PENCIL_ICON)),
+      h('span', { class: 'dir-rename-btn tree-action-btn', title: t('renameFolder'), onClick: (e: Event) => { e.stopPropagation(); dirRenameModal.open(childPath); } }, raw(ContentTree.PENCIL_ICON)),
     );
     if (!isRemote) {
       btnChildren.push(
-        h('span', { class: 'dir-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.stopPropagation(); openPublishNode(childPath); } }, raw(ContentTree.LINK_ICON)),
+        h('span', { class: 'dir-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.stopPropagation(); settingsPanel.openPublish(childPath); } }, raw(ContentTree.LINK_ICON)),
       );
     }
 
@@ -204,8 +232,8 @@ class ContentTree {
     if (fileActionable) {
       aChildren.push(
         h('span', { class: 'file-access-btn tree-action-btn', title: t('aclBtnTitle'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); if (window.openAccessFor) window.openAccessFor(child.path); } }, raw(ContentTree.ACL_ICON)),
-        h('span', { class: 'file-rename-btn tree-action-btn', title: t('renameFile'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); showMarkdown(child); openRenameModal('rename'); } }, raw(ContentTree.PENCIL_ICON)),
-        h('span', { class: 'file-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); openPublishNode(child.path); } }, raw(ContentTree.LINK_ICON)),
+        h('span', { class: 'file-rename-btn tree-action-btn', title: t('renameFile'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); docRenderer.show(child); renameModal.open('rename'); } }, raw(ContentTree.PENCIL_ICON)),
+        h('span', { class: 'file-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); settingsPanel.openPublish(child.path); } }, raw(ContentTree.LINK_ICON)),
       );
     }
 
@@ -219,7 +247,7 @@ class ContentTree {
     if (openable) {
       props.onClick = (e: Event) => {
         e.preventDefault();
-        showMarkdown(child);
+        docRenderer.show(child);
         history.replaceState(null, '', '#' + encodeURIComponent(child.path));
       };
     } else {
@@ -306,7 +334,7 @@ class ContentTree {
   }
 }
 
-const contentTree = new ContentTree();
+export const contentTree = new ContentTree();
 
 // Toolbar: expand/collapse every folder.
 (function () {

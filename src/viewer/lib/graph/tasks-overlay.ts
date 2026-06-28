@@ -2,7 +2,17 @@
 // row click opens its doc and scrolls to the task. Imperative DOM (innerHTML + createElement), byte-for-
 // behaviour with the pre-migration view — the Atlas DOM runtime port is a later pass. Self-contained
 // (no graph state), so the singleton is constructed right here; 11-palette-pins reads it by name.
-class TasksOverlay {
+
+import { IS_OFFLINE_BUILD, EMBED_TASKS } from '../core/data-csrf';
+import { sse } from '../core/sse-coord';
+import { t } from '../core/i18n';
+import { contentEl } from '../core/dom-refs';
+import { fileMap } from '../core/tree';
+import { escapeHtml } from '../core/utils';
+import { highlightFirstMatch } from '../content/content-decorators';
+import { docRenderer } from '../content/doc-renderer';
+
+export class TasksOverlay {
   private overlay = document.getElementById('tasks-overlay')!;
   private list = document.getElementById('tasks-list')!;
   private stats = document.getElementById('tasks-stats')!;
@@ -213,7 +223,7 @@ class TasksOverlay {
           this.close();
 
           if (!file) return;
-          await showMarkdown(file);
+          await docRenderer.show(file);
           history.replaceState(null, '', '#' + encodeURIComponent(file.path));
           this.scrollToCheckbox(task);
         });
@@ -225,4 +235,4 @@ class TasksOverlay {
   }
 }
 
-const tasksOverlay = new TasksOverlay();
+export const tasksOverlay = new TasksOverlay();

@@ -1,7 +1,12 @@
 // Settings › Profile tab (self-service, "security" pane): prefill + save your first/last name. The
 // form markup is static in 05-settings.html; the submit handler is wired lazily on first load (the
 // dataset.wired guard) so it is attached exactly once.
-class SettingsProfile {
+
+import { t } from '../../core/i18n';
+import { avatarSeed, constellationSvg } from '../../ui/avatar';
+import { SettingsContext } from './settings-shared';
+
+export class SettingsProfile {
   constructor(private readonly ctx: SettingsContext) {}
 
   async load(): Promise<void> {

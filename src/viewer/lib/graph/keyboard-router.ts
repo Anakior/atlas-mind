@@ -3,7 +3,16 @@
 // and the historyOverlay owned by 06, and opens the commandPalette owned by 11, so it must load after
 // all of them (the references resolve at keydown time, never at construction).
 
-class KeyboardRouter {
+import { currentFile, editMode } from '../core/state';
+import { searchEl } from '../core/dom-refs';
+import { editor } from '../editor/editor';
+import { layoutChrome } from '../home/layout-chrome';
+import { historyOverlay, historyPanel } from '../content/history-panel';
+import { commandPalette } from './command-palette';
+import { tasksOverlay } from './tasks-overlay';
+import { mindGraph } from './graph-boot';
+
+export class KeyboardRouter {
   constructor() {
     document.addEventListener('keydown', (e) => this.onKey(e));
   }
@@ -20,7 +29,7 @@ class KeyboardRouter {
     }
 
     if (e.key === 'Escape' && !historyOverlay.classList.contains('hidden')) {
-      closeHistory();
+      historyPanel.close();
 
       return;
     }
@@ -63,19 +72,19 @@ class KeyboardRouter {
 
     if (e.key === 'e' && currentFile && !editMode && !window.__viewerMode) {
       e.preventDefault();
-      enterEditMode();
+      editor.enterEditMode();
     }
 
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
       e.preventDefault();
-      toggleSidebar();
+      layoutChrome.toggleSidebar();
     }
 
     if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
       e.preventDefault();
-      toggleToc();
+      layoutChrome.toggleToc();
     }
   }
 }
 
-const keyboardRouter = new KeyboardRouter();
+export const keyboardRouter = new KeyboardRouter();

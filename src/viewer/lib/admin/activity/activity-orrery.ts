@@ -4,7 +4,11 @@
 // it reads through the ActivityRenderCtx the shell hands it (helpers + openDocHistory) and keeps its own
 // transient orreryItems (the list the nodes index into). Top-level (no IIFE) so it is a shared symbol in
 // the concat scope.
-class ActivityOrrery {
+
+import { escapeHtml } from '../../core/utils';
+import { ActivityIcons } from './activity-icons';
+
+export class ActivityOrrery {
   private orreryItems: ActivityItem[] = []; // the list the constellation nodes index into (respects the filter)
 
   constructor(private readonly ctx: ActivityRenderCtx) {}

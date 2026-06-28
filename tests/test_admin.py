@@ -786,9 +786,11 @@ class TestAdminUiPanel(unittest.TestCase):
         # (Recent, search, the Mind, stats) BEFORE the per-account filtered
         # softReload(). Gated on IS_OFFLINE_BUILD, not the protocol — a static
         # offline build is served over https on Pages. Mirrors 02-content-tree.js.
-        self.assertIn(
-            "if (IS_OFFLINE_BUILD) {\n  index(TREE);",
-            self.index)
+        # esbuild reshaped the indentation/line breaks; match the meaningful
+        # tokens (the offline-only index(TREE) call) ignoring exact whitespace.
+        self.assertRegex(
+            self.index,
+            r"if \(IS_OFFLINE_BUILD\)\s*\{\s*index\(TREE\);")
         # softReload still rebuilds fileMap from the FILTERED /api/tree.
         self.assertRegex(self.index, r"await fetch\([\"']/api/tree[\"']\)")  # quote-agnostic: esbuild re-quotes the .ts literal
 
@@ -877,8 +879,10 @@ class TestAdminUiPanel(unittest.TestCase):
         self.assertIn('id="reset-pw-confirm"', self.index)
         self.assertIn('id="reset-pw-toggle"', self.index)
         self.assertIn('id="reset-pw-success"', self.index)
-        # The "Reset" click handler opens the modal (no more prompt).
-        self.assertIn("openResetPassword(", self.index)
+        # The "Reset" click handler opens the modal (no more prompt). The thin
+        # global wrapper was removed by the esbuild bundling; the call site now
+        # uses the modal instance directly.
+        self.assertIn("resetPwModal.open(", self.index)
 
     def test_reset_password_i18n_keys_in_both_languages(self):
         # Every added label is bilingual (fr AND en in the single STRINGS).
@@ -963,12 +967,13 @@ class TestSecurityUi(unittest.TestCase):
         self.assertNotIn('cdn.', self.index.split('rsEncode')[1][:6000])
 
     def test_no_native_dialogs_for_security_actions(self):
-        # logout-all and the confirmations go through the in-app confirmDialog,
-        # not through native confirm()/alert()/prompt().
+        # logout-all and the confirmations go through the in-app Dialogs.confirm,
+        # not through native confirm()/alert()/prompt(). The thin global wrapper
+        # was removed by the esbuild bundling; call sites use Dialogs directly.
         self.assertNotIn('window.confirm', self.index)
         self.assertNotIn('window.alert', self.index)
         self.assertNotIn('window.prompt', self.index)
-        self.assertIn('confirmDialog(', self.index)
+        self.assertIn('Dialogs.confirm(', self.index)
 
     def test_security_i18n_keys_in_both_languages(self):
         for fr_value in ("settingsTabProfile: 'Profil'",

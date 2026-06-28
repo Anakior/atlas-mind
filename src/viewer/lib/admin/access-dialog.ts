@@ -2,7 +2,15 @@
 // The "Accès" button on a doc opens a dialog to see/own/share it with users,
 // groups, or everyone — backed by /api/acl. Read-only for a non-manager.
 
-class AccessDialog {
+import { meState } from '../core/data-csrf';
+import { t } from '../core/i18n';
+import { setStatus } from '../core/net';
+import { currentFile } from '../core/state';
+import { escapeHtml } from '../core/utils';
+import { Dialogs } from '../modals/dialogs';
+import { AtlasCombobox } from '../ui/combobox';
+
+export class AccessDialog {
   // ---- static partial DOM (the dialog markup ships as one unit; the backdrop guard above proved
   // it present, so the rest are asserted) ----
   private readonly backdrop = document.getElementById('acl-backdrop')!;
@@ -230,7 +238,7 @@ class AccessDialog {
 
     document.getElementById('acl-make-commons')!.addEventListener('click', async () => {
       // Destructive: removes the owner AND every grant of this doc → confirm first.
-      const ok = await confirmDialog({
+      const ok = await Dialogs.confirm({
         title: t('aclMakeCommons'),
         message: t('aclMakeCommonsConfirm'),
         confirmLabel: t('aclMakeCommons'),

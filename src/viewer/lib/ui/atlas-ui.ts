@@ -7,3 +7,5 @@ window.AtlasUI = {
   input: 'w-full px-3 py-2 text-sm bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent',
   label: 'text-[11px] uppercase tracking-wider text-ink-500 font-semibold mb-1 block',
 };
+
+export {};

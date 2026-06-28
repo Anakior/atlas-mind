@@ -1,7 +1,15 @@
 // Settings › Groups tab (principals group:<name>): list groups, create/edit a group (name + a chips
 // combobox of members), delete. The node-path combobox (Nodes tab) is mounted here too — a static
 // inputs-once wiring kept verbatim from the original wireGroups (see flag in the A3 report).
-class SettingsGroups {
+
+import { t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
+import { AtlasCombobox } from '../../ui/combobox';
+import { getAllDirs } from '../../modals/new-file-modal';
+import { Dialogs } from '../../modals/dialogs';
+import { SettingsContext } from './settings-shared';
+
+export class SettingsGroups {
   constructor(private readonly ctx: SettingsContext) {
     this.wire();
   }
@@ -125,7 +133,7 @@ class SettingsGroups {
       const delBtn = this.ctx.hit(e, '.settings-group-del');
 
       if (delBtn) {
-        const ok = await confirmDialog({
+        const ok = await Dialogs.confirm({
           title: t('settingsGroupDeleteTitle'),
           message: t('settingsGroupDeleteMsg', delBtn.dataset.name),
           confirmLabel: t('settingsGroupDelete'),

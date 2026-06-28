@@ -7,7 +7,12 @@
 //
 // Concatenated before 09-editor (09-autocomplete sorts first) so the class exists when the Editor's
 // field initializer runs `new WikilinkAutocomplete()` — class declarations do not hoist.
-class WikilinkAutocomplete {
+import { fileMap } from '../core/tree';
+import { WL_TARGET_EXTS } from '../content/content-tree';
+import { editTextarea } from '../core/state';
+import { escapeHtml } from '../core/utils';
+
+export class WikilinkAutocomplete {
   // The textarea computed-style props mirrored onto the caret-measuring div.
   private static readonly STYLE_KEYS = [
     'boxSizing',

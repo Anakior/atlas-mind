@@ -4,26 +4,33 @@
 // reassigned by 13-todos.ts, so they are shared globals (loaded before 13), not class state. The
 // read-only demo-banner IIFE rides along at the tail (it was the original file's last block). A later
 // pass relocates this surface to 13-todos / 01-state (plan items B1/B12).
-const todoWidget = document.getElementById('todo-widget')!;
-const todoHeader = document.getElementById('todo-header')!;
-const todoBody = document.getElementById('todo-body')!;
-const todoChevron = document.getElementById('todo-chevron')!;
-const todoList = document.getElementById('todo-list')!;
-const todoForm = document.getElementById('todo-form')!;
-const todoInput = document.getElementById('todo-input')!;
-const todoCount = document.getElementById('todo-count')!;
-const todoBubbleCount = document.getElementById('todo-bubble-count')!;
-const todoStatus = document.getElementById('todo-status')!;
+import { layoutChrome } from '../home/layout-chrome';
+import { todos } from '../content/content-tree';
+import { escapeHtml } from '../core/utils';
+import { SITE_NAME, IS_OFFLINE_BUILD } from '../core/data-csrf';
 
-let collapsed: boolean;
+declare const __TODO_CATEGORIES_JSON__: Array<{ cat: string; label: string }>;
+
+export const todoWidget = document.getElementById('todo-widget')!;
+export const todoHeader = document.getElementById('todo-header')!;
+export const todoBody = document.getElementById('todo-body')!;
+export const todoChevron = document.getElementById('todo-chevron')!;
+export const todoList = document.getElementById('todo-list')!;
+export const todoForm = document.getElementById('todo-form')!;
+export const todoInput = document.getElementById('todo-input')!;
+export const todoCount = document.getElementById('todo-count')!;
+export const todoBubbleCount = document.getElementById('todo-bubble-count')!;
+export const todoStatus = document.getElementById('todo-status')!;
+
+export let collapsed: boolean;
 
 {
   const stored = localStorage.getItem('todo-collapsed');
 
-  collapsed = stored === null ? isMobile() : stored === '1';
+  collapsed = stored === null ? layoutChrome.isMobile() : stored === '1';
 }
 
-function applyCollapsed(): void {
+export function applyCollapsed(): void {
   if (collapsed) {
     todoBody.classList.add('hidden');
     todoChevron.style.transform = 'rotate(-90deg)';
@@ -43,14 +50,14 @@ todoHeader.addEventListener('click', () => {
   applyCollapsed();
 });
 
-function updateHomeTodoStat(): void {
+export function updateHomeTodoStat(): void {
   const el = document.getElementById('home-todo-stat');
 
   if (!el) return;
   el.textContent = todos.length ? `${todos.filter((td) => td.done).length}/${todos.length}` : '–';
 }
 
-function buildFavicon(count: number): string {
+export function buildFavicon(count: number): string {
   const badge =
     count > 0
       ? "<circle cx='23' cy='9' r='8' fill='#ef4444' stroke='#0e0d12' stroke-width='1.5'/>" +
@@ -77,7 +84,7 @@ function buildFavicon(count: number): string {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
-function updateTabBadge(): void {
+export function updateTabBadge(): void {
   const pending = todos.filter((td) => !td.done).length;
 
   document.title = pending > 0 ? '(' + pending + ') ' + SITE_NAME : SITE_NAME;
@@ -86,20 +93,28 @@ function updateTabBadge(): void {
   if (link) link.href = buildFavicon(pending);
 }
 
-let showDoneTodos = localStorage.getItem('todo-show-done') === '1';
+export let showDoneTodos = localStorage.getItem('todo-show-done') === '1';
+
+export function setShowDoneTodos(v: boolean): void {
+  showDoneTodos = v;
+}
 // Todo categories injected at build time from atlas.toml ([todo].categories); tabs, labels and filter
 // all derive from them.
-const TODO_CATEGORIES = __TODO_CATEGORIES_JSON__;
-const TODO_CATS = TODO_CATEGORIES.map((c) => c.cat);
-const TODO_FILTER_LABELS: Record<string, string> = Object.fromEntries(
+export const TODO_CATEGORIES = __TODO_CATEGORIES_JSON__;
+export const TODO_CATS = TODO_CATEGORIES.map((c) => c.cat);
+export const TODO_FILTER_LABELS: Record<string, string> = Object.fromEntries(
   TODO_CATEGORIES.map((c): [string, string] => [c.cat, c.label]),
 );
 // An unknown cat (todo from a category removed from the config) falls back to the first configured
 // category (the default), instead of a hard-coded "work".
-function tcat(td: Todo): string {
+export function tcat(td: Todo): string {
   return TODO_CATS.includes(td.cat) ? td.cat : TODO_CATS[0];
 }
-let todoFilter = localStorage.getItem('todo-filter');
+export let todoFilter = localStorage.getItem('todo-filter');
+
+export function setTodoFilter(v: string | null): void {
+  todoFilter = v;
+}
 
 if (!todoFilter || !TODO_CATS.includes(todoFilter)) todoFilter = TODO_CATS[0];
 (function buildTodoFilterTabs(): void {
@@ -112,7 +127,7 @@ if (!todoFilter || !TODO_CATS.includes(todoFilter)) todoFilter = TODO_CATS[0];
   ).join('');
 })();
 
-function renderTodoFilterTabs(): void {
+export function renderTodoFilterTabs(): void {
   document.querySelectorAll('.todo-filter-btn').forEach((btn) => {
     const cat = (btn as HTMLElement).dataset.cat;
     const active = cat === todoFilter;

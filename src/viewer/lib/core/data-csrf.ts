@@ -4,25 +4,35 @@
 // The __NAME__ barewords are JSON literals pasted by render.py (single regex pass); esbuild
 // strips the types but never touches them, so the Python substitution still lands. Foundation
 // layer: NOT wrapped in an IIFE — these are the shared globals the rest of the viewer reads.
-const TREE = __DATA__;
-const EMBED_CONTENT = __EMBED_CONTENT__;
-const EMBED_BACKLINKS = __EMBED_BACKLINKS__;
-const EMBED_NOTES = __EMBED_NOTES__;
-const EMBED_TASKS = __EMBED_TASKS__;
+declare const __DATA__: DirNode;
+declare const __EMBED_CONTENT__: Record<string, string> | null;
+declare const __EMBED_BACKLINKS__: any;
+declare const __EMBED_NOTES__: any;
+declare const __EMBED_TASKS__: any;
+declare const __EMBED_ACTIVITY__: any;
+declare const __TEMPLATES__: Record<string, string>;
+declare const __TAGLINE_JSON__: string;
+declare const __SITE_PREFIX_JSON__: string;
+
+export const TREE = __DATA__;
+export const EMBED_CONTENT = __EMBED_CONTENT__;
+export const EMBED_BACKLINKS = __EMBED_BACKLINKS__;
+export const EMBED_NOTES = __EMBED_NOTES__;
+export const EMBED_TASKS = __EMBED_TASKS__;
 // Frozen activity-layer snapshot {events, stale, contradictions} for the offline
 // build (public minds); null online → the home fetches /api/activity live.
-const EMBED_ACTIVITY = __EMBED_ACTIVITY__;
+export const EMBED_ACTIVITY = __EMBED_ACTIVITY__;
 // New-document skeletons {label: markdown}, label = file name without extension.
 // Engine templates/ merged with <mind>/templates/ (mind overrides).
-const DOC_TEMPLATES = __TEMPLATES__;
-const IS_OFFLINE_BUILD = EMBED_CONTENT !== null;
+export const DOC_TEMPLATES = __TEMPLATES__;
+export const IS_OFFLINE_BUILD = EMBED_CONTENT !== null;
 // Captured from <title> BEFORE the todos badge mutates it. Entities are already
 // decoded by the parser, so re-escape via escapeHtml when displaying.
-const SITE_NAME = document.title;
+export const SITE_NAME = document.title;
 // Injected as JSON constants, not raw text placeholders: a backtick or ${…} in
 // atlas.toml must neither break the script nor evaluate code.
-const TAGLINE = __TAGLINE_JSON__;
-const SITE_PREFIX = __SITE_PREFIX_JSON__;
+export const TAGLINE = __TAGLINE_JSON__;
+export const SITE_PREFIX = __SITE_PREFIX_JSON__;
 
 // ─── CSRF synchronizer ───────────────────────────────────────────────────────
 // In cloud mode every authenticated MUTATING request needs the X-CSRF-Token
@@ -32,21 +42,30 @@ const SITE_PREFIX = __SITE_PREFIX_JSON__;
 //   2. else the kb_csrf cookie (readable, not HttpOnly) — for the first call
 //      before /api/me responds.
 // Refreshed via setCsrfToken() after any epoch bump (logout-all, TOTP enable/disable).
-let csrfToken: string | null = null;
-let meState: MeResponse | null = null; // latest /api/me (email, role, cloud, totp_enabled…)
-let totpEnabled = false; // 2FA state of the current account (cloud)
+export let csrfToken: string | null = null;
+export let meState: MeResponse | null = null; // latest /api/me (email, role, cloud, totp_enabled…)
 
-function readCsrfCookie(): string | null {
+export function setMeState(v: MeResponse | null): void {
+  meState = v;
+}
+
+export let totpEnabled = false; // 2FA state of the current account (cloud)
+
+export function setTotpEnabled(v: boolean): void {
+  totpEnabled = v;
+}
+
+export function readCsrfCookie(): string | null {
   const m = document.cookie.match(/(?:^|;\s*)kb_csrf=([^;]+)/);
 
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-function setCsrfToken(token: string | null): void {
+export function setCsrfToken(token: string | null): void {
   if (token) csrfToken = token;
 }
 
-function currentCsrfToken(): string | null {
+export function currentCsrfToken(): string | null {
   return csrfToken || readCsrfCookie();
 }
 

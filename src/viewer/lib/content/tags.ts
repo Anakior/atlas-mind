@@ -16,11 +16,23 @@
 // globals because 06/09/12 and 22-inbox call them bare in the shared bundle scope. renderDocTags gets
 // a thin top-level wrapper for the same reason. (highlightFirstMatch moved to 04c-content-decorators.)
 
-function stripFrontmatter(text: string): string {
+import { IS_OFFLINE_BUILD } from '../core/data-csrf';
+import { t } from '../core/i18n';
+import { escapeHtml } from '../core/utils';
+import { fileMap } from '../core/tree';
+import { contentEl } from '../core/dom-refs';
+import { currentFile, editTextarea } from '../core/state';
+import { Dialogs } from '../modals/dialogs';
+import { AtlasCombobox } from '../ui/combobox';
+import { loadContent, contentCache } from './content-tree';
+import { tagBrowsePage } from './tag-browse';
+import { docRenderer } from './doc-renderer';
+
+export function stripFrontmatter(text: string): string {
   return text.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n?/, '');
 }
 
-function folderTagsOf(path: string): string[] {
+export function folderTagsOf(path: string): string[] {
   return path
     .split('/')
     .slice(0, -1)
@@ -28,7 +40,7 @@ function folderTagsOf(path: string): string[] {
 }
 
 // ---- doc-tag chips (an HTML string spliced into 06-view-history's #content innerHTML) ----
-class DocTags {
+export class DocTags {
   renderDocTags(file: FileNode | null): string {
     if (!file || file.ext !== '.md') return '';
 
@@ -72,7 +84,7 @@ class DocTags {
 }
 
 // ---- the tag data layer: frontmatter rewrite, persist, and the all-tags aggregate ----
-class TagStore {
+export class TagStore {
   constructor(private readonly docTags: DocTags) {}
 
   allTagsList(): string[] {
@@ -139,7 +151,7 @@ class TagStore {
 
       if (!res.ok) throw new Error('HTTP ' + res.status);
     } catch (err) {
-      notifyError('tagSaveFailed', (err as Error).message);
+      Dialogs.notifyError('tagSaveFailed', (err as Error).message);
 
       return false;
     }
@@ -188,7 +200,7 @@ class TagStore {
 }
 
 // ---- the tag-editor popup island + the content-area click delegation ----
-class TagEditor {
+export class TagEditor {
   // The tag-editor popup wrapper (z-50, body-anchored). Only static class string worth hoisting.
   private static readonly EDITOR_CLASS =
     'fixed z-50 w-64 bg-navy-800 border subtle-border rounded-lg shadow-2xl shadow-black/70 p-3';
@@ -323,7 +335,7 @@ class TagEditor {
 
       if (tagBtn && tagBtn.dataset.tag) {
         e.preventDefault();
-        showTag(tagBtn.dataset.tag);
+        tagBrowsePage.showTag(tagBtn.dataset.tag);
 
         return;
       }
@@ -335,7 +347,7 @@ class TagEditor {
         const f = wl.dataset.path ? fileMap[wl.dataset.path] : undefined;
 
         if (f) {
-          showMarkdown(f);
+          docRenderer.show(f);
           history.replaceState(null, '', '#' + encodeURIComponent(f.path));
         }
       }
@@ -343,19 +355,14 @@ class TagEditor {
   }
 }
 
-const docTags = new DocTags();
-const tagStore = new TagStore(docTags);
-const tagEditor = new TagEditor(tagStore);
+export const docTags = new DocTags();
+export const tagStore = new TagStore(docTags);
+export const tagEditor = new TagEditor(tagStore);
 
 tagEditor.init();
 
-// Thin top-level wrapper — cross-module consumers call this bare in the shared bundle scope.
-function renderDocTags(file: FileNode | null): string {
-  return docTags.renderDocTags(file);
-}
-
 // ---- markdown insert primitives (09-editor's toolbar) — operate on the editTextarea island ----
-function mdInsertWrap(before: string, after: string, placeholderIfEmpty?: string): void {
+export function mdInsertWrap(before: string, after: string, placeholderIfEmpty?: string): void {
   const ta = editTextarea;
 
   if (!ta) return;
@@ -377,7 +384,7 @@ function mdInsertWrap(before: string, after: string, placeholderIfEmpty?: string
   ta.dispatchEvent(new Event('input'));
 }
 
-function mdInsertLineStart(prefix: string): void {
+export function mdInsertLineStart(prefix: string): void {
   const ta = editTextarea;
 
   if (!ta) return;
@@ -392,7 +399,7 @@ function mdInsertLineStart(prefix: string): void {
   ta.dispatchEvent(new Event('input'));
 }
 
-function mdInsertAtCursor(text: string): void {
+export function mdInsertAtCursor(text: string): void {
   const ta = editTextarea;
 
   if (!ta) return;

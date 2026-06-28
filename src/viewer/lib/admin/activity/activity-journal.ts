@@ -3,7 +3,12 @@
 // view — it reads the filtered feed, the journal toggles and the helper cluster through the
 // ActivityRenderCtx the shell hands it (the shell owns the state and the card-level wiring). Top-level
 // (no IIFE) so it is a shared symbol in the concat scope.
-class ActivityJournal {
+
+import { t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
+import { ActivityIcons } from './activity-icons';
+
+export class ActivityJournal {
   constructor(private readonly ctx: ActivityRenderCtx) {}
 
   private row(e: ActivityItem): string {

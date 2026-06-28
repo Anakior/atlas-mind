@@ -1,6 +1,7 @@
-"""Determinism + id-uniqueness of the constellation avatar generator (02-avatar.ts),
-exercised through node since the function is pure JS. The .ts is transpiled to a
-require()-able .cjs by jsmod.requirable (esbuild bridge for pure modules)."""
+"""Determinism + id-uniqueness of the constellation avatar generator (ui/avatar.ts),
+exercised through node since the function is pure JS. The .ts is bundled to an importable
+.mjs by jsmod.requirable (esbuild ESM bundle; avatar's own import of core/rng.ts is resolved
+in), and its named exports (constellationSvg/avatarSeed) are read via dynamic import()."""
 import re
 import shutil
 import subprocess
@@ -10,27 +11,29 @@ from pathlib import Path
 from jsmod import requirable
 
 AVATAR = Path(__file__).resolve().parent.parent / "src" / "viewer" / "lib" / "ui" / "avatar.ts"
-RNG = AVATAR.parent.parent / "core" / "rng.ts"  # avatar references Rng, a sibling bundle module
 
 
 def _svg(identity, size=56):
+    # Dynamic-import the bundled .mjs (as a file URL) and emit constellationSvg(identity, size).
     script = (
-        "require(process.argv[1]);"
-        "process.stdout.write(globalThis.constellationSvg(process.argv[2], +process.argv[3]));"
+        "const {pathToFileURL}=require('url');"
+        "import(pathToFileURL(process.argv[1]).href).then(m=>"
+        "process.stdout.write(m.constellationSvg(process.argv[2], +process.argv[3])));"
     )
     out = subprocess.run(
-        ["node", "-e", script, str(requirable(AVATAR, deps=(RNG,), expose=("constellationSvg", "avatarSeed"))), identity, str(size)],
+        ["node", "-e", script, str(requirable(AVATAR)), identity, str(size)],
         capture_output=True, text=True, check=True)
     return out.stdout
 
 
 def _seed(first, last, email):
     script = (
-        "require(process.argv[1]);"
-        "process.stdout.write(globalThis.avatarSeed(process.argv[2], process.argv[3], process.argv[4]));"
+        "const {pathToFileURL}=require('url');"
+        "import(pathToFileURL(process.argv[1]).href).then(m=>"
+        "process.stdout.write(m.avatarSeed(process.argv[2], process.argv[3], process.argv[4])));"
     )
     out = subprocess.run(
-        ["node", "-e", script, str(requirable(AVATAR, deps=(RNG,), expose=("constellationSvg", "avatarSeed"))), first, last, email],
+        ["node", "-e", script, str(requirable(AVATAR)), first, last, email],
         capture_output=True, text=True, check=True)
     return out.stdout
 

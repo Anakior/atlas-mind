@@ -5,15 +5,20 @@
 // quickCaptureModal instance by name.
 
 // ── Quick capture: element refs ────────────────────────────────────────────────────────────────
-const qcBtn = document.getElementById('quick-capture-btn');
-const qcBackdrop = document.getElementById('quick-capture-backdrop');
-const qcForm = document.getElementById('quick-capture-form');
-const qcTitle = document.getElementById('quick-capture-title');
-const qcBody = document.getElementById('quick-capture-body');
-const qcCancel = document.getElementById('quick-capture-cancel');
-const qcError = document.getElementById('quick-capture-error');
+import { Modal } from '../ui/modal-base';
+import { t } from '../core/i18n';
+import { slugify } from '../core/utils';
+import { setStatus } from '../core/net';
 
-class QuickCaptureModal extends Modal {
+export const qcBtn = document.getElementById('quick-capture-btn');
+export const qcBackdrop = document.getElementById('quick-capture-backdrop');
+export const qcForm = document.getElementById('quick-capture-form');
+export const qcTitle = document.getElementById('quick-capture-title');
+export const qcBody = document.getElementById('quick-capture-body');
+export const qcCancel = document.getElementById('quick-capture-cancel');
+export const qcError = document.getElementById('quick-capture-error');
+
+export class QuickCaptureModal extends Modal {
   // qc* are the nullable getElementById consts above; assert/cast to the precise type here.
   private readonly title = qcTitle as HTMLInputElement;
   private readonly body = qcBody as HTMLTextAreaElement;
@@ -82,4 +87,4 @@ class QuickCaptureModal extends Modal {
   }
 }
 
-const quickCaptureModal = new QuickCaptureModal();
+export const quickCaptureModal = new QuickCaptureModal();

@@ -11,28 +11,34 @@
 // Behaviour-preserving pass: the lists still build their rows by innerHTML string-concat and mutate
 // via delegated click listeners reading data-* — the keyed-runtime port is a later pass.
 
+import { LANG, t } from '../../core/i18n';
+import { currentFile } from '../../core/state';
+import { escapeHtml } from '../../core/utils';
+import { fileMap } from '../../core/tree';
+import { Dialogs } from '../../modals/dialogs';
+
 // ── Share modal (admin + server mode) ────────────────────────────────────────
 // The share-link modal: element refs + the two list helpers, plus the open/close/post logic below. Kept
 // imperative — a tiny static popup, not worth a component. The existing-links list builds its rows by
 // innerHTML string-concat (keyed-runtime port is a later pass), with hand-escaped fields. shareFormatDate
 // is a hoisted function reused by the Settings tab controllers (16c/16d/16e/16f) for their date columns.
-const btnShare = document.getElementById('btn-share')!;
-const shareBackdrop = document.getElementById('share-backdrop')!;
-const sharePath = document.getElementById('share-path')!;
-const shareStep1 = document.getElementById('share-step1')!;
-const shareStep2 = document.getElementById('share-step2')!;
-const shareUrl = document.getElementById('share-url')!;
-const shareCopy = document.getElementById('share-copy')!;
-const shareExpiry = document.getElementById('share-expiry')!;
-const shareError = document.getElementById('share-error')!;
-const shareCancel = document.getElementById('share-cancel')!;
-const shareClose = document.getElementById('share-close')!;
-const shareNew = document.getElementById('share-new')!;
-const shareExisting = document.getElementById('share-existing')!;
-const shareExistingList = document.getElementById('share-existing-list')!;
-const shareExistingCount = document.getElementById('share-existing-count')!;
+export const btnShare = document.getElementById('btn-share')!;
+export const shareBackdrop = document.getElementById('share-backdrop')!;
+export const sharePath = document.getElementById('share-path')!;
+export const shareStep1 = document.getElementById('share-step1')!;
+export const shareStep2 = document.getElementById('share-step2')!;
+export const shareUrl = document.getElementById('share-url')!;
+export const shareCopy = document.getElementById('share-copy')!;
+export const shareExpiry = document.getElementById('share-expiry')!;
+export const shareError = document.getElementById('share-error')!;
+export const shareCancel = document.getElementById('share-cancel')!;
+export const shareClose = document.getElementById('share-close')!;
+export const shareNew = document.getElementById('share-new')!;
+export const shareExisting = document.getElementById('share-existing')!;
+export const shareExistingList = document.getElementById('share-existing-list')!;
+export const shareExistingCount = document.getElementById('share-existing-count')!;
 
-function shareFormatDate(ts: number): string {
+export function shareFormatDate(ts: number): string {
   if (!ts) return '';
 
   return new Date(ts * 1000).toLocaleDateString(LANG, {
@@ -42,7 +48,7 @@ function shareFormatDate(ts: number): string {
   });
 }
 
-async function refreshShareList(): Promise<void> {
+export async function refreshShareList(): Promise<void> {
   const file = currentFile;
 
   if (!file) return;
@@ -99,7 +105,7 @@ async function refreshShareList(): Promise<void> {
   } catch (e) {}
 }
 
-function openShareModal(): void {
+export function openShareModal(): void {
   const file = currentFile;
 
   if (!file || window.__viewerMode) return;
@@ -111,7 +117,7 @@ function openShareModal(): void {
   refreshShareList();
 }
 
-function closeShareModal(): void {
+export function closeShareModal(): void {
   shareBackdrop!.classList.add('hidden');
 }
 
@@ -131,7 +137,7 @@ shareExistingList!.addEventListener('click', async (e) => {
   const delBtn = (e.target as HTMLElement).closest<HTMLElement>('.share-existing-del');
 
   if (delBtn) {
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('revokeConfirmTitle'),
       message: t('revokeConfirmMsg'),
       confirmLabel: t('revoke'),
@@ -220,7 +226,7 @@ shareCopy!.addEventListener('click', async () => {
 
 // ── HTTP + pure helpers ───────────────────────────────────────────────────────
 // HTTP status → human message (never the raw technical detail).
-function settingsHttpMessage(status: number): string {
+export function settingsHttpMessage(status: number): string {
   if (status === 403 || status === 401) return t('settingsErrForbidden');
 
   if (status === 409) return t('settingsErrConflict');
@@ -230,7 +236,7 @@ function settingsHttpMessage(status: number): string {
 
 // Shared JSON fetch for admin mutations: adds Content-Type, parses the body and raises a readable
 // message (not the server detail) on failure. Read cross-file by 15-reset-pw.js and 18-totp.js.
-async function settingsFetch<T = any>(url: string, options?: RequestInit): Promise<T> {
+export async function settingsFetch<T = any>(url: string, options?: RequestInit): Promise<T> {
   const opts: RequestInit = { ...options };
   const headers: Record<string, string> = { ...(opts.headers as Record<string, string> | undefined) };
 
@@ -258,7 +264,7 @@ async function settingsFetch<T = any>(url: string, options?: RequestInit): Promi
 }
 
 // Node name from a path: last segment, slugified.
-function suggestNodeName(path: string): string {
+export function suggestNodeName(path: string): string {
   const base = (String(path).split('/').pop() || path).replace(/\.(md|html)$/i, '');
 
   return (
@@ -271,7 +277,7 @@ function suggestNodeName(path: string): string {
 }
 
 // Info about the remote node a mirror doc belongs to (remotes/<name>/…).
-function remoteNodeInfo(path: string): { name: string; sourceRel: string; fileCount: number } | null {
+export function remoteNodeInfo(path: string): { name: string; sourceRel: string; fileCount: number } | null {
   const parts = (path || '').split('/');
 
   if (parts[0] !== 'remotes' || parts.length < 3) return null;
@@ -283,7 +289,7 @@ function remoteNodeInfo(path: string): { name: string; sourceRel: string; fileCo
 }
 
 // Read cross-file by 05b-notes-store (copies its own text), so it stays a bare global.
-async function copyToClipboard(text: string): Promise<boolean> {
+export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
 
@@ -297,7 +303,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 // The services every tab controller needs: the admin JSON fetch, the panel's single error banner,
 // and the copy-button helpers. The shell builds ONE and hands it to each of the seven controllers,
 // so none of them re-implements the banner or the clipboard flash.
-class SettingsContext {
+export class SettingsContext {
   private readonly errorEl = document.getElementById('settings-error')!;
 
   // The shared admin/share JSON fetch (declared above as a cross-file global).

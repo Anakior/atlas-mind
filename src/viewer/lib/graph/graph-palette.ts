@@ -3,7 +3,7 @@
 // in isolation. familyHue is (re)populated by GraphLayout.buildGraphModel on every open(); hierColor
 // reads it. Shared by GraphLayout (model build + structured scaffold colors) and GraphRenderer (the
 // organic zone blobs), injected into both rather than duplicated.
-class GraphPalette {
+export class GraphPalette {
   private static readonly GRAPH_COLORS = [
     '#5db5e8',
     '#fbc678',

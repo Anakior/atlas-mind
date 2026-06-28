@@ -1,5 +1,5 @@
 // Shared modal lifecycle. Subclasses add their open()/submit(); close() may be extended.
-class Modal {
+export class Modal {
   constructor(protected readonly backdrop: HTMLElement) {
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) this.close();

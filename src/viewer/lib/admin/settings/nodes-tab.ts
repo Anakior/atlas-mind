@@ -1,7 +1,13 @@
 // Settings › Nodes tab (hive): publish a doc as a node (one-time link), relink (regenerate the
 // token) or revoke. prefill() is the entry the shell's openPublish() delegates to when the tree's
 // "share as node" button pre-fills a path.
-class SettingsNodes {
+
+import { t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
+import { Dialogs } from '../../modals/dialogs';
+import { SettingsContext, shareFormatDate, suggestNodeName } from './settings-shared';
+
+export class SettingsNodes {
   private readonly list = document.getElementById('settings-nodes-list')!;
   private readonly form = document.getElementById('settings-node-form') as HTMLFormElement;
   private readonly result = document.getElementById('settings-node-result')!;
@@ -131,7 +137,7 @@ class SettingsNodes {
     if (relinkBtn) {
       // Re-publishing regenerates the token (old link dies), but it's the only way to get a
       // copyable link back — hence the warning.
-      const ok = await confirmDialog({
+      const ok = await Dialogs.confirm({
         title: t('settingsNodeRelinkTitle'),
         message: t('settingsNodeRelinkMsg', relinkBtn.dataset.name),
         confirmLabel: t('settingsNodeRelink'),
@@ -151,7 +157,7 @@ class SettingsNodes {
     const revokeBtn = this.ctx.hit(e, '.settings-node-revoke');
 
     if (!revokeBtn || !revokeBtn.dataset.name) return;
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('settingsRevokeNodeTitle'),
       message: t('settingsRevokeNodeMsg', revokeBtn.dataset.name),
       confirmLabel: t('revoke'),

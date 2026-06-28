@@ -6,13 +6,33 @@
 // contentTree.rerender() instead of an imperative DOM poke. showMarkdown stays a shared top-level
 // global (cross-module callers reference it by name). The anti-race guards stay object-identity
 // (currentFile !== file): a slow load for doc A must not clobber doc B.
-class DocRenderer {
+
+import { IS_OFFLINE_BUILD } from '../core/data-csrf';
+import { LANG, t } from '../core/i18n';
+import { escapeHtml, relativeDate } from '../core/utils';
+import { contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, btnEdit, btnSave, btnCancel } from '../core/dom-refs';
+import { currentFile, setCurrentFile, editMode } from '../core/state';
+import { editor } from '../editor/editor';
+import { pins } from '../graph/pins';
+import { renderSkeleton } from './skeleton';
+import { toc, readingTimeFromWords } from './toc';
+import { historyPanel } from './history-panel';
+import { contentTree, loadContent } from './content-tree';
+import { frameRenderer } from './frames';
+import { stripFrontmatter, docTags } from './tags';
+import { markdown } from './markdown';
+import { attachCopyButtons, highlightFirstMatch } from './content-decorators';
+import { taskCheckboxes } from './task-checkboxes';
+import { renderBacklinksFor } from './backlinks';
+import { notesPanel } from './notes/notes-panel';
+
+export class DocRenderer {
   // THE document renderer that owns #content. Writes the skeleton, gates the breadcrumb chrome,
   // dispatches by extension (.html/.pdf/.docx → an isolated frame, else the markdown pipeline) and
   // fires the post-render hooks. async: a slow load is raced out by the currentFile !== file guards.
   async show(file: FileNode, highlightQuery?: string): Promise<void> {
-    if (editMode) exitEditMode(false);
-    currentFile = file;
+    if (editMode) editor.exitEditMode(false);
+    setCurrentFile(file);
     // Reset the overrides set by HTML rendering (cf. renderHtmlFrame): a .md doc after a .html must
     // get back the prose width/padding, and the todos widget (hidden during the preview) reappears.
     contentEl.style.maxWidth = '';
@@ -73,9 +93,9 @@ class DocRenderer {
     if (dlExt) dlExt.textContent = file.ext || '';
     // Close any history panel left open from the previous doc so it never shows stale revisions; the
     // button itself is gated by historyAvailable().
-    closeHistory();
-    document.getElementById('btn-history')?.classList.toggle('hidden', !historyAvailable(file));
-    updatePinButton(file);
+    historyPanel.close();
+    document.getElementById('btn-history')?.classList.toggle('hidden', !historyPanel.available(file));
+    pins.updateButton(file);
     // Active highlight + ancestor-open are derived from currentFile by 02-content-tree (active when
     // path matches; ancestors open via its startsWith clause), so a rerender off the new currentFile
     // replaces the old imperative .active / .hidden / .caret poke and can't drift from the tree.
@@ -84,21 +104,21 @@ class DocRenderer {
 
     // .html document → standalone render in an isolated iframe, no markdown pipeline.
     if (file.ext === '.html') {
-      renderHtmlFrame(file);
+      frameRenderer.renderHtml(file);
 
       return;
     }
 
     // .pdf document → browser's native viewer in an iframe, no markdown.
     if (file.ext === '.pdf') {
-      renderPdfFrame(file);
+      frameRenderer.renderPdf(file);
 
       return;
     }
 
     // Word document → converted to readable HTML in the browser (read-only).
     if (file.ext === '.docx') {
-      renderDocxFrame(file);
+      frameRenderer.renderDocx(file);
 
       return;
     }
@@ -118,12 +138,12 @@ class DocRenderer {
     if (currentFile !== file) return;
     const body = stripFrontmatter(content);
 
-    contentEl.innerHTML = renderDocTags(file) + renderMd(body);
+    contentEl.innerHTML = docTags.renderDocTags(file) + markdown.render(body);
     attachCopyButtons();
-    wireTaskCheckboxes(file, content);
+    taskCheckboxes.wireTaskCheckboxes(file, content);
     renderBacklinksFor(file);
-    buildToc();
-    renderNotesFor(file);
+    toc.buildToc();
+    notesPanel.renderNotesFor(file);
     // Extensions hook: the doc has just been rendered (path + markdown without frontmatter).
     // Extensions listen to decorate / track the current doc.
     document.dispatchEvent(
@@ -134,8 +154,4 @@ class DocRenderer {
   }
 }
 
-const docRenderer = new DocRenderer();
-
-function showMarkdown(file: FileNode, highlightQuery?: string): Promise<void> {
-  return docRenderer.show(file, highlightQuery);
-}
+export const docRenderer = new DocRenderer();

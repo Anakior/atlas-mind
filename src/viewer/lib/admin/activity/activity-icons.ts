@@ -3,7 +3,7 @@
 // caps and the easter-egg lines. Split out of ActivityCard so the icon/data tables sit apart from the
 // behaviour; the shell's helper cluster and the view classes (Journal / Orrery / Health) read
 // ActivityIcons.* at render time. Top-level (no IIFE) so it is a shared symbol in the concat scope.
-class ActivityIcons {
+export class ActivityIcons {
   // CDC event types -> display label + tint + Heroicons-v2 outline path (clean line
   // icons, matching the rest of the app). Keyed by the type /api/activity returns.
   static readonly TYPES: Record<string, { label: string; color: string; d: string }> = {

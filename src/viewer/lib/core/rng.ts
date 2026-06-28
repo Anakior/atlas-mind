@@ -3,7 +3,7 @@
 // evolving state, so a consumer draws a whole deterministic sequence from one instance by pulling
 // next() in a fixed order. Lives in core/ and loads before its users in the shared concat scope.
 
-class Rng {
+export class Rng {
   readonly seed: number;
   private a: number;
 

@@ -1,6 +1,6 @@
 // Filename tooltip: one body-level popup shown over any truncated [data-name] label or any explicit
 // [data-tip] (the tree + breadcrumb use it). Document-delegated, so it stays imperative.
-class Tooltip {
+export class Tooltip {
   private readonly el: HTMLElement;
 
   constructor() {

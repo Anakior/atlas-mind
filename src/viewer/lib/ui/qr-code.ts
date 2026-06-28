@@ -12,7 +12,7 @@
 type QrCell = 0 | 1 | null;
 type QrBitMatrix = (0 | 1)[][];
 
-class QrCode {
+export class QrCode {
   // ── GF(256) arithmetic over the QR primitive polynomial 0x11d (Reed-Solomon ECC) ──
   // exp = antilog (length 512, doubled so log[a]+log[b] never overflows); log (length 256). Both
   // tables are filled once by the static block below, then read by gfMul/genPoly.
@@ -365,7 +365,7 @@ class QrCode {
 // false when `text` exceeds the encoder's capacity (matrix === null), so the caller can fall back to the
 // plaintext secret. A free bundle global — consumed by 18-totp-modal.ts's enrollment flow as a bareword —
 // reading QrCode off the shared top-level scope.
-function renderQrCanvas(el: HTMLElement, text: string, sizePx: number): boolean {
+export function renderQrCanvas(el: HTMLElement, text: string, sizePx: number): boolean {
   const matrix = new QrCode(text).matrix;
 
   if (!matrix) return false;

@@ -2,7 +2,13 @@
 // via refreshTreeOrReload. Extends the shared Modal lifecycle (01c-modal-base.ts); instantiated by
 // 19-newfile.ts, which also owns the dirRenameBackdrop ref and the openDirRenameModal global. Concatenated
 // before 19-newfile.ts so the class exists when `new DirRenameModal()` runs at module init.
-class DirRenameModal extends Modal {
+
+import { Modal } from '../ui/modal-base';
+import { t } from '../core/i18n';
+import { setStatus } from '../core/net';
+import { dirRenameBackdrop, refreshTreeOrReload } from './new-file-modal';
+
+export class DirRenameModal extends Modal {
   private readonly form = document.getElementById('dir-rename-form') as HTMLFormElement;
   private readonly input = document.getElementById('dir-rename-input') as HTMLInputElement;
   private readonly current = document.getElementById('dir-rename-current') as HTMLElement;

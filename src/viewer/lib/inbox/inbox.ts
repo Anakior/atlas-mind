@@ -11,9 +11,16 @@
 // survive the 5s poll. The sub region (progress + source chips) above the focus card is frozen while
 // an inline editor is open, so the input never shifts and the body-level combobox popup stays anchored.
 
-const esc = escapeHtml;
+import { escapeHtml } from '../core/utils';
+import { t } from '../core/i18n';
+import { raw, h, createApp } from '../runtime/atlas-dom';
+import { folderTagsOf } from '../content/tags';
+import { AtlasCombobox } from '../ui/combobox';
+import { getAllDirs } from '../modals/new-file-modal';
 
-class Inbox {
+export const esc = escapeHtml;
+
+export class Inbox {
   // ---- icons (Heroicons v2 outline, the viewer's set) ----
   private static readonly ISRC: Record<string, { tint: string; d: string }> = {
     gmail: { tint: '#5db5e8', d: 'M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75' },

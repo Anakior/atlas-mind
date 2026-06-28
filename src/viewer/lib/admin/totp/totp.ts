@@ -2,9 +2,6 @@
 // and 99-bootstrap.ts (/api/me boot) refresh the security pane. The pane itself (status badge +
 // enable/disable/logout-all buttons) is 18-totp-pane.ts; the enrollment modal (QR + secret + recovery
 // codes) is 18-totp-modal.ts. totpEnabled is the global 2FA flag owned by 00-data-csrf.ts.
-
-// Called cross-file by the Settings Security tab (Security tab open) and 99-bootstrap.ts (/api/me boot);
-// delegates to the security pane (18-totp-pane.ts).
-function refreshSecurityState(): void {
-  securityPane.refreshState();
-}
+//
+// The cross-file refreshSecurityState wrapper was removed in the ES-module pass: callers now invoke
+// securityPane.refreshState() directly (imported from ./security-pane).

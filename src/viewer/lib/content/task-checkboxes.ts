@@ -7,7 +7,15 @@
 // PUTs in the background, and rolls everything back on failure; the in-flight write is tracked via
 // sse.trackTaskWrite so the disk-derived rollup waits for it, and sse.muteSelfSave mutes the SSE
 // reload our own commit triggers.
-class TaskCheckboxes {
+
+import { isServerMode, currentFile } from '../core/state';
+import { contentEl } from '../core/dom-refs';
+import { sse } from '../core/sse-coord';
+import { Dialogs } from '../modals/dialogs';
+import { toggleNthTaskMarker } from './task-markers';
+import { contentCache } from './content-tree';
+
+export class TaskCheckboxes {
   // Make the rendered task checkboxes writable; each toggle flips its source marker and commits.
   wireTaskCheckboxes(file: FileNode, fullContent: string): void {
     // Offline (file://) or read-only shared view: no writing possible.
@@ -78,7 +86,7 @@ class TaskCheckboxes {
 
             if (currentFile && currentFile.path === file.path) currentFile.content = prev;
             box.checked = !desired;
-            notifyError('err', e.message);
+            Dialogs.notifyError('err', e.message);
           });
 
         sse.trackTaskWrite(write);
@@ -87,8 +95,4 @@ class TaskCheckboxes {
   }
 }
 
-const taskCheckboxes = new TaskCheckboxes();
-
-function wireTaskCheckboxes(file: FileNode, fullContent: string): void {
-  taskCheckboxes.wireTaskCheckboxes(file, fullContent);
-}
+export const taskCheckboxes = new TaskCheckboxes();

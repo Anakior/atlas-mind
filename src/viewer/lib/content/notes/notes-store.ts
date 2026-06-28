@@ -3,7 +3,20 @@
 // server-side (offline: EMBED_NOTES). The write methods close the popover (notePopover) on success
 // and re-render via showMarkdown; the loaded list is shared through noteContext (filled by
 // NotesPanel, read here by the copy-all export).
-class NotesStore {
+
+import { IS_OFFLINE_BUILD, EMBED_NOTES } from '../../core/data-csrf';
+import { currentFile } from '../../core/state';
+import { LANG, t } from '../../core/i18n';
+import { setStatus } from '../../core/net';
+import { copyToClipboard } from '../../admin/settings/settings-shared';
+import { Dialogs } from '../../modals/dialogs';
+import { docRenderer } from '../doc-renderer';
+import type { TextQuoteAnchor } from './note-anchor';
+import { noteContext } from './notes-panel';
+import { notePopover } from './note-popover';
+import { loadNotesIndex, decorateTreeBadges } from './notes-index';
+
+export class NotesStore {
   async fetchNotes(file: FileNode): Promise<NotePersisted[]> {
     if (IS_OFFLINE_BUILD) return (EMBED_NOTES && EMBED_NOTES[file.path]) || [];
 
@@ -59,7 +72,7 @@ class NotesStore {
 
       if (!res.ok) throw new Error('HTTP ' + res.status);
     } catch (e) {
-      notifyError('noteSaveFailed', (e as Error).message);
+      Dialogs.notifyError('noteSaveFailed', (e as Error).message);
 
       return;
     }
@@ -89,7 +102,7 @@ class NotesStore {
 
       if (!res.ok) throw new Error('HTTP ' + res.status);
     } catch (e) {
-      notifyError('actionFailed', (e as Error).message);
+      Dialogs.notifyError('actionFailed', (e as Error).message);
 
       return;
     }
@@ -100,7 +113,7 @@ class NotesStore {
 
   async deleteNote(note: NoteResolved): Promise<void> {
     if (!currentFile) return;
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('deleteNoteTitle'),
       message: t('deleteNoteMsg', note.note.length > 80 ? note.note.slice(0, 80) + '…' : note.note),
       confirmLabel: t('del'),
@@ -120,7 +133,7 @@ class NotesStore {
 
       if (!res.ok) throw new Error('HTTP ' + res.status);
     } catch (e) {
-      notifyError('actionFailed', (e as Error).message);
+      Dialogs.notifyError('actionFailed', (e as Error).message);
 
       return;
     }
@@ -149,8 +162,8 @@ class NotesStore {
       }
     } catch (_) {}
 
-    showMarkdown(currentFile);
+    docRenderer.show(currentFile);
   }
 }
 
-const notesStore = new NotesStore();
+export const notesStore = new NotesStore();

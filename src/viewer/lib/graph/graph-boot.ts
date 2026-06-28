@@ -5,12 +5,11 @@
 //
 // mindGraph stays a global (11-palette-pins dispatches to it by name); openGraph is the bareword the
 // home view wires to #home-graph-btn. Both delegate to the single instance.
-const mindGraph = new MindGraph();
 
-// Thin wrapper for 10-home-layout's home view (it wires #home-graph-btn → openGraph).
-function openGraph(): void {
-  mindGraph.open();
-}
+import { EMBED_MIND } from '../core/state';
+import { MindGraph } from './mind-graph';
+
+export const mindGraph = new MindGraph();
 
 // Embed hero: open the graph chrome-less. The host iframe is pointer-events:none, so there is nothing
 // to interact with — it just lives.

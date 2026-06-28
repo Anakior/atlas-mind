@@ -4,13 +4,15 @@
 // never goes through markdown rendering) and live inside #content rather than the keyed runtime, so
 // callers re-apply them after each content render.
 
+import { contentEl } from '../../core/dom-refs';
+
 // The locator subset of a note, built from a live selection and POSTed verbatim as the note's
 // anchor fields. Single-file, so not promoted to interface/.
-type TextQuoteAnchor = Pick<NotePersisted, 'exact' | 'prefix' | 'suffix' | 'pos'>;
+export type TextQuoteAnchor = Pick<NotePersisted, 'exact' | 'prefix' | 'suffix' | 'pos'>;
 
 // Text-quote anchoring (exact + prefix/suffix context + approximate pos), W3C Web Annotation style:
 // resilient to text shifts; if the passage disappears the note becomes orphaned.
-class NoteAnchor {
+export class NoteAnchor {
   private static readonly CTX_LEN = 60; // captured prefix/suffix context length
 
   // Global text offset of a (node, offset) within contentEl, by walking the text nodes. -1 if the
@@ -158,4 +160,4 @@ class NoteAnchor {
   }
 }
 
-const noteAnchor = new NoteAnchor();
+export const noteAnchor = new NoteAnchor();

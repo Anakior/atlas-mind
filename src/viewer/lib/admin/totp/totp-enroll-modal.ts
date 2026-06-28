@@ -6,7 +6,17 @@
 // the pane wires its enable/disable buttons. The QR codec AND its canvas bridge are both 17-qr.ts (the
 // QrCode class + renderQrCanvas); enroll() calls renderQrCanvas to paint the otpauth URI. The mutating
 // requests go through settingsFetch (16-settings.ts).
-class TotpEnrollModal {
+
+import { readCsrfCookie, setCsrfToken, setTotpEnabled } from '../../core/data-csrf';
+import { t } from '../../core/i18n';
+import { setStatus } from '../../core/net';
+import { escapeHtml } from '../../core/utils';
+import { renderQrCanvas } from '../../ui/qr-code';
+import { settingsFetch } from '../settings/settings-shared';
+import { settingsPanel } from '../settings/settings-panel';
+import { securityPane } from './security-pane';
+
+export class TotpEnrollModal {
   private static readonly SIX_DIGITS = /^[0-9]{6}$/; // a 6-digit code is a TOTP, anything else a recovery code
 
   private readonly backdrop = document.getElementById('totp-backdrop')!;
@@ -96,7 +106,7 @@ class TotpEnrollModal {
       this.openModal('enroll');
       setTimeout(() => this.verifyCode.focus(), 60);
     } catch (err) {
-      showSettingsError((err as Error).message || t('settingsErrGeneric'));
+      settingsPanel.showError((err as Error).message || t('settingsErrGeneric'));
     }
   }
 
@@ -122,8 +132,8 @@ class TotpEnrollModal {
       // enable bumps the epoch → fresh session + kb_csrf cookies; reload the CSRF token so the next
       // mutating requests don't break.
       setCsrfToken(readCsrfCookie());
-      totpEnabled = true;
-      refreshSecurityState();
+      setTotpEnabled(true);
+      securityPane.refreshState();
       // Recovery codes are shown ONCE.
       this.recoveryCodes = Array.isArray(data.recovery_codes) ? data.recovery_codes : [];
       this.recoveryList.innerHTML = this.recoveryCodes
@@ -192,8 +202,8 @@ class TotpEnrollModal {
         body: JSON.stringify(body),
       });
       setCsrfToken(readCsrfCookie());
-      totpEnabled = false;
-      refreshSecurityState();
+      setTotpEnabled(false);
+      securityPane.refreshState();
       this.closeModal();
       setStatus(t('totpDisabledToast'), 'ok');
     } catch (err) {
@@ -222,4 +232,4 @@ class TotpEnrollModal {
   }
 }
 
-const totpModal = new TotpEnrollModal();
+export const totpModal = new TotpEnrollModal();

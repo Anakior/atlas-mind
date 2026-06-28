@@ -1,6 +1,14 @@
 // Settings › Users tab: list the accounts, invite a new one (one-time link), resend a pending
 // invite, reset a password, or delete. All mutations go through the shared SettingsContext.
-class SettingsUsers {
+
+import { t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
+import { avatarSeed, constellationSvg } from '../../ui/avatar';
+import { Dialogs } from '../../modals/dialogs';
+import { resetPwModal } from '../../modals/reset-password';
+import { SettingsContext } from './settings-shared';
+
+export class SettingsUsers {
   private readonly list = document.getElementById('settings-users-list')!;
   private readonly form = document.getElementById('settings-user-form') as HTMLFormElement;
   private readonly inviteResult = document.getElementById('settings-invite-result')!;
@@ -144,7 +152,7 @@ class SettingsUsers {
     const resetBtn = this.ctx.hit(e, '.settings-user-reset');
 
     if (resetBtn) {
-      openResetPassword(resetBtn.dataset.email);
+      resetPwModal.open(resetBtn.dataset.email);
 
       return;
     }
@@ -152,7 +160,7 @@ class SettingsUsers {
     const delBtn = this.ctx.hit(e, '.settings-user-del');
 
     if (delBtn) {
-      const ok = await confirmDialog({
+      const ok = await Dialogs.confirm({
         title: t('settingsDeleteUserTitle'),
         message: t('settingsDeleteUserMsg', delBtn.dataset.email),
         confirmLabel: t('settingsDeleteUser'),

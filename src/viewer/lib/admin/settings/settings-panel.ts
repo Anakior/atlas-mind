@@ -6,7 +6,19 @@
 //
 // Concatenated LAST in the 16x family (16z sorts after 16b…16h) so every controller class is already
 // in scope when `new SettingsPanel()` constructs them — class declarations do not hoist.
-class SettingsPanel {
+
+import { t } from '../../core/i18n';
+import { securityPane } from '../totp/security-pane';
+import { SettingsContext } from './settings-shared';
+import { SettingsUsers } from './users-tab';
+import { SettingsTokens } from './tokens-tab';
+import { SettingsShares } from './shares-tab';
+import { SettingsNodes } from './nodes-tab';
+import { SettingsRemotes } from './remotes-tab';
+import { SettingsGroups } from './groups-tab';
+import { SettingsProfile } from './profile-tab';
+
+export class SettingsPanel {
   private readonly settingsBtn = document.getElementById('settings-btn')!;
   private readonly settingsBackdrop = document.getElementById('settings-backdrop')!;
   private readonly settingsClose = document.getElementById('settings-close')!;
@@ -85,7 +97,7 @@ class SettingsPanel {
       this.remotes.load();
     } else if (name === 'groups') this.groups.load();
     else if (name === 'security') {
-      refreshSecurityState();
+      securityPane.refreshState();
       this.profile.load();
     }
   }
@@ -113,22 +125,4 @@ class SettingsPanel {
   }
 }
 
-const settingsPanel = new SettingsPanel();
-
-// Cross-file globals still called from 18-totp, 15-reset-pw, 19-newfile and 02-content-tree.ts —
-// thin wrappers over the single panel instance.
-function showSettingsError(message: string): void {
-  settingsPanel.showError(message);
-}
-
-function clearSettingsError(): void {
-  settingsPanel.clearError();
-}
-
-function closeSettings(): void {
-  settingsPanel.close();
-}
-
-function openPublishNode(path: string): void {
-  settingsPanel.openPublish(path);
-}
+export const settingsPanel = new SettingsPanel();

@@ -1,7 +1,13 @@
 // Settings › Tokens tab: list active API tokens, create one (plaintext shown once), revoke. The
 // token result panel (plaintext + MCP URL) is the shell's only cross-tab dependency here — open()
 // hides it via hideResult().
-class SettingsTokens {
+
+import { t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
+import { Dialogs } from '../../modals/dialogs';
+import { SettingsContext, shareFormatDate } from './settings-shared';
+
+export class SettingsTokens {
   private readonly list = document.getElementById('settings-tokens-list')!;
   private readonly form = document.getElementById('settings-token-form') as HTMLFormElement;
   private readonly result = document.getElementById('settings-token-result')!;
@@ -106,7 +112,7 @@ class SettingsTokens {
     const revokeBtn = this.ctx.hit(e, '.settings-token-revoke');
 
     if (!revokeBtn) return;
-    const ok = await confirmDialog({
+    const ok = await Dialogs.confirm({
       title: t('settingsRevokeTokenTitle'),
       message: t('settingsRevokeTokenMsg', revokeBtn.dataset.label),
       confirmLabel: t('settingsRevokeToken'),
