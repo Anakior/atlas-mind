@@ -188,15 +188,15 @@ class TestI18nViewerDictionaryConsistency(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # The viewer is split: the STRINGS dict lives in web/js/*.js and the
-        # data-i18n markup in web/partials/*.html — read the full source (shell +
+        # The viewer is split: the STRINGS dict lives in viewer/lib/*.js and the
+        # data-i18n markup in viewer/partials/*.html — read the full source (shell +
         # fragments), as the build recollates them.
-        web = REPO_ROOT / "src" / "web"
+        web = REPO_ROOT / "src" / "viewer"
         parts = [(web / "viewer.html").read_text(encoding="utf-8")]
-        for sub in ("js", "partials", "styles"):
+        for sub in ("lib", "partials", "styles"):
             directory = web / sub
             if directory.is_dir():
-                for frag in sorted(directory.rglob("*")):  # rglob: js/ now has clean-named subfolders
+                for frag in sorted(directory.rglob("*")):  # rglob: lib/ now has clean-named subfolders
                     if frag.is_file():
                         parts.append(frag.read_text(encoding="utf-8"))
         cls.template = "\n".join(parts)

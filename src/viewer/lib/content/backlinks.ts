@@ -1,0 +1,118 @@
+// Backlinks panel (#toc-links): incoming / outgoing wikilinks + same-topic (shared-tag) docs.
+// Imperative DOM path (innerHTML / appendChild / addEventListener), NOT the keyed runtime.
+//
+// loadBacklinksIndex / renderBacklinksFor stay top-level over the `let` caches below (rather than a
+// class) because 99-bootstrap nulls backlinksIndex / backlinksLoading by name on reload, and a class
+// field can't be reassigned cross-file (mirrors 02's loadContent + contentCache). renderBacklinksFor
+// is a bareword global: its consumers (06-view-history, 09-editor) call it unqualified, and
+// loadBacklinksIndex is read by 12-tasks-graph.
+
+// Value type of backlinksIndex; single-file, so not promoted to interface/.
+interface BacklinkEntry {
+  out: string[];
+  in: string[];
+}
+
+// Lazy caches, reset to null cross-file by 99-bootstrap on reload — hence top-level `let`s.
+let backlinksIndex: Record<string, BacklinkEntry> | null = null;
+let backlinksLoading: Promise<Record<string, BacklinkEntry>> | null = null;
+
+async function loadBacklinksIndex(): Promise<Record<string, BacklinkEntry>> {
+  if (backlinksIndex) return backlinksIndex;
+
+  if (backlinksLoading) return backlinksLoading;
+  backlinksLoading = (async () => {
+    if (IS_OFFLINE_BUILD) {
+      backlinksIndex = EMBED_BACKLINKS || {};
+    } else {
+      try {
+        const res = await fetch('/_backlinks.json', { cache: 'no-cache' });
+
+        backlinksIndex = res.ok ? await res.json() : {};
+      } catch (e) {
+        backlinksIndex = {};
+      }
+    }
+
+    return backlinksIndex!;
+  })();
+
+  return backlinksLoading;
+}
+
+async function renderBacklinksFor(file: FileNode): Promise<void> {
+  // Synchronous reset (before the await): applyToc() from buildToc() will see a clean state.
+  tocHasLinks = false;
+
+  if (tocLinks) {
+    tocLinks.innerHTML = '';
+    tocLinks.classList.remove('border-t', 'panel-divider');
+  }
+
+  const idx = await loadBacklinksIndex();
+
+  if (currentFile !== file) return; // user changed page mid-load
+  const entry = idx[file.path] || { out: [], in: [] };
+  const resolve = (paths: string[] | undefined): FileNode[] =>
+    (paths || []).map((p) => fileMap[p]).filter((f): f is FileNode => !!f);
+  const incoming = resolve(entry.in);
+  const outgoing = resolve(entry.out);
+  // Same-topic docs: shared tags (excluding the current doc), ranked by shared-tag
+  // count then recency.
+  const tagSet = new Set(file.tags || []);
+  const shared = (f: FileNode): number => (f.tags || []).filter((tg) => tagSet.has(tg)).length;
+  const related = tagSet.size
+    ? Object.values(fileMap)
+        .filter((f) => f.ext === '.md' && f.path !== file.path && shared(f) > 0)
+        .sort((a, b) => shared(b) - shared(a) || (b.mtime || 0) - (a.mtime || 0))
+        .slice(0, 8)
+    : [];
+
+  tocHasLinks = !!(incoming.length || outgoing.length || related.length);
+  tocLinks.classList.toggle('hidden', !tocHasLinks); // empty section → no gap
+
+  if (!tocHasLinks) {
+    applyToc();
+
+    return;
+  }
+
+  const card = (f: FileNode): string =>
+    '<a class="block px-2 py-1 rounded hover:bg-white/5 text-ink-300 hover:text-accent cursor-pointer truncate" ' +
+    'data-conn="' +
+    escapeHtml(f.path) +
+    '" title="' +
+    escapeHtml(f.path) +
+    '">' +
+    escapeHtml(f.name) +
+    '</a>';
+  const group = (title: string, items: FileNode[]): string =>
+    items.length
+      ? '<div class="mt-2"><div class="px-2 pb-0.5 text-[10px] uppercase tracking-[0.1em] text-ink-500 font-bold">' +
+        title +
+        '</div>' +
+        items.map(card).join('') +
+        '</div>'
+      : '';
+
+  tocLinks.classList.add('border-t', 'panel-divider');
+  tocLinks.innerHTML =
+    '<div class="px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-accent font-bold">' +
+    t('linksTitle') +
+    '</div>' +
+    group(t('referencedBy', incoming.length), incoming) +
+    group(t('outgoingLinks', outgoing.length), outgoing) +
+    group(t('sameTopic', related.length), related);
+  tocLinks.querySelectorAll('[data-conn]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const f = fileMap[(a as HTMLElement).dataset.conn!];
+
+      if (f) {
+        showMarkdown(f);
+        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+      }
+    });
+  });
+  applyToc();
+}

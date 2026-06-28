@@ -60,10 +60,10 @@ class ReloadHub:
 
     # Editable viewer-source subdirs (never vendor/ or tailwind/node_modules, which
     # would make the mtime poll crawl over thousands of files every second).
-    _WATCHED_SUBDIRS = ('partials', 'styles', 'js', 'pages', 'i18n')
+    _WATCHED_SUBDIRS = ('partials', 'styles', 'lib', 'pages', 'i18n')
 
     def _sources_sig(self, config) -> float:
-        """Newest mtime across the engine's editable web sources (config.web_dir):
+        """Newest mtime across the engine's editable viewer sources (config.web_dir):
         its top-level files + the editable subdirs, recursively."""
         latest = 0.0
         candidates = []

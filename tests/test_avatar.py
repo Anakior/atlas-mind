@@ -9,7 +9,8 @@ from pathlib import Path
 
 from jsmod import requirable
 
-AVATAR = Path(__file__).resolve().parent.parent / "src" / "web" / "js" / "ui" / "avatar.ts"
+AVATAR = Path(__file__).resolve().parent.parent / "src" / "viewer" / "lib" / "ui" / "avatar.ts"
+RNG = AVATAR.parent.parent / "core" / "rng.ts"  # avatar references Rng, a sibling bundle module
 
 
 def _svg(identity, size=56):
@@ -18,7 +19,7 @@ def _svg(identity, size=56):
         "process.stdout.write(globalThis.constellationSvg(process.argv[2], +process.argv[3]));"
     )
     out = subprocess.run(
-        ["node", "-e", script, str(requirable(AVATAR)), identity, str(size)],
+        ["node", "-e", script, str(requirable(AVATAR, deps=(RNG,), expose=("constellationSvg", "avatarSeed"))), identity, str(size)],
         capture_output=True, text=True, check=True)
     return out.stdout
 
@@ -29,7 +30,7 @@ def _seed(first, last, email):
         "process.stdout.write(globalThis.avatarSeed(process.argv[2], process.argv[3], process.argv[4]));"
     )
     out = subprocess.run(
-        ["node", "-e", script, str(requirable(AVATAR)), first, last, email],
+        ["node", "-e", script, str(requirable(AVATAR, deps=(RNG,), expose=("constellationSvg", "avatarSeed"))), first, last, email],
         capture_output=True, text=True, check=True)
     return out.stdout
 

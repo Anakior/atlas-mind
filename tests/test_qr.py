@@ -1,4 +1,4 @@
-"""QR codec (src/web/js/17-qr.ts) — determinism + exact-matrix goldens, run through node.
+"""QR codec (src/viewer/lib/17-qr.ts) — determinism + exact-matrix goldens, run through node.
 
 The .ts is transpiled to a require()-able .cjs by jsmod.requirable; the codec attaches
 QrCode to the global scope, so we read `new globalThis.QrCode(text).matrix` and sha256 it.
@@ -14,7 +14,7 @@ from pathlib import Path
 
 from jsmod import requirable
 
-QR = Path(__file__).resolve().parent.parent / "src" / "web" / "js" / "ui" / "qr-code.ts"
+QR = Path(__file__).resolve().parent.parent / "src" / "viewer" / "lib" / "ui" / "qr-code.ts"
 
 # input -> (dimensions, sha256 of the rows joined by '\n', each cell '1' if ===1 else '0').
 GOLDENS = {
@@ -33,7 +33,7 @@ def _matrix(text):
         "process.stdout.write(JSON.stringify(new globalThis.QrCode(process.argv[2]).matrix));"
     )
     out = subprocess.run(
-        ["node", "-e", script, str(requirable(QR)), text],
+        ["node", "-e", script, str(requirable(QR, expose=("QrCode",))), text],
         capture_output=True, text=True, check=True)
     return json.loads(out.stdout)
 

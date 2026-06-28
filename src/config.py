@@ -262,9 +262,9 @@ class AtlasConfig:
         # the *.css/*.js there, server.py loads the *.py there at boot. Missing
         # directory = no extensions.
         self.extensions_dir = self.root / ".atlas" / "extensions"
-        # Viewer assets ship inside the package (src/web) so a pip wheel is
-        # self-contained — always the package's web/, never the mind's.
-        self.web_dir = PACKAGE_DIR / "web"
+        # Viewer assets ship inside the package (src/viewer) so a pip wheel is
+        # self-contained — always the package's viewer/, never the mind's.
+        self.web_dir = PACKAGE_DIR / "viewer"
 
         # ── instance identity (configurable branding) ──────────────────────
         # Brand is FIXED (SITE_WORDMARK); only the prefix is configurable. Empty

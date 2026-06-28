@@ -25,11 +25,15 @@ content/
 # ground truth — versioned despite the content/ rule above.
 !tests/fixtures/contradictions_kb/content/
 !tests/fixtures/contradictions_kb/content/**
-# Throwaway mind + artifacts for the Playwright e2e goldens (src/web/ts/e2e).
+# Exception: the viewer's content-RENDERING source modules (markdown / doc-renderer /
+# notes / ... code, NOT a mind's content) — versioned despite the content/ rule above.
+!src/viewer/lib/content/
+!src/viewer/lib/content/**
+# Throwaway mind + artifacts for the Playwright e2e goldens (src/viewer/build/e2e).
 .e2e-mind/
-src/web/ts/e2e/.auth/
-src/web/ts/e2e/.artifacts/
-src/web/ts/test-results/
-src/web/ts/playwright-report/
+src/viewer/build/e2e/.auth/
+src/viewer/build/e2e/.artifacts/
+src/viewer/build/test-results/
+src/viewer/build/playwright-report/
 
 key.pem

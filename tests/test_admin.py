@@ -956,11 +956,11 @@ class TestSecurityUi(unittest.TestCase):
     def test_qr_generator_is_self_contained(self):
         # QR rendered client-side WITHOUT an external lib (Reed-Solomon +
         # homemade mask): no CDN dependency, the QR code lives in the viewer.
-        self.assertIn('Gf256', self.index)  # the homemade GF(256) Reed-Solomon field
+        self.assertIn('gfMul', self.index)  # the homemade GF(256) Reed-Solomon field multiply
         self.assertIn('rsEncode', self.index)
         # No QR via a third-party lib/CDN.
         self.assertNotIn('qrcode.min.js', self.index)
-        self.assertNotIn('cdn.', self.index.split('Gf256')[1][:6000])
+        self.assertNotIn('cdn.', self.index.split('rsEncode')[1][:6000])
 
     def test_no_native_dialogs_for_security_actions(self):
         # logout-all and the confirmations go through the in-app confirmDialog,

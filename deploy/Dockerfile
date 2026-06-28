@@ -9,9 +9,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# The engine (src/) bundles its own assets: src/web (viewer + vendored libs/fonts
+# The engine (src/) bundles its own assets: src/viewer (viewer + vendored libs/fonts
 # + sw.js + icon.svg) and src/templates (new-document skeletons). The image is
-# SELF-CONTAINED — web_dir = PACKAGE_DIR/web (see config.py) — and the cloned mind
+# SELF-CONTAINED — web_dir = PACKAGE_DIR/viewer (see config.py) — and the cloned mind
 # carries no engine code, only content.
 COPY src/ ./src/
 

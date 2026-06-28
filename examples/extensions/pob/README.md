@@ -28,7 +28,7 @@ atlas serve <mind>
   `<mind>/.atlas/extensions/_tree_cache/` (outside git, outside the viewer).
 - `pob.js` — inlined into the viewer at build time, also injected into the
   public share pages: PoB decoder (pako 2.1.0 loaded lazily from
-  `/vendor/pako.min.js`, vendored in `src/web/vendor/`), markdown sheet
+  `/vendor/pako.min.js`, vendored in `src/viewer/vendor/`), markdown sheet
   generator, modals and button, with fr/en translations embedded.
 - `pob.css` — `.poe-*` styles for the sheet (viewer + share pages).
 

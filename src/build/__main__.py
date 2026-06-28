@@ -143,37 +143,37 @@ def _snapshot_activity(cfg):
 
 
 def _rebuild_js_bundle(web_dir) -> None:
-    """Regenerate web/vendor/app.bundle.js from web/js/*.{js,ts} via esbuild
-    (web/ts/build.mjs, transform-concat). Dev/CI only: skipped when the node toolchain
+    """Regenerate viewer/vendor/app.bundle.js from viewer/lib/*.{js,ts} via esbuild
+    (viewer/build/build.mjs, transform-concat). Dev/CI only: skipped when the node toolchain
     is absent, so the Python-only runtime never shells out to node and serves the
     committed bundle as-is. mtime-gated: skipped when the bundle is already newer than
-    every web/js source, so a content-edit dev reload never re-forks esbuild for nothing.
+    every viewer/lib source, so a content-edit dev reload never re-forks esbuild for nothing.
     A failed compile aborts the build."""
-    ts_dir = web_dir / "ts"
+    ts_dir = web_dir / "build"
     if shutil.which("node") is None or not (ts_dir / "node_modules").is_dir():
         return
     bundle = web_dir / "vendor" / "app.bundle.js"
-    js_dir = web_dir / "js"
-    newest_src = max((p.stat().st_mtime for p in (*js_dir.glob("*.js"), *js_dir.glob("*.ts"))),
+    js_dir = web_dir / "lib"
+    newest_src = max((p.stat().st_mtime for p in js_dir.rglob("*.ts")),
                      default=0.0)
     # 2s tolerance mirrors render.py's freshness guard (absorbs checkout/copy mtime jitter).
     if bundle.is_file() and bundle.stat().st_mtime + 2.0 >= newest_src:
         return
     if subprocess.run(["node", "build.mjs"], cwd=str(ts_dir)).returncode != 0:
-        sys.exit("FATAL: esbuild bundle build failed (web/ts/build.mjs)")
+        sys.exit("FATAL: esbuild bundle build failed (viewer/build/build.mjs)")
 
 
 def _newest_tailwind_source_mtime(web_dir) -> float:
     """Newest mtime among everything that changes the compiled tailwind.css: the class
-    sources Tailwind scans (viewer/partials/pages/js + extension examples) and its config,
+    sources Tailwind scans (viewer/partials/pages/lib + extension examples) and its config,
     input and safelist extractor."""
     tw_dir = web_dir / "tailwind"
     sources = [web_dir / "viewer.html", tw_dir / "tailwind.config.cjs",
                tw_dir / "input.css", tw_dir / "extract-safelist.py"]
     sources += (web_dir / "partials").rglob("*.html")
     sources += (web_dir / "pages").rglob("*.html")
-    sources += (web_dir / "js").glob("*.js")
-    sources += (web_dir / "js").glob("*.ts")
+    sources += (web_dir / "lib").rglob("*.js")  # lib/ nests sources in clean-named subfolders
+    sources += (web_dir / "lib").rglob("*.ts")
     extensions = web_dir.parent / "examples" / "extensions"
     if extensions.is_dir():
         sources += extensions.rglob("*")
@@ -196,11 +196,11 @@ def _rebuild_tailwind(web_dir) -> None:
     # extract the dynamic-class safelist, then compile. cli.js is invoked via node so the
     # call is cross-platform (no .cmd/.bin shim juggling).
     if subprocess.run([sys.executable, "extract-safelist.py"], cwd=str(tw_dir)).returncode != 0:
-        sys.exit("FATAL: tailwind safelist extraction failed (web/tailwind/extract-safelist.py)")
+        sys.exit("FATAL: tailwind safelist extraction failed (viewer/tailwind/extract-safelist.py)")
     cli = tw_dir / "node_modules" / "tailwindcss" / "lib" / "cli.js"
     if subprocess.run(["node", str(cli), "-c", "tailwind.config.cjs", "-i", "input.css",
                        "-o", "../vendor/tailwind.css", "--minify"], cwd=str(tw_dir)).returncode != 0:
-        sys.exit("FATAL: tailwind compile failed (web/tailwind)")
+        sys.exit("FATAL: tailwind compile failed (viewer/tailwind)")
     # Tailwind skips the write when the output is byte-identical, leaving the OLD mtime, so
     # stamp the css now — else the gate keeps seeing it as stale and recompiles every build
     # while a class source stays newer.

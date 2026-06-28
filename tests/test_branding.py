@@ -14,7 +14,7 @@ side, JSON constant on the viewer's JS side -- never raw text in a template
 literal).
 
 Also covers the NUL-bytes fix (graph dedup key: separator "\\x00" -> "\\n"):
-web/viewer.html and dist/index.html must be NUL-free so grep audits stay
+viewer/viewer.html and dist/index.html must be NUL-free so grep audits stay
 reliable (grep treats a file with NUL as binary).
 """
 from __future__ import annotations
@@ -203,7 +203,7 @@ class TestBrandingHostilePrefix(unittest.TestCase):
 
 
 class TestBrandingNeutralDefaults(unittest.TestCase):
-    """Without atlas.toml: everything served is neutral, and the engine (web/)
+    """Without atlas.toml: everything served is neutral, and the engine (viewer/)
     no longer contains any personal marker nor NUL byte."""
 
     @classmethod
@@ -237,8 +237,8 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
             self.assertNotIn(placeholder, text)
         # The engine itself (template + service worker) is de-personalized: no
         # proper name nor a PWA cache under a personal name anymore.
-        template = (REPO_ROOT / "src" / "web" / "viewer.html").read_bytes()
-        sw = (REPO_ROOT / "src" / "web" / "sw.js").read_bytes()
+        template = (REPO_ROOT / "src" / "viewer" / "viewer.html").read_bytes()
+        sw = (REPO_ROOT / "src" / "viewer" / "sw.js").read_bytes()
         for marker in (b"Acme", b"acme", b"example corp"):
             self.assertEqual(template.count(marker), 0, marker)
             self.assertEqual(sw.count(marker), 0, marker)
@@ -260,7 +260,7 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
     def test_no_nul_bytes_in_template_nor_dist_index(self):
         # Fix agreed in the spec: the graph dedup key uses "\n" (impossible in a
         # path) instead of "\x00" -- zero NUL = reliable grep audits.
-        template = (REPO_ROOT / "src" / "web" / "viewer.html").read_bytes()
+        template = (REPO_ROOT / "src" / "viewer" / "viewer.html").read_bytes()
         self.assertEqual(template.count(b"\x00"), 0)
         dist_index = (self.srv.root / "dist" / "index.html").read_bytes()
         self.assertEqual(dist_index.count(b"\x00"), 0)

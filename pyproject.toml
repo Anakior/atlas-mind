@@ -55,7 +55,7 @@ Issues = "https://github.com/Anakior/atlas-mind/issues"
 Changelog = "https://github.com/Anakior/atlas-mind/releases"
 
 # The engine lives under src/ and is published as the `atlas_mind` package. The
-# viewer assets (src/web) and document skeletons (src/templates) live INSIDE the
+# viewer assets (src/viewer) and document skeletons (src/templates) live INSIDE the
 # package and are shipped as package data, so a `pip install atlas-mind` wheel is
 # fully self-contained (no clone, no separate assets to fetch).
 [tool.setuptools]
@@ -84,4 +84,4 @@ package-dir = { "atlas_mind" = "src" }
 version = { attr = "atlas_mind.__version__" }
 
 [tool.setuptools.package-data]
-atlas_mind = ["web/**/*", "templates/**/*"]
+atlas_mind = ["viewer/**/*", "templates/**/*"]
