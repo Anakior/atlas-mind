@@ -29,6 +29,7 @@ legacy hashes starting with "$2" (conditional import).
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -39,6 +40,19 @@ import time
 import unicodedata
 import uuid
 from pathlib import Path
+
+# Cross-platform advisory inter-process file lock primitive: fcntl on POSIX,
+# msvcrt on Windows. Exactly one of the two imports succeeds; on an exotic
+# platform exposing neither, _interprocess_lock degrades to a no-op (the
+# in-process Lock still fully serializes a single-process deployment).
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
+try:
+    import msvcrt
+except ImportError:  # POSIX
+    msvcrt = None
 
 API_ROLE = "api"
 
@@ -351,10 +365,17 @@ class FileStore:
                     the durable files aren't rewritten on every Bearer request.
 
     Concurrency: one threading.Lock per file around each read-modify-write
-    sequence; atomic write tempfile + os.replace; re-read when the mtime
-    changes (an external seed is seen immediately).
+    sequence (threads of the SAME process), PLUS a cross-process advisory lock
+    on <base>/.lock held inside it (see _rmw / _interprocess_lock) so a CLI
+    `atlas user`/`atlas token` mutation and the running server never interleave
+    a read-modify-write on the same durable registry file — two RMW sequences in
+    different PROCESSES would otherwise lose an update (last os.replace wins: a
+    token revocation or account creation silently dropped). Atomic write tempfile
+    + os.replace; re-read when the mtime changes (an external seed is seen
+    immediately, and is exactly why durable readers need no inter-process lock).
     """
 
+    LOCK_FILE = ".lock"  # cross-process advisory lock target (see _interprocess_lock)
     USERS_FILE = "users.json"
     SHARES_FILE = "shares.json"
     NODES_FILE = "nodes.json"
@@ -452,6 +473,53 @@ class FileStore:
             self._cache[name] = ((self.base / name).stat().st_mtime_ns, data)
         except OSError:
             self._cache.pop(name, None)
+
+    # ── cross-process advisory lock ───────────────────────────────────────────
+
+    @contextlib.contextmanager
+    def _interprocess_lock(self):
+        """Hold an EXCLUSIVE advisory lock across PROCESSES on <base>/.lock for the
+        duration of the block. Single lock file for the whole store: it serializes
+        every durable read-modify-write so the CLI and the server can't both load,
+        mutate and atomically rewrite the same registry file and lose one update.
+
+        fcntl.flock on POSIX, msvcrt.locking on Windows; a fresh handle per call so
+        the lock follows the open file description (correct cross-process semantics).
+        ALWAYS acquired INSIDE the per-file in-process Lock (see _rmw): the global
+        acquisition order is in-process → inter-process and no method ever holds two
+        in-process locks, so no deadlock can form. On a platform exposing neither
+        primitive it degrades to a no-op (a single-process deployment is unaffected,
+        the in-process Lock already serializing it)."""
+        self.base.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(self.base / self.LOCK_FILE), os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            if fcntl is not None:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            elif msvcrt is not None:
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+            yield
+        finally:
+            try:
+                if fcntl is not None:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                elif msvcrt is not None:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+            finally:
+                os.close(fd)
+
+    @contextlib.contextmanager
+    def _rmw(self, name: str):
+        """Critical section for a READ-MODIFY-WRITE on durable registry file `name`:
+        take the per-file in-process Lock FIRST, then the cross-process advisory lock
+        INSIDE it (consistent order → no deadlock). Every method that loads a durable
+        file, mutates it and atomically rewrites it enters through here. Plain readers
+        keep using self._locks[name] directly — atomic os.replace already gives them a
+        whole-file view and a reader can't lose an update — as do the two volatile
+        state.json writers (server-only, best-effort, on the per-request hot path)."""
+        with self._locks[name], self._interprocess_lock():
+            yield
 
     # ── users ────────────────────────────────────────────────────────────────
 
@@ -552,7 +620,7 @@ class FileStore:
             pass
 
     def upsert_user(self, email: str, fields: dict) -> None:
-        with self._locks[self.USERS_FILE]:
+        with self._rmw(self.USERS_FILE):
             users = [dict(u) for u in self._load(self.USERS_FILE)]
             for user in users:
                 if user.get("email") == email:
@@ -575,7 +643,7 @@ class FileStore:
         if not token_sha256 or not password_hash:
             return None
         now = int(time.time())
-        with self._locks[self.USERS_FILE]:
+        with self._rmw(self.USERS_FILE):
             users = [dict(u) for u in self._load(self.USERS_FILE)]
             for user in users:
                 stored = user.get("invite_token_hash") or ""
@@ -605,7 +673,7 @@ class FileStore:
         removed (constant-time comparison)."""
         if not target_hash:
             return False
-        with self._locks[self.USERS_FILE]:
+        with self._rmw(self.USERS_FILE):
             users = [dict(u) for u in self._load(self.USERS_FILE)]
             target = next((u for u in users if u.get("email") == email), None)
             if target is None:
@@ -636,7 +704,7 @@ class FileStore:
         DELETEs on the last two admins can't both drop to zero). Raises
         LastAdminError if the deletion would remove the last admin. The CLI leaves
         this False (deliberate local recovery path)."""
-        with self._locks[self.USERS_FILE]:
+        with self._rmw(self.USERS_FILE):
             users = [dict(u) for u in self._load(self.USERS_FILE)]
             target = next((u for u in users if u.get("email") == email), None)
             if target is None:
@@ -709,7 +777,7 @@ class FileStore:
         Critical section under the USERS_FILE lock: no TOCTOU between the
         existence check and the write."""
         email = token_email(label, owner=acts_as)
-        with self._locks[self.USERS_FILE]:
+        with self._rmw(self.USERS_FILE):
             users = [dict(u) for u in self._load(self.USERS_FILE)]
             existing = next((u for u in users if u.get("email") == email), None)
             if existing is not None and existing.get("role") != API_ROLE:
@@ -738,7 +806,7 @@ class FileStore:
                 email = token_email(id_or_email)
             except ValueError:
                 return False
-        with self._locks[self.USERS_FILE]:
+        with self._rmw(self.USERS_FILE):
             users = [dict(u) for u in self._load(self.USERS_FILE)]
             for user in users:
                 if user.get("email") != email or user.get("role") != API_ROLE:
@@ -760,7 +828,7 @@ class FileStore:
         token = record.get("token")
         record["token_sha256"] = hash_share_token(token or "")
         record["id"] = str(uuid.uuid4())
-        with self._locks[self.SHARES_FILE]:
+        with self._rmw(self.SHARES_FILE):
             shares = [dict(s) for s in self._load(self.SHARES_FILE)]
             shares.append(record)
             self._write(self.SHARES_FILE, shares)
@@ -808,7 +876,7 @@ class FileStore:
         like revoke_share) rather than dropping, preserving the 410-gone signal.
         Returns the number revoked."""
         now = int(time.time())
-        with self._locks[self.SHARES_FILE]:
+        with self._rmw(self.SHARES_FILE):
             shares = [dict(s) for s in self._load(self.SHARES_FILE)]
             n = 0
             for s in shares:
@@ -823,7 +891,7 @@ class FileStore:
     def revoke_share(self, share_id: str) -> bool:
         # Plain equality on the id field: accepts native uuid4s as well as the
         # legacy 24-hex ids.
-        with self._locks[self.SHARES_FILE]:
+        with self._rmw(self.SHARES_FILE):
             shares = [dict(s) for s in self._load(self.SHARES_FILE)]
             for share in shares:
                 if share.get("id") != share_id:
@@ -841,7 +909,7 @@ class FileStore:
         link whose document was moved/renamed). The token is unchanged — only the
         stored target moves — so the public link keeps working. Returns False if no
         active share matches the id."""
-        with self._locks[self.SHARES_FILE]:
+        with self._rmw(self.SHARES_FILE):
             shares = [dict(s) for s in self._load(self.SHARES_FILE)]
             for share in shares:
                 if share.get("id") != share_id or share.get("revoked", False):
@@ -856,7 +924,7 @@ class FileStore:
         `rewrite(path)`. Returns the count updated (single atomic write). Shared by
         the file-move and folder-move repointers below."""
         count = 0
-        with self._locks[self.SHARES_FILE]:
+        with self._rmw(self.SHARES_FILE):
             shares = [dict(s) for s in self._load(self.SHARES_FILE)]
             for share in shares:
                 path = share.get("path") or ""
@@ -896,7 +964,7 @@ class FileStore:
 
     def set_owner(self, path: str, principal: str) -> None:
         """Set/replace the owner of `path` (creates the entry, keeps grants)."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             entry = dict(acl.get(path) or {})
             entry["owner"] = principal
@@ -909,7 +977,7 @@ class FileStore:
         """Grant (or upgrade) `principal` to `level` on `path`. One grant per
         principal: an existing grant for the same principal is replaced. `expires_at`
         (epoch) time-limits it; `by` records who granted it (audit + "shared by")."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             entry = dict(acl.get(path) or {})
             grants = [dict(g) for g in entry.get("grants", [])
@@ -926,7 +994,7 @@ class FileStore:
 
     def revoke_grant(self, path: str, principal: str) -> bool:
         """Remove `principal`'s grant on `path`. False if there was none."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             entry = acl.get(path)
             if not entry:
@@ -971,7 +1039,7 @@ class FileStore:
 
     def delete_acl(self, path: str) -> bool:
         """Drop the whole ACL entry of `path`. False if there was none."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             if path not in acl:
                 return False
@@ -984,7 +1052,7 @@ class FileStore:
         A commons doc keeps NO owner but remembers its creator, so on the commons
         the creator — not the admin — manages its sharing. Idempotent: never
         overwrites an existing creator (survives edits/moves)."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             entry = dict(acl.get(path) or {})
             if entry.get("creator"):
@@ -998,7 +1066,7 @@ class FileStore:
         """Return `path` to the commons: drop `owner` and all grants, but KEEP the
         `creator` (so its creator keeps managing it). Drops the entry entirely only
         when there was no creator to remember."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             entry = acl.get(path)
             if not entry:
@@ -1013,7 +1081,7 @@ class FileStore:
     def repoint_acl_by_path(self, old_path: str, new_path: str) -> bool:
         """Move a doc's ACL entry when it is renamed/moved in-app, so its sharing
         travels with it (mirror of repoint_shares_by_path). False if no entry."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             if old_path not in acl:
                 return False
@@ -1028,7 +1096,7 @@ class FileStore:
         new = new_dir.strip("/")
         old_prefix = old + "/"
         new_prefix = new + "/"
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             moved = {}
             for path in list(acl):
@@ -1051,7 +1119,7 @@ class FileStore:
         new = new_dir.strip("/")
         old_prefix = old + "/"
         new_prefix = new + "/"
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             added = {}
             for path, entry in acl.items():
@@ -1070,7 +1138,7 @@ class FileStore:
         rename. Returns the number removed."""
         old = old_dir.strip("/")
         old_prefix = old + "/"
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             stale = [p for p in acl if p == old or p.startswith(old_prefix)]
             for p in stale:
@@ -1085,7 +1153,7 @@ class FileStore:
         their owned/created docs go to a surviving admin instead of either falling
         to the commons (which would EXPOSE a private doc) or stranding under a ghost
         owner that no one — not even an admin — can manage. Returns entries changed."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             changed = 0
             for path, entry in list(acl.items()):
@@ -1109,7 +1177,7 @@ class FileStore:
         entry left with no owner, creator or grant. Used when a user or group is
         deleted so re-creating the same email / group name can't silently inherit
         the old grants (privilege resurrection). Returns entries changed."""
-        with self._locks[self.ACL_FILE]:
+        with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             changed = 0
             for path, entry in list(acl.items()):
@@ -1213,7 +1281,7 @@ class FileStore:
         """Create/replace a group's membership (lowercased + deduped, order kept).
         Emails are normalized to lowercase so a grant resolves regardless of the
         case typed — mirrors the user-email normalization at account creation."""
-        with self._locks[self.GROUPS_FILE]:
+        with self._rmw(self.GROUPS_FILE):
             groups = dict(self._load(self.GROUPS_FILE, dict))
             groups[name] = list(dict.fromkeys(
                 e.strip().lower() for e in emails if e and e.strip()))
@@ -1231,7 +1299,7 @@ class FileStore:
                     if isinstance(members, list)}
 
     def delete_group(self, name: str) -> bool:
-        with self._locks[self.GROUPS_FILE]:
+        with self._rmw(self.GROUPS_FILE):
             groups = dict(self._load(self.GROUPS_FILE, dict))
             if name not in groups:
                 return False
@@ -1255,7 +1323,7 @@ class FileStore:
 
     def save_user_todos(self, email: str, items) -> None:
         """Replace the member's whole todo list (private to that account)."""
-        with self._locks[self.TODOS_FILE]:
+        with self._rmw(self.TODOS_FILE):
             data = dict(self._load(self.TODOS_FILE, dict))
             data[email] = [dict(t) for t in items]
             self._write(self.TODOS_FILE, data)
@@ -1268,7 +1336,7 @@ class FileStore:
         record = {"name": name, "path": path.strip("/"),
                   "token_sha256": hash_api_token(token),
                   "created_at": int(time.time()), "revoked": False}
-        with self._locks[self.NODES_FILE]:
+        with self._rmw(self.NODES_FILE):
             nodes = [dict(n) for n in self._load(self.NODES_FILE)
                      if n.get("name") != name]
             nodes.append(record)
@@ -1294,7 +1362,7 @@ class FileStore:
         return None
 
     def revoke_node(self, name: str) -> bool:
-        with self._locks[self.NODES_FILE]:
+        with self._rmw(self.NODES_FILE):
             nodes = [dict(n) for n in self._load(self.NODES_FILE)]
             for n in nodes:
                 if n.get("name") == name and not n.get("revoked"):
@@ -1321,7 +1389,7 @@ class FileStore:
             "last_manifest_hash": "",
             "last_error": "",
         }
-        with self._locks[self.REMOTES_FILE]:
+        with self._rmw(self.REMOTES_FILE):
             remotes = [dict(r) for r in self._load(self.REMOTES_FILE)
                        if r.get("name") != name]
             remotes.append(clean)
@@ -1341,7 +1409,7 @@ class FileStore:
         return None
 
     def remove_remote(self, name: str) -> bool:
-        with self._locks[self.REMOTES_FILE]:
+        with self._rmw(self.REMOTES_FILE):
             remotes = [dict(r) for r in self._load(self.REMOTES_FILE)]
             kept = [r for r in remotes if r.get("name") != name]
             if len(kept) == len(remotes):
@@ -1351,7 +1419,7 @@ class FileStore:
 
     def update_remote_status(self, name: str, fields: dict) -> None:
         allowed = ("last_sync_at", "last_manifest_hash", "last_error")
-        with self._locks[self.REMOTES_FILE]:
+        with self._rmw(self.REMOTES_FILE):
             remotes = [dict(r) for r in self._load(self.REMOTES_FILE)]
             for r in remotes:
                 if r.get("name") == name:

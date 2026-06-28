@@ -38,6 +38,16 @@ VIEWER_EMAIL = "viewer@test.local"
 VIEWER_PASSWORD = "viewer-password-42"
 
 
+def _assert_i18n(tc, haystack, entry):
+    # The viewer STRINGS catalog ships from .ts now; esbuild re-quotes string literals
+    # (single→double) AND strips whitespace (no space after the `key:` colon) when
+    # bundling. Match each "key: 'value'" entry regardless of the surrounding quote
+    # style and of the collapsed spacing, while keeping the key + value tokens intact.
+    pattern = re.escape(entry).replace("'", "[\"']")
+    pattern = re.sub(r"\\?\s+", r"\\s*", pattern)
+    tc.assertRegex(haystack, pattern)
+
+
 def cloud_env() -> dict:
     return {
         "KB_AUTH_ENABLED": "1",
@@ -779,11 +789,14 @@ class TestAdminUiPanel(unittest.TestCase):
         # (Recent, search, the Mind, stats) BEFORE the per-account filtered
         # softReload(). Gated on IS_OFFLINE_BUILD, not the protocol — a static
         # offline build is served over https on Pages. Mirrors 02-content-tree.js.
-        self.assertIn(
-            "if (IS_OFFLINE_BUILD) {\n  index(TREE);",
-            self.index)
+        # esbuild collapsed the line breaks AND rewrote the `if (IS_OFFLINE_BUILD)
+        # { index(TREE); }` statement into a `&&` short-circuit. Match the meaningful
+        # tokens: index(TREE) is reached ONLY when IS_OFFLINE_BUILD is truthy.
+        self.assertRegex(
+            self.index,
+            r"IS_OFFLINE_BUILD\s*&&\s*index\(TREE\)")
         # softReload still rebuilds fileMap from the FILTERED /api/tree.
-        self.assertIn("const res = await fetch('/api/tree');", self.index)
+        self.assertRegex(self.index, r"await fetch\([\"']/api/tree[\"']\)")  # quote-agnostic: esbuild re-quotes the .ts literal
 
     def test_settings_panel_markup_present(self):
         # Panel container + its three tabs + the gear entry point.
@@ -812,12 +825,12 @@ class TestAdminUiPanel(unittest.TestCase):
                          "settingsTabUsers: 'Utilisateurs'",
                          "settingsTabTokens: 'Tokens'",
                          "settingsTabShares: 'Partages'"):
-            self.assertIn(fr_value, self.index)
+            _assert_i18n(self, self.index, fr_value)
         for en_value in ("settingsTitle: 'Settings'",
                          "settingsTabUsers: 'Users'",
                          "settingsTabShares: 'Shares'",
                          "settingsMcpUrl: 'MCP connector URL'"):
-            self.assertIn(en_value, self.index)
+            _assert_i18n(self, self.index, en_value)
 
     def test_settings_entry_point_gated_on_admin_cloud(self):
         # Batch 2d change: the gear is now revealed for ANY authenticated account
@@ -826,10 +839,10 @@ class TestAdminUiPanel(unittest.TestCase):
         # reserved for the admin (body.admin-cloud).
         self.assertIn('id="settings-btn"', self.index)
         self.assertIn("body.cloud-authed #settings-btn", self.index)
-        self.assertIn("classList.add('cloud-authed')", self.index)
+        self.assertRegex(self.index, r"classList\.add\([\"']cloud-authed[\"']\)")
         # body.admin-cloud stays set to manage the visibility of admin tabs.
-        self.assertIn("classList.add('admin-cloud')", self.index)
-        self.assertIn("data.role === 'admin'", self.index)
+        self.assertRegex(self.index, r"classList\.add\([\"']admin-cloud[\"']\)")
+        self.assertRegex(self.index, r"data\.role\s*===\s*[\"']admin[\"']")
         # Admin-only tabs stay hidden outside admin-cloud — a member must not see a tab
         # it cannot use (e.g. Groups, whose /api/admin/groups is admin-gated).
         for tab in ("users", "nodes", "groups", "shares"):
@@ -870,25 +883,27 @@ class TestAdminUiPanel(unittest.TestCase):
         self.assertIn('id="reset-pw-confirm"', self.index)
         self.assertIn('id="reset-pw-toggle"', self.index)
         self.assertIn('id="reset-pw-success"', self.index)
-        # The "Reset" click handler opens the modal (no more prompt).
-        self.assertIn("openResetPassword(", self.index)
+        # The "Reset" click handler opens the modal (no more prompt). The thin
+        # global wrapper was removed by the esbuild bundling; the call site now
+        # uses the modal instance directly.
+        self.assertIn("resetPwModal.open(", self.index)
 
     def test_reset_password_i18n_keys_in_both_languages(self):
         # Every added label is bilingual (fr AND en in the single STRINGS).
         for fr_value in ("settingsConfirmPasswordLabel: 'Confirmer le mot de passe'",
                          "settingsPasswordMismatch:",
                          "settingsPasswordUpdated: 'Mot de passe mis à jour.'"):
-            self.assertIn(fr_value, self.index)
+            _assert_i18n(self, self.index, fr_value)
         for en_value in ("settingsConfirmPasswordLabel: 'Confirm password'",
                          "settingsPasswordMismatch:",
                          "settingsPasswordUpdated: 'Password updated.'"):
-            self.assertIn(en_value, self.index)
+            _assert_i18n(self, self.index, en_value)
 
     def test_token_reveal_has_close_and_warning(self):
         # The one-time token reveal: strong warning + Close button + the secret
-        # is purged from the DOM when hidden (hideTokenResult).
+        # is purged from the DOM when hidden (SettingsTokens.hideResult).
         self.assertIn('id="settings-token-close"', self.index)
-        self.assertIn("function hideTokenResult", self.index)
+        self.assertIn("hideResult(", self.index)
         self.assertIn("token-warning-text", self.index)
 
 
@@ -944,36 +959,38 @@ class TestSecurityUi(unittest.TestCase):
         self.assertIn('kb_csrf', self.index)
         self.assertIn('csrf_token', self.index)
         # The wrapper wraps window.fetch (centralized wiring, not scattered).
-        self.assertIn('window.fetch =', self.index)
+        # esbuild stripped the spaces around the assignment: `window.fetch=`.
+        self.assertRegex(self.index, r"window\.fetch\s*=")
 
     def test_qr_generator_is_self_contained(self):
         # QR rendered client-side WITHOUT an external lib (Reed-Solomon +
         # homemade mask): no CDN dependency, the QR code lives in the viewer.
-        self.assertIn('const QR = (function', self.index)
+        self.assertIn('gfMul', self.index)  # the homemade GF(256) Reed-Solomon field multiply
         self.assertIn('rsEncode', self.index)
         # No QR via a third-party lib/CDN.
         self.assertNotIn('qrcode.min.js', self.index)
-        self.assertNotIn('cdn.', self.index.split('const QR =')[1][:6000])
+        self.assertNotIn('cdn.', self.index.split('rsEncode')[1][:6000])
 
     def test_no_native_dialogs_for_security_actions(self):
-        # logout-all and the confirmations go through the in-app confirmDialog,
-        # not through native confirm()/alert()/prompt().
+        # logout-all and the confirmations go through the in-app Dialogs.confirm,
+        # not through native confirm()/alert()/prompt(). The thin global wrapper
+        # was removed by the esbuild bundling; call sites use Dialogs directly.
         self.assertNotIn('window.confirm', self.index)
         self.assertNotIn('window.alert', self.index)
         self.assertNotIn('window.prompt', self.index)
-        self.assertIn('confirmDialog(', self.index)
+        self.assertIn('Dialogs.confirm(', self.index)
 
     def test_security_i18n_keys_in_both_languages(self):
         for fr_value in ("settingsTabProfile: 'Profil'",
                          "securityTotpEnable: 'Activer le 2FA'",
                          "securityLogoutAll: 'Déconnecter toutes mes sessions'",
                          "totpRecoveryWarn:"):
-            self.assertIn(fr_value, self.index)
+            _assert_i18n(self, self.index, fr_value)
         for en_value in ("settingsTabProfile: 'Profile'",
                          "securityTotpEnable: 'Enable 2FA'",
                          "securityLogoutAll: 'Sign out all my sessions'",
                          "totpRecoveryWarn:"):
-            self.assertIn(en_value, self.index)
+            _assert_i18n(self, self.index, en_value)
 
 
 class TestLoginPageTwoStepUi(unittest.TestCase):

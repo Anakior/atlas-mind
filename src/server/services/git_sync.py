@@ -28,6 +28,7 @@ class GitSync:
         self._dev_lock = threading.Lock()    # coalesces the dev live-rebuild (single-flight)
         self._dev_building = False
         self._dev_dirty = False
+        self._build_lock = threading.Lock()  # serializes `python -m build` runs so two never race on web/vendor/app.bundle.js
 
     def run(self, *args, cwd=None, check=False, timeout=60):
         """Run a git command in the mind repo. GIT_TERMINAL_PROMPT=0 so a bad/unset
@@ -60,15 +61,20 @@ class GitSync:
         return env
 
     def build(self, *, text=False, timeout=60):
-        """Rebuild the viewer against the current mind. text=True to read stderr."""
-        return subprocess.run(
-            self._build_command(),
-            cwd=str(self._config.root),
-            env=self._build_env(),
-            capture_output=True,
-            text=text,
-            timeout=timeout,
-        )
+        """Rebuild the viewer against the current mind. text=True to read stderr.
+
+        Serialized on _build_lock: in dev the source-watch loop (A) and a content edit
+        (B) both land here, and two concurrent `python -m build` would race on
+        web/vendor/app.bundle.js — esbuild rewrites it while another render reads it."""
+        with self._build_lock:
+            return subprocess.run(
+                self._build_command(),
+                cwd=str(self._config.root),
+                env=self._build_env(),
+                capture_output=True,
+                text=text,
+                timeout=timeout,
+            )
 
     def _dev_rebuild(self) -> None:
         """Coalesced dev live-rebuild: at most ONE build runs at a time; a burst of writes

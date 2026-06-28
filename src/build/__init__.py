@@ -125,6 +125,11 @@ def walk(path: Path, *, content_root: Path | None = None,
     node = {"name": path.name, "type": "dir", "children": []}
     entries = []
     for child in path.iterdir():
+        # Symlinks are skipped before any recursion/read: a symlinked dir can form
+        # a cycle (infinite walk → crash) and a symlinked file can pull an
+        # out-of-repo target into the static index.
+        if child.is_symlink():
+            continue
         if child.name in excluded_names:
             continue
         if any(child.name.startswith(p) for p in excluded_prefixes):

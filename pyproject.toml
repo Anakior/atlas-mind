@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=64.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -55,7 +55,7 @@ Issues = "https://github.com/Anakior/atlas-mind/issues"
 Changelog = "https://github.com/Anakior/atlas-mind/releases"
 
 # The engine lives under src/ and is published as the `atlas_mind` package. The
-# viewer assets (src/web) and document skeletons (src/templates) live INSIDE the
+# viewer assets (src/viewer) and document skeletons (src/templates) live INSIDE the
 # package and are shipped as package data, so a `pip install atlas-mind` wheel is
 # fully self-contained (no clone, no separate assets to fetch).
 [tool.setuptools]
@@ -84,4 +84,21 @@ package-dir = { "atlas_mind" = "src" }
 version = { attr = "atlas_mind.__version__" }
 
 [tool.setuptools.package-data]
-atlas_mind = ["web/**/*", "templates/**/*"]
+atlas_mind = ["viewer/**/*", "templates/**/*"]
+
+# The viewer ships BUILT: render.py inlines viewer/vendor/app.bundle.js + vendor/tailwind.css +
+# the vendor libs/fonts, plus viewer/styles/*.css, viewer/partials/*.html and viewer.html. The
+# dev toolchain that PRODUCES those must NOT ship — it is hundreds of MB of node_modules for zero
+# runtime use: esbuild/playwright/tsc + e2e (viewer/build/), the tailwind CLI source
+# (viewer/tailwind/, whose built output already lives in vendor/), the jsfmt formatter, and the
+# uncompiled .ts sources (viewer/lib/). render.py's lib/ staleness check no-ops (max default 0.0)
+# when the sources are absent, so dropping them is safe. MANIFEST.in prunes the same dirs from the
+# sdist — the wheel honours exclude-package-data, the sdist honours MANIFEST.
+[tool.setuptools.exclude-package-data]
+atlas_mind = [
+    "viewer/build/**",
+    "viewer/tailwind/**",
+    "viewer/jsfmt/**",
+    "viewer/lib/**",
+    "viewer/**/node_modules/**",
+]

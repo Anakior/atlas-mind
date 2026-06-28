@@ -1,0 +1,10 @@
+# Keep the sdist lean: ship the BUILT viewer (vendor/, styles/, partials/, viewer.html, icon,
+# sw.js), prune the dev toolchain that produces it — esbuild/playwright/tsc + their node_modules
+# and e2e (viewer/build/), the tailwind CLI source (viewer/tailwind/; its built output already
+# lives in viewer/vendor/tailwind.css), the jsfmt formatter, and the uncompiled .ts sources
+# (viewer/lib/). The runtime reads only the built artifacts. See exclude-package-data in
+# pyproject.toml, which keeps the same dirs out of the wheel.
+prune src/viewer/build
+prune src/viewer/tailwind
+prune src/viewer/jsfmt
+prune src/viewer/lib

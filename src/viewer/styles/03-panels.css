@@ -1,0 +1,82 @@
+  .panel-card {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 45%),
+      rgba(35, 34, 42, 0.55);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow:
+      0 18px 48px -12px rgba(0, 0, 0, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  /* Dialog surface = the same glass as panels (slightly more opaque since dialogs
+     sit over arbitrary content and host form fields → keep text/inputs readable). */
+  .dialog-card {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 45%),
+      rgba(30, 29, 37, 0.72);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow:
+      0 18px 48px -12px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  /* Combobox dropdown: same glass as dialogs (defined here, not as a Tailwind class —
+     arbitrary/utility classes built in JS strings don't always survive the precompile). */
+  .atlas-cb-pop {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 45%),
+      rgba(30, 29, 37, 0.72);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .panel-divider { border-color: #2a2a32; }
+  .subtle-border { border-color: #2a2a32; }
+  .palette-active { background: rgba(29, 155, 209, 0.18); }
+  .palette-active .text-ink-100 { color: #ffffff; }
+  .md-tb-btn { padding: 5px 9px; border-radius: 4px; color: #b0b1b5; font-size: 12px; font-weight: 500; min-width: 32px; text-align: center; transition: background 0.08s, color 0.08s; }
+  .md-tb-btn:hover { background: rgba(255,255,255,0.06); color: #ffffff; }
+  .md-tb-sep { width: 1px; background: #2a2a32; margin: 3px 4px; }
+  /* Single backdrop for ALL overlays/modals — one source of truth so they never
+     drift apart (matches the Tasks view: navy tint + 12px blur). */
+  .overlay-backdrop {
+    background: rgba(14, 13, 18, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  /* History overlay (desktop): roomy card + wider revision list so the diff/version
+     pane isn't cramped. Plain CSS (not arbitrary Tailwind utilities) → no
+     tailwind.css recompile. The mobile full-screen override lives in 06-mobile.css. */
+  #history-card { width: 108rem; max-width: 94vw; max-height: 90vh; }
+  #history-list { width: 19rem; }
+
+  /* Chrome icon-buttons (toolbar graph/tasks/new + sidebar toggles + TOC close) only had
+     :hover states — no visible keyboard focus. Give them the same branded accent ring the
+     form inputs use (focus:ring-2 focus:ring-accent/40). :focus-visible keeps mouse clicks
+     ring-free. box-shadow follows each button's border-radius, so the ring stays rounded. */
+  #sidebar-toggle:focus-visible,
+  #sidebar-show-inline:focus-visible,
+  #graph-btn:focus-visible,
+  #tasks-btn:focus-visible,
+  #new-file-btn:focus-visible,
+  #toc-close:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(29, 155, 209, 0.55);
+  }
+
+  /* Floating To-do widget (#todo-widget, fixed bottom-right) floats over the scrolling home
+     content; expanded, it can cover the constellation legend, the tag cloud and the inbox
+     Keep/Trash/Snooze actions on shorter (~900px-tall) screens. Bound its footprint so the
+     content underneath stays reachable. The collapse/expand toggle (todo-surface.ts) is
+     untouched — only the size + a content safe-area. Desktop-scoped so the mobile pill
+     overrides in 06-mobile.css are left intact. */
+  @media (min-width: 768px) {
+    #todo-widget { max-height: calc(100vh - 2.5rem); }
+    #todo-body { max-height: min(50vh, 26rem) !important; }
+    /* Bottom gutter so the last actionable rows can be scrolled clear of the widget. */
+    #content { padding-bottom: 5rem; }
+  }
+  @media (min-width: 768px) and (max-height: 900px) {
+    #todo-body { max-height: 38vh !important; }
+  }

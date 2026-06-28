@@ -581,6 +581,10 @@ def migrate_legacy_format():
 # Live reload (local-dev): SSE fan-out + dist/index.html watcher live in the
 # ReloadHub service; run() starts reload_hub.watch_loop as a daemon thread.
 
+# Bounded ceiling on concurrent held-open SSE streams (DoS guard): every SSE route
+# claims a slot via this shared gate and refuses with 503 once the cap is reached.
+from server.services.sse_gate import SSE_GATE  # noqa: F401
+
 
 from server.render.i18n import _strings, _t  # noqa: F401
 from server.render.pages import (  # noqa: F401

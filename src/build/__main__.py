@@ -49,6 +49,8 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import shutil
+import subprocess
 import sys
 
 from build import (
@@ -140,6 +142,71 @@ def _snapshot_activity(cfg):
     }
 
 
+def _rebuild_js_bundle(web_dir) -> None:
+    """Regenerate viewer/vendor/app.bundle.js from viewer/lib/*.{js,ts} via esbuild
+    (viewer/build/build.mjs, transform-concat). Dev/CI only: skipped when the node toolchain
+    is absent, so the Python-only runtime never shells out to node and serves the
+    committed bundle as-is. mtime-gated: skipped when the bundle is already newer than
+    every viewer/lib source, so a content-edit dev reload never re-forks esbuild for nothing.
+    A failed compile aborts the build."""
+    ts_dir = web_dir / "build"
+    if shutil.which("node") is None or not (ts_dir / "node_modules").is_dir():
+        return
+    bundle = web_dir / "vendor" / "app.bundle.js"
+    js_dir = web_dir / "lib"
+    newest_src = max((p.stat().st_mtime for p in js_dir.rglob("*.ts")),
+                     default=0.0)
+    # 2s tolerance mirrors render.py's freshness guard (absorbs checkout/copy mtime jitter).
+    if bundle.is_file() and bundle.stat().st_mtime + 2.0 >= newest_src:
+        return
+    if subprocess.run(["node", "build.mjs"], cwd=str(ts_dir)).returncode != 0:
+        sys.exit("FATAL: esbuild bundle build failed (viewer/build/build.mjs)")
+
+
+def _newest_tailwind_source_mtime(web_dir) -> float:
+    """Newest mtime among everything that changes the compiled tailwind.css: the class
+    sources Tailwind scans (viewer/partials/pages/lib + extension examples) and its config,
+    input and safelist extractor."""
+    tw_dir = web_dir / "tailwind"
+    sources = [web_dir / "viewer.html", tw_dir / "tailwind.config.cjs",
+               tw_dir / "input.css", tw_dir / "extract-safelist.py"]
+    sources += (web_dir / "partials").rglob("*.html")
+    sources += (web_dir / "pages").rglob("*.html")
+    sources += (web_dir / "lib").rglob("*.js")  # lib/ nests sources in clean-named subfolders
+    sources += (web_dir / "lib").rglob("*.ts")
+    extensions = web_dir.parent / "examples" / "extensions"
+    if extensions.is_dir():
+        sources += extensions.rglob("*")
+    return max((p.stat().st_mtime for p in sources if p.is_file()), default=0.0)
+
+
+def _rebuild_tailwind(web_dir) -> None:
+    """Regenerate web/vendor/tailwind.css from the class sources via the tailwind CLI.
+    Dev/CI only: skipped when the node toolchain is absent (Fly serves the committed css).
+    mtime-gated like _rebuild_js_bundle — tailwind is slow (~1-3s) and shares this
+    `python -m build` chokepoint with the test suite, so it rebuilds ONLY when a class
+    source is newer than the committed css. A failed compile aborts the build."""
+    tw_dir = web_dir / "tailwind"
+    if shutil.which("node") is None or not (tw_dir / "node_modules").is_dir():
+        return
+    css = web_dir / "vendor" / "tailwind.css"
+    if css.is_file() and css.stat().st_mtime + 2.0 >= _newest_tailwind_source_mtime(web_dir):
+        return
+    # Run both steps from Python (not the npm script, whose `python3` is not portable):
+    # extract the dynamic-class safelist, then compile. cli.js is invoked via node so the
+    # call is cross-platform (no .cmd/.bin shim juggling).
+    if subprocess.run([sys.executable, "extract-safelist.py"], cwd=str(tw_dir)).returncode != 0:
+        sys.exit("FATAL: tailwind safelist extraction failed (viewer/tailwind/extract-safelist.py)")
+    cli = tw_dir / "node_modules" / "tailwindcss" / "lib" / "cli.js"
+    if subprocess.run(["node", str(cli), "-c", "tailwind.config.cjs", "-i", "input.css",
+                       "-o", "../vendor/tailwind.css", "--minify"], cwd=str(tw_dir)).returncode != 0:
+        sys.exit("FATAL: tailwind compile failed (viewer/tailwind)")
+    # Tailwind skips the write when the output is byte-identical, leaving the OLD mtime, so
+    # stamp the css now — else the gate keeps seeing it as stale and recompiles every build
+    # while a class source stays newer.
+    css.touch()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--offline", action="store_true",
@@ -160,6 +227,8 @@ def main() -> int:
     site_url, site_description, og_image = (cfg.site_url, cfg.site_description,
                                             cfg.og_image)
     extensions_dir, web_dir = cfg.extensions_dir, cfg.web_dir
+    _rebuild_js_bundle(web_dir)
+    _rebuild_tailwind(web_dir)
     todo_cats = [{"cat": c, "label": cfg.todo_cat_headers.get(c, c.capitalize())}
                  for c in cfg.todo_categories]
     out_online = dist_dir / "index.html"

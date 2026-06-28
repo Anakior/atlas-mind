@@ -262,9 +262,9 @@ class AtlasConfig:
         # the *.css/*.js there, server.py loads the *.py there at boot. Missing
         # directory = no extensions.
         self.extensions_dir = self.root / ".atlas" / "extensions"
-        # Viewer assets ship inside the package (src/web) so a pip wheel is
-        # self-contained — always the package's web/, never the mind's.
-        self.web_dir = PACKAGE_DIR / "web"
+        # Viewer assets ship inside the package (src/viewer) so a pip wheel is
+        # self-contained — always the package's viewer/, never the mind's.
+        self.web_dir = PACKAGE_DIR / "viewer"
 
         # ── instance identity (configurable branding) ──────────────────────
         # Brand is FIXED (SITE_WORDMARK); only the prefix is configurable. Empty
@@ -386,15 +386,16 @@ class AtlasConfig:
                 server, "server", "allow_private_remotes", False)
 
         # Update check: admin Settings banner when a newer atlas-mind is on PyPI.
-        # The ONLY outbound call the engine makes on its own (cached ~1/day,
-        # admin-only, best-effort). Opt out to disable that single network call.
+        # The ONLY outbound call the engine could make on its own (cached ~1/day,
+        # admin-only, best-effort) — OFF by default so a stock instance makes zero
+        # third-party network calls (the README's promise). Opt in to enable it.
         update_check_env = env.get("ATLAS_UPDATE_CHECK", "").strip()
         if update_check_env:
             self.update_check = update_check_env.lower() in (
                 "1", "true", "yes", "on")
         else:
             self.update_check = _toml_bool(
-                server, "server", "update_check", True)
+                server, "server", "update_check", False)
 
         # ── identity/share registry ────────────────────────────────────────
         # `or` (not presence): an EMPTY env value falls back to the next level

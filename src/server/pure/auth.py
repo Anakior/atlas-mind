@@ -65,7 +65,7 @@ def make_token(email: str, role: str, epoch: int = 0) -> str:
 
 
 def verify_token(token: str):
-    """Returns {'email': ..., 'role': ...} or None. Old tokens without role default to admin.
+    """Returns {'email': ..., 'role': ...} or None. Old tokens without role default to viewer (least privilege).
 
     Verifies, in order: HMAC signature (constant time) → expiration
     (CONFIG.session_max_age) → session epoch (server-side revocation). A registry
@@ -89,7 +89,7 @@ def verify_token(token: str):
         cookie_epoch = int(data.get("ep") or 0)
         if current_session_epoch(email) != cookie_epoch:
             return None
-        return {"email": email, "role": data.get("role", "admin")}
+        return {"email": email, "role": data.get("role", "viewer")}
     except Exception:
         return None
 
@@ -127,7 +127,8 @@ def authenticate(email: str, password: str):
     Keeps the historical signature (role only). The 2-factor login flow goes
     through authenticate_user to be able to inspect the account's 2FA state."""
     user = authenticate_user(email, password)
-    return user.get("role", "admin") if user else None
+    # Least privilege: a record missing its role resolves to viewer, never admin.
+    return user.get("role", "viewer") if user else None
 
 
 # Share links are opaque CAPABILITY tokens: a random key whose SHA256 indexes the

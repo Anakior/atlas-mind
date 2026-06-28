@@ -4,7 +4,7 @@ Scope: no resource is loaded from a CDN or Google Fonts anymore — neither by
 dist/index.html (online viewer), nor by the /login page, nor by
 index-offline.html (file:// monolith, /vendor/ assets inlined). The libs
 (marked, DOMPurify, highlight.js, MiniSearch, pako) and the fonts live in
-web/vendor/, served by the server under /vendor/ with the right content-types,
+viewer/vendor/, served by the server under /vendor/ with the right content-types,
 without auth (the login page depends on it) and without traversal. The
 dangerous "DOMPurify absent → raw HTML" fallback in renderMd is removed.
 """
@@ -20,23 +20,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from harness import AtlasServer  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-VIEWER = REPO_ROOT / "src" / "web" / "viewer.html"
+VIEWER = REPO_ROOT / "src" / "viewer" / "viewer.html"
 SERVER_PY = REPO_ROOT / "src" / "server" / "__init__.py"
-PAGES_DIR = REPO_ROOT / "src" / "web" / "pages"  # served login/setup/share HTML
-SW_JS = REPO_ROOT / "src" / "web" / "sw.js"
-WEB_DIR = REPO_ROOT / "src" / "web"
+PAGES_DIR = REPO_ROOT / "src" / "viewer" / "pages"  # served login/setup/share HTML
+SW_JS = REPO_ROOT / "src" / "viewer" / "sw.js"
+WEB_DIR = REPO_ROOT / "src" / "viewer"
 
 
 def _viewer_source() -> str:
     """The full viewer source = the shell viewer.html + the split fragments it
-    recollates at build (web/styles/*.css, web/partials/*.html, web/js/*.js), so
+    recollates at build (viewer/styles/*.css, viewer/partials/*.html, viewer/lib/*.js), so
     substring assertions about the viewer's CSS / markup / JS hold wherever the
     content now physically lives."""
     parts = [VIEWER.read_text(encoding="utf-8")]
-    for sub in ("styles", "partials", "js"):
+    for sub in ("styles", "partials", "lib"):
         directory = WEB_DIR / sub
         if directory.is_dir():
-            for frag in sorted(directory.iterdir()):
+            for frag in sorted(directory.rglob("*")):  # rglob: lib/ now has clean-named subfolders
                 if frag.is_file():
                     parts.append(frag.read_text(encoding="utf-8"))
     return "\n".join(parts)
@@ -96,7 +96,7 @@ class TestVendoringOnline(unittest.TestCase):
                     'src="/vendor/marked.min.js"', 'src="/vendor/purify.min.js"',
                     'href="/vendor/highlight-github-dark.min.css"',
                     'src="/vendor/highlight.min.js"',
-                    "'/vendor/minisearch.min.js'"):
+                    "/vendor/minisearch.min.js"):
             self.assertIn(ref, text)
 
     def test_vendor_assets_served_with_content_types(self):
@@ -147,10 +147,15 @@ class TestVendoringOnline(unittest.TestCase):
         text = (self.srv.dist_dir / "index-offline.html").read_text(
             encoding="utf-8")
         # No resource loaded over http(s), and no remaining /vendor/ reference
-        # in the markup: everything is inlined.
+        # in the markup: everything is inlined. esbuild stripped the spaces around
+        # assignments, so the bundle's runtime MiniSearch fallback now reads
+        # `s.src="/vendor/minisearch.min.js"` — a JS property write (unreachable
+        # offline: MiniSearch is already inlined below, so typeof MiniSearch short-
+        # circuits it), NOT an un-inlined markup tag. Assert no <script>/<link> TAG
+        # still points at /vendor/ (the real "self-contained" intent), which keeps
+        # catching a genuinely un-inlined resource while tolerating that JS literal.
         self.assertIsNone(_EXTERNAL_LOAD_RE.search(text))
-        self.assertNotIn('src="/vendor/', text)
-        self.assertNotIn('href="/vendor/', text)
+        self.assertNotRegex(text, r'<(?:script|link)\b[^>]*\b(?:src|href)="/vendor/')
         # The libs are indeed in there (markers placed by inline_vendor_assets),
         # MiniSearch included (offline search without network).
         for marker in ("vendor: tailwind.css", "vendor: fonts.css",
@@ -169,7 +174,7 @@ class TestVendoringOnline(unittest.TestCase):
         # Integrity: each inlined lib is BYTE-IDENTICAL to the vendored file
         # (a real regression: a late replace of </head> injected MiniSearch
         # in the middle of a DOMPurify string and broke its parsing).
-        vendor = self.srv.root / "src" / "web" / "vendor"
+        vendor = self.srv.root / "src" / "viewer" / "vendor"
         for name in ("marked.min.js", "purify.min.js", "highlight.min.js",
                      "minisearch.min.js"):
             match = re.search(
@@ -261,7 +266,7 @@ class TestVendoringSources(unittest.TestCase):
             self.assertIn("hljs.highlightAuto", text, label)
 
     def test_vendor_licenses_are_preserved(self):
-        vendor = REPO_ROOT / "src" / "web" / "vendor"
+        vendor = REPO_ROOT / "src" / "viewer" / "vendor"
         # OFL: the license must travel with the .woff2 files (per-family notices).
         ofl = (vendor / "fonts" / "OFL.txt").read_text(encoding="utf-8")
         self.assertIn("SIL OPEN FONT LICENSE Version 1.1", ofl)
@@ -282,7 +287,7 @@ class TestVendoringSources(unittest.TestCase):
         self.assertIn("MIT", first_line)
 
     def test_vendor_files_exist_and_are_non_trivial(self):
-        vendor = REPO_ROOT / "src" / "web" / "vendor"
+        vendor = REPO_ROOT / "src" / "viewer" / "vendor"
         for name, minimum_size in {
             "tailwind.css": 20_000, "fonts.css": 2_000,
             "marked.min.js": 10_000, "purify.min.js": 10_000,
