@@ -99,17 +99,26 @@ TEST_GITIGNORE = "__pycache__/\n*.pyc\ndist/\n.atlas/\n/src/\n/pkg/\n"
 
 
 def _rmtree_best_effort(path: Path) -> None:
-    """Remove a tmp mind, surviving Windows. Just after terminate() the child server can
-    still hold file handles for a beat, and copied git files keep the read-only bit
-    Windows refuses to unlink (WinError 5) — both make a plain rmtree leak the dir (the
-    suite was stranding thousands of them). Clear the bit and retry with a short backoff;
-    give up silently rather than fail a test's teardown (the OS temp cleaner gets the rest)."""
+    """Remove a tmp mind, surviving Windows AND Linux CI. Just after terminate() the child
+    server can still hold file handles for a beat, and git marks its objects read-only (on
+    Windows the copied engine's files too) — both make a plain rmtree raise. Clear the bit on
+    the target AND its parent (on Unix an unlink/rmdir needs the PARENT writable) and retry with
+    a short backoff; give up silently rather than fail a test's teardown (the OS temp cleaner
+    gets the rest)."""
     def _onexc(func, target, _exc):
-        try:
-            os.chmod(target, stat.S_IWRITE)
-        except OSError:
-            pass
-        func(target)
+        for p in (target, os.path.dirname(target)):
+            try:
+                os.chmod(p, stat.S_IRWXU)
+            except OSError:
+                pass
+        # Replay only the simple path-arg removers. On Linux rmtree's fd-based path also hands us
+        # os.open/os.scandir (which need flags/extra args) when it can't descend a dir — replaying
+        # those raises TypeError and would crash teardown; the chmod above lets a later pass in.
+        if func in (os.unlink, os.remove, os.rmdir):
+            try:
+                func(target)
+            except OSError:
+                pass
 
     for attempt in range(4):
         try:
@@ -117,11 +126,11 @@ def _rmtree_best_effort(path: Path) -> None:
                 shutil.rmtree(path, onexc=_onexc)
             else:  # onexc replaced onerror in 3.12; older needs onerror.
                 shutil.rmtree(path, onerror=lambda f, p, _info: _onexc(f, p, None))
-            return
         except OSError:
-            if attempt == 3:
-                return  # a stubborn handle; leave it rather than crash teardown
-            time.sleep(0.3)
+            pass  # fall through to the existence check + retry
+        if not path.exists():
+            return  # gone — done
+        time.sleep(0.3)  # perms fixed this pass; let a handle/lock clear, then retry
 
 
 def find_free_port() -> int:
