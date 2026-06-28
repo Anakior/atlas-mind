@@ -30,7 +30,7 @@ export class HomeView {
     recentList.innerHTML = files
       .map(
         (f) => `
-    <li class="overflow-hidden"><a class="tree-item w-full flex flex-col px-2 py-1 rounded cursor-pointer" data-path="${f.path}">
+    <li class="overflow-hidden"><a class="tree-item w-full flex flex-col px-2 py-1 rounded cursor-pointer" data-path="${escapeHtml(f.path)}">
       <span class="block text-xs text-ink-200 truncate w-full" data-name="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
       <span class="text-[10px] text-ink-500">${relativeDate(f.mtime)}</span>
     </a></li>
@@ -221,7 +221,7 @@ export class HomeView {
       .map((f) => {
         return (
           '<a data-recent-path="' +
-          f.path +
+          escapeHtml(f.path) +
           '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
           '<div class="text-sm text-ink-100 font-medium font-sans truncate">' +
           escapeHtml(f.name) +
@@ -249,7 +249,7 @@ export class HomeView {
 
             return (
               '<a data-recent-path="' +
-              f.path +
+              escapeHtml(f.path) +
               '" class="block cursor-pointer group">' +
               '<div class="flex items-center gap-2">' +
               '<span class="text-ink-500 font-mono text-xs w-4 text-right">' +

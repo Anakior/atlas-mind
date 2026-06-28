@@ -189,7 +189,7 @@ export class Search {
         '<div class="text-sm font-medium text-ink-100 truncate">' +
         escapeHtml(file.name) +
         '</div><div class="text-[10px] text-ink-500">' +
-        file.path +
+        escapeHtml(file.path) +
         '</div>' +
         snippetHtml;
 
