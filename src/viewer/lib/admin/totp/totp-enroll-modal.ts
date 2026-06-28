@@ -1,11 +1,10 @@
 // The 2FA enrollment modal (partials/06-totp.html): the QR + copyable secret + one-time recovery
-// codes shown to enable, and the code prompt to disable. The Security pane (18-totp-pane.ts) opens it;
-// on a successful enable/disable it flips the global totpEnabled flag (owned by 00-data-csrf.ts),
-// reloads the CSRF token (the epoch bump rotates the session cookie) and calls refreshSecurityState()
-// so the pane redraws. Concatenates before 18-totp-pane.ts (filename order) so totpModal exists when
-// the pane wires its enable/disable buttons. The QR codec AND its canvas bridge are both 17-qr.ts (the
+// codes shown to enable, and the code prompt to disable. The Security pane (./security-pane) opens it;
+// on a successful enable/disable it flips the totpEnabled flag (owned by core/data-csrf.ts),
+// reloads the CSRF token (the epoch bump rotates the session cookie) and calls securityPane.refreshState()
+// so the pane redraws. The QR codec AND its canvas bridge are both ui/qr-code.ts (the
 // QrCode class + renderQrCanvas); enroll() calls renderQrCanvas to paint the otpauth URI. The mutating
-// requests go through settingsFetch (16-settings.ts).
+// requests go through settingsFetch (../settings/settings-shared).
 
 import { readCsrfCookie, setCsrfToken, setTotpEnabled } from '../../core/data-csrf';
 import { t } from '../../core/i18n';

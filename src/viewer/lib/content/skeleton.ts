@@ -1,6 +1,6 @@
-// Loading skeletons for the document surface (shared by 06-view-history and 07-frames). hashStr seeds
-// a per-path LCG so the same doc always shimmers the same shape; renderSkeleton paints it. Loaded
-// before both consumers.
+// Loading skeletons for the document surface (shared by doc-renderer.ts and frames.ts). hashStr seeds
+// a per-path LCG so the same doc always shimmers the same shape; renderSkeleton paints it. Both
+// consumers import it.
 
 import { t } from '../core/i18n';
 
@@ -14,7 +14,7 @@ export function hashStr(s: string): number {
 }
 
 // Deterministic per-path skeleton (same doc → same layout). LCG seeded by hashStr(path). Pure +
-// cross-cutting: 07-frames also renders it before a .html/.pdf/.docx frame loads.
+// cross-cutting: frames.ts also renders it before a .html/.pdf/.docx frame loads.
 export function renderSkeleton(file: FileNode): string {
   let state = (file && file.path ? hashStr(file.path) : 1) || 1;
   const next = (): number => (state = (state * 1664525 + 1013904223) >>> 0);

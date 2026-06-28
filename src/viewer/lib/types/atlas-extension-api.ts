@@ -1,4 +1,4 @@
-// window.Atlas — the public, versioned extension API (defined in 19-newfile.ts, consumed by
+// window.Atlas — the public, versioned extension API (defined in modals/new-file-modal.ts, consumed by
 // examples/extensions/*). Extensions register new-document templates and drive the viewer through
 // it; the viewer also dispatches atlas:doc-rendered {path, markdown} and atlas:edit-enter on
 // document, and freezes the soft-reload while a [data-atlas-modal] is visible. Stable contract:

@@ -2,13 +2,13 @@
 // attributed git history. Reads GET /api/activity (the read side of the attribution layer); reuses the
 // real constellation avatars. Hidden offline / when there is nothing to show.
 //
-// The card is split across the 21*-activity-*.ts files (concat = load order): static registries live in
-// 21a-activity-icons, the pure projections in 21b-activity-model, and the three views in
-// 21c/21d/21e-activity-{journal,orrery,health}. This shell owns the data lifecycle (load → aggregate →
+// The card is split across the sibling ./activity-*.ts modules: static registries live in
+// ./activity-icons, the pure projections in ./activity-model, and the three views in
+// ./activity-{journal,orrery,health}. This shell owns the data lifecycle (load → aggregate →
 // digest), the shared state + helper cluster, the card chrome (skeleton, digest, view switch, wiring),
 // and hands each view a render context (see ActivityRenderCtx) so the helpers are defined once and can
-// never diverge between views. The load-time instantiation lives at the end of the last-sorting file
-// (21e-activity-health.ts) so every class is defined before `new ActivityCard()` runs.
+// never diverge between views. The single instance is constructed in ./activity-boot; the imports above
+// guarantee every class is defined before `new ActivityCard()` runs.
 
 import { EMBED_ACTIVITY, IS_OFFLINE_BUILD } from '../../core/data-csrf';
 import { LANG, t } from '../../core/i18n';
@@ -263,7 +263,7 @@ export class ActivityCard {
     } else if (v === 'health' && !healthEl.dataset.rendered) {
       healthEl.dataset.rendered = '1'; healthEl.innerHTML = this.healthView.html(); this.healthView.load(healthEl);
     } else if (v === 'inbox' && inboxEl && !inboxEl.dataset.rendered && window.AtlasInbox) {
-      inboxEl.dataset.rendered = '1'; window.AtlasInbox.mount(inboxEl); // the Inbox is its own module (22-inbox.ts)
+      inboxEl.dataset.rendered = '1'; window.AtlasInbox.mount(inboxEl); // the Inbox is its own module (inbox/inbox.ts)
     }
     journalEl.classList.toggle('hidden', v !== 'journal');
     orreryEl.classList.toggle('hidden', v !== 'orrery');
@@ -364,8 +364,9 @@ export class ActivityCard {
   }
 
   // ── Public API (mountActivity / refreshActivityData) ──────────────────
-  // Fill the mount left by showWelcome(). Robust to load order (showWelcome may run at boot before
-  // this file defines the renderer, so we also mount on our own load).
+  // Fill the mount left by showWelcome(). Robust to evaluation order: showWelcome guards on
+  // window.mountActivity, and ./activity-boot also self-calls mountActivity on load, so the card
+  // mounts whichever runs first.
   async mount(): Promise<void> {
     const m = document.getElementById('home-activity-mount');
 

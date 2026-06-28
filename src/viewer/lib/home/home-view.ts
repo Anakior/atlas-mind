@@ -12,11 +12,11 @@ import { Dialogs } from '../modals/dialogs';
 import { tocShow } from './layout-chrome';
 
 // Home dashboard + the viewer's hash router. The home view stays imperative innerHTML, NOT the keyed
-// runtime: contentEl is co-owned by sibling modules (showMarkdown, renderHtmlFrame, openHistory), so a
-// render()-based home would desync the runtime's per-container child map. HomeView is stateless; the
-// bare-name entry points (showWelcome / routeFromHash / showNotFound / renderRecent) stay top-level
-// globals because sibling modules (11-palette, 11c-pins, 16f-settings-remotes, 99-bootstrap) call them
-// by name.
+// runtime: contentEl is co-owned by other content renderers (showMarkdown, renderHtmlFrame,
+// openHistory), so a render()-based home would desync the runtime's per-container child map. HomeView
+// is stateless; its entry points (showWelcome / routeFromHash / showNotFound / renderRecent) are public
+// methods on the exported homeView singleton, imported by the modules that route and render (e.g. the
+// command palette and bootstrap). Module scope keeps everything else private.
 export class HomeView {
   // ---- home renderers (imperative innerHTML; see file header) ----
   renderRecent(): void {
@@ -381,8 +381,9 @@ export class HomeView {
     const homeGraphBtn = contentEl.querySelector('#home-graph-btn');
 
     if (homeGraphBtn) homeGraphBtn.addEventListener('click', () => mindGraph.open());
-    // The Activity island (#home-activity-mount) is owned by 21-activity.js: it fills the empty
-    // mount and re-mounts on SSE. Home only leaves the slot for it.
+    // The Activity island (#home-activity-mount) is owned by the activity module
+    // (admin/activity/activity-boot.ts wires window.mountActivity to activity-card.ts): it fills the
+    // empty mount and re-mounts on SSE. Home only leaves the slot for it.
     if (window.mountActivity) window.mountActivity();
 
     breadcrumbPath.textContent = '/';

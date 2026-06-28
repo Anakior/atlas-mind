@@ -2,7 +2,7 @@
 // (or offline EMBED_ACTIVITY) event to the ActivityItem the renderers consume, aggregate collapses a
 // run of same-doc/same-author/same-type events into one counted entry, and computeDigest rolls the
 // last 7 days into the factual ActivityDigest. No DOM, no state, no network — split out of ActivityCard
-// so the data layer stands on its own. Top-level (no IIFE) so it is a shared symbol in the concat scope.
+// so the data layer stands on its own. Exported as a class; the shell imports it for the data lifecycle.
 export class ActivityModel {
   // ---- pure projections over the wire events ----
   static toItem(e: ActivityRaw): ActivityItem {

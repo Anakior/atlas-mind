@@ -4,8 +4,9 @@
 // build + physics + camera) and GraphRenderer (the per-frame paint). The loop stays imperative — no
 // reconciliation, the 2D context is driven directly inside the canvas island, only typed.
 //
-// Instantiated once in 12z-graph-boot.ts (built last, after the three pieces are concatenated) so every
-// class is in scope when `new MindGraph()` runs its field initializers — class declarations do not hoist.
+// Instantiated once in graph-boot.ts; its field initializers construct the three injected pieces
+// (GraphPalette, GraphLayout, GraphRenderer), which are imported above so they are defined when
+// `new MindGraph()` runs.
 
 import { t } from '../core/i18n';
 import { EMBED_MIND } from '../core/state';

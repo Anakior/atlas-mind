@@ -3,8 +3,10 @@
 // esbuild --bundle from the single ESM entry lib/main.ts, which side-effect-imports every module
 // in load order (so esbuild includes + evaluates them in that sequence). format:iife keeps the one
 // shared runtime scope the modules expect; treeShaking off keeps every module's side effects and
-// the __DATA__/__EMBED_* barewords render.py substitutes later; minify off + charset utf8 keep
-// those barewords and accents literal so the Python build can fill them in one regex pass.
+// the __DATA__/__EMBED_* barewords render.py substitutes later. Whitespace + syntax are minified but
+// IDENTIFIERS are kept (minifyIdentifiers off): the artifact shrinks ~30% yet every symbol name stays
+// intact, so the barewords, the public window.* API extensions read, and the Python build's regex pass
+// all keep working — and the bundle stays greppable/debuggable. charset utf8 keeps accents literal.
 import esbuild from 'esbuild';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +21,9 @@ esbuild.buildSync({
   format: 'iife',
   target: 'es2020',
   treeShaking: false,
-  minify: false,
+  minifyWhitespace: true,
+  minifySyntax: true,
+  minifyIdentifiers: false,
   charset: 'utf8',
   legalComments: 'none',
   outfile,

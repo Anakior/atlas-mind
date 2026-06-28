@@ -1,8 +1,9 @@
 // AtlasCombobox — the reusable "search + create" field (folders, tags, ACL principals, group members).
 // One <body>-level fixed popup per instance, anchored once from the input's rect; there is no scroll/
 // resize re-position listener, so the input must not move while the popup is open (golden D). The
-// factory entry AtlasCombobox(input, opts) -> ComboboxController is a bareword global the still-.js
-// modules call. CSS lives in styles/03-panels.css. Opts/controller shapes: interface/Combobox*.ts.
+// factory entry AtlasCombobox(input, opts) -> ComboboxController is exported for the modules that
+// consume it. CSS lives in styles/03-panels.css. Opts/controller shapes:
+// types/combobox-controller.ts + types/combobox-options.ts.
 
 import { escapeHtml } from '../core/utils';
 import { t } from '../core/i18n';
@@ -262,7 +263,7 @@ export class Combobox implements ComboboxController {
   }
 }
 
-// Factory (the viewer is concatenated scripts, not ES modules): the bareword every consumer calls.
+// Factory: the entry every consumer imports.
 export function AtlasCombobox(input: HTMLElement, opts: ComboboxOptions): ComboboxController {
   return new Combobox(input, opts);
 }

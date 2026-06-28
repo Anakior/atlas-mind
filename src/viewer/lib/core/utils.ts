@@ -1,6 +1,5 @@
-// Pure helpers (no DOM, no network). Split out of the old 01-i18n-state.js. relativeDate
-// depends on i18n (t/LANG), concatenated before this file. Foundation layer: top-level so
-// these are shared globals used across the viewer.
+// Pure helpers (no DOM, no network), exported and used across the viewer. relativeDate
+// depends on i18n (t/LANG), imported below.
 import { LANG, t } from './i18n';
 
 export function relativeDate(epoch: number): string {

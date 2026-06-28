@@ -1,6 +1,6 @@
 // Task-marker source surgery: flipping a rendered checkbox flips the Nth `[ ]`/`[x]` marker in the
-// markdown SOURCE. DOM-free, pure string ops — the render pipeline (Markdown, renderMd) stays in
-// 03-markdown.ts. Loads before its sole consumer wireTaskCheckboxes (04b-task-checkboxes), which calls the
+// markdown SOURCE. DOM-free, pure string ops — the render pipeline (the Markdown class) lives in
+// markdown.ts. Its sole consumer is wireTaskCheckboxes (task-checkboxes.ts), which calls the
 // toggleNthTaskMarker wrapper after a checkbox change.
 export class TaskMarkers {
   private static readonly TASK_MARK_RE = /^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/;

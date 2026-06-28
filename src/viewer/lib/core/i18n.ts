@@ -1,7 +1,6 @@
 // i18n: the fr/en string catalog + t() (the single translation entry point) +
-// applyStaticI18n (static [data-i18n] markup). Split out of the old 01-i18n-state.js.
-// Foundation layer: stays top-level so t()/LANG/STRINGS are shared globals (not module-
-// scoped). Language from <html lang>, set by the Python build.
+// applyStaticI18n (static [data-i18n] markup). t()/LANG/STRINGS are exported here and
+// imported across the viewer. Language from <html lang>, set by the Python build.
 export const LANG = (document.documentElement.lang || 'fr').toLowerCase().startsWith('en') ? 'en' : 'fr';
 
 // An i18n entry is either a literal label or a function that interpolates its args. The

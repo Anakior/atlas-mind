@@ -3,7 +3,6 @@
 // fetched lists, the persisted sub-tab and the per-list expand flags — and the contradiction-dismiss
 // POST that used to live in the shell's wire(). Renders deterministic helpers (docTitle, skelRows)
 // through the ActivityRenderCtx; doc clicks are routed by the shell's delegated [data-path] handler.
-// Top-level (no IIFE) so it is a shared symbol in the concat scope.
 
 import { EMBED_ACTIVITY, IS_OFFLINE_BUILD } from '../../core/data-csrf';
 import { t } from '../../core/i18n';

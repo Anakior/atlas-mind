@@ -1,7 +1,7 @@
 // Notes persistence (CRUD) for the current doc: load the sidecar list, create / edit / delete an
 // annotation, then refresh the tree badge + re-render the doc. Data lives in .notes/<doc>.json
 // server-side (offline: EMBED_NOTES). The write methods close the popover (notePopover) on success
-// and re-render via showMarkdown; the loaded list is shared through noteContext (filled by
+// and re-render via DocRenderer.show; the loaded list is shared through noteContext (filled by
 // NotesPanel, read here by the copy-all export).
 
 import { IS_OFFLINE_BUILD, EMBED_NOTES } from '../../core/data-csrf';

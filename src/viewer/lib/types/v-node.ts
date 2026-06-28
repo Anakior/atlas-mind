@@ -1,4 +1,4 @@
-// A virtual node for the Atlas DOM runtime (00b-atlas-dom.ts). `tag` is an element name,
+// A virtual node for the Atlas DOM runtime (runtime/atlas-dom.ts). `tag` is an element name,
 // or the markers '#text' (textContent) and '#raw' (a single-root trusted HTML string).
 interface VNode {
   tag: string;

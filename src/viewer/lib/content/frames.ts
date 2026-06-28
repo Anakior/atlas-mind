@@ -1,9 +1,9 @@
 // Read-only renderers for the non-markdown formats the viewer can open: a standalone .html doc in a
 // sandboxed iframe, a .pdf in the browser's native viewer, and a .docx converted client-side via a
-// lazy-loaded mammoth. showMarkdown (06) dispatches here by extension; the three render* shims stay
-// bundle-scope globals it calls by name. Plain innerHTML rendering — no
+// lazy-loaded mammoth. DocRenderer.show (doc-renderer.ts) dispatches here by extension through the
+// exported frameRenderer. Plain innerHTML rendering — no
 // markdown pipeline, no editing chrome (TOC/backlinks/notes/todos are hidden, restored by the next
-// .md doc via showMarkdown).
+// .md doc via DocRenderer.show).
 
 import { IS_OFFLINE_BUILD, EMBED_CONTENT } from '../core/data-csrf';
 import { escapeHtml } from '../core/utils';
@@ -92,7 +92,7 @@ export class Frames {
   // A framed doc takes over the content pane: no editing (none of these is editable via the viewer),
   // no TOC/backlinks/notes/todos (meaningless over a standalone doc). fullWidth drops the prose width
   // cap + padding for the HTML/PDF decks; DOCX keeps prose width (restores it). All restored by the
-  // next .md doc via showMarkdown.
+  // next .md doc via DocRenderer.show.
   private enterFrameMode(fullWidth: boolean): void {
     btnEdit.classList.add('hidden');
     btnSave.classList.add('hidden');

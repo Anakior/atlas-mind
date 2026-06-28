@@ -1,7 +1,7 @@
 // Seeded pseudo-random generator (generic, pure, no DOM): a mulberry32 stream whose next() yields a
 // value in [0, 1), seeded by an FNV-1a (shift-mixed) hash of an identity string. Holds its own
 // evolving state, so a consumer draws a whole deterministic sequence from one instance by pulling
-// next() in a fixed order. Lives in core/ and loads before its users in the shared concat scope.
+// next() in a fixed order. Lives in core/ and is imported by its users.
 
 export class Rng {
   readonly seed: number;

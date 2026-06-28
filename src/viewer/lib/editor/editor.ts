@@ -1,12 +1,13 @@
-// Document editor on the shared global scope (no IIFE: the chrome buttons trigger edit mode, and
-// 11-palette / 12b-shortcuts call enterEditMode while 06-view-history / 08-tags call exitEditMode by
-// bare name when leaving a doc).
+// Document editor exposed as the `editor` singleton: the chrome buttons trigger edit mode, the
+// command palette (graph/command-palette.ts) and keyboard router (graph/keyboard-router.ts) call
+// enterEditMode, while the doc renderer (content/doc-renderer.ts) and tag browser
+// (content/tag-browse.ts) call exitEditMode when leaving a doc.
 //
 // Editor owns the markdown toolbar and the split-view edit mode (textarea + live preview). The split
 // UI is built imperatively and the debounced preview rewrite touches ONLY #md-preview — the
 // #md-editor textarea is never recreated, so caret / focus survive (golden E). Kept imperative on
 // purpose: no vDOM reconciliation here. The [[wikilink]] autocomplete is composed in from
-// 09-autocomplete (WikilinkAutocomplete); full-text search is its own concern in 09-search.
+// WikilinkAutocomplete (./wikilink-autocomplete); full-text search is its own concern in ./search.
 
 import { t } from '../core/i18n';
 import { WikilinkAutocomplete } from './wikilink-autocomplete';
@@ -33,8 +34,8 @@ import { tocShow } from '../home/layout-chrome';
 
 export class Editor {
   // ---- markdown toolbar ----
-  // Built once at class-definition time (same timing as the old module-level const); the strings
-  // are localized via t(), so it must evaluate after 01-i18n.
+  // Built once when this module is first evaluated; the strings are localized via t(), so core/i18n
+  // must already be evaluated — the import guarantees that ordering.
   private static readonly MD_TOOLBAR_HTML =
     '' +
     '<button data-md="bold" class="md-tb-btn" title="' +

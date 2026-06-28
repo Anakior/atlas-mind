@@ -1,11 +1,11 @@
 // ── Settings panel (admin + cloud mode) ──────────────────────────────────────
-// Thin shell over the seven per-tab controllers (16b…16h): owns the user-bar gear, open/close, and
+// Thin shell over the seven per-tab controllers (./*-tab.ts): owns the user-bar gear, open/close, and
 // the tab switch. Each tab's lists/forms/fetches live in its own controller; the shell just builds
 // the shared SettingsContext, constructs the controllers, and dispatches open() → selectTab() →
 // the active tab's load().
 //
-// Concatenated LAST in the 16x family (16z sorts after 16b…16h) so every controller class is already
-// in scope when `new SettingsPanel()` constructs them — class declarations do not hoist.
+// Every per-tab controller class is imported above, so all are in scope when `new SettingsPanel()`
+// constructs them (the single instance is created at the bottom of this module).
 
 import { t } from '../../core/i18n';
 import { securityPane } from '../totp/security-pane';
@@ -45,7 +45,7 @@ export class SettingsPanel {
     });
   }
 
-  // ── error banner (called cross-file via the showSettingsError/clearSettingsError wrappers) ──
+  // ── error banner (reached cross-module via settingsPanel.showError / clearError) ──
   showError(message: string): void {
     this.ctx.showError(message);
   }
@@ -71,8 +71,8 @@ export class SettingsPanel {
     this.settingsBackdrop.classList.add('hidden');
   }
 
-  // Opens Settings → Nodes with the path pre-filled (from the tree button). Called cross-file via
-  // the openPublishNode wrapper (02-content-tree.ts).
+  // Opens Settings → Nodes with the path pre-filled (from the tree button). Called from the tree's
+  // "share as node" button in content/content-tree.ts via settingsPanel.openPublish().
   openPublish(path: string): void {
     this.open();
     this.selectTab('nodes');

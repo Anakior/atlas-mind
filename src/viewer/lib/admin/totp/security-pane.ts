@@ -1,10 +1,10 @@
 // The Settings → Security pane: the 2FA status badge, the enable / disable buttons and "sign out all
-// sessions". State only — the enrollment / verify / disable UI lives in the modal (18-totp-modal.ts),
-// which the enable and disable buttons open. refreshState reflects the global totpEnabled flag (owned
-// by 00-data-csrf.ts) and is driven cross-file through refreshSecurityState() (18-totp.ts) by the
-// Settings Security tab and 99-bootstrap.ts (/api/me boot). Mutating requests go through settingsFetch
-// (16-settings.ts). Concatenates after 18-totp-modal.ts (filename order) so totpModal exists when the
-// enable / disable buttons are wired below.
+// sessions". State only — the enrollment / verify / disable UI lives in the modal (./totp-enroll-modal),
+// which the enable and disable buttons open. refreshState reflects the totpEnabled flag (owned
+// by core/data-csrf.ts) and is called by the Settings Security tab (admin/settings/settings-panel.ts)
+// and boot/bootstrap.ts (/api/me boot). Mutating requests go through settingsFetch
+// (../settings/settings-shared). totpModal is imported from ./totp-enroll-modal, so it is available when
+// the enable / disable buttons are wired below.
 
 import { totpEnabled } from '../../core/data-csrf';
 import { t } from '../../core/i18n';

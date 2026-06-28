@@ -1,7 +1,8 @@
 // The tasks rollup overlay: a modal listing every checkbox across the mind (GET /_tasks-index.json); a
 // row click opens its doc and scrolls to the task. Imperative DOM (innerHTML + createElement), byte-for-
 // behaviour with the pre-migration view — the Atlas DOM runtime port is a later pass. Self-contained
-// (no graph state), so the singleton is constructed right here; 11-palette-pins reads it by name.
+// (no graph state), so the singleton is constructed right here and exported for keyboard-router.ts to
+// reach.
 
 import { IS_OFFLINE_BUILD, EMBED_TASKS } from '../core/data-csrf';
 import { sse } from '../core/sse-coord';

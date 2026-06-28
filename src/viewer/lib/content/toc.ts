@@ -1,6 +1,6 @@
-// Table of contents over the already-rendered content DOM (not the markdown source). buildToc stays a
-// top-level global — showMarkdown (06-view-history) and exitEditMode (09-editor) call it after setting
-// contentEl.innerHTML. readingTimeFromWords is a sibling pure util read by the same showMarkdown.
+// Table of contents over the already-rendered content DOM (not the markdown source). buildToc is
+// called by DocRenderer.show (doc-renderer.ts) and editor.exitEditMode (editor/editor.ts) after they
+// set contentEl.innerHTML. readingTimeFromWords is a sibling pure util read by the same DocRenderer.show.
 
 import { tocList, contentEl, tocPanel } from '../core/dom-refs';
 import { slugify } from '../core/utils';
@@ -66,7 +66,7 @@ export class Toc {
 
 export const toc = new Toc();
 
-// Reading-time estimate (≈220 wpm); shown in the breadcrumb by showMarkdown (06-view-history). Pure.
+// Reading-time estimate (≈220 wpm); shown in the breadcrumb by DocRenderer.show (doc-renderer.ts). Pure.
 export function readingTimeFromWords(words: number | undefined): ReadingTime | null {
   if (!words) return null;
 

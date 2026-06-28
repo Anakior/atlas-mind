@@ -186,11 +186,12 @@ class TestBrandingHostilePrefix(unittest.TestCase):
         # string), with the </ -> <\/ protection against tag closing.
         expected = (json.dumps(HOSTILE_PREFIX, ensure_ascii=False)
                     .replace("</", "<\\/"))
-        # esbuild emits the bundled symbol as a top-level `var` (name preserved);
-        # what matters is the exact JSON-encoded value of the constant.
+        # esbuild chains the bundled symbol into a comma-separated top-level `var`
+        # (name preserved, terminated by `,` not `;`); what matters is the exact
+        # JSON-encoded value of the constant.
         self.assertRegex(
             self.rendered,
-            r"(?:const|let|var)\s+SITE_PREFIX\s*=\s*" + re.escape(expected) + r"\s*;")
+            r"SITE_PREFIX\s*=\s*" + re.escape(expected) + r"\s*[,;]")
 
     def test_title_is_derived_site_name_escaped(self):
         expected = html.escape(f"{HOSTILE_PREFIX} Atlas Mind", quote=True)
@@ -228,8 +229,9 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
         self.assertNotIn("Acme", text)
         # Without a prefix, the styled wordmark stays alone in the H1 (the prefix
         # span is empty) and the viewer's JS constant is the empty string.
-        # (esbuild emits a top-level `var`; the symbol name + value are preserved.)
-        self.assertRegex(text, r'(?:const|let|var)\s+SITE_PREFIX\s*=\s*"";')
+        # (esbuild chains the symbol into a comma-separated `var`; the name + value
+        # are preserved, terminated by `,` not `;`.)
+        self.assertRegex(text, r'SITE_PREFIX\s*=\s*""[,;]')
         # The default mind has no [site].url → only a <meta description> from
         # the tagline, no canonical/OG it has no public URL to back.
         self.assertIn(
@@ -309,8 +311,9 @@ class TestBrandingFromToml(unittest.TestCase):
         self.assertIn('href="/vendor/fonts.css"', text)
         self.assertNotIn("fonts.googleapis.com", text)
         # Home (JS): the prefix comes from the JSON constant, never raw.
-        # (esbuild emits a top-level `var`; the JSON value is what matters.)
-        self.assertRegex(text, r"(?:const|let|var)\s+SITE_PREFIX\s*=\s*\"Acme's\";")
+        # (esbuild chains the symbol into a comma-separated `var`; the JSON value
+        # is what matters.)
+        self.assertRegex(text, r"SITE_PREFIX\s*=\s*\"Acme's\"[,;]")
 
     def test_manifest_uses_derived_name_and_fixed_short_name(self):
         manifest = self.srv.get("/manifest.json").json()
@@ -446,17 +449,19 @@ class TestEmbedActivity(unittest.TestCase):
     def test_null_when_not_embedded(self):
         # Online build (and any build without a snapshot): the JS constant is null
         # so the viewer falls back to the live /api/activity fetch.
-        # (esbuild emits a top-level `var`; the symbol name + value are preserved.)
+        # (esbuild chains the symbol into a comma-separated `var`; the name + value
+        # are preserved, terminated by `,` not `;`.)
         self.assertRegex(self._render(None),
-                         r"(?:const|let|var)\s+EMBED_ACTIVITY\s*=\s*null;")
+                         r"EMBED_ACTIVITY\s*=\s*null[,;]")
 
     def test_snapshot_inlined_when_embedded(self):
         snap = {"events": [{"sha": "abc123", "type": "edit", "ai": "claude"}],
                 "stale": [], "contradictions": []}
         html = self._render(snap)
-        # Mirror of the null check above against the reshaped `var` form, so this
-        # stays a real assertion (not a tautology now that `const` is never emitted).
-        self.assertNotRegex(html, r"(?:const|let|var)\s+EMBED_ACTIVITY\s*=\s*null;")
+        # Mirror of the null check above against the reshaped comma-chained `var`
+        # form, so this stays a real assertion (not a tautology now that the symbol
+        # is never emitted with a leading `var ` keyword).
+        self.assertNotRegex(html, r"EMBED_ACTIVITY\s*=\s*null[,;]")
         self.assertIn('"events"', html)
         self.assertIn('"sha": "abc123"', html)
 

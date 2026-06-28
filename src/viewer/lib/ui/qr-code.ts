@@ -1,12 +1,11 @@
 // QR codec (ISO/IEC 18004, error-correction level L, versions 1-10). The QrCode class is pure: it
 // encodes a string to a module matrix, no DOM; its GF(256)/Reed-Solomon helpers are private statics
 // (the exp/log tables + gfMul/rsEncode/genPoly), so nothing leaks beside the class. The DOM bridge
-// renderQrCanvas (matrix → <canvas>) is a free bundle global below; the 2FA enrollment wiring that
-// calls it lives in 18-totp-modal.ts. Public surface: the QrCode class (`new QrCode(text).matrix`) +
-// renderQrCanvas.
+// renderQrCanvas (matrix → <canvas>) is exported below; the 2FA enrollment wiring that
+// calls it lives in admin/totp/totp-enroll-modal.ts. Public surface: the QrCode class
+// (`new QrCode(text).matrix`) + renderQrCanvas.
 //
-// Stays at the 17- prefix so it concatenates BEFORE its consumer 18-totp-modal.ts (bundle order is
-// filename sort). A wrong >>/<</^/& here yields a structurally valid but UNREADABLE QR with no error
+// A wrong >>/<</^/& here yields a structurally valid but UNREADABLE QR with no error
 // thrown — tests/test_qr.py locks the matrix byte-for-byte.
 
 type QrCell = 0 | 1 | null;
@@ -363,8 +362,7 @@ export class QrCode {
 
 // DOM bridge: paint an encoded QR matrix onto a crisp <canvas> (square pixels) inside `el`. Returns
 // false when `text` exceeds the encoder's capacity (matrix === null), so the caller can fall back to the
-// plaintext secret. A free bundle global — consumed by 18-totp-modal.ts's enrollment flow as a bareword —
-// reading QrCode off the shared top-level scope.
+// plaintext secret. Exported and consumed by admin/totp/totp-enroll-modal.ts's enrollment flow.
 export function renderQrCanvas(el: HTMLElement, text: string, sizePx: number): boolean {
   const matrix = new QrCode(text).matrix;
 

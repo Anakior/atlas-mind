@@ -1,9 +1,10 @@
 // The "all docs with #tag" browse page: an imperative innerHTML render of #content. It stays
-// imperative (like the doc-tag chips in 08-tags) because the content area is still owned by
-// showMarkdown (06-view-history); routing it through the runtime's render() would leave that
-// container's ROOTS map stale and corrupt the next diff. Reached from a tag-chip click (08-tags'
-// content delegation), the graph's tag nodes (12) and the home tag rows (10), all through the
-// top-level showTag wrapper. Self-contained: it shares no state with the tag-editing pieces.
+// imperative (like the doc-tag chips in tags.ts) because the content area is still owned by
+// DocRenderer.show (doc-renderer.ts); routing it through the runtime's render() would leave that
+// container's ROOTS map stale and corrupt the next diff. Reached from a tag-chip click (tags.ts'
+// content delegation), the graph's tag nodes (graph/mind-graph.ts) and the home tag rows
+// (home/home-view.ts), all through tagBrowsePage.showTag. Self-contained: it shares no state with the
+// tag-editing pieces.
 
 import { t } from '../core/i18n';
 import { escapeHtml } from '../core/utils';

@@ -1,8 +1,7 @@
 // Journal view of the home Activity card: the chronological feed grouped by day, each row carrying an
 // avatar + actor + verb phrase + relative time, with an in-place "see all" expand toggle. A render-only
 // view — it reads the filtered feed, the journal toggles and the helper cluster through the
-// ActivityRenderCtx the shell hands it (the shell owns the state and the card-level wiring). Top-level
-// (no IIFE) so it is a shared symbol in the concat scope.
+// ActivityRenderCtx the shell hands it (the shell owns the state and the card-level wiring).
 
 import { t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';

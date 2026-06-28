@@ -1,7 +1,6 @@
-// Cached DOM element refs for the viewer chrome. Split out of the old 01-i18n-state.js.
-// These ids are guaranteed by the static viewer markup (partials), so the lookups are
-// asserted non-null — downstream modules use them without a null guard. Foundation layer:
-// top-level so the refs are shared globals.
+// Cached DOM element refs for the viewer chrome. These ids are guaranteed by the static
+// viewer markup (partials), so the lookups are asserted non-null — downstream modules
+// import and use them without a null guard.
 export const treeEl = document.getElementById('tree')!;
 export const contentEl = document.getElementById('content')!;
 export const breadcrumbPath = document.getElementById('breadcrumb-path')!;

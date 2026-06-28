@@ -2,8 +2,7 @@
 // system — each aggregated event is a node on one of three rings, hover/tap reveals a popover, the sun
 // carries the easter egg, and a node opens its doc's history. A render-only view over the shared feed:
 // it reads through the ActivityRenderCtx the shell hands it (helpers + openDocHistory) and keeps its own
-// transient orreryItems (the list the nodes index into). Top-level (no IIFE) so it is a shared symbol in
-// the concat scope.
+// transient orreryItems (the list the nodes index into).
 
 import { escapeHtml } from '../../core/utils';
 import { ActivityIcons } from './activity-icons';

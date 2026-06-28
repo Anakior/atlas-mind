@@ -1,4 +1,4 @@
-// Mutable runtime state shared across the viewer. Split out of the old 01-i18n-state.js.
+// Mutable runtime state shared across the viewer.
 // These stay module-level `let`s exposed through explicit setters: ES modules forbid reassigning
 // an imported binding, so cross-module writers (editor, backlinks, notes-panel, bootstrap, tree)
 // go through setX() while readers import the live binding.
@@ -36,7 +36,7 @@ export function setEditTextarea(v: HTMLTextAreaElement | null): void {
   editTextarea = v;
 }
 
-// File counters for the stats line, populated by index() in 01-tree.ts.
+// File counters for the stats line, populated by index() in tree.ts.
 export let mdCount = 0;
 
 export function setMdCount(v: number): void {

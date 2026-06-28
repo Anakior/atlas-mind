@@ -1,7 +1,5 @@
-// Tree indexing: fileMap (path → file node) + index() that walks the tree. Split out of
-// the old 01-i18n-state.js. Foundation layer, concatenated after dom-refs/i18n/state, so
-// statsEl, t, mdCount, otherCount (and TREE/IS_OFFLINE_BUILD from 00-data-csrf.ts) are all
-// defined when this runs.
+// Tree indexing: fileMap (path → file node) + index() that walks the tree. statsEl, t, the
+// counters (mdCount/otherCount) and TREE/IS_OFFLINE_BUILD come from the core imports below.
 import { IS_OFFLINE_BUILD, TREE } from './data-csrf';
 import { statsEl } from './dom-refs';
 import { t } from './i18n';

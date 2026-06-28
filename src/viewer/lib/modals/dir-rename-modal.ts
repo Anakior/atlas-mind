@@ -1,7 +1,6 @@
 // The folder-rename dialog. POSTs /api/dir/rename, then reconciles the tree (and any open doc's hash)
-// via refreshTreeOrReload. Extends the shared Modal lifecycle (01c-modal-base.ts); instantiated by
-// 19-newfile.ts, which also owns the dirRenameBackdrop ref and the openDirRenameModal global. Concatenated
-// before 19-newfile.ts so the class exists when `new DirRenameModal()` runs at module init.
+// via refreshTreeOrReload. Extends the shared Modal lifecycle (ui/modal-base.ts); instantiated by
+// new-file-modal.ts, which also owns the dirRenameBackdrop ref imported here.
 
 import { Modal } from '../ui/modal-base';
 import { t } from '../core/i18n';

@@ -1,10 +1,11 @@
 // Notes index → tree badges: loads the {path: count} map and stamps a count badge on each tree link.
 //
-// These MUST stay hoisted `function` declarations (not const/arrow): 02-content-tree's offline boot
-// calls decorateTreeBadges() during its own module eval, and 02 concatenates BEFORE this file — only a
-// function declaration hoists script-wide so that early call resolves. Online: _notes-index.json ;
-// offline: EMBED_NOTES. notesIndex ({path: count}) is declared in 02-content-tree (early enough to be
-// initialized before that boot reads it).
+// These MUST stay hoisted `function` declarations (not const/arrow): content-tree.ts imports
+// decorateTreeBadges and calls it from its offline boot during module eval. The two modules form an
+// import cycle (content-tree.ts → notes-index.ts → content-tree.ts), and a hoisted function binding is
+// already live even if notes-index.ts hasn't finished evaluating when that early call runs. Online:
+// _notes-index.json ; offline: EMBED_NOTES. notesIndex ({path: count}) is declared in content-tree.ts
+// (initialized before that boot reads it).
 
 import { IS_OFFLINE_BUILD, EMBED_NOTES } from '../../core/data-csrf';
 import { treeEl } from '../../core/dom-refs';

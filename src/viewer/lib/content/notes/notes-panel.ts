@@ -1,6 +1,6 @@
 // Passage-notes side panel (#toc-notes): the per-doc list of annotations, plus renderNotesFor — the
 // pipeline that fetches the notes (notesStore), resolves + highlights each anchor (noteAnchor) and
-// renders the rows. renderNotesFor is a bareword global, called unqualified by 06-view-history.
+// renders the rows. renderNotesFor is called by DocRenderer.show (doc-renderer.ts).
 //
 // noteContext is the one mutable seam the note pieces share: NotesPanel fills notesForDoc here during
 // the resolve pass; notesStore.copyAllNotes reads it for the markdown export.

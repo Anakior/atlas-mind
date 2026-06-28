@@ -1,7 +1,7 @@
-// App-wide keyboard router: the global-shortcut dispatcher plus its document keydown listener. High
-// prefix on purpose — it dispatches to the mindGraph / tasksOverlay instances owned by 12-tasks-graph
-// and the historyOverlay owned by 06, and opens the commandPalette owned by 11, so it must load after
-// all of them (the references resolve at keydown time, never at construction).
+// App-wide keyboard router: the global-shortcut dispatcher plus its document keydown listener. It
+// imports and dispatches to the mindGraph (graph-boot.ts) / tasksOverlay (tasks-overlay.ts) instances,
+// the historyOverlay (content/history-panel.ts) and the commandPalette (command-palette.ts); the
+// handlers reach those instances at keydown time, never at construction.
 
 import { currentFile, editMode } from '../core/state';
 import { searchEl } from '../core/dom-refs';

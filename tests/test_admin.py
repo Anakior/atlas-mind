@@ -40,9 +40,12 @@ VIEWER_PASSWORD = "viewer-password-42"
 
 def _assert_i18n(tc, haystack, entry):
     # The viewer STRINGS catalog ships from .ts now; esbuild re-quotes string literals
-    # (single→double) when bundling, so match each "key: 'value'" entry regardless of the
-    # surrounding quote style.
-    tc.assertRegex(haystack, re.escape(entry).replace("'", "[\"']"))
+    # (single→double) AND strips whitespace (no space after the `key:` colon) when
+    # bundling. Match each "key: 'value'" entry regardless of the surrounding quote
+    # style and of the collapsed spacing, while keeping the key + value tokens intact.
+    pattern = re.escape(entry).replace("'", "[\"']")
+    pattern = re.sub(r"\\?\s+", r"\\s*", pattern)
+    tc.assertRegex(haystack, pattern)
 
 
 def cloud_env() -> dict:
@@ -786,11 +789,12 @@ class TestAdminUiPanel(unittest.TestCase):
         # (Recent, search, the Mind, stats) BEFORE the per-account filtered
         # softReload(). Gated on IS_OFFLINE_BUILD, not the protocol — a static
         # offline build is served over https on Pages. Mirrors 02-content-tree.js.
-        # esbuild reshaped the indentation/line breaks; match the meaningful
-        # tokens (the offline-only index(TREE) call) ignoring exact whitespace.
+        # esbuild collapsed the line breaks AND rewrote the `if (IS_OFFLINE_BUILD)
+        # { index(TREE); }` statement into a `&&` short-circuit. Match the meaningful
+        # tokens: index(TREE) is reached ONLY when IS_OFFLINE_BUILD is truthy.
         self.assertRegex(
             self.index,
-            r"if \(IS_OFFLINE_BUILD\)\s*\{\s*index\(TREE\);")
+            r"IS_OFFLINE_BUILD\s*&&\s*index\(TREE\)")
         # softReload still rebuilds fileMap from the FILTERED /api/tree.
         self.assertRegex(self.index, r"await fetch\([\"']/api/tree[\"']\)")  # quote-agnostic: esbuild re-quotes the .ts literal
 
@@ -838,7 +842,7 @@ class TestAdminUiPanel(unittest.TestCase):
         self.assertRegex(self.index, r"classList\.add\([\"']cloud-authed[\"']\)")
         # body.admin-cloud stays set to manage the visibility of admin tabs.
         self.assertRegex(self.index, r"classList\.add\([\"']admin-cloud[\"']\)")
-        self.assertRegex(self.index, r"data\.role === [\"']admin[\"']")
+        self.assertRegex(self.index, r"data\.role\s*===\s*[\"']admin[\"']")
         # Admin-only tabs stay hidden outside admin-cloud — a member must not see a tab
         # it cannot use (e.g. Groups, whose /api/admin/groups is admin-gated).
         for tab in ("users", "nodes", "groups", "shares"):
@@ -955,7 +959,8 @@ class TestSecurityUi(unittest.TestCase):
         self.assertIn('kb_csrf', self.index)
         self.assertIn('csrf_token', self.index)
         # The wrapper wraps window.fetch (centralized wiring, not scattered).
-        self.assertIn('window.fetch =', self.index)
+        # esbuild stripped the spaces around the assignment: `window.fetch=`.
+        self.assertRegex(self.index, r"window\.fetch\s*=")
 
     def test_qr_generator_is_self_contained(self):
         # QR rendered client-side WITHOUT an external lib (Reed-Solomon +

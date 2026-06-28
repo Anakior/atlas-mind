@@ -1,4 +1,4 @@
-// Option bag for the confirm / alert / prompt dialogs (14-dialogs). Every field is optional;
+// Option bag for the confirm / alert / prompt dialogs (modals/dialogs.ts). Every field is optional;
 // each dialog reads only the subset it needs (e.g. prompt uses placeholder/value, confirm uses
 // destructive/cancelLabel). A bare string is also accepted by confirm/alert as a shorthand message.
 interface DialogOptions {

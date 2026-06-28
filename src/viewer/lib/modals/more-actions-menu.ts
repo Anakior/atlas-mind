@@ -1,7 +1,7 @@
 // Kebab "More actions" menu (btn-more) — the per-doc rename / move / delete dropdown. It owns only the
 // menu chrome (toggle + outside-click dismiss) and the delete-doc fetch; rename and move are delegated to
 // RenameModal via renameModal.open(...). The element handles (btnMore, btnMoreMenu) and the renameModal
-// instance live in 14-dialogs.ts, concatenated first, so both exist when this wires up and dispatches.
+// instance are imported from dialogs.ts.
 
 import { btnMore, btnMoreMenu, renameModal, Dialogs } from './dialogs';
 import { t } from '../core/i18n';

@@ -1,7 +1,7 @@
 // Inbox triage — the home Activity card's "Inbox" tab, on the Atlas DOM runtime.
 //
 // Agents pre-triage upstream and drop ready-to-file items into a per-person inbox lane via the MCP;
-// you keep / trash / snooze them here. The Activity card (21-activity.js) owns only the tab button,
+// you keep / trash / snooze them here. The Activity card (admin/activity/activity-card.ts) owns only the tab button,
 // the #inbox-badge and the empty #activity-inbox slot, and calls AtlasInbox.{mount,show,hide}.
 // CSS lives in styles/10-inbox.css.
 //

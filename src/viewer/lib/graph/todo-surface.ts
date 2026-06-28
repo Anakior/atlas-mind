@@ -1,9 +1,9 @@
-// To-do widget shared surface (cross-cutting top-level glue, kept in the 12-* family for now). The DOM
-// refs, the collapse state, todoFilter/showDoneTodos, the favicon/tab badge and the
+// To-do widget shared surface (cross-cutting glue for the todo feature). The DOM refs, the collapse
+// state, todoFilter/showDoneTodos, the favicon/tab badge and the
 // tcat/TODO_FILTER_LABELS/renderTodoFilterTabs/updateHomeTodoStat/updateTabBadge helpers are read AND
-// reassigned by 13-todos.ts, so they are shared globals (loaded before 13), not class state. The
-// read-only demo-banner IIFE rides along at the tail (it was the original file's last block). A later
-// pass relocates this surface to 13-todos / 01-state (plan items B1/B12).
+// reassigned by todos.ts (the Todos widget), so they are module-level exported bindings, not class
+// state. The read-only demo-banner setup runs in an IIFE at the bottom of this module. A later pass
+// relocates this surface to todos.ts / core/state.ts (plan items B1/B12).
 import { layoutChrome } from '../home/layout-chrome';
 import { todos } from '../content/content-tree';
 import { escapeHtml } from '../core/utils';

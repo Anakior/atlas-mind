@@ -4,8 +4,8 @@
 // to a pure-email seed when no name is set (it does change on rename — intended).
 // Pure (returns an SVG string), no DOM/network/storage, works in the offline build.
 //
-// Seeded-deterministic: the ORDER in which the constructor pulls from its Rng (core/rng.ts,
-// loaded earlier in the shared scope) decides a person's avatar, so it is fixed. The render
+// Seeded-deterministic: the ORDER in which the constructor pulls from its Rng (imported from
+// core/rng.ts) decides a person's avatar, so it is fixed. The render
 // methods only turn that drawn state into SVG — no randomness, reorder-proof.
 
 import { Rng } from '../core/rng';
@@ -292,8 +292,8 @@ export class Avatar {
   }
 }
 
-// Public bundle API: top-level in the shared concat scope so the consumers (user bar, admin lists,
-// profile, activity) read constellationSvg/avatarSeed as bare globals (loaded after this file).
+// Public API: the consumers (user bar, admin lists, profile, activity) import
+// constellationSvg/avatarSeed from this module.
 export function constellationSvg(identity: string, size?: number): string {
   return new Avatar(identity, size).render();
 }

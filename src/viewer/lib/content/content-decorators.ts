@@ -1,10 +1,11 @@
 // Post-render decorators of the #content markdown body — hooks run after each innerHTML write:
-//   • attachCopyButtons   — adds the hover copy button to every <pre> code block (06/09 after a render).
-//   • highlightFirstMatch — highlights + scrolls to the 1st occurrence of a search term (06/12).
+//   • attachCopyButtons   — adds the hover copy button to every <pre> code block (doc-renderer.ts /
+//                           editor.ts after a render).
+//   • highlightFirstMatch — highlights + scrolls to the 1st occurrence of a search term (doc-renderer.ts
+//                           / graph/tasks-overlay.ts).
 //
 // Both are cross-cutting (neither belongs to the notes nor the tags concern), so they live here as
-// bareword top-level functions: their consumers (06/09/12) call them unqualified in the shared bundle
-// scope, and this file sorts before all of them (04c < 06/09/12).
+// module exports their consumers import.
 
 import { contentEl } from '../core/dom-refs';
 import { t } from '../core/i18n';

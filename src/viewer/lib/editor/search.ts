@@ -1,12 +1,10 @@
-// Full-text search on the shared global scope (no IIFE: 11-palette calls getSearchHits by bare name,
-// and 99-bootstrap nulls miniSearch/searchInitPromise by name to invalidate the offline index).
+// Full-text search exposed as the `search` singleton: the command palette (graph/command-palette.ts)
+// calls getSearchHits, and boot/bootstrap.ts resets miniSearch/searchInitPromise (via setMiniSearch /
+// setSearchInitPromise) to invalidate the offline index.
 //
 // Search runs MiniSearch offline (file:// monolith, lazy-loaded on the first query) and /api/search
 // online, normalizes both engines to NormalizedHit[], and renders the results pane under the tree.
 // makeSnippet stays a pure helper (the highlighted excerpt around the first matching word).
-//
-// Concatenated after 09-editor (09-search sorts last in the 09 family); no load-order coupling to the
-// Editor — just the agreed autocomplete < editor < search order.
 
 import { searchEl, searchResultsEl, treeEl, recentList, recentSection } from '../core/dom-refs';
 import { t } from '../core/i18n';
@@ -15,8 +13,9 @@ import { EMBED_CONTENT, IS_OFFLINE_BUILD } from '../core/data-csrf';
 import { escapeHtml } from '../core/utils';
 import { docRenderer } from '../content/doc-renderer';
 
-// MiniSearch index + its in-flight init promise. Top-level globals (NOT class state): 99-bootstrap
-// nulls both by name on softReload to invalidate the index. Lazy-loaded on the first offline search.
+// MiniSearch index + its in-flight init promise. Module-level state (NOT class state) so
+// boot/bootstrap.ts can reset both via setMiniSearch / setSearchInitPromise on softReload to
+// invalidate the index. Lazy-loaded on the first offline search.
 export let miniSearch: any = null;
 export let searchInitPromise: Promise<any> | null = null;
 

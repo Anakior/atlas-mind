@@ -1,18 +1,17 @@
 // New-file modal + the public window.Atlas extension API, and the cross-modal Escape-priority stack.
 //
-// Each modal shares one lifecycle (Modal, in 01c-modal-base.ts): hidden-class toggle +
+// Each modal shares one lifecycle (Modal, in ui/modal-base.ts): hidden-class toggle +
 // click-outside-to-close; focus and field resets live in each subclass's open(). One module-level
 // keydown handler owns the Escape-priority stack across EVERY modal — including ones other modules own
 // (settings, quick-capture, share, rename) — plus the `n` new-file shortcut, so it stays a free handler,
 // not a method.
 //
-// NewFileModal delegates its template <select> to a TemplateRegistry (19-a-template-registry.ts) and
-// the folder-rename dialog lives in DirRenameModal (19-b-dir-rename.ts); both concat before this file
-// so their classes exist when the modals are constructed at module init below.
+// NewFileModal delegates its template <select> to a TemplateRegistry (template-registry.ts) and
+// the folder-rename dialog lives in DirRenameModal (dir-rename-modal.ts); both are imported by this module.
 //
-// getAllDirs / refreshTreeOrReload / openNewFileModal / closeNewFileModal / openDirRenameModal stay
-// free globals: cross-module consumers (02-content-tree, 13-todos, 14-dialogs, 16-settings,
-// 22-inbox) read them by name in the shared scope.
+// getAllDirs and refreshTreeOrReload are exported here and imported by consumers across modules —
+// content/content-tree.ts, the admin/settings/ tabs, inbox/inbox.ts and the rename/dir-rename modals;
+// module scope (not a shared global scope) keeps everything else private.
 
 import { Modal } from '../ui/modal-base';
 import { AtlasCombobox } from '../ui/combobox';
@@ -30,7 +29,7 @@ import { shareBackdrop, closeShareModal } from '../admin/settings/settings-share
 import { settingsPanel } from '../admin/settings/settings-panel';
 import { quickCaptureModal } from './quick-capture';
 
-// Cross-file refs read by 99-bootstrap.ts; HTMLElement | null, so consumers assert with `!`.
+// Cross-file refs read by boot/bootstrap.ts; HTMLElement | null, so consumers assert with `!`.
 export const newFileBtn = document.getElementById('new-file-btn');
 export const newFileBackdrop = document.getElementById('new-file-backdrop');
 export const dirRenameBackdrop = document.getElementById('dir-rename-backdrop');
@@ -182,7 +181,7 @@ export class NewFileModal extends Modal {
 export const newFileModal = new NewFileModal();
 export const dirRenameModal = new DirRenameModal();
 
-// Extensions (inlined after this script by build.py) register templates and drive the viewer here.
+// Extensions (inlined after this script by the Python build) register templates and drive the viewer here.
 window.Atlas = {
   version: 1,
   t,
@@ -209,7 +208,7 @@ window.Atlas = {
 // Order: settings → new-file → dir-rename → quick-capture → share → rename.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    // 16-settings owns the backdrop privately now, so probe the element rather than a global ref.
+    // settings-panel.ts keeps its backdrop private, so probe the element rather than import a ref.
     const settingsBackdrop = document.getElementById('settings-backdrop');
 
     if (settingsBackdrop && !settingsBackdrop.classList.contains('hidden')) {

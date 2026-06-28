@@ -256,6 +256,6 @@ export class AccessDialog {
 // is present; otherwise it stays undefined (consumers guard on it).
 if (document.getElementById('acl-backdrop')) {
   const dialog = new AccessDialog();
-  // The tree (02-content-tree.ts) opens the dialog through this global; keep it exposed from the instance.
+  // The tree (content/content-tree.ts) opens the dialog through this window global; keep it exposed from the instance.
   window.openAccessFor = (path) => dialog.openAccessFor(path);
 }

@@ -2,7 +2,7 @@
 // Heroicons-v2 outline path), the per-language verb labels, the AI-family glyphs, the orrery/journal
 // caps and the easter-egg lines. Split out of ActivityCard so the icon/data tables sit apart from the
 // behaviour; the shell's helper cluster and the view classes (Journal / Orrery / Health) read
-// ActivityIcons.* at render time. Top-level (no IIFE) so it is a shared symbol in the concat scope.
+// ActivityIcons.* at render time. Exported as a class the shell and view modules import.
 export class ActivityIcons {
   // CDC event types -> display label + tint + Heroicons-v2 outline path (clean line
   // icons, matching the rest of the app). Keyed by the type /api/activity returns.
@@ -18,7 +18,7 @@ export class ActivityIcons {
     node_remove: { label: 'removed node', color: '#868a90', d: 'M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z' },
   };
 
-  // Verb labels by UI language (LANG from 01-i18n.ts). A local map (vs t()) keeps them next to
+  // Verb labels by UI language (LANG from core/i18n). A local map (vs t()) keeps them next to
   // TYPES and avoids colliding with existing STRINGS keys (create/edit…).
   static readonly VERB: Record<'fr' | 'en', Record<string, string>> = {
     fr: { create: 'créé', edit: 'édité', move: 'déplacé', delete: 'supprimé', check: 'coché', revert: 'restauré', node_add: 'ajouté le nœud', node_remove: 'retiré le nœud' },

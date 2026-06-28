@@ -1,9 +1,9 @@
-// ─── Data injected by build.py ───────────────────────────────────────────
+// ─── Data injected by render.py ───────────────────────────────────────────
 // Online: EMBED_* are null, loaded on demand from the server.
 // Offline: they hold the inline data (standalone HTML).
 // The __NAME__ barewords are JSON literals pasted by render.py (single regex pass); esbuild
-// strips the types but never touches them, so the Python substitution still lands. Foundation
-// layer: NOT wrapped in an IIFE — these are the shared globals the rest of the viewer reads.
+// strips the types but never touches them, so the Python substitution still lands. They are
+// exported as module bindings the rest of the viewer imports.
 declare const __DATA__: DirNode;
 declare const __EMBED_CONTENT__: Record<string, string> | null;
 declare const __EMBED_BACKLINKS__: any;

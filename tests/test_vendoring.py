@@ -147,10 +147,15 @@ class TestVendoringOnline(unittest.TestCase):
         text = (self.srv.dist_dir / "index-offline.html").read_text(
             encoding="utf-8")
         # No resource loaded over http(s), and no remaining /vendor/ reference
-        # in the markup: everything is inlined.
+        # in the markup: everything is inlined. esbuild stripped the spaces around
+        # assignments, so the bundle's runtime MiniSearch fallback now reads
+        # `s.src="/vendor/minisearch.min.js"` — a JS property write (unreachable
+        # offline: MiniSearch is already inlined below, so typeof MiniSearch short-
+        # circuits it), NOT an un-inlined markup tag. Assert no <script>/<link> TAG
+        # still points at /vendor/ (the real "self-contained" intent), which keeps
+        # catching a genuinely un-inlined resource while tolerating that JS literal.
         self.assertIsNone(_EXTERNAL_LOAD_RE.search(text))
-        self.assertNotIn('src="/vendor/', text)
-        self.assertNotIn('href="/vendor/', text)
+        self.assertNotRegex(text, r'<(?:script|link)\b[^>]*\b(?:src|href)="/vendor/')
         # The libs are indeed in there (markers placed by inline_vendor_assets),
         # MiniSearch included (offline search without network).
         for marker in ("vendor: tailwind.css", "vendor: fonts.css",

@@ -1,20 +1,20 @@
 // Document tags, split by concern but sharing one content-area surface:
-//   • DocTags   — renders the doc-tag chips (an HTML string spliced into 06-view-history's #content
-//                 innerHTML; routing it through the runtime's render() would leave its per-container
-//                 ROOTS map stale and corrupt the next diff, so it stays a string builder).
+//   • DocTags   — renders the doc-tag chips (an HTML string spliced into the #content innerHTML written
+//                 by DocRenderer.show; routing it through the runtime's render() would leave its
+//                 per-container ROOTS map stale and corrupt the next diff, so it stays a string builder).
 //   • TagStore  — the tag data layer: the `tags:` frontmatter rewrite, the PUT /api/file persist, and
 //                 the all-tags aggregate the editor autocompletes from. After a successful write it
 //                 re-renders the chips in place through the injected DocTags.
-//   • TagEditor — the body-anchored tag-editor popup island (like 13-combobox's pop): created on open,
+//   • TagEditor — the body-anchored tag-editor popup island (like ui/combobox.ts's pop): created on open,
 //                 torn down on close, placed via getBoundingClientRect. It also owns the content-area
 //                 click delegation (chips + [[wikilink]]s) and the outside-click close; tag mutations
-//                 delegate to the injected TagStore, and a chip click hands off to showTag.
+//                 delegate to the injected TagStore, and a chip click hands off to tagBrowsePage.showTag.
 //
-// The "all docs with #tag" browse page (showTag) lives in 08b-tag-browse.ts.
+// The "all docs with #tag" browse page (tagBrowsePage.showTag) lives in tag-browse.ts.
 //
-// folderTagsOf / stripFrontmatter / mdInsert* are stateless cross-cutting utils; they stay top-level
-// globals because 06/09/12 and 22-inbox call them bare in the shared bundle scope. renderDocTags gets
-// a thin top-level wrapper for the same reason. (highlightFirstMatch moved to 04c-content-decorators.)
+// folderTagsOf / stripFrontmatter / mdInsert* are stateless cross-cutting utils, exported here and
+// imported by doc-renderer.ts / editor.ts / the graph / inbox.ts. (highlightFirstMatch moved to
+// content-decorators.ts.)
 
 import { IS_OFFLINE_BUILD } from '../core/data-csrf';
 import { t } from '../core/i18n';
@@ -39,7 +39,7 @@ export function folderTagsOf(path: string): string[] {
     .map((s) => s.toLowerCase());
 }
 
-// ---- doc-tag chips (an HTML string spliced into 06-view-history's #content innerHTML) ----
+// ---- doc-tag chips (an HTML string spliced into the #content innerHTML written by DocRenderer.show) ----
 export class DocTags {
   renderDocTags(file: FileNode | null): string {
     if (!file || file.ext !== '.md') return '';
@@ -298,7 +298,7 @@ export class TagEditor {
     });
   }
 
-  // ---- delegation + outside-click wiring (top-level side effects in the old .js) ----
+  // ---- delegation + outside-click wiring (registered once by init()) ----
   init(): void {
     // Close the popup on any outside click — but not on the + button, which toggles it.
     document.addEventListener('click', (e) => {
@@ -361,7 +361,7 @@ export const tagEditor = new TagEditor(tagStore);
 
 tagEditor.init();
 
-// ---- markdown insert primitives (09-editor's toolbar) — operate on the editTextarea island ----
+// ---- markdown insert primitives (editor.ts's toolbar) — operate on the editTextarea island ----
 export function mdInsertWrap(before: string, after: string, placeholderIfEmpty?: string): void {
   const ta = editTextarea;
 

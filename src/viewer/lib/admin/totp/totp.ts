@@ -1,7 +1,7 @@
-// Security 2FA shell. The cross-file entry point that lets the Settings Security tab (16z-settings.ts)
-// and 99-bootstrap.ts (/api/me boot) refresh the security pane. The pane itself (status badge +
-// enable/disable/logout-all buttons) is 18-totp-pane.ts; the enrollment modal (QR + secret + recovery
-// codes) is 18-totp-modal.ts. totpEnabled is the global 2FA flag owned by 00-data-csrf.ts.
+// Security 2FA cluster map. The status pane (badge + enable/disable/logout-all buttons) is
+// ./security-pane; the enrollment modal (QR + secret + recovery codes) is ./totp-enroll-modal. The
+// Settings Security tab (admin/settings/settings-panel.ts) and boot/bootstrap.ts (/api/me boot) refresh
+// the pane via securityPane.refreshState(). totpEnabled is the 2FA flag owned by core/data-csrf.ts.
 //
-// The cross-file refreshSecurityState wrapper was removed in the ES-module pass: callers now invoke
-// securityPane.refreshState() directly (imported from ./security-pane).
+// This module holds no code: the refreshSecurityState wrapper it used to expose was removed in the
+// ES-module pass; callers now invoke securityPane.refreshState() directly (from ./security-pane).

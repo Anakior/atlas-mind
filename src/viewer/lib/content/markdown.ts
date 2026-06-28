@@ -1,7 +1,6 @@
 // Markdown rendering: secure HTML via marked + DOMPurify, plus the [[wikilink]] resolution. The base
-// marked config + the wikilink path maps live in 02-content-tree.ts (load order); this class adds the
-// wikilink inline extension and the render behaviour. The task-checkbox source toggle lives in
-// 03b-task-markers.ts.
+// marked config + the wikilink path maps live in content-tree.ts; this class adds the wikilink inline
+// extension and the render behaviour. The task-checkbox source toggle lives in task-markers.ts.
 
 import { escapeHtml } from '../core/utils';
 import { t } from '../core/i18n';

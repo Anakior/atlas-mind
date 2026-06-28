@@ -1,4 +1,4 @@
-// Option bag for AtlasCombobox (13-combobox). source is the only required field — the current
+// Option bag for AtlasCombobox (ui/combobox.ts). source is the only required field — the current
 // suggestion list, sync or async; the rest tune the creatable / multi / formatting behaviour.
 interface ComboboxOptions {
   source: () => string[] | Promise<string[]>;

@@ -5,8 +5,8 @@
 // where those endpoints don't exist / return 401. The DOM is written exactly as before
 // (innerHTML/createElement/appendChild); the panel's mutable state lives in the instance, and the
 // anti-race guards stay object-identity (this.file !== file): a slow load for doc A must not clobber
-// doc B. openHistory / historyAvailable / closeHistory stay shared top-level globals, and
-// historyOverlay stays a top-level const (11-palette-pins reads it for the Escape handler).
+// doc B. open / available / close are methods on the exported historyPanel, and historyOverlay is
+// exported too (graph/keyboard-router.ts reads it for the Escape handler).
 
 import { IS_OFFLINE_BUILD } from '../core/data-csrf';
 import { LANG, t } from '../core/i18n';
@@ -33,7 +33,7 @@ export class HistoryPanel {
   private currentSha: string | null = null; // the revision shown in the detail pane (kept across a filter toggle)
 
   available(file: FileNode | null): file is FileNode {
-    // Inline the protocol check rather than reference the `isServerMode` const: showMarkdown calls
+    // Inline the protocol check rather than reference the `isServerMode` const: DocRenderer.show calls
     // this synchronously before its first await, so on an initial deep-link it can run before that
     // const is initialized (TDZ).
     const serverMode = location.protocol === 'http:' || location.protocol === 'https:';

@@ -1,10 +1,11 @@
-// Connections-graph bootstrap — built LAST in the 12-* family (12z sorts after the pieces and the
-// controller), same pattern as 21z-activity-boot.ts. Concat = load order and `class` does not hoist:
-// 12-graph-palette/layout/renderer define the pieces, 12-graph defines the controller, and only here
-// does the load-time `new MindGraph()` run its field initializers — so every class is in scope.
+// Connections-graph bootstrap — constructs the single MindGraph instance (same split as the activity
+// card's admin/activity/activity-boot.ts: the class lives in mind-graph.ts, the instance is created
+// here). ESM import resolution guarantees MindGraph and its injected pieces
+// (graph-palette/graph-layout/graph-renderer) are defined before `new MindGraph()` runs.
 //
-// mindGraph stays a global (11-palette-pins dispatches to it by name); openGraph is the bareword the
-// home view wires to #home-graph-btn. Both delegate to the single instance.
+// mindGraph is exported and imported wherever the graph is opened — command-palette.ts and
+// keyboard-router.ts dispatch to it, and home-view.ts wires #home-graph-btn to mindGraph.open(); all
+// share this one instance.
 
 import { EMBED_MIND } from '../core/state';
 import { MindGraph } from './mind-graph';

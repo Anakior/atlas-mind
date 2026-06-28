@@ -2,7 +2,7 @@
 // paths. Two registries that must agree but belong to no single feature:
 //   - selfSaveUntil: per-path mute window — the SSE that follows our own commit must not re-render it.
 //   - taskWrites: in-flight checkbox PUTs; the disk-derived rollup awaits these before reading.
-// One instance (`sse`); loaded before its earliest consumer (04b-task-checkboxes).
+// One instance (`sse`), imported by its consumers (content/task-checkboxes.ts et al.).
 export class SseCoord {
   private readonly selfSaveUntil: Record<string, number> = {};
   private readonly taskWrites = new Set<Promise<unknown>>();

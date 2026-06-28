@@ -1,12 +1,12 @@
 // Modal layer: the in-app replacements for the browser's banned confirm/alert/prompt (Promise-based,
-// so many modules `await confirmDialog`/`promptDialog`), plus the rename/move modal. Top-level (no IIFE):
-// every public dialog stays a shared-scope global its callers reach by name; esbuild keeps those names
-// with minify off.
+// so many modules `await Dialogs.confirm`/`Dialogs.prompt`), plus the rename/move modal. The Dialogs
+// statics are exported and imported by their callers; module scope keeps each dialog's event wiring
+// private.
 //
 // Behaviour is byte-for-behaviour with the pre-migration DOM — each dialog wires its own
 // add/removeEventListener pair and the setTimeout(…, 50) focus, with no runtime/reconciler involvement.
 // The rename/move modal owns its element handles + `renameMode` below; the kebab "More actions" menu that
-// opens it lives in MoreActionsMenu (14a-more-menu.ts).
+// opens it lives in MoreActionsMenu (more-actions-menu.ts).
 
 import { t } from '../core/i18n';
 import { IS_OFFLINE_BUILD } from '../core/data-csrf';
@@ -196,8 +196,8 @@ export class Dialogs {
 
 // ── Rename / move modal ──────────────────────────────────────────────────────────────────────
 // Element handles + the cross-file `renameMode`. RenameModal drives the rename/move form; the kebab
-// "More actions" menu (btn-more / btn-more-menu) that opens it lives in MoreActionsMenu (14a-more-menu.ts,
-// concatenated next). renameBackdrop is also probed by 19-newfile.ts's Escape stack and 99-bootstrap.
+// "More actions" menu (btn-more / btn-more-menu) that opens it lives in MoreActionsMenu
+// (more-actions-menu.ts). renameBackdrop is also imported by new-file-modal.ts's Escape stack.
 export const btnMore = document.getElementById('btn-more');
 export const btnMoreMenu = document.getElementById('btn-more-menu');
 export const renameBackdrop = document.getElementById('rename-backdrop');

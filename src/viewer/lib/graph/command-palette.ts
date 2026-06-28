@@ -1,7 +1,7 @@
 // Command palette (Ctrl+K): a fuzzy command/file picker plus async full-text search (the same engine
 // as the search bar, via getSearchHits). Keeps its imperative DOM (innerHTML + rebind), byte-for-
 // behaviour with the pre-migration view. The app-wide keyboard router that opens it lives in
-// 12b-shortcuts.ts (it dispatches to overlays owned by 06/12, so it loads after them).
+// keyboard-router.ts.
 
 import { t } from '../core/i18n';
 import { currentFile, editMode } from '../core/state';

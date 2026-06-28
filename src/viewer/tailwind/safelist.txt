@@ -283,7 +283,6 @@ choisis
 choisit
 choose
 ci-dessus).
-class
 classer
 claude,
 clavier)
@@ -332,7 +331,6 @@ confirm-cancel
 confirm-message
 confirm-ok
 confirm-title
-confirmDialog
 confirmed
 connecteur
 connector
@@ -341,6 +339,7 @@ cont
 container)
 content
 content.
+contentCache).
 contenu
 continue
 contradiction
@@ -364,7 +363,6 @@ create
 created
 createdShort
 cree
-cross-file
 current
 currentColor
 cursor-pointer
@@ -483,6 +481,7 @@ edit
 editable
 edited
 edited).
+editor
 ee
 either
 el
@@ -936,6 +935,7 @@ list
 live-reload
 lo
 load
+loadContent
 loadError
 loadingDoc
 local
@@ -1263,7 +1263,6 @@ prompt-input
 prompt-message
 prompt-ok
 prompt-title
-promptDialog
 propre
 prose
 prose-invert
@@ -1312,7 +1311,6 @@ read-only.
 readingTime
 readonly
 real
-reassigned
 recent
 recent-list
 recent-section
@@ -1356,6 +1354,7 @@ renameFolder
 renameMode
 renamed
 render(view(state),
+renderBacklinksFor
 rendered
 rendering
 rendu
@@ -1785,7 +1784,6 @@ toc-list
 toc-notes
 toc-panel
 toc-show
-tocShow
 todo
 todo-body
 todo-bubble-count
@@ -1806,6 +1804,7 @@ todo-toggle-done
 todo-toggle-icon
 todo-toggle-label
 todo-widget
+todoStatus
 toggle
 toggleNthTaskMarker(content:
 toi
@@ -1883,7 +1882,6 @@ try
 tu
 two
 type
-typeof
 ul
 ul,
 un

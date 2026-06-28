@@ -1,12 +1,12 @@
 // Admin/cloud Settings — foundation layer: the standalone share-link modal, the shared admin/share
 // JSON fetch, a few pure helpers, and the SettingsContext handed to every tab controller. The seven
-// per-tab controllers live in 16b…16h-settings-*.ts and the orchestrating SettingsPanel shell in
-// 16z-settings.ts (built last, once every controller class is concatenated).
+// per-tab controllers live in ./*-tab.ts and the orchestrating SettingsPanel shell in
+// ./settings-panel.ts (which imports and constructs every controller class).
 //
-// Top-level (no IIFE): settingsFetch / copyToClipboard / openShareModal / closeShareModal — and the
-// SettingsPanel wrappers showSettingsError / clearSettingsError / closeSettings / openPublishNode
-// (16z) — are shared globals still called cross-file from 15-reset-pw, 18-totp, 19-newfile,
-// 05b-notes-store and 02-content-tree, so they stay reachable as bare functions.
+// settingsFetch / copyToClipboard / openShareModal / closeShareModal are exported and imported
+// cross-module by modals/reset-password.ts, admin/totp/*, modals/new-file-modal.ts and
+// content/notes/notes-store.ts. The SettingsPanel shell is reached through its imported instance
+// (settingsPanel.showError / openPublish / close), replacing the old free-function wrappers.
 //
 // Behaviour-preserving pass: the lists still build their rows by innerHTML string-concat and mutate
 // via delegated click listeners reading data-* — the keyed-runtime port is a later pass.
@@ -21,7 +21,7 @@ import { Dialogs } from '../../modals/dialogs';
 // The share-link modal: element refs + the two list helpers, plus the open/close/post logic below. Kept
 // imperative — a tiny static popup, not worth a component. The existing-links list builds its rows by
 // innerHTML string-concat (keyed-runtime port is a later pass), with hand-escaped fields. shareFormatDate
-// is a hoisted function reused by the Settings tab controllers (16c/16d/16e/16f) for their date columns.
+// is exported and reused by the Settings tab controllers (./*-tab.ts) for their date columns.
 export const btnShare = document.getElementById('btn-share')!;
 export const shareBackdrop = document.getElementById('share-backdrop')!;
 export const sharePath = document.getElementById('share-path')!;
@@ -235,7 +235,7 @@ export function settingsHttpMessage(status: number): string {
 }
 
 // Shared JSON fetch for admin mutations: adds Content-Type, parses the body and raises a readable
-// message (not the server detail) on failure. Read cross-file by 15-reset-pw.js and 18-totp.js.
+// message (not the server detail) on failure. Imported by modals/reset-password.ts and admin/totp/*.
 export async function settingsFetch<T = any>(url: string, options?: RequestInit): Promise<T> {
   const opts: RequestInit = { ...options };
   const headers: Record<string, string> = { ...(opts.headers as Record<string, string> | undefined) };
@@ -288,7 +288,7 @@ export function remoteNodeInfo(path: string): { name: string; sourceRel: string;
   return { name, sourceRel: parts.slice(2).join('/'), fileCount };
 }
 
-// Read cross-file by 05b-notes-store (copies its own text), so it stays a bare global.
+// Imported by content/notes/notes-store.ts (copies its own text).
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -306,7 +306,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 export class SettingsContext {
   private readonly errorEl = document.getElementById('settings-error')!;
 
-  // The shared admin/share JSON fetch (declared above as a cross-file global).
+  // The shared admin/share JSON fetch (settingsFetch, exported above).
   readonly fetch = settingsFetch;
 
   showError(message: string): void {

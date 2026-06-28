@@ -1,11 +1,11 @@
 // Backlinks panel (#toc-links): incoming / outgoing wikilinks + same-topic (shared-tag) docs.
 // Imperative DOM path (innerHTML / appendChild / addEventListener), NOT the keyed runtime.
 //
-// loadBacklinksIndex / renderBacklinksFor stay top-level over the `let` caches below (rather than a
-// class) because 99-bootstrap nulls backlinksIndex / backlinksLoading by name on reload, and a class
-// field can't be reassigned cross-file (mirrors 02's loadContent + contentCache). renderBacklinksFor
-// is a bareword global: its consumers (06-view-history, 09-editor) call it unqualified, and
-// loadBacklinksIndex is read by 12-tasks-graph.
+// loadBacklinksIndex / renderBacklinksFor stay module-level functions over the `let` caches below
+// (rather than a class) because boot/bootstrap.ts resets backlinksIndex / backlinksLoading on reload
+// via the exported setters, and a class field can't be reassigned from another module (mirrors
+// content-tree.ts's loadContent + contentCache). renderBacklinksFor's consumers (doc-renderer.ts,
+// editor.ts) import it, and loadBacklinksIndex is read by graph/mind-graph.ts.
 
 import { IS_OFFLINE_BUILD, EMBED_BACKLINKS } from '../core/data-csrf';
 import { tocLinks } from '../core/dom-refs';
@@ -22,7 +22,7 @@ export interface BacklinkEntry {
   in: string[];
 }
 
-// Lazy caches, reset to null cross-file by 99-bootstrap on reload — hence top-level `let`s.
+// Lazy caches, reset to null by boot/bootstrap.ts on reload (via the exported setters) — hence module-level `let`s.
 export let backlinksIndex: Record<string, BacklinkEntry> | null = null;
 
 export function setBacklinksIndex(v: Record<string, BacklinkEntry> | null): void {

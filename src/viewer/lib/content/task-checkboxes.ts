@@ -1,9 +1,9 @@
 // Task-checkbox wiring over the already-rendered content DOM (not the markdown source).
-// wireTaskCheckboxes stays a top-level global — showMarkdown (06-view-history) and exitEditMode
-// (09-editor) call it after setting contentEl.innerHTML.
+// wireTaskCheckboxes is called by DocRenderer.show (doc-renderer.ts) and editor.exitEditMode
+// (editor/editor.ts) after they set contentEl.innerHTML.
 //
 // The checkbox path is positional: the Nth rendered box maps to the Nth source marker via
-// toggleNthTaskMarker (03b-task-markers). A toggle advances local state optimistically (no re-render),
+// toggleNthTaskMarker (task-markers.ts). A toggle advances local state optimistically (no re-render),
 // PUTs in the background, and rolls everything back on failure; the in-flight write is tracked via
 // sse.trackTaskWrite so the disk-derived rollup waits for it, and sse.muteSelfSave mutes the SSE
 // reload our own commit triggers.

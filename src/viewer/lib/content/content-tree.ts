@@ -1,8 +1,8 @@
 // Sidebar tree + content loader. The tree renders through the Atlas DOM runtime: openDirs is
 // state, render(treeView(TREE), treeEl) reuses live nodes so the scroll offset survives a reload
 // (golden C), and the open/closed state is keyed on the FULL dir path so homonym folders stay
-// independent (golden B). Top-level: no IIFE — the content loader + the markdown setup are shared
-// globals other (still-.js) modules read; only the tree's internals are encapsulated in the class.
+// independent (golden B). The content loader + the markdown setup are module-level exports other
+// modules import; only the tree's internals are encapsulated in the class.
 
 import { IS_OFFLINE_BUILD, EMBED_CONTENT, TREE } from '../core/data-csrf';
 import { t } from '../core/i18n';
@@ -53,8 +53,7 @@ export async function loadContent(file: FileNode): Promise<string> {
   return text;
 }
 
-// Shared with the todo widget + showWelcome; declared early to avoid TDZ. Relocated to their
-// owning modules (13-todos / 05b-notes-panel) when those migrate.
+// Shared with the todo widget + showWelcome; exported here as the common owner those modules import.
 export let todos: any[] = [];
 
 export function setTodos(v: any[]): void {
@@ -67,8 +66,8 @@ export function setNotesIndex(v: Record<string, number> | null): void {
   notesIndex = v;
 }
 
-// ─── Markdown pipeline (marked + hljs, wikilink maps) — stays here for load order, splits to
-// 03-markdown when it migrates. ──────────────────────────────────────────────────────────────
+// ─── Markdown pipeline base (marked + hljs config, wikilink maps) — the Markdown class in
+// markdown.ts builds on this base config. ──────────────────────────────────────────────────────
 marked.setOptions({ gfm: true, breaks: false });
 // marked ≥ v5 dropped the `highlight` option (silently ignored by the vendored v15), so highlight
 // in a custom `code` renderer instead. The hljs output survives DOMPurify; the `hljs` class enables

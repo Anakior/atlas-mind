@@ -1,7 +1,7 @@
 // Password-reset modal (admin + cloud).
 //
 // ResetPwModal replaces the native prompt for setting a user's password (admin/cloud): entry +
-// confirmation, opened from Settings via openResetPassword and stacked over it. It owns its field refs,
+// confirmation, opened from the Settings users tab via resetPwModal.open() and stacked over it. It owns its field refs,
 // the RESET_PW_MIN minimum and the validation/visibility helpers below — all read only by this modal.
 // getElementById returns HTMLElement | null, so the modal asserts/casts at use.
 

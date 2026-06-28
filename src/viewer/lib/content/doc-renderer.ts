@@ -2,9 +2,9 @@
 // chrome, dispatches by extension (.html/.pdf/.docx → an isolated frame, else the markdown pipeline)
 // and fires the post-render hooks. The DOM is written exactly as before (innerHTML/createElement/
 // appendChild) — no reconciliation refactor — so the goldens stay byte-stable; the one structural
-// change is that the tree's active/ancestor-open highlight is derived by 02-content-tree via
-// contentTree.rerender() instead of an imperative DOM poke. showMarkdown stays a shared top-level
-// global (cross-module callers reference it by name). The anti-race guards stay object-identity
+// change is that the tree's active/ancestor-open highlight is derived by content-tree.ts via
+// contentTree.rerender() instead of an imperative DOM poke. DocRenderer.show is the render entry
+// point its cross-module callers import. The anti-race guards stay object-identity
 // (currentFile !== file): a slow load for doc A must not clobber doc B.
 
 import { IS_OFFLINE_BUILD } from '../core/data-csrf';
@@ -96,7 +96,7 @@ export class DocRenderer {
     historyPanel.close();
     document.getElementById('btn-history')?.classList.toggle('hidden', !historyPanel.available(file));
     pins.updateButton(file);
-    // Active highlight + ancestor-open are derived from currentFile by 02-content-tree (active when
+    // Active highlight + ancestor-open are derived from currentFile by content-tree.ts (active when
     // path matches; ancestors open via its startsWith clause), so a rerender off the new currentFile
     // replaces the old imperative .active / .hidden / .caret poke and can't drift from the tree.
     contentTree.rerender();

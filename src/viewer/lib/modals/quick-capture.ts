@@ -1,8 +1,7 @@
 // Quick capture — the inbox-capture modal (quick-capture-*). A tiny note grabber that PUTs a timestamped
 // markdown file into inbox/; it is neither 2FA nor new-file, so it owns its own module. Shares the Modal
-// lifecycle (01c-modal-base.ts). Concatenates after the 18-totp-* files (where these refs were stranded)
-// and before 19-newfile.ts, whose Escape stack — and 99-bootstrap.ts — read qcBtn/qcBackdrop and the
-// quickCaptureModal instance by name.
+// lifecycle (ui/modal-base.ts). new-file-modal.ts's Escape stack imports the quickCaptureModal instance,
+// and boot/bootstrap.ts imports qcBtn/qcBackdrop.
 
 // ── Quick capture: element refs ────────────────────────────────────────────────────────────────
 import { Modal } from '../ui/modal-base';

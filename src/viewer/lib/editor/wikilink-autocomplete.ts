@@ -1,12 +1,9 @@
 // [[wikilink]] autocomplete for the document editor. Triggered by typing `[[`: suggests docs from
 // fileMap (filtered by name/path), keyboard-navigable, and inserts an always-resolvable target (name
 // only when unique, full path otherwise). Owns a body-level popup, its outside-click listener, and a
-// blur timer — all torn down between edit sessions so nothing leaks. Operates on the global
-// editTextarea (set by the Editor when it builds the split view); it shares no state with the Editor
-// beyond that handle, so it stays a standalone class the Editor composes.
-//
-// Concatenated before 09-editor (09-autocomplete sorts first) so the class exists when the Editor's
-// field initializer runs `new WikilinkAutocomplete()` — class declarations do not hoist.
+// blur timer — all torn down between edit sessions so nothing leaks. Operates on the shared
+// editTextarea (imported from core/state, set by the Editor when it builds the split view); it shares
+// no state with the Editor beyond that handle, so it stays a standalone class the Editor composes.
 import { fileMap } from '../core/tree';
 import { WL_TARGET_EXTS } from '../content/content-tree';
 import { editTextarea } from '../core/state';

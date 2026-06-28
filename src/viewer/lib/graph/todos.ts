@@ -1,11 +1,12 @@
 // Home todo widget — the sidebar #todo-list, on the live /api/todos contract. List rendering and the
 // inline edit stay imperative (innerHTML + a swapped <input>), byte-for-behaviour with the pre-migration
-// DOM; the Atlas DOM runtime port is a later pass. State (todos/todoFilter/showDoneTodos) lives in the
-// shared globals owned by 02/12, since 12-tasks-graph.js still reads them.
+// DOM; the Atlas DOM runtime port is a later pass. State lives outside the class — todos in
+// content/content-tree.ts, todoFilter/showDoneTodos in ./todo-surface — and is imported here, since the
+// to-do surface helpers read and reassign it too.
 //
-// refresh stays a top-level function: it is polled by 99-bootstrap, so it must remain a hoisted bundle
-// global, not a class method. (setStatus + api — the app-wide status writer + fetch wrapper — live in
-// 01-net.ts.)
+// refresh stays a module-level exported function: boot/bootstrap.ts polls it on a timer, so it is
+// exported rather than a class method. (setStatus + api — the app-wide status writer + fetch wrapper —
+// live in core/net.ts.)
 
 import { todos, setTodos } from '../content/content-tree';
 import {
@@ -204,8 +205,8 @@ export class Todos {
     }
   }
 
-  // Swap the row's text span for a live <input>, commit on Enter/blur, revert on Escape. A 99-bootstrap
-  // poll that re-renders mid-edit destroys this input — the keyed runtime port fixes that later.
+  // Swap the row's text span for a live <input>, commit on Enter/blur, revert on Escape. The bootstrap
+  // todos poll re-rendering mid-edit destroys this input — the keyed runtime port fixes that later.
   private startInlineEdit(row: HTMLElement): void {
     const id = parseInt(row.dataset.id!);
     const item = todos.find((it) => it.id === id);

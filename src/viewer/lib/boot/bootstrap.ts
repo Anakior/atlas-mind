@@ -34,9 +34,9 @@ export class Boot {
       this.serverBoot();
     } else {
       this.fileBoot();
-      // Initial route (was the tail of the old pins module under the load-order bundle): the embed hero
-      // shows the welcome base view, otherwise route from the URL hash. Server mode routes from the hash
-      // in softReload once /api/tree has populated fileMap, so it needs nothing here.
+      // Initial route: the embed hero shows the welcome base view, otherwise route from the URL hash.
+      // Server mode routes from the hash in softReload once /api/tree has populated fileMap, so it needs
+      // nothing here.
       if (EMBED_MIND) homeView.showWelcome();
       else homeView.routeFromHash();
     }

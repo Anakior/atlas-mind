@@ -1,12 +1,12 @@
-// Activity card bootstrap — built LAST, once every class of the cluster is concatenated (same pattern
-// as 16z-settings.ts). Concat = load order and `class` does not hoist: the shell (21-activity.ts) sorts
-// FIRST so it only DEFINES ActivityCard, while this load-time `new ActivityCard()` runs mount() right
-// away — and the offline path maps the embed through ActivityModel.toItem synchronously. Keeping the
-// instantiation here, after 21a/21b (icons/model) and 21c/21d/21e (the views), guarantees every class
-// is defined before it is used.
+// Activity card bootstrap: constructs the single ActivityCard instance and exposes its lifecycle on
+// window. The shell (./activity-card) imports every class of the cluster (icons, model, and the
+// journal/orrery/health views), so all are defined before `new ActivityCard()` runs here; the trailing
+// window.mountActivity() self-call mounts it right away, and the offline path maps the embed through
+// ActivityModel.toItem synchronously.
 //
-// mountActivity stays a global (10-home-layout's showWelcome calls it); refreshActivityData is the SSE
-// soft-reload hook (99-bootstrap.ts). Both delegate to the single instance.
+// window.mountActivity is the home's mount hook (home/home-view.ts showWelcome calls it);
+// window.refreshActivityData is the SSE soft-reload hook (boot/bootstrap.ts). Both delegate to the
+// single instance, and stay on window because those callers reach them cross-module through the global.
 
 import { ActivityCard } from './activity-card';
 

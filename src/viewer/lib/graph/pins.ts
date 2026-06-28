@@ -1,6 +1,6 @@
 // Pinned favorites: the sidebar's "Pinned" section, persisted to localStorage. Keeps its imperative
-// DOM (innerHTML + rebind). 06-view-history calls the updatePinButton wrapper when a doc opens to
-// refresh the header pin button.
+// DOM (innerHTML + rebind). content/doc-renderer.ts calls updateButton when a doc opens to refresh the
+// header pin button.
 
 import { fileMap } from '../core/tree';
 import { currentFile } from '../core/state';

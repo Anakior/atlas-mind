@@ -1,8 +1,7 @@
 // The new-file dialog's template <select>: the built-in DOC_TEMPLATES skeleton options, the
 // extension-registered providers, the per-template extras block, and the {{title}}/{{date}}/{{isoDate}}
-// content fill. NewFileModal owns one instance and delegates here; window.Atlas.registerTemplate routes
-// through registerTemplate(). Concatenated before 19-newfile.ts so the class exists when NewFileModal
-// is constructed at module init.
+// content fill. NewFileModal (new-file-modal.ts) imports this class, owns one instance and delegates
+// here; window.Atlas.registerTemplate routes through registerTemplate().
 
 import { DOC_TEMPLATES } from '../core/data-csrf';
 import { LANG, t } from '../core/i18n';
