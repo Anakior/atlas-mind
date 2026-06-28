@@ -16,7 +16,7 @@ from build.assets import (
 )
 from build.paths import (
     SITE_WORDMARK, DEFAULT_SITE_PREFIX, DEFAULT_TAGLINE, DEFAULT_LANG,
-    DEFAULT_TODO_CATEGORIES, TEMPLATE, STYLES_DIR, PARTIALS_DIR, JS_DIR,
+    DEFAULT_TODO_CATEGORIES, TEMPLATE, STYLES_DIR, PARTIALS_DIR, WEB_DIR,
 )
 
 
@@ -89,6 +89,29 @@ def _head_meta(*, site_name: str, description: str, site_url: str,
     return "\n".join(lines)
 
 
+def _read_app_bundle() -> str:
+    """The viewer JS, read from the esbuild artifact viewer/vendor/app.bundle.js (built by
+    viewer/build/build.mjs, committed). Closing tags neutralised like the other inlined sources.
+    Missing OR stale (older than the newest viewer/lib source) is fatal: `atlas build`/`atlas
+    dev` regenerate it when the node toolchain is present, else run `npm run build` in
+    viewer/build."""
+    bundle = WEB_DIR / "vendor" / "app.bundle.js"
+    if not bundle.is_file():
+        raise SystemExit(
+            f"FATAL: {bundle} is missing. Run `npm run build` in viewer/build (or `atlas "
+            "build`, which regenerates it when the node toolchain is present).")
+    js_dir = WEB_DIR / "lib"
+    newest_src = max((p.stat().st_mtime for p in js_dir.rglob("*.ts")),
+                     default=0.0)
+    # The 2s tolerance absorbs the mtime jitter of a fresh git checkout / file copy (every
+    # file lands within one instant); a genuine "forgot to rebuild" gap is far larger.
+    if newest_src > bundle.stat().st_mtime + 2.0:
+        raise SystemExit(
+            f"FATAL: {bundle} is stale (older than a viewer/lib source). Run `npm run build` in "
+            "viewer/build (or `atlas build`/`atlas dev`, which regenerate it when node is present).")
+    return _escape_closing_tag(bundle.read_text(encoding="utf-8-sig"), _CLOSING_SCRIPT_RE)
+
+
 def render_template(*, tree: dict, embed_content: dict | None,
                     embed_backlinks: dict | None, embed_notes: dict | None,
                     embed_tasks=None,
@@ -111,7 +134,7 @@ def render_template(*, tree: dict, embed_content: dict | None,
     # unextracted concern's dir is absent (concat_sources → "") → no-op.
     template = template.replace("__STYLES__", concat_sources(STYLES_DIR, (".css",)))
     template = template.replace("__BODY__", concat_sources(PARTIALS_DIR, (".html",)))
-    template = template.replace("__APP_JS__", concat_sources(JS_DIR, (".js",)))
+    template = template.replace("__APP_JS__", _read_app_bundle())
     # Phase 2 — JSON encode and protect </script> termination.
     def _enc(obj) -> str:
         return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
@@ -172,7 +195,7 @@ def render_manifest(*, site_prefix: str = DEFAULT_SITE_PREFIX,
                     tagline: str = DEFAULT_TAGLINE,
                     lang: str = DEFAULT_LANG) -> dict:
     """PWA manifest generated from the config (no more static manifest in
-    web/): name = derived "<prefix> Atlas", short_name = the brand alone."""
+    viewer/): name = derived "<prefix> Atlas", short_name = the brand alone."""
     return {
         "name": _derive_site_name(site_prefix),
         "short_name": SITE_WORDMARK,

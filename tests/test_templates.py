@@ -39,7 +39,13 @@ ENGINE_TEMPLATES = {
     "lecture", "guide", "contact", "retro", "spec",
 }
 
-DOC_TEMPLATES_RE = re.compile(r"^const DOC_TEMPLATES = (.*);$", re.M)
+# esbuild collapses the whole bundle onto a few long lines and chains the
+# top-level constants into one comma-separated `var` (…,DOC_TEMPLATES=<json>,NEXT=…);
+# the name is preserved. Locate the assignment whitespace-agnostically (no line
+# anchors, no `var ` keyword in front anymore), then decode exactly one JSON object
+# from it — raw_decode stops at the matching brace, ignoring the trailing
+# declarators, so the inner `{{title}}` braces never confuse the extraction.
+DOC_TEMPLATES_RE = re.compile(r"\bDOC_TEMPLATES\s*=(?!=)\s*")
 
 
 def make_mind(root: Path, *, templates: dict | None = None) -> None:
@@ -74,11 +80,12 @@ def run_build(mind: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def extract_doc_templates(index_html: str) -> dict:
-    """The JSON injected in place of __TEMPLATES__ (a single line)."""
+    """The JSON object injected in place of __TEMPLATES__."""
     match = DOC_TEMPLATES_RE.search(index_html)
     if match is None:
-        raise AssertionError("const DOC_TEMPLATES not found in the generated HTML")
-    return json.loads(match.group(1))
+        raise AssertionError("DOC_TEMPLATES not found in the generated HTML")
+    templates, _ = json.JSONDecoder().raw_decode(index_html, match.end())
+    return templates
 
 
 class TestEngineTemplatesDiscovered(unittest.TestCase):

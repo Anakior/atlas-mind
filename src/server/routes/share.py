@@ -77,7 +77,7 @@ def list_shares(handler):
             _annotate_share(doc)
         handler._send_json(200, docs)
     except Exception as e:
-        handler._send_json(500, {"error": str(e)})
+        _s.registry_503(handler, "[share] list", e)
 
 
 def _resolve_target(handler, rel):
@@ -159,7 +159,7 @@ def repoint(handler):
             return
         handler._send_json(200, {"ok": True, "path": rel})
     except Exception as e:
-        handler._send_json(500, {"error": str(e)})
+        _s.registry_503(handler, "[share] repoint", e)
 
 
 def revoke(handler):
@@ -174,4 +174,4 @@ def revoke(handler):
             return
         handler._send_json(200, {"ok": True})
     except Exception as e:
-        handler._send_json(500, {"error": str(e)})
+        _s.registry_503(handler, "[share] revoke", e)

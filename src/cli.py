@@ -6,7 +6,9 @@ Usage:
 
     python3 src/cli.py init <dir> [--force] [--lang en|fr] [--prefix P] [--tagline T] [--yes]
     python3 src/cli.py serve <dir> [--port N]
-    python3 src/cli.py dev [<dir>] [--port N] [--fresh] [--reset]
+    python3 src/cli.py dev [--port N] [--fresh] [--reset]
+    python3 src/cli.py dev seed [<dir>]                       # DEV-ONLY sample data
+    python3 src/cli.py dev inbox "<title>" [<dir>]            # DEV-ONLY single item
     python3 src/cli.py build <dir> [--offline]
     python3 src/cli.py deploy <dir> [--target compose|systemd|fly] [--app NAME] [--wizard] [--force]
     python3 src/cli.py user add <dir> --email a@b.c [--role admin|viewer] [--password ...]
@@ -787,6 +789,214 @@ def cmd_dev(args) -> int:
         return subprocess.run([sys.executable, "-m", "server"], env=env).returncode
     except KeyboardInterrupt:
         return 0
+
+
+# ─── dev seeding (DEV-ONLY) ──────────────────────────────────────────────────
+# `atlas dev seed` / `atlas dev inbox` populate a mind with sample data so the home
+# Activity card and the Inbox render WITHOUT real git history or upstream agents —
+# the missing pieces that make a fresh/dev mind show empty + stuck-skeleton states.
+#
+# DEV-ONLY: this MUTATES the mind (writes docs, sets ACLs, makes git commits). It only
+# ever targets a throwaway dev mind (default: the .dev-mind sandbox) and refuses a mind
+# wired to a git remote. It deliberately reuses the LIVE code paths so the seeded data is
+# identical to production output: the MCP create_inbox_item tool
+# (server.pure.mcp_call._tool_create_inbox_item) for inbox items, and GitSync.commit_change
+# for the attributed Activity commits.
+
+# Pinned to the dev sandbox's seeded admin (dev@local / dev): the inbox items land in THAT
+# person's owned lane, so they appear once you log into `atlas dev`.
+_DEV_SEED_EMAIL = "dev@local"
+
+# Inbox samples: varied sources (the source becomes the origin badge), a suggested
+# destination, tags, a short preview and a confidence — every field the triage UI shows.
+_DEV_INBOX_SAMPLES = (
+    {"source": "gmail", "title": "Invoice from Hetzner — June",
+     "content": "Monthly hosting invoice (47.20 EUR) is ready. File it under finance once paid.",
+     "confidence": 0.82, "suggest_dest": "finance/invoices",
+     "suggest_tags": ["finance", "invoice"]},
+    {"source": "sentry", "title": "TypeError in checkout flow (prod)",
+     "content": "Cannot read properties of undefined (reading 'total') in cart.js — 23 events, 9 users in the last hour.",
+     "confidence": 0.66, "suggest_dest": "incidents",
+     "suggest_tags": ["incident", "prod", "frontend"]},
+    {"source": "manual", "title": "Idea: weekly digest of the inbox",
+     "content": "Send myself a Monday email summarizing what landed in the inbox over the week.",
+     "confidence": 0.5, "suggest_dest": "ideas",
+     "suggest_tags": ["idea", "product"]},
+    {"source": "gmail", "title": "Re: Q3 roadmap sync — notes",
+     "content": "Action items from the roadmap sync: cut scope on the editor rewrite, ship search first.",
+     "confidence": 0.74, "suggest_dest": "meetings",
+     "suggest_tags": ["meeting", "roadmap"]},
+)
+
+# Activity samples: plain commons docs, each committed under a DISTINCT author/email and
+# back-dated a few days apart, so the Journal spans several days and the contributor
+# constellation has several people to render.
+_DEV_ACTIVITY_SAMPLES = (
+    {"author": ("Ada Lovelace", "ada@dev.local"), "rel": "notes/architecture-overview.md",
+     "title": "Architecture overview",
+     "body": "How the pieces fit together. See [[welcome]] for the entry point.", "days_ago": 6},
+    {"author": ("Linus Torvalds", "linus@dev.local"), "rel": "notes/git-workflow.md",
+     "title": "Git workflow",
+     "body": "Branch, commit small, rebase before push. Trunk stays green.", "days_ago": 4},
+    {"author": ("Grace Hopper", "grace@dev.local"), "rel": "notes/debugging-playbook.md",
+     "title": "Debugging playbook",
+     "body": "Reproduce, bisect, add a failing test, fix, keep the test.", "days_ago": 2},
+    {"author": ("Ada Lovelace", "ada@dev.local"), "rel": "notes/api-design-notes.md",
+     "title": "API design notes",
+     "body": "Small, orthogonal endpoints. Errors are data. Links over IDs.", "days_ago": 1},
+)
+
+
+def _resolve_seed_mind(raw: str | None) -> Path:
+    """Mind to seed: the explicit dir, else the .dev-mind sandbox. The default sandbox is
+    scaffolded on demand (so `atlas dev seed` is turnkey from nothing); an explicit dir
+    must already be a mind."""
+    if raw:
+        mind = Path(raw).expanduser().resolve()
+        if not (mind / "content").is_dir():
+            raise CliError(f"{mind} is not a mind (no content/) — run `atlas init {raw}` first.")
+        return mind
+    mind = _DEFAULT_DEV_MIND
+    if not (mind / "content").is_dir():
+        _seed_dev_mind(mind, reset=False)
+    return mind
+
+
+def _guard_dev_only(mind: Path) -> None:
+    """Refuse to seed a mind wired to a git remote: that signals a REAL, synced mind, and
+    seeding mutates content (sample docs, commits, ACLs). Dev seeding is only ever for a
+    throwaway local mind."""
+    if not (mind / ".git").is_dir():
+        return
+    remotes = subprocess.run(["git", "remote"], cwd=str(mind),
+                             capture_output=True, text=True)
+    if "origin" in remotes.stdout.split():
+        raise CliError(
+            f"{mind} has a git remote (origin) — refusing to seed what looks like a real "
+            "mind. `atlas dev seed` is DEV-ONLY and mutates content; point it at a throwaway "
+            "mind (default: the .dev-mind sandbox).")
+
+
+def _boot_seed_server(mind: Path):
+    """Bootstrap the server module's globals (CONFIG + AppContext) against `mind` WITHOUT
+    serving — the minimum of server.run() the seed needs to reuse the live inbox/commit
+    code. The async git push/rebuild is neutralized: a dev mind has no remote, and the
+    viewer is (re)built by `atlas dev` / `atlas serve`, so the seed only writes data plus
+    the explicit attributed commits."""
+    import server
+    config = _load_config(mind)
+    server.CONFIG = config
+    server._CTX = server.AppContext.build(config, server.build_store(config))
+    git_sync = server._CTX.git_sync
+    git_sync._request_push = lambda: None   # real inline commits, but never push (no remote)
+    git_sync.trigger_sync = lambda: None    # never spawn the background add-all / rebuild / push
+    return server
+
+
+def _ensure_seed_repo(mind: Path) -> None:
+    """Make `mind` its OWN git repo with a committer identity and an initial commit. Critical
+    before any git op: a dev mind without its own .git would make `git add/commit` walk UP
+    into the enclosing engine checkout. Reuses _git_init_main."""
+    if shutil.which("git") is None:
+        raise CliError("git is required to seed Activity history (install git, then re-run).")
+    if not (mind / ".git").exists():
+        _git_init_main(mind)
+
+    def _git(*args):
+        return subprocess.run(["git", *args], cwd=str(mind), capture_output=True, text=True)
+
+    # --author on each attributed commit sets the AUTHOR; the committer still needs an
+    # identity, so pin a neutral one on the repo (dev mind, never pushed).
+    _git("config", "user.email", "atlas-dev-seed@local")
+    _git("config", "user.name", "Atlas Dev Seed")
+    if _git("rev-parse", "--verify", "-q", "HEAD").returncode != 0:
+        # Fresh repo: a root commit so `git commit --only` has a HEAD to build on.
+        _git("add", "-A")
+        _git("commit", "-m", "chore: dev mind scaffold", "--quiet")
+
+
+def _seed_inbox(server, items) -> int:
+    """Drop each sample via the MCP create_inbox_item tool, under a human ctx pinned to the
+    dev admin — exactly as an agent bound to that person would. `source` (normally the
+    token label) is set per item to vary the origin badge."""
+    from server.pure.mcp_call import _tool_create_inbox_item
+    email = _DEV_SEED_EMAIL
+    created = 0
+    for item in items:
+        ctx = server.ViewerCtx({"*", "user:" + email}, True, "user:" + email,
+                               source=item["source"])
+        result = _tool_create_inbox_item({
+            "title": item["title"], "content": item.get("content", ""),
+            "confidence": item.get("confidence"),
+            "suggest_dest": item.get("suggest_dest"),
+            "suggest_tags": item.get("suggest_tags"),
+        }, ctx)
+        if result.get("isError"):
+            print(f"  inbox: skipped {item['title']!r}: {result['content'][0]['text']}",
+                  file=sys.stderr)
+        else:
+            created += 1
+    return created
+
+
+def _seed_activity(server, docs) -> int:
+    """Write each sample doc into the commons and commit it under a DISTINCT author,
+    back-dated, via GitSync.commit_change — so /api/activity returns attributed history."""
+    git_sync = server._CTX.git_sync
+    content_root = server.CONFIG.content_root
+    made = 0
+    for doc in docs:
+        target = content_root / doc["rel"]
+        if target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"# {doc['title']}\n\n{doc['body']}\n", encoding="utf-8")
+        when = time.strftime("%Y-%m-%d %H:%M:%S",
+                             time.localtime(time.time() - doc.get("days_ago", 0) * 86400))
+        # GitSync.run inherits os.environ, so these set the commit's author/committer date.
+        os.environ["GIT_AUTHOR_DATE"] = when
+        os.environ["GIT_COMMITTER_DATE"] = when
+        try:
+            git_sync.commit_change(f"created: {target.stem}", [str(target)],
+                                   author=doc["author"])
+        finally:
+            os.environ.pop("GIT_AUTHOR_DATE", None)
+            os.environ.pop("GIT_COMMITTER_DATE", None)
+        made += 1
+    return made
+
+
+def cmd_dev_seed(args) -> int:
+    """DEV-ONLY: fill a mind with sample inbox items + attributed Activity commits."""
+    mind = _resolve_seed_mind(args.dir)
+    _guard_dev_only(mind)
+    _ensure_seed_repo(mind)
+    server = _boot_seed_server(mind)
+    n_inbox = _seed_inbox(server, _DEV_INBOX_SAMPLES)
+    n_activity = _seed_activity(server, _DEV_ACTIVITY_SAMPLES)
+    authors = len({doc["author"] for doc in _DEV_ACTIVITY_SAMPLES})
+    print(f"Seeded {mind} (DEV-ONLY):")
+    print(f"  inbox   : {n_inbox} sample item(s) in {_DEV_SEED_EMAIL}'s lane")
+    print(f"  activity: {n_activity} sample doc(s) committed under {authors} author(s)")
+    print()
+    print(f"View it:  atlas dev   (log in as {_DEV_SEED_EMAIL} / dev to triage the inbox)")
+    print(f"   or:    atlas serve {mind}")
+    return 0
+
+
+def cmd_dev_inbox(args) -> int:
+    """DEV-ONLY: drop a single sample inbox item with the given title."""
+    mind = _resolve_seed_mind(args.dir)
+    _guard_dev_only(mind)
+    server = _boot_seed_server(mind)
+    if not _seed_inbox(server, [{
+        "source": "manual", "title": args.title,
+        "content": "Seeded via `atlas dev inbox`.", "confidence": 0.6,
+        "suggest_dest": "notes", "suggest_tags": ["dev", "seed"],
+    }]):
+        raise CliError("could not create the inbox item (see the message above).")
+    print(f"Dropped 1 inbox item {args.title!r} into {_DEV_SEED_EMAIL}'s lane in {mind}.")
+    return 0
 
 
 # ─── deploy ──────────────────────────────────────────────────────────────────
@@ -1657,10 +1867,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_dev = subparsers.add_parser(
         "dev", help="Local CLOUD sandbox: login/share/2FA/admin with NO git "
                     "push/commit, a seeded dev@local/dev admin, on a throwaway "
-                    "copy of the demo mind.")
-    p_dev.add_argument("dir", nargs="?", default=None,
-                       help="Throwaway mind location (default: a gitignored "
-                            ".dev-mind next to the engine).")
+                    "copy of the demo mind. Subcommands seed sample data.")
     p_dev.add_argument("--port", type=int, default=None,
                        help="Listening port (default: 8765).")
     p_dev.add_argument("--fresh", action="store_true",
@@ -1668,7 +1875,23 @@ def build_parser() -> argparse.ArgumentParser:
                             "/setup token flow instead.")
     p_dev.add_argument("--reset", action="store_true",
                        help="Wipe the dev mind (accounts + edits) and re-seed it.")
-    p_dev.set_defaults(func=cmd_dev)
+    # Bare `atlas dev` (no sub-action) runs the sandbox on the .dev-mind; the
+    # subcommands below populate a mind with sample data instead.
+    p_dev.set_defaults(func=cmd_dev, dir=None)
+    dev_sub = p_dev.add_subparsers(dest="dev_action", metavar="<action>",
+                                   required=False)
+    p_dev_seed = dev_sub.add_parser(
+        "seed", help="DEV-ONLY: fill the mind with sample inbox items + "
+                     "attributed Activity commits (so the home card + Inbox render).")
+    p_dev_seed.add_argument("dir", nargs="?", default=None,
+                            help="Mind to seed (default: the .dev-mind sandbox).")
+    p_dev_seed.set_defaults(func=cmd_dev_seed)
+    p_dev_inbox = dev_sub.add_parser(
+        "inbox", help="DEV-ONLY: drop a single sample inbox item with the given title.")
+    p_dev_inbox.add_argument("title", help="Title of the inbox item.")
+    p_dev_inbox.add_argument("dir", nargs="?", default=None,
+                             help="Mind to seed (default: the .dev-mind sandbox).")
+    p_dev_inbox.set_defaults(func=cmd_dev_inbox)
 
     p_build = subparsers.add_parser(
         "build", help="Generate this mind's viewer (dist/).")

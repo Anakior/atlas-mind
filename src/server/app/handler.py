@@ -460,8 +460,13 @@ class Handler(SimpleHTTPRequestHandler):
         if not target.exists() or target.suffix.lower() not in (".md", ".html"):
             self._send_share_error("invalid")
             return
-        # A shared .html is already a standalone page: served as-is (noindex),
-        # no marked re-rendering — the owner's work, like a shared .md.
+        # A shared .html is a standalone page (slide deck / dashboard): served as-is
+        # (noindex, no marked re-rendering — the owner's work, like a shared .md), but
+        # SANDBOXED. Without this it runs top-level on the atlas origin, so its JS could
+        # read kb_csrf and act as a logged-in visitor who opens the link. `sandbox
+        # allow-scripts` keeps the deck's own JS working in an opaque origin (no cookie /
+        # atlas-origin access) — the exact posture the in-app viewer already gives it
+        # (it iframes the same .html with sandbox="allow-scripts").
         if target.suffix.lower() == ".html":
             body = target.read_bytes()
             self.send_response(200)
@@ -469,6 +474,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Robots-Tag", "noindex, nofollow")
+            self.send_header("Content-Security-Policy", "sandbox allow-scripts")
             self.end_headers()
             self.wfile.write(body)
             return

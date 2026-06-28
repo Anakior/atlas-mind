@@ -1,0 +1,20 @@
+{
+  "name": "atlas-ts-build",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dev-only toolchain that compiles viewer/lib/*.{js,ts} into viewer/vendor/app.bundle.js (esbuild transform-concat, shared global scope preserved). tsc type-checks, Playwright runs the browser goldens. NOT shipped: the Atlas runtime is Python stdlib only. Install once (npm install), then `npm run build` after editing the viewer sources, `npm test` for the goldens.",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit -p ../lib/tsconfig.json",
+    "check:e2e": "tsc -p e2e/tsconfig.json",
+    "test": "playwright test",
+    "test:runtime": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^22.20.0",
+    "esbuild": "0.24.2",
+    "jsdom": "^29.1.1",
+    "typescript": "5.7.3"
+  }
+}

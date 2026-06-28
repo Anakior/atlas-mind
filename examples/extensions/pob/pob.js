@@ -271,7 +271,7 @@ async function loadPakoLib() {
   if (typeof pako !== 'undefined') return;
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = '/vendor/pako.min.js';  // pako 2.1.0 vendored (src/web/vendor/)
+    s.src = '/vendor/pako.min.js';  // pako 2.1.0 vendored (src/viewer/vendor/)
     s.onload = resolve;
     s.onerror = () => reject(new Error(t('cdnFailPako')));
     document.head.appendChild(s);

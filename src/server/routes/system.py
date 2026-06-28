@@ -183,12 +183,17 @@ def webhook(handler):
 def events(handler):
     """GET /api/events — SSE live-reload stream (auth). Registers the live
     Handler with the ReloadHub; pings every 20 s until the client drops."""
-    handler.send_response(200)
-    handler.send_header("Content-Type", "text/event-stream")
-    handler.send_header("Cache-Control", "no-cache")
-    handler.send_header("Connection", "keep-alive")
-    handler.end_headers()
+    # Bound the held-open SSE streams: refuse once the global cap is reached so a
+    # flood of never-closing connections can't pin a thread each (DoS).
+    if not _s.SSE_GATE.try_acquire():
+        handler._send_json(503, {"error": "SSE connection limit reached"})
+        return
     try:
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/event-stream")
+        handler.send_header("Cache-Control", "no-cache")
+        handler.send_header("Connection", "keep-alive")
+        handler.end_headers()
         handler.wfile.write(b": connected\n\n")
         handler.wfile.flush()
         _s._CTX.reload_hub.register(handler)
@@ -201,3 +206,4 @@ def events(handler):
                 break
     finally:
         _s._CTX.reload_hub.unregister(handler)
+        _s.SSE_GATE.release()

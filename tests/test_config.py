@@ -89,14 +89,14 @@ class TestDefaults(ConfigTestBase):
         self.assertEqual(cfg.git_author_email, "atlas-bot@example.com")
 
     def test_web_dir_is_engine_side(self):
-        # web/ (viewer template + PWA assets) belongs to the ENGINE: even with a
+        # viewer/ (viewer template + PWA assets) belongs to the ENGINE: even with a
         # decoupled mind that has its own web/, it is the engine's one (present
         # in this repo) that is kept.
         (self.mind / "web").mkdir()
         cfg = self.load()
-        # Viewer assets are bundled inside the package (src/web), not taken from
+        # Viewer assets are bundled inside the package (src/viewer), not taken from
         # the mind even if it ships its own web/.
-        self.assertEqual(cfg.web_dir, config.PACKAGE_DIR / "web")
+        self.assertEqual(cfg.web_dir, config.PACKAGE_DIR / "viewer")
         self.assertNotEqual(cfg.web_dir, self.mind / "web")
 
 
@@ -318,7 +318,7 @@ class TestMindResolution(ConfigTestBase):
 
 class TestSeparateMindServer(unittest.TestCase):
     """The key decoupling test: the server runs from the harness tmpdir
-    (engine: src/ + web/) but serves a DISTINCT mind passed via ATLAS_MIND.
+    (engine: src/ + viewer/) but serves a DISTINCT mind passed via ATLAS_MIND.
     The harness decoy content (accueil.md…) must never show through."""
 
     HELLO_MD = "# Mind séparé\n\nDocument servi depuis un mind découplé.\n"

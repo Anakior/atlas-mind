@@ -1,0 +1,22 @@
+{
+  "//": "Type-checks the viewer sources. Lives WITH the sources (src/viewer/lib/) so the editor's TS server associates each module with this project (a tsconfig in the sibling build/ toolchain dir is not an ancestor, so VSCode would drop the files into an inferred project and miss the types/ + globals declarations). The toolchain runs it via `npm run check` (tsc -p ../lib/tsconfig.json).",
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "strict": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": [],
+    "isolatedModules": false
+  },
+  "include": ["**/*.ts"]
+}

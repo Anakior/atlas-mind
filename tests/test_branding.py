@@ -14,7 +14,7 @@ side, JSON constant on the viewer's JS side -- never raw text in a template
 literal).
 
 Also covers the NUL-bytes fix (graph dedup key: separator "\\x00" -> "\\n"):
-web/viewer.html and dist/index.html must be NUL-free so grep audits stay
+viewer/viewer.html and dist/index.html must be NUL-free so grep audits stay
 reliable (grep treats a file with NUL as binary).
 """
 from __future__ import annotations
@@ -23,6 +23,7 @@ import contextlib
 import html
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -185,7 +186,12 @@ class TestBrandingHostilePrefix(unittest.TestCase):
         # string), with the </ -> <\/ protection against tag closing.
         expected = (json.dumps(HOSTILE_PREFIX, ensure_ascii=False)
                     .replace("</", "<\\/"))
-        self.assertIn(f"const SITE_PREFIX = {expected};", self.rendered)
+        # esbuild chains the bundled symbol into a comma-separated top-level `var`
+        # (name preserved, terminated by `,` not `;`); what matters is the exact
+        # JSON-encoded value of the constant.
+        self.assertRegex(
+            self.rendered,
+            r"SITE_PREFIX\s*=\s*" + re.escape(expected) + r"\s*[,;]")
 
     def test_title_is_derived_site_name_escaped(self):
         expected = html.escape(f"{HOSTILE_PREFIX} Atlas Mind", quote=True)
@@ -203,7 +209,7 @@ class TestBrandingHostilePrefix(unittest.TestCase):
 
 
 class TestBrandingNeutralDefaults(unittest.TestCase):
-    """Without atlas.toml: everything served is neutral, and the engine (web/)
+    """Without atlas.toml: everything served is neutral, and the engine (viewer/)
     no longer contains any personal marker nor NUL byte."""
 
     @classmethod
@@ -223,7 +229,9 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
         self.assertNotIn("Acme", text)
         # Without a prefix, the styled wordmark stays alone in the H1 (the prefix
         # span is empty) and the viewer's JS constant is the empty string.
-        self.assertIn('const SITE_PREFIX = "";', text)
+        # (esbuild chains the symbol into a comma-separated `var`; the name + value
+        # are preserved, terminated by `,` not `;`.)
+        self.assertRegex(text, r'SITE_PREFIX\s*=\s*""[,;]')
         # The default mind has no [site].url → only a <meta description> from
         # the tagline, no canonical/OG it has no public URL to back.
         self.assertIn(
@@ -237,8 +245,8 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
             self.assertNotIn(placeholder, text)
         # The engine itself (template + service worker) is de-personalized: no
         # proper name nor a PWA cache under a personal name anymore.
-        template = (REPO_ROOT / "src" / "web" / "viewer.html").read_bytes()
-        sw = (REPO_ROOT / "src" / "web" / "sw.js").read_bytes()
+        template = (REPO_ROOT / "src" / "viewer" / "viewer.html").read_bytes()
+        sw = (REPO_ROOT / "src" / "viewer" / "sw.js").read_bytes()
         for marker in (b"Acme", b"acme", b"example corp"):
             self.assertEqual(template.count(marker), 0, marker)
             self.assertEqual(sw.count(marker), 0, marker)
@@ -260,7 +268,7 @@ class TestBrandingNeutralDefaults(unittest.TestCase):
     def test_no_nul_bytes_in_template_nor_dist_index(self):
         # Fix agreed in the spec: the graph dedup key uses "\n" (impossible in a
         # path) instead of "\x00" -- zero NUL = reliable grep audits.
-        template = (REPO_ROOT / "src" / "web" / "viewer.html").read_bytes()
+        template = (REPO_ROOT / "src" / "viewer" / "viewer.html").read_bytes()
         self.assertEqual(template.count(b"\x00"), 0)
         dist_index = (self.srv.root / "dist" / "index.html").read_bytes()
         self.assertEqual(dist_index.count(b"\x00"), 0)
@@ -303,7 +311,9 @@ class TestBrandingFromToml(unittest.TestCase):
         self.assertIn('href="/vendor/fonts.css"', text)
         self.assertNotIn("fonts.googleapis.com", text)
         # Home (JS): the prefix comes from the JSON constant, never raw.
-        self.assertIn('const SITE_PREFIX = "Acme\'s";', text)
+        # (esbuild chains the symbol into a comma-separated `var`; the JSON value
+        # is what matters.)
+        self.assertRegex(text, r"SITE_PREFIX\s*=\s*\"Acme's\"[,;]")
 
     def test_manifest_uses_derived_name_and_fixed_short_name(self):
         manifest = self.srv.get("/manifest.json").json()
@@ -439,13 +449,19 @@ class TestEmbedActivity(unittest.TestCase):
     def test_null_when_not_embedded(self):
         # Online build (and any build without a snapshot): the JS constant is null
         # so the viewer falls back to the live /api/activity fetch.
-        self.assertIn("const EMBED_ACTIVITY = null;", self._render(None))
+        # (esbuild chains the symbol into a comma-separated `var`; the name + value
+        # are preserved, terminated by `,` not `;`.)
+        self.assertRegex(self._render(None),
+                         r"EMBED_ACTIVITY\s*=\s*null[,;]")
 
     def test_snapshot_inlined_when_embedded(self):
         snap = {"events": [{"sha": "abc123", "type": "edit", "ai": "claude"}],
                 "stale": [], "contradictions": []}
         html = self._render(snap)
-        self.assertNotIn("const EMBED_ACTIVITY = null;", html)
+        # Mirror of the null check above against the reshaped comma-chained `var`
+        # form, so this stays a real assertion (not a tautology now that the symbol
+        # is never emitted with a leading `var ` keyword).
+        self.assertNotRegex(html, r"EMBED_ACTIVITY\s*=\s*null[,;]")
         self.assertIn('"events"', html)
         self.assertIn('"sha": "abc123"', html)
 

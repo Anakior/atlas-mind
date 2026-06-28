@@ -21,6 +21,12 @@ def validate_doc_path(rel: str, content_root):
     other than .md or .html (both are first-class documents)."""
     if not rel or rel.startswith("/") or ".." in rel.split("/"):
         return None
+    # No HTML-injection or control characters in a document path: the viewer inlines doc
+    # names/paths into markup, so a name like `<img src=x onerror=...>.md` would be a
+    # stored-XSS sink. These are never legitimate in a document filename anyway — the
+    # authoritative defence is output-escaping at each sink, this is defence-in-depth.
+    if any(c in rel for c in '<>"') or any(ord(c) < 0x20 or ord(c) == 0x7f for c in rel):
+        return None
     if not rel.endswith((".md", ".html")):
         return None
     try:

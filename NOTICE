@@ -50,7 +50,7 @@ This software vendors third-party frontend libraries and fonts, each under its
 own licence (MIT, Apache-2.0 OR MPL-2.0, BSD-3-Clause, BSD-2-Clause, MIT AND
 Zlib, SIL Open Font License, ...). Their licence banners are preserved, and a
 full inventory with versions and upstream URLs is maintained in
-src/web/vendor/LICENSES.md.
+src/viewer/vendor/LICENSES.md.
 
 bcrypt (optional, used only to verify legacy password hashes) is a separate
 package installed at runtime under its own licence and is not distributed as
