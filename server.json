@@ -2,7 +2,7 @@
     "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "name": "app.anakior/atlas-mind",
     "description": "Self-hosted git-native knowledge base with an MCP endpoint your AI reads, writes and rewinds",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "website_url": "https://atlas-mind.anakior.app/",
     "repository": {
         "url": "https://github.com/Anakior/atlas-mind",

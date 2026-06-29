@@ -6,6 +6,9 @@
 
 /* the Inbox tab's count badge (rendered in the activity header's segmented control) */
 .act-ibadge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #fff; color: #1d9bd1; margin-left: 5px; vertical-align: middle; }
+/* `.act-ibadge`'s display would otherwise beat tailwind's `.hidden` (equal specificity, this block
+   loads after vendor css), leaving an empty white pill when the count is 0. Same guard as .act-pop. */
+.act-ibadge.hidden { display: none; }
 
 .act-skel { background: rgba(255, 255, 255, .06); border-radius: 5px; }
 .activity-seg { cursor: pointer; transition: color .12s, background .12s; }
