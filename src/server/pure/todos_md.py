@@ -83,6 +83,13 @@ def load_todos(email, is_admin=False):
     store = _s.get_store()
     todos = store.load_user_todos(email)
     if todos is not None:
+        # Re-densify ids to positions. patch/delete index the list BY POSITION
+        # (todos[idx]); delete pops without renumbering, so the persisted ids
+        # drift sparse and a toggle on a now-out-of-range id 404s. The markdown
+        # path self-heals (parse_todos reassigns), so mirror it for the cloud
+        # per-member list — this also repairs already-drifted todos.json on read.
+        for i, t in enumerate(todos):
+            t["id"] = i
         return todos
     if is_admin and _s.CONFIG.todo_file.exists():
         legacy = _load_todos_md()

@@ -338,5 +338,47 @@ class TestDeleteTodo(unittest.TestCase):
             self.assertEqual(resp.body, b"")
 
 
+class TestCloudTodoReindex(unittest.TestCase):
+    """Cloud per-member todos.json: ids must stay positional across a delete,
+    like the markdown path. Regression for the '404 on validating a todo' bug —
+    clearing the done items of a long list left the survivors carrying their
+    stale stored ids, so a later toggle PATCHed todos[id] past the end of the
+    now-shorter list and got a 404. The markdown path self-heals (parse_todos
+    reassigns id = position); the cloud path didn't until load_todos re-densifies."""
+
+    def _auth(self, srv):
+        # Use the VIEWER (non-admin): it never triggers the legacy-markdown
+        # migration in load_todos, so its list starts empty and deterministic.
+        from test_admin import (seed_admin_and_viewer, file_store_of,
+                                session_cookie, csrf_token_for,
+                                VIEWER_EMAIL, VIEWER_PASSWORD)
+        seed_admin_and_viewer(file_store_of(srv))
+        cookie = session_cookie(srv, VIEWER_EMAIL, VIEWER_PASSWORD)
+        return {"Cookie": cookie,
+                "X-CSRF-Token": csrf_token_for(srv, cookie)}
+
+    def test_delete_reindexes_so_a_high_id_toggle_does_not_404(self):
+        from test_admin import cloud_env
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            h = self._auth(srv)
+            for text in ("a", "b", "c", "d"):
+                self.assertEqual(
+                    srv.post("/api/todos", headers=h,
+                             json_body={"text": text, "cat": "personal"}).status, 200)
+            # Drop the first item: survivors must be renumbered 0..2, both in the
+            # delete response and on the next GET — not keep their stored ids 1,2,3.
+            after = srv.delete("/api/todos/0", headers=h).json()
+            self.assertEqual([t["id"] for t in after], [0, 1, 2])
+            got = srv.get("/api/todos", headers=h).json()
+            self.assertEqual([t["id"] for t in got], [0, 1, 2])
+            # Pre-fix the last survivor still carried id 3 with only 3 items left,
+            # so toggling it indexed past the end -> 404. It must now succeed.
+            last = got[-1]["id"]
+            resp = srv.patch("/api/todos/" + str(last), headers=h,
+                             json_body={"done": True})
+            self.assertEqual(resp.status, 200)
+            self.assertTrue(resp.json()[last]["done"])
+
+
 if __name__ == "__main__":
     unittest.main()
