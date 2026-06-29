@@ -544,6 +544,8 @@ export const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
     securityLoggedOutAll: 'Toutes les sessions ont été déconnectées.',
     // Capture rapide
     quickCaptureTitle: 'Capture rapide',
+    newDocTab: 'Document',
+    quickCaptureTab: 'Capture rapide',
     quickCaptureHint: 'Crée une note dans',
     titlePlaceholder: 'Titre',
     qcBodyPlaceholder: '(optionnel) corps de la note',
@@ -1103,6 +1105,8 @@ export const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
     securityLoggedOutAll: 'All sessions have been signed out.',
     // Quick capture
     quickCaptureTitle: 'Quick capture',
+    newDocTab: 'Document',
+    quickCaptureTab: 'Quick capture',
     quickCaptureHint: 'Creates a note in',
     titlePlaceholder: 'Title',
     qcBodyPlaceholder: '(optional) note body',

@@ -19,7 +19,6 @@ import { homeView } from '../home/home-view';
 import { refresh } from '../graph/todos';
 import { todoList, todoInput, todoForm } from '../graph/todo-surface';
 import { newFileBtn, newFileBackdrop, dirRenameBackdrop } from '../modals/new-file-modal';
-import { qcBtn, qcBackdrop } from '../modals/quick-capture';
 import { shareBackdrop } from '../admin/settings/settings-shared';
 import { securityPane } from '../admin/totp/security-pane';
 
@@ -62,11 +61,6 @@ export class Boot {
           // Authoritative CSRF token for all mutating requests (cf. the fetch wrapper).
           if (data.csrf_token) setCsrfToken(data.csrf_token);
           if (typeof data.totp_enabled === 'boolean') setTotpEnabled(data.totp_enabled);
-
-          // Quick-capture FAB: a signed-in user can drop a note straight into the inbox. The button
-          // ships hidden in the markup (and stays hidden on the file:// boot); reveal it once we know
-          // the session is authenticated, so it never flashes for a logged-out visitor.
-          qcBtn?.classList.remove('hidden');
 
           if (data.cloud && data.email) {
             document.getElementById('user-email')!.textContent = data.name || data.email;
@@ -111,7 +105,6 @@ export class Boot {
     (todoForm!.querySelector('button') as HTMLButtonElement).disabled = true;
     setStatus(t('serverRequired'), 'err');
     newFileBtn!.classList.add('hidden');
-    qcBtn!.classList.add('hidden');
   }
 
   // Bail conditions for a live-reload: anything the user is mid-action on that a re-render would
@@ -122,7 +115,6 @@ export class Boot {
     if (editMode) return true;
     if (document.querySelector('.todo-edit')) return true;
     if (!newFileBackdrop!.classList.contains('hidden')) return true;
-    if (!qcBackdrop!.classList.contains('hidden')) return true;
     if (!shareBackdrop!.classList.contains('hidden')) return true;
     if (!dirRenameBackdrop!.classList.contains('hidden')) return true;
     if (document.querySelector('[data-atlas-modal]:not(.hidden)')) return true;

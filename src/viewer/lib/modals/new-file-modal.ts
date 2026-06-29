@@ -3,8 +3,8 @@
 // Each modal shares one lifecycle (Modal, in ui/modal-base.ts): hidden-class toggle +
 // click-outside-to-close; focus and field resets live in each subclass's open(). One module-level
 // keydown handler owns the Escape-priority stack across EVERY modal — including ones other modules own
-// (settings, quick-capture, share, rename) — plus the `n` new-file shortcut, so it stays a free handler,
-// not a method.
+// (settings, share, rename) — plus the `n` new-file shortcut, so it stays a free handler, not a method.
+// Quick capture is now a MODE of this modal (a tab in the new-file dialog), not a separate modal.
 //
 // NewFileModal delegates its template <select> to a TemplateRegistry (template-registry.ts) and
 // the folder-rename dialog lives in DirRenameModal (dir-rename-modal.ts); both are imported by this module.
@@ -19,7 +19,7 @@ import { TREE } from '../core/data-csrf';
 import { TemplateRegistry } from './template-registry';
 import { DirRenameModal } from './dir-rename-modal';
 import { t } from '../core/i18n';
-import { escapeHtml } from '../core/utils';
+import { escapeHtml, slugify } from '../core/utils';
 import { setStatus } from '../core/net';
 import { currentFile, editMode } from '../core/state';
 import { contentCache } from '../content/content-tree';
@@ -27,7 +27,6 @@ import { fileMap } from '../core/tree';
 import { renameBackdrop, renameModal } from './dialogs';
 import { shareBackdrop, closeShareModal } from '../admin/settings/settings-shared';
 import { settingsPanel } from '../admin/settings/settings-panel';
-import { quickCaptureModal } from './quick-capture';
 
 // Cross-file refs read by boot/bootstrap.ts; HTMLElement | null, so consumers assert with `!`.
 export const newFileBtn = document.getElementById('new-file-btn');
@@ -71,6 +70,17 @@ export class NewFileModal extends Modal {
   // The template <select> — its options, extension providers and content fill — is delegated here.
   private readonly registry: TemplateRegistry;
 
+  // Mode toggle: a full document, or a quick capture dropped straight into the inbox.
+  private readonly titleEl = document.getElementById('new-file-title') as HTMLElement;
+  private readonly submitBtn = document.getElementById('new-file-submit') as HTMLElement;
+  private readonly docFields = document.getElementById('new-file-doc-fields') as HTMLElement;
+  private readonly captureFields = document.getElementById('new-file-capture-fields') as HTMLElement;
+  private readonly modeDocBtn = document.getElementById('new-file-mode-doc') as HTMLElement;
+  private readonly modeCaptureBtn = document.getElementById('new-file-mode-capture') as HTMLElement;
+  private readonly captureTitle = document.getElementById('new-file-capture-title') as HTMLInputElement;
+  private readonly captureBody = document.getElementById('new-file-capture-body') as HTMLTextAreaElement;
+  private mode: 'doc' | 'capture' = 'doc';
+
   constructor() {
     super(newFileBackdrop!);
     // Created once, lives for the page's lifetime (no teardown — the modal is never destroyed).
@@ -80,7 +90,24 @@ export class NewFileModal extends Modal {
     this.cancel.addEventListener('click', () => this.close());
     document.getElementById('new-file-close')?.addEventListener('click', () => this.close());
     this.template.addEventListener('change', () => this.registry.updateExtras());
+    this.modeDocBtn.addEventListener('click', () => { this.setMode('doc'); this.dir.focus(); });
+    this.modeCaptureBtn.addEventListener('click', () => { this.setMode('capture'); this.captureTitle.focus(); });
     this.form.addEventListener('submit', (e) => this.submit(e));
+  }
+
+  // Swap the two field groups (and the title / submit label). Focus is the caller's job.
+  private setMode(m: 'doc' | 'capture'): void {
+    this.mode = m;
+
+    const capture = m === 'capture';
+
+    this.modeDocBtn.classList.toggle('active', !capture);
+    this.modeCaptureBtn.classList.toggle('active', capture);
+    this.docFields.classList.toggle('hidden', capture);
+    this.captureFields.classList.toggle('hidden', !capture);
+    this.titleEl.textContent = capture ? t('quickCaptureTitle') : t('newDocHeader');
+    this.submitBtn.textContent = capture ? t('save') : t('create');
+    this.error.classList.add('hidden');
   }
 
   // window.Atlas.registerTemplate — delegated to the template registry.
@@ -94,6 +121,9 @@ export class NewFileModal extends Modal {
     this.dir.value = presetDir || '';
     this.name.value = '';
     this.template.value = 'blank';
+    this.captureTitle.value = '';
+    this.captureBody.value = '';
+    this.setMode('doc'); // every open starts on the document tab
 
     if (this.visibility) {
       // Default PRIVATE (Notion sense), pre-set to the user's last choice. A doc created inside a
@@ -113,9 +143,44 @@ export class NewFileModal extends Modal {
     this.error.classList.remove('hidden');
   }
 
+  // Quick capture: drop a title (+ optional body) straight into inbox/ for later triage. The inbox
+  // poll surfaces it; it stays sealed from the tree/search until you keep it.
+  private async submitCapture(): Promise<void> {
+    const title = this.captureTitle.value.trim();
+
+    if (!title) return this.showError(t('titleRequired'));
+
+    const body = this.captureBody.value.trim();
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dateStr =
+      now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) +
+      '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+    const slug = (slugify(title) || 'note').slice(0, 50);
+    const path = 'inbox/' + dateStr + '-' + slug + '.md';
+    const content = '# ' + title + '\n\n_Capture : ' + now.toLocaleString('fr-FR') + '_\n\n' + body + '\n';
+
+    try {
+      const res = await fetch('/api/file', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, content }),
+      });
+
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      this.close();
+      setStatus(t('noteSaved'), 'ok');
+    } catch (err) {
+      this.showError(t('errSp', (err as Error).message));
+    }
+  }
+
   private async submit(e: Event): Promise<void> {
     e.preventDefault();
     this.error.classList.add('hidden');
+
+    if (this.mode === 'capture') return this.submitCapture();
+
     const dir = this.dir.value.trim().replace(/^\/+|\/+$/g, '');
     let name = this.name.value.trim();
     const provider = this.registry.activeProvider();
@@ -205,7 +270,7 @@ window.Atlas = {
 };
 
 // One Escape-priority stack across every modal (some owned by other modules) + the `n` shortcut.
-// Order: settings → new-file → dir-rename → quick-capture → share → rename.
+// Order: settings → new-file → dir-rename → share → rename.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     // settings-panel.ts keeps its backdrop private, so probe the element rather than import a ref.
@@ -225,12 +290,6 @@ document.addEventListener('keydown', (e) => {
 
     if (dirRenameModal.isOpen()) {
       dirRenameModal.close();
-
-      return;
-    }
-
-    if (quickCaptureModal.isOpen()) {
-      quickCaptureModal.close();
 
       return;
     }

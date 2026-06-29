@@ -80,3 +80,9 @@
   @media (min-width: 768px) and (max-height: 900px) {
     #todo-body { max-height: 38vh !important; }
   }
+
+/* New-file modal: Document / Quick-capture segmented toggle (raw CSS — no Tailwind utility deps). */
+.nf-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; }
+.nf-seg-btn { appearance: none; border: 0; background: transparent; color: #9a9ca1; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 7px; cursor: pointer; transition: background .12s, color .12s; }
+.nf-seg-btn:hover { color: #e7e8ea; }
+.nf-seg-btn.active { background: #1d9bd1; color: #fff; }

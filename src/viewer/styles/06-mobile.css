@@ -29,15 +29,6 @@
     #todo-form input { padding: 0.75rem 1rem !important; font-size: 1.05rem !important; }
     #todo-form button { padding: 0.6rem 1.1rem !important; font-size: 1.2rem !important; min-width: 2.85rem; }
     #todo-status { padding: 0.5rem 1rem !important; font-size: 0.75rem !important; }
-    /* Two harmonized FABs at bottom-right: quick capture on top, todo at the bottom */
-    #quick-capture-btn {
-      display: flex !important;
-      left: auto !important;
-      right: 0.75rem !important;
-      bottom: 4.8rem !important;
-      width: 3.25rem !important;
-      height: 3.25rem !important;
-    }
     #todo-widget.is-collapsed {
       width: 3.25rem !important;
       height: 3.25rem !important;

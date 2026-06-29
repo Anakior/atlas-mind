@@ -68,7 +68,6 @@ import './ui/qr-code';
 import './admin/totp/totp-enroll-modal';
 import './admin/totp/security-pane';
 import './admin/totp/totp';
-import './modals/quick-capture';
 import './modals/template-registry';
 import './modals/dir-rename-modal';
 import './modals/new-file-modal';
