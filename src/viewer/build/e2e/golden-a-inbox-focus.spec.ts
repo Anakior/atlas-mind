@@ -5,9 +5,9 @@ import { test, expect } from '@playwright/test';
 // Invariant (the oracle for the TS/runtime migration): while a destination editor is
 // open in the inbox focus card, the live poll appends new queue rows BELOW the focus
 // card and must not touch the focused input — focus, caret and the uncommitted value
-// stay put. The current code earns this with the editing() guard (src/viewer/lib/22-inbox.js:108,
-// :313-317): the append is unconditional but progress/chips/toast are skipped while an
-// input is open. The runtime rewrite must keep this true by construction.
+// stay put. The current code earns this with the editing() guard (inbox.ts refreshSub/poll):
+// the append is unconditional but the chip/toast refresh is skipped while an input is open.
+// The runtime rewrite must keep this true by construction.
 //
 // We mock the two reads the inbox tab needs: /api/activity (so the home Activity card
 // mounts at all) and /api/inbox (mutable — the poll re-fetches it, and we stage a new
@@ -48,8 +48,9 @@ test('A — inbox focus + uncommitted value survive the 5s poll', async ({ page 
   await editor.fill('Inbox/Triage/Mine');
   const editorHandle = await editor.elementHandle();
 
-  // Baseline above the input: one source so far (gmail) → one filter chip, no toast.
-  await expect(page.locator('#ibx-chips-wrap .ibx-chip')).toHaveCount(1);
+  // Baseline above the input: a single source (gmail) shows no filter chip — a lone source chip is
+  // just the MCP's own name and filters nothing, so the bar is empty here. No toast either.
+  await expect(page.locator('#ibx-chips-wrap .ibx-chip')).toHaveCount(0);
   await expect(page.locator('#ibx-toast')).toHaveCount(0);
 
   // A second item from a NEW source arrives; the next poll (≤5s) must append exactly
@@ -62,9 +63,9 @@ test('A — inbox focus + uncommitted value survive the 5s poll', async ({ page 
   expect(await editorHandle!.evaluate((el) => el === document.activeElement)).toBe(true);
   await expect(editor).toHaveValue('Inbox/Triage/Mine');
 
-  // The editing() guard froze the region ABOVE the input: the new 'sentry' source did
-  // NOT add a chip, and no "new items" toast was shown (both would have shifted the
-  // input and detached the combobox popup).
-  await expect(page.locator('#ibx-chips-wrap .ibx-chip')).toHaveCount(1);
+  // The editing() guard froze the region ABOVE the input: the new 'sentry' source did NOT refresh
+  // the chips (a second source would otherwise surface the filter bar), and no "new items" toast was
+  // shown — both would have shifted the input and detached the combobox popup. The bar stays empty.
+  await expect(page.locator('#ibx-chips-wrap .ibx-chip')).toHaveCount(0);
   await expect(page.locator('#ibx-toast')).toHaveCount(0);
 });

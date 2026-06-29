@@ -685,9 +685,25 @@ def cmd_build(args) -> int:
 # Bundled demo mind — present in a source checkout, absent from a pip wheel
 # (which ships no examples/). When missing, the dev mind is scaffolded instead.
 _DEMO_MIND = ENGINE_SRC.parent / "examples" / "demo-mind"
-# Default throwaway location: a gitignored .dev-mind next to the engine. State
-# (accounts, edits) persists across runs there; --reset wipes it.
-_DEFAULT_DEV_MIND = ENGINE_SRC.parent / ".dev-mind"
+
+
+def _user_cache_dir() -> Path:
+    """OS-appropriate per-user cache dir: %LOCALAPPDATA% on Windows, $XDG_CACHE_HOME
+    (or ~/.cache) elsewhere. Falls back to the home-relative default if the env var
+    is unset."""
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA")
+
+        return Path(base) if base else Path.home() / "AppData" / "Local"
+
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+
+
+# Default throwaway location: a per-user cache dir OUTSIDE the engine checkout, so the
+# sandbox's own .git isn't picked up as a nested repo by editors (VSCode Source Control)
+# and doesn't clutter the project tree. State (accounts, edits) persists across runs
+# there; --reset wipes it.
+_DEFAULT_DEV_MIND = _user_cache_dir() / "atlas" / "dev-mind"
 
 
 def _rmtree_robust(path: Path) -> None:

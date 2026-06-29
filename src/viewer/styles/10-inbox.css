@@ -2,12 +2,8 @@
    container is positioned for the "N new" toast. */
 #activity-inbox { position: relative; }
 
-/* progress + source filter row */
-.ibx-sub { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.ibx-progress { font-size: 12px; color: #868a90; }
-.ibx-progress b { color: #d1d2d3; }
-.ibx-progress .track { display: inline-block; vertical-align: middle; width: 120px; height: 5px; border-radius: 999px; background: #1a181e; margin-left: 8px; overflow: hidden; }
-.ibx-progress .fill { display: block; height: 100%; background: linear-gradient(90deg, #1d9bd1, #5fd0a6); transition: width .35s ease; }
+/* source + type filter row */
+.ibx-sub { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .ibx-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .ibx-chip { appearance: none; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .03); color: #868a90; font: inherit; font-size: 11px; padding: 3px 9px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: .12s; }
 .ibx-chip:hover { color: #d1d2d3; }
@@ -21,7 +17,6 @@
 .ibx-focus.ibx-entering { animation: ibxpop .26s ease; }
 @keyframes ibxpop { 0% { transform: translateY(8px) scale(.99); opacity: 0; } 100% { transform: none; opacity: 1; } }
 .ibx-frow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.ibx-src { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: #d1d2d3; text-transform: capitalize; }
 .ibx-ic { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .ibx-ic svg { width: 15px; height: 15px; }
 .ibx-spacer { flex: 1; }
@@ -120,5 +115,4 @@
 /* Respect the OS "reduce motion" preference (vestibular a11y), like every other animated stylesheet. */
 @media (prefers-reduced-motion: reduce) {
   .ibx-focus, .ibx-focus.ibx-entering, .ibx-toast, .ibx-skel { animation: none; transition: none; }
-  .ibx-progress .fill { transition: none; }
 }

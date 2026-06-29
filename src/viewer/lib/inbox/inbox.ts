@@ -8,7 +8,7 @@
 // A single stateful component: state lives in the instance, and mutate-then-render(view) drives the
 // keyed reconciler. It keeps the focus card and each queue row as stable DOM nodes (keyed by path),
 // so an open destination editor, its caret and uncommitted value, and the scroll position all
-// survive the 5s poll. The sub region (progress + source chips) above the focus card is frozen while
+// survive the 5s poll. The sub region (source + type filter chips) above the focus card is frozen while
 // an inline editor is open, so the input never shifts and the body-level combobox popup stays anchored.
 
 import { escapeHtml } from '../core/utils';
@@ -40,7 +40,7 @@ export class Inbox {
 
   // ---- state ----
   private inbox: InboxItemEdited[] | null = null; // the queue | []
-  private total = 0; // baseline length, for the "X / Y traités" progress
+  private activePath: string | null = null; // the focused item's path; null falls back to the first in queue
   private filter: Set<string> | null = null; // enabled source keys (null = all on)
   private typeFilter: Set<string> | null = null; // enabled type keys (null = all on)
   private session: SessionStats = { kept: 0, trashed: 0, snoozed: 0 };
@@ -61,8 +61,6 @@ export class Inbox {
   // the sub region snapshot, refreshed only while NOT editing (the don't-move-the-input invariant)
   private subSources: string[] = [];
   private subTypes: string[] = [];
-  private subDone = 0;
-  private subTotal = 0;
 
   // toast state (a keyed vnode, not an appended node)
   private toastN = 0;
@@ -158,6 +156,18 @@ export class Inbox {
     if (this.typeFilter) q = q.filter((i) => this.typeFilter!.has(this.itemType(i)));
 
     return q;
+  }
+
+  // Index of the focused item within the (filtered) queue. activePath pins it; when it's unset or the
+  // pinned item is gone (acted on, or hidden by a filter), the focus falls back to the first visible row.
+  private activeIdx(q: InboxItemEdited[]): number {
+    if (this.activePath) {
+      const i = q.findIndex((x) => x.path === this.activePath);
+
+      if (i >= 0) return i;
+    }
+
+    return 0;
   }
 
   // The item's KIND, normalized for display + filtering. Defaults to "note" for legacy items the
@@ -273,7 +283,6 @@ export class Inbox {
       'div',
       { key: 'focus:' + it.path, class: 'ibx-focus' + (this.leaving ? ' ibx-leaving' : ' ibx-entering'), id: 'ibx-focus' },
       h('div', { class: 'ibx-frow' },
-        h('span', { class: 'ibx-src' }, this.srcIc(it.source), it.source),
         this.typeBadge(it),
         h('span', { class: 'ibx-pill ' + tr, title: Math.round(it.confidence * 100) + '%' }, this.tierLabel(it.confidence)),
         h('span', { class: 'ibx-spacer' }),
@@ -331,14 +340,12 @@ export class Inbox {
   }
 
   private subView(): VNode {
-    const pct = this.subTotal ? Math.round((this.subDone / this.subTotal) * 100) : 0;
-
     return h('div', { key: 'sub', class: 'ibx-sub', id: 'ibx-sub' },
-      h('div', { class: 'ibx-progress' },
-        h('b', { id: 'ibx-done' }, String(this.subDone)), ' / ', h('span', { id: 'ibx-total' }, String(this.subTotal)), ' ' + t('inboxDone'),
-        h('span', { class: 'track' }, h('span', { class: 'fill', id: 'ibx-fill', style: 'width:' + pct + '%' }))),
       h('div', { id: 'ibx-chips-wrap', class: 'ibx-chips-wrap' },
-        this.chipsView(),
+        // Source chips only matter once items come from more than one source — a lone source chip is
+        // just the MCP's own name and filters nothing. Keep it while a source filter is active so it
+        // can still be cleared. Same rule as the type chips below.
+        this.subSources.length > 1 || this.filter ? this.chipsView() : null,
         // Show type chips once there is variety to sort — but ALSO whenever a type filter is active,
         // so the escape hatch survives the queue collapsing to a single still-excluded type (else the
         // filter would soft-lock with no in-UI way to clear it).
@@ -395,7 +402,7 @@ export class Inbox {
       h('div', { id: 'ibx-next-rows' }, items.map((it) => this.qRowView(it, it.path === activePath))));
   }
 
-  // Refresh the sub snapshot (source chips + progress). Skipped while editing so the input never shifts.
+  // Refresh the sub snapshot (source + type chips). Skipped while editing so the input never shifts.
   private refreshSub(): void {
     const srcs: string[] = [];
     const types: string[] = [];
@@ -408,8 +415,6 @@ export class Inbox {
     });
     this.subSources = srcs;
     this.subTypes = types;
-    this.subDone = Math.max(0, this.total - (this.inbox ? this.inbox.length : 0));
-    this.subTotal = this.total;
   }
 
   private view(): Child {
@@ -426,9 +431,12 @@ export class Inbox {
       return this.zeroView();
     }
 
-    // The focused item is q[0]; the list (nextView) shows the WHOLE queue with that item marked
-    // active, so the current item is never hidden — you can always click back to it (or any other).
-    return [this.subView(), this.focusView(q[0]), this.nextView(q, q[0].path), this.toastView()];
+    // The focused item is the active one (activePath, defaulting to the first); the list (nextView)
+    // shows the WHOLE queue with that item marked active, IN PLACE — clicking a row just moves the
+    // focus pin, it never reorders the list.
+    const active = q[this.activeIdx(q)];
+
+    return [this.subView(), this.focusView(active), this.nextView(q, active.path), this.toastView()];
   }
 
   // ---- data + live poll ----
@@ -459,8 +467,8 @@ export class Inbox {
     } catch (_) {}
     inbox.forEach((it) => this.applyOverride(it));
     this.inbox = inbox;
-    this.total = inbox.length;
     this.session = { kept: 0, trashed: 0, snoozed: 0 };
+    this.activePath = null;
     this.filter = null;
     this.typeFilter = null;
     this.draw();
@@ -481,7 +489,6 @@ export class Inbox {
         if (!fresh.length) return;
         fresh.forEach((it) => this.applyOverride(it));
         this.inbox = this.inbox!.concat(fresh); // to the BACK: the focus item never moves
-        this.total += fresh.length;
         this.updateBadge();
         if (!this.editing()) this.showToast(fresh.length); // sub refresh happens via view() when not editing
         this.draw();
@@ -519,15 +526,21 @@ export class Inbox {
 
     if (!q.length || this.leaving) return;
 
-    const it = q[0];
+    const idx = this.activeIdx(q);
+    const it = q[idx];
 
     if (kind === 'next') {
-      this.inbox = this.inbox!.filter((x) => x.path !== it.path).concat([it]); // rotate to the back
+      this.activePath = q[(idx + 1) % q.length].path; // advance the focus pin, cycling — no reorder
       this.draw();
 
       return;
     }
     if (kind === 'keep' && !this.suggestDest(it)) return; // no destination -> Keep is inert
+
+    // Once `it` leaves, the focus moves to the row that followed it (or the previous one if it was
+    // last). Captured now, from the visible queue, so it's whatever the user sees come next.
+    const next = q[idx + 1] || q[idx - 1] || null;
+    const nextPath = next ? next.path : null;
 
     const body: ActionBody = { action: kind, path: it.path };
 
@@ -544,12 +557,13 @@ export class Inbox {
     fetch('/api/inbox/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then((r) => {
         if (r.ok) {
-          // Hold leaving for the WHOLE swipe-out: the next item is queue()[0] but not yet shown, so
-          // releasing now would let a second K/X/S act on it blind. Drop + render after the animation.
+          // Hold leaving for the WHOLE swipe-out: the next item isn't shown yet, so releasing now
+          // would let a second K/X/S act on it blind. Drop + repin + render after the animation.
           if (Inbox.SKEY[kind]) this.session[Inbox.SKEY[kind]]++;
           setTimeout(() => {
             this.inbox = this.inbox!.filter((x) => x.path !== it.path);
             delete this.overrides[it.path];
+            this.activePath = nextPath;
             this.leaving = false;
             this.draw();
           }, 180);
@@ -565,10 +579,8 @@ export class Inbox {
   }
 
   private select(path: string): void {
-    const it = this.inbox && this.inbox.find((x) => x.path === path);
-
-    if (!it) return;
-    this.inbox = [it].concat(this.inbox!.filter((x) => x.path !== path)); // promote to the focus slot
+    if (!this.inbox || !this.inbox.some((x) => x.path === path)) return;
+    this.activePath = path; // pin the focus on the clicked row, leaving the list order untouched
     this.draw();
   }
 
@@ -688,7 +700,6 @@ export class Inbox {
 
       fresh.forEach((it) => this.applyOverride(it));
       this.inbox = fresh;
-      this.total = fresh.length;
       this.updateBadge();
     } catch (_) {}
   }
