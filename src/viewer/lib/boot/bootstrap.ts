@@ -63,6 +63,11 @@ export class Boot {
           if (data.csrf_token) setCsrfToken(data.csrf_token);
           if (typeof data.totp_enabled === 'boolean') setTotpEnabled(data.totp_enabled);
 
+          // Quick-capture FAB: a signed-in user can drop a note straight into the inbox. The button
+          // ships hidden in the markup (and stays hidden on the file:// boot); reveal it once we know
+          // the session is authenticated, so it never flashes for a logged-out visitor.
+          qcBtn?.classList.remove('hidden');
+
           if (data.cloud && data.email) {
             document.getElementById('user-email')!.textContent = data.name || data.email;
             const avatar = document.getElementById('user-avatar');

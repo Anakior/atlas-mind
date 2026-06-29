@@ -5,6 +5,9 @@ interface InboxItem {
   title: string;
   preview: string;
   source: string;
+  // The KIND of item (note/task/idea/question/reference/alert…), set by the agent at capture or
+  // defaulted to "note". Free vocabulary; drives the type badge + the type filter chips.
+  type: string;
   confidence: number;
   suggest_dest: string;
   suggest_tags: string[];

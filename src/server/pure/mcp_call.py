@@ -172,7 +172,9 @@ def _tool_create_inbox_item(args, ctx):
     (search/topology/contradictions) until kept. A token NOT bound to a person has no inbox.
     Reuses create_doc for path validation, ACL and the attributed commit.
 
-    args: title (required), content, confidence?, suggest_dest?, suggest_tags?, dedupe_key?."""
+    args: title (required), content, type?, confidence?, suggest_dest?, suggest_tags?, dedupe_key?.
+    `type` is the optional KIND of item (note/task/idea/question/reference/alert…), used by the human
+    to sort their inbox; it is normalized to a lowercase slug and defaults to "note" when absent."""
     title = (args.get("title") or "").strip()
     if not title:
         return text_result("'title' is required", is_error=True)
@@ -201,11 +203,18 @@ def _tool_create_inbox_item(args, ctx):
         slug = slugify_token_label(title)[:60].strip("-.") or "note"
     except ValueError:
         slug = "note"
+    # Optional item KIND (what the human sorts on), NOT the source. Free vocabulary, normalized to a
+    # lowercase slug; anything empty/unusable falls back to "note" so an item always carries a type.
+    raw_type = args.get("type")
+    try:
+        item_type = slugify_token_label(raw_type) if isinstance(raw_type, str) and raw_type.strip() else "note"
+    except ValueError:
+        item_type = "note"
     try:
         conf = max(0.0, min(1.0, float(args.get("confidence"))))
     except (TypeError, ValueError):
         conf = 0.5
-    lines = ["---", "origin: inbox", f"source: {source}",
+    lines = ["---", "origin: inbox", f"source: {source}", f"type: {item_type}",
              f"captured_at: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
              f"confidence: {conf}"]
     dest = (args.get("suggest_dest") or "").strip()

@@ -238,6 +238,7 @@ def _api_inbox_list(limit: int = 50, ctx=None) -> list:
             # source from the frontmatter; fallback to the immediate parent folder (inbox/<user>/
             # <source>/file or the legacy inbox/<source>/file -> parts[-2] is the source either way)
             "source": meta.get("source") or (parts[-2] if len(parts) >= 3 else "manual"),
+            "type": meta.get("type") or "note",
             "confidence": meta.get("confidence", 0.0),
             "suggest_dest": meta.get("suggest_dest", ""),
             "suggest_tags": meta.get("suggest_tags", []),

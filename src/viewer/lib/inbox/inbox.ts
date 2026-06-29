@@ -42,6 +42,7 @@ export class Inbox {
   private inbox: InboxItemEdited[] | null = null; // the queue | []
   private total = 0; // baseline length, for the "X / Y traités" progress
   private filter: Set<string> | null = null; // enabled source keys (null = all on)
+  private typeFilter: Set<string> | null = null; // enabled type keys (null = all on)
   private session: SessionStats = { kept: 0, trashed: 0, snoozed: 0 };
   private overrides: Record<string, Override> = {}; // path -> edits, re-applied across reloads
   private leaving = false; // an action is mid-flight (swipe-out guard)
@@ -59,6 +60,7 @@ export class Inbox {
 
   // the sub region snapshot, refreshed only while NOT editing (the don't-move-the-input invariant)
   private subSources: string[] = [];
+  private subTypes: string[] = [];
   private subDone = 0;
   private subTotal = 0;
 
@@ -150,7 +152,34 @@ export class Inbox {
   private queue(): InboxItemEdited[] {
     if (!this.inbox) return [];
 
-    return this.filter ? this.inbox.filter((i) => this.filter!.has(i.source)) : this.inbox;
+    let q = this.inbox;
+
+    if (this.filter) q = q.filter((i) => this.filter!.has(i.source));
+    if (this.typeFilter) q = q.filter((i) => this.typeFilter!.has(this.itemType(i)));
+
+    return q;
+  }
+
+  // The item's KIND, normalized for display + filtering. Defaults to "note" for legacy items the
+  // build emitted before the type field existed.
+  private itemType(it: InboxItem): string {
+    return (it.type || 'note').trim() || 'note';
+  }
+
+  // A stable hue (0-359) derived from the type string, so each type keeps one consistent colour for
+  // its badge + filter chip without hardcoding a palette (the vocabulary is open-ended).
+  private typeHue(ty: string): number {
+    let n = 0;
+
+    for (let i = 0; i < ty.length; i++) n = (n * 31 + ty.charCodeAt(i)) & 0xffffff;
+
+    return n % 360;
+  }
+
+  private typeBadge(it: InboxItem): VNode {
+    const ty = this.itemType(it);
+
+    return h('span', { class: 'ibx-type', style: '--th:' + this.typeHue(ty), title: t('inboxTypeTitle', ty) }, ty);
   }
 
   private snoozeDate(): string {
@@ -245,6 +274,7 @@ export class Inbox {
       { key: 'focus:' + it.path, class: 'ibx-focus' + (this.leaving ? ' ibx-leaving' : ' ibx-entering'), id: 'ibx-focus' },
       h('div', { class: 'ibx-frow' },
         h('span', { class: 'ibx-src' }, this.srcIc(it.source), it.source),
+        this.typeBadge(it),
         h('span', { class: 'ibx-pill ' + tr, title: Math.round(it.confidence * 100) + '%' }, this.tierLabel(it.confidence)),
         h('span', { class: 'ibx-spacer' }),
         h('span', { class: 'ibx-ago' }, this.ago(it))),
@@ -268,10 +298,11 @@ export class Inbox {
     );
   }
 
-  private qRowView(it: InboxItemEdited): VNode {
-    return h('div', { key: 'row:' + it.path, class: 'ibx-qrow', 'data-ipath': it.path, onClick: () => this.select(it.path) },
+  private qRowView(it: InboxItemEdited, active: boolean): VNode {
+    return h('div', { key: 'row:' + it.path, class: 'ibx-qrow' + (active ? ' active' : ''), 'data-ipath': it.path, 'aria-current': active ? 'true' : null, onClick: () => this.select(it.path) },
       this.srcIc(it.source),
       h('span', { class: 'ibx-qt' }, it.title),
+      this.typeBadge(it),
       h('span', { class: 'ibx-mini ' + this.tier(it.confidence), title: this.tierLabel(it.confidence) }),
       h('span', { class: 'ibx-qa' }, this.ago(it)));
   }
@@ -287,6 +318,18 @@ export class Inbox {
       }));
   }
 
+  // Type filter chips (mirror the source chips). Only meaningful once the inbox holds more than one
+  // kind, so the caller renders this group only then — a lone "note" chip would be noise.
+  private typeChipsView(): VNode {
+    return h('div', { class: 'ibx-chips ibx-tchips' },
+      this.subTypes.map((ty) => {
+        const on = !this.typeFilter || this.typeFilter.has(ty);
+
+        return h('button', { key: 't:' + ty, type: 'button', class: 'ibx-chip ' + (on ? 'on' : ''), style: '--th:' + this.typeHue(ty), onClick: () => this.toggleTypeFilter(ty) },
+          h('span', { class: 'tdot' }), ty);
+      }));
+  }
+
   private subView(): VNode {
     const pct = this.subTotal ? Math.round((this.subDone / this.subTotal) * 100) : 0;
 
@@ -294,7 +337,12 @@ export class Inbox {
       h('div', { class: 'ibx-progress' },
         h('b', { id: 'ibx-done' }, String(this.subDone)), ' / ', h('span', { id: 'ibx-total' }, String(this.subTotal)), ' ' + t('inboxDone'),
         h('span', { class: 'track' }, h('span', { class: 'fill', id: 'ibx-fill', style: 'width:' + pct + '%' }))),
-      h('div', { id: 'ibx-chips-wrap' }, this.chipsView()));
+      h('div', { id: 'ibx-chips-wrap', class: 'ibx-chips-wrap' },
+        this.chipsView(),
+        // Show type chips once there is variety to sort — but ALSO whenever a type filter is active,
+        // so the escape hatch survives the queue collapsing to a single still-excluded type (else the
+        // filter would soft-lock with no in-UI way to clear it).
+        this.subTypes.length > 1 || this.typeFilter ? this.typeChipsView() : null));
   }
 
   private zeroView(): VNode {
@@ -315,6 +363,15 @@ export class Inbox {
         : null);
   }
 
+  // Every item is filtered out (source and/or type chips) while the inbox still holds some. Distinct
+  // from inbox-zero: the sub bar above stays mounted so the chips remain clickable to clear it.
+  private emptyFilteredView(): VNode {
+    return h('div', { key: 'zerofilt', class: 'ibx-zero ibx-zero-filtered' },
+      h('div', { class: 'ibx-mark' }, this.svg(Inbox.IDOC)),
+      h('h3', null, t('inboxZeroTitle')),
+      h('p', null, t('inboxNoMatch')));
+  }
+
   private skelView(): VNode {
     const row = (i: number) =>
       h('div', { key: 'sk:' + i, class: 'ibx-skelrow' },
@@ -332,33 +389,46 @@ export class Inbox {
     return h('div', { key: 'toast', id: 'ibx-toast', class: 'ibx-toast' + (this.toastShow ? ' show' : '') }, t('inboxNew', this.toastN));
   }
 
-  private nextView(up: InboxItemEdited[]): VNode {
+  private nextView(items: InboxItemEdited[], activePath: string): VNode {
     return h('div', { key: 'next', id: 'ibx-next' },
-      h('div', { class: 'ibx-next-h', id: 'ibx-next-h', style: up.length ? null : 'display:none' }, up.length ? t('inboxUpNext') + ' · ' + up.length : ''),
-      h('div', { id: 'ibx-next-rows' }, up.map((it) => this.qRowView(it))));
+      h('div', { class: 'ibx-next-h', id: 'ibx-next-h', style: items.length ? null : 'display:none' }, items.length ? t('inboxQueue') + ' · ' + items.length : ''),
+      h('div', { id: 'ibx-next-rows' }, items.map((it) => this.qRowView(it, it.path === activePath))));
   }
 
   // Refresh the sub snapshot (source chips + progress). Skipped while editing so the input never shifts.
   private refreshSub(): void {
     const srcs: string[] = [];
+    const types: string[] = [];
 
     (this.inbox || []).forEach((i) => {
       if (srcs.indexOf(i.source) < 0) srcs.push(i.source);
+      const ty = this.itemType(i);
+
+      if (types.indexOf(ty) < 0) types.push(ty);
     });
     this.subSources = srcs;
+    this.subTypes = types;
     this.subDone = Math.max(0, this.total - (this.inbox ? this.inbox.length : 0));
     this.subTotal = this.total;
   }
 
   private view(): Child {
     if (this.inbox === null) return this.skelView();
+    if (!this.editing()) this.refreshSub();
 
     const q = this.queue();
 
-    if (!q.length) return this.zeroView();
-    if (!this.editing()) this.refreshSub();
+    if (!q.length) {
+      // A filter can hide every item while the inbox still holds some — keep the filter bar visible
+      // so the user can clear it, instead of the misleading "inbox zero" screen.
+      if ((this.filter || this.typeFilter) && this.inbox.length) return [this.subView(), this.emptyFilteredView()];
 
-    return [this.subView(), this.focusView(q[0]), this.nextView(q.slice(1)), this.toastView()];
+      return this.zeroView();
+    }
+
+    // The focused item is q[0]; the list (nextView) shows the WHOLE queue with that item marked
+    // active, so the current item is never hidden — you can always click back to it (or any other).
+    return [this.subView(), this.focusView(q[0]), this.nextView(q, q[0].path), this.toastView()];
   }
 
   // ---- data + live poll ----
@@ -392,6 +462,7 @@ export class Inbox {
     this.total = inbox.length;
     this.session = { kept: 0, trashed: 0, snoozed: 0 };
     this.filter = null;
+    this.typeFilter = null;
     this.draw();
   }
 
@@ -505,6 +576,13 @@ export class Inbox {
     if (!this.filter) this.filter = new Set(this.inbox!.map((i) => i.source));
     if (this.filter.has(src) && this.filter.size > 1) this.filter.delete(src);
     else this.filter.add(src);
+    this.draw();
+  }
+
+  private toggleTypeFilter(ty: string): void {
+    if (!this.typeFilter) this.typeFilter = new Set(this.inbox!.map((i) => this.itemType(i)));
+    if (this.typeFilter.has(ty) && this.typeFilter.size > 1) this.typeFilter.delete(ty);
+    else this.typeFilter.add(ty);
     this.draw();
   }
 

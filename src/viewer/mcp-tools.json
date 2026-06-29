@@ -98,7 +98,7 @@
   },
   {
     "name": "create_inbox_item",
-    "description": "Drop an item into your inbox lane (the agents' on-ramp to the mind). Use this — NOT create_doc — when you are surfacing something for the human to triage: an email worth keeping, a Sentry/alert ticket, a scraped finding, a reminder. The item lands in inbox/<your-source>/ where the source is derived from YOUR token (you cannot set it, no impersonation) and stays SEALED from search/topology/contradictions until the human keeps it. The human triages it later: Keep promotes it into the graph, Trash, or Snooze. Reformulate the content in your own words (not a raw dump); set an honest confidence.",
+    "description": "Drop an item into your inbox lane (the agents' on-ramp to the mind). Use this — NOT create_doc — when you are surfacing something for the human to triage: an email worth keeping, a Sentry/alert ticket, a scraped finding, a reminder. The item lands in inbox/<your-source>/ where the source is derived from YOUR token (you cannot set it, no impersonation) and stays SEALED from search/topology/contradictions until the human keeps it. The human triages it later: Keep promotes it into the graph, Trash, or Snooze. Reformulate the content in your own words (not a raw dump); set an honest confidence. Optionally categorize the item with `type` (note/task/idea/question/reference/alert…) so the human can sort their inbox; omit it and the item is filed as a note. `type` is the KIND of item, NOT the source (the source is your token's label, set automatically).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -109,6 +109,10 @@
         "content": {
           "type": "string",
           "description": "The item body in markdown, reformulated by you. Concise and self-contained."
+        },
+        "type": {
+          "type": "string",
+          "description": "Optional KIND of item, used by the human to sort/triage their inbox. A short lowercase keyword. Common values: note (the default), task, idea, question, reference, alert — but you may use another short word that fits better. Omit it and the item is filed as a note. This is NOT the source: the source comes from your token automatically, you only describe what KIND of thing this is."
         },
         "confidence": {
           "type": "number",

@@ -102,6 +102,21 @@
 .ibx-skel { background: rgba(255, 255, 255, .06); border-radius: 5px; animation: ibx-skel 1.3s ease-in-out infinite; }
 @keyframes ibx-skel { 0%, 100% { opacity: .4; } 50% { opacity: .85; } }
 
+/* item KIND badge — open vocabulary, so its colour is derived from a hue set inline (--th). */
+.ibx-type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .045em; padding: 2px 7px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; color: hsl(var(--th, 210) 65% 78%); background: hsl(var(--th, 210) 55% 50% / .15); border: 1px solid hsl(var(--th, 210) 55% 58% / .32); }
+.ibx-qrow .ibx-type { font-size: 9.5px; padding: 1px 6px; }
+
+/* the focused item, shown as a highlighted row in the queue so it is never hidden from the list */
+.ibx-qrow.active { background: rgba(29, 155, 209, .12); box-shadow: inset 2px 0 0 #1d9bd1; }
+.ibx-qrow.active:hover { background: rgba(29, 155, 209, .17); }
+.ibx-qrow.active .ibx-qt { color: #cdeafb; font-weight: 600; }
+
+/* source chips + (optional) type chips share one wrap; a hairline separates the two groups */
+.ibx-chips-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.ibx-tchips { padding-left: 10px; border-left: 1px solid rgba(255, 255, 255, .1); }
+.ibx-tchips .ibx-chip .tdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; background: hsl(var(--th, 210) 55% 58%); }
+.ibx-tchips .ibx-chip.on { color: hsl(var(--th, 210) 70% 82%); border-color: hsl(var(--th, 210) 55% 58% / .45); background: hsl(var(--th, 210) 55% 50% / .16); }
+
 /* Respect the OS "reduce motion" preference (vestibular a11y), like every other animated stylesheet. */
 @media (prefers-reduced-motion: reduce) {
   .ibx-focus, .ibx-focus.ibx-entering, .ibx-toast, .ibx-skel { animation: none; transition: none; }

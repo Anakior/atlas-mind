@@ -54,7 +54,7 @@ def _inbox_mind():
         _item("gmail", "keepme", "Astreinte rotation 6h",
               "La rotation d'astreinte oncall passe a 6h, escalade PagerDuty.",
               confidence=0.9, suggest_dest="ops/"),
-        _item("sentry", "low", "Pic de timeouts", "x", confidence=0.3),
+        _item("sentry", "low", "Pic de timeouts", "x", confidence=0.3, type="alert"),
         _item("gmail", "sealed", "Note scellee", "marqueur unique zarbitoken9 ici.", confidence=0.7),
         _item("gmail", "trashed", "Spam", "x", confidence=0.5, inbox_status="trashed"),
         _item("gmail", "snoozed", "Plus tard", "x", confidence=0.6,
@@ -94,11 +94,15 @@ class TestInboxRead(unittest.TestCase):
         self.assertEqual(items[0]["path"], KEEP)  # 0.9 on top
 
     def test_list_carries_fields(self):
-        keep = next(i for i in self.srv.get("/api/inbox").json()["inbox"]
-                    if i["path"].endswith("keepme.md"))
+        items = self.srv.get("/api/inbox").json()["inbox"]
+        keep = next(i for i in items if i["path"].endswith("keepme.md"))
         self.assertEqual(keep["source"], "gmail")
         self.assertEqual(keep["suggest_dest"], "ops/")
         self.assertTrue(keep["title"])
+        # the item KIND (used by the UI to sort): an explicit type round-trips, an absent one defaults
+        self.assertEqual(keep["type"], "note")  # keepme has no type in its envelope -> defaulted
+        low = next(i for i in items if i["path"].endswith("low.md"))
+        self.assertEqual(low["type"], "alert")  # explicit type carried through to the DTO
 
     def test_inbox_sealed_from_search(self):
         # "zarbitoken9" lives only in an inbox item -> search must return it from NOWHERE.
@@ -210,6 +214,24 @@ class TestInboxMcp(unittest.TestCase):
         self.assertTrue(err)
         self.assertIn("create_inbox_item", str(msg).lower())
         self.assertFalse((self.srv.content_root / "inbox" / "sneaky.md").exists())
+
+    def test_type_is_persisted_and_normalized(self):
+        # An optional `type` is normalized to a lowercase slug and written to the envelope, so the
+        # human can sort their inbox by KIND (note/task/idea/…) rather than by the token's source.
+        err, _ = _call(self.srv, self.token, "create_inbox_item", {
+            "title": "Ship the release", "content": "x",
+            "type": "To Do", "dedupe_key": "typed-item-1"})
+        self.assertFalse(err)
+        typed = next(p for p in self.srv.content_root.glob(f"inbox/{USER_SLUG}/{TOKEN_SOURCE}/*.md")
+                     if "dedupe_key: typed-item-1" in p.read_text(encoding="utf-8"))
+        self.assertIn("type: to-do", typed.read_text(encoding="utf-8"))  # "To Do" -> slug "to-do"
+        # An item created WITHOUT a type defaults to a note (never the source/title).
+        err, _ = _call(self.srv, self.token, "create_inbox_item", {
+            "title": "Untyped capture", "content": "y", "dedupe_key": "untyped-item-1"})
+        self.assertFalse(err)
+        untyped = next(p for p in self.srv.content_root.glob(f"inbox/{USER_SLUG}/{TOKEN_SOURCE}/*.md")
+                       if "dedupe_key: untyped-item-1" in p.read_text(encoding="utf-8"))
+        self.assertIn("type: note", untyped.read_text(encoding="utf-8"))
 
     def test_dedupe_key_makes_recreate_idempotent(self):
         # The tool advertises dedupe_key as "re-running you does not duplicate the item": a second

@@ -55,7 +55,7 @@ def _parse_tags(block: str) -> list[str]:
 
 
 # Inbox triage envelope keys (cf. CDC inbox). Scalar whitelist, no YAML dependency.
-_INBOX_KEYS = ("origin", "source", "captured_at", "confidence", "suggest_dest",
+_INBOX_KEYS = ("origin", "source", "type", "captured_at", "confidence", "suggest_dest",
                "suggest_tags", "inbox_status", "snooze_until", "neighbors", "dedupe_key")
 _INBOX_LIST_KEYS = ("suggest_tags", "neighbors")
 _INBOX_KEY_RE = re.compile(r"^([a-z_]+)[ \t]*:[ \t]*(.*)$", re.I)
@@ -67,7 +67,7 @@ def _inbox_meta(text: str) -> dict:
     Reads the leading --- block line by line, keeps known keys, defaults the rest
     (status -> 'pending', confidence -> 0.0). List values ([a, b] or a, b) split on
     commas. Unknown/malformed lines are ignored. Pure; no YAML dependency."""
-    out: dict = {"inbox_status": "pending", "confidence": 0.0}
+    out: dict = {"inbox_status": "pending", "confidence": 0.0, "type": "note"}
     m = _FM_RE.match(text)
     if not m:
         return out
