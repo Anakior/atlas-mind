@@ -258,6 +258,10 @@ _ACTIVITY_VERB_TYPE = {
     "created": "create", "edited": "edit", "moved": "move", "folder": "move",
     "deleted": "delete", "checked": "check", "unchecked": "check",
     "reverted": "revert", "annotated": "edit", "annotation": "edit",
+    # Inbox lifecycle (all frontmatter flips, so git would otherwise type them M=edit): a drop is
+    # "received" (staged, not yet in the mind); a trash is a soft-delete; un-trash restores it; a
+    # snooze postpones it. Kept items keep the rename signal (R -> move).
+    "received": "receive", "trashed": "delete", "restored": "revert", "snoozed": "snooze",
     # Mental-node subscriptions (remotes/) get their own verbs so the feed reads
     # "added/removed the node X" instead of a generic create/delete of mirror files.
     "node_added": "node_add", "node_removed": "node_remove",

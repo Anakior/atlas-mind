@@ -223,6 +223,24 @@ def slugify_token_label(label: str) -> str:
     return slug
 
 
+def slugify_title(title: str, max_len: int = 60) -> str:
+    """Slug of a HUMAN document title (filenames born from a real title), distinct from
+    slugify_token_label which serves ASCII token identities. Folds accents (NFD + drop the
+    combining marks) so "idée" -> "idee" instead of mangling the accent into a dash, keeps
+    [a-z0-9-] with single dashes, and truncates on a word boundary (never mid-word). Empty
+    or unusable input -> "note", so a file always gets a name."""
+    folded = "".join(c for c in unicodedata.normalize("NFD", (title or "").lower())
+                     if unicodedata.category(c) != "Mn")
+    slug = "".join(c if c in "abcdefghijklmnopqrstuvwxyz0123456789-" else "-" for c in folded)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    slug = slug.strip("-")
+    if len(slug) > max_len:
+        head = slug[:max_len].rsplit("-", 1)[0].strip("-")  # drop the half word the cut left
+        slug = head or slug[:max_len].strip("-")            # ...unless it was one long word
+    return slug or "note"
+
+
 def token_email(label: str, owner=None) -> str:
     """Identity email of a token: <slug>@api.local, or <slug>@<owner-hash>.api.local
     when bound to an owner — so two people can each label a token "claude" without

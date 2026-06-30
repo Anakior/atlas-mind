@@ -125,6 +125,12 @@ class TestCommitSubjects(unittest.TestCase):
         self._mcp("delete_doc", {"path": "log/d1.md", "ai": "claude"})
         self.assertEqual(self._subject(), "deleted: d1")
 
+    def test_inbox_drop_subject_is_received(self):
+        # An inbox drop is staged, not yet a doc in the mind: its subject uses the `received:`
+        # verb (not `created:`) so the activity feed reads "a reçu", and the slug carries no date.
+        self._mcp("create_inbox_item", {"title": "Idée à trier", "content": "x", "ai": "claude"})
+        self.assertEqual(self._subject(), "received: idee-a-trier")
+
     def test_revert_subject(self):
         self._mcp("create_doc", {"path": "log/r1.md", "content": "# R1\n", "ai": "claude"})
         self._mcp("edit_doc", {"path": "log/r1.md", "content": "# R1 v2\n", "ai": "claude"})

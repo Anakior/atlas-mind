@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 import server as _s
-from store import slugify_token_label
+from store import slugify_token_label, slugify_title
 from server.pure.queries import (
     _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
     _api_stale, _activity_events,
@@ -102,9 +102,11 @@ def _tool_recent_docs(args, ctx):
     return text_result(json.dumps(hits, ensure_ascii=False, indent=2))
 
 
-def _create_doc_impl(rel, content, ai, ctx):
+def _create_doc_impl(rel, content, ai, ctx, subject=None):
     """Write + ACL-stamp + commit a new doc. The shared core of create_doc and
-    create_inbox_item (the inbox guard lives in the public create_doc wrapper, not here)."""
+    create_inbox_item (the inbox guard lives in the public create_doc wrapper, not here).
+    `subject` overrides the commit subject: create_inbox_item passes a `received:` verb so the
+    activity feed reads "a reçu" — the item is staged, not yet a doc in the mind."""
     target = _s._validate_doc_path(rel)
     if not target:
         return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
@@ -126,7 +128,7 @@ def _create_doc_impl(rel, content, ai, ctx):
             _s._stamp_new_doc(rel, ctx)
         except Exception as e:
             print(f"[create_doc owner] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"created: {target.stem}", target, ai=ai)
+    _s.commit_change(ctx, subject or f"created: {target.stem}", target, ai=ai)
     return text_result(f"Document created: {rel}")
 
 
@@ -199,10 +201,10 @@ def _tool_create_inbox_item(args, ctx):
         source = slugify_token_label(source)
     except ValueError:
         source = "agent"
-    try:
-        slug = slugify_token_label(title)[:60].strip("-.") or "note"
-    except ValueError:
-        slug = "note"
+    # Human title -> a readable filename slug: fold accents (idée -> idee) and cut on a word
+    # boundary. slugify_token_label is for ASCII token identities and would mangle accents into
+    # dashes and truncate mid-word, leaking an ugly "id-e-...-d-mo" stem into the activity feed.
+    slug = slugify_title(title)
     # Optional item KIND (what the human sorts on), NOT the source. Free vocabulary, normalized to a
     # lowercase slug; anything empty/unusable falls back to "note" so an item always carries a type.
     raw_type = args.get("type")
@@ -232,12 +234,14 @@ def _tool_create_inbox_item(args, ctx):
             return text_result(f"Already in your inbox (dedupe_key match): {existing}")
         lines.append(f"dedupe_key: {dk}")
     lines.append("inbox_status: pending")
-    stamp = time.strftime("%Y-%m-%d", time.gmtime())
+    # No date in the filename: the capture instant already lives in `captured_at` + the git log,
+    # and the date prefix only made the staging stem (and the activity feed) noisier. Collisions
+    # fall back to a -N suffix.
     folder = f"inbox/{user}"
-    rel = f"{folder}/{source}/{stamp}-{slug}.md"
+    rel = f"{folder}/{source}/{slug}.md"
     n = 2
     while (_s.CONFIG.content_root / rel).exists():
-        rel = f"{folder}/{source}/{stamp}-{slug}-{n}.md"
+        rel = f"{folder}/{source}/{slug}-{n}.md"
         n += 1
     # Pre-compute same-subject neighbors at ingestion and freeze them in the frontmatter, so triage
     # reads them without re-scanning the corpus. Best-effort: never fail the drop on a scan error.
@@ -257,7 +261,7 @@ def _tool_create_inbox_item(args, ctx):
         except Exception as e:
             print(f"[create_inbox_item owner] {e}", file=sys.stderr)
             return text_result("Could not secure your inbox lane; nothing was created.", is_error=True)
-    return _create_doc_impl(rel, "\n".join(lines), args.get("ai"), ctx)
+    return _create_doc_impl(rel, "\n".join(lines), args.get("ai"), ctx, subject=f"received: {slug}")
 
 
 def _tool_edit_doc(args, ctx):

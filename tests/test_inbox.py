@@ -199,6 +199,17 @@ class TestInboxMcp(unittest.TestCase):
         acl = fs._load(fs.ACL_FILE, dict)
         self.assertEqual(acl.get(f"inbox/{USER_SLUG}", {}).get("owner"), "user:" + ADMIN_EMAIL)
 
+    def test_filename_is_an_accent_folded_slug_with_no_date(self):
+        # The staging filename comes from a human-title slug: accents are folded (idée -> idee),
+        # not mangled into dashes, and there is NO date prefix (the instant lives in captured_at).
+        err, _ = _call(self.srv, self.token, "create_inbox_item", {
+            "title": "Idée digest hebdomadaire", "content": "x", "dedupe_key": "slug-shape-1"})
+        self.assertFalse(err)
+        item = next(p for p in self.srv.content_root.glob(f"inbox/{USER_SLUG}/{TOKEN_SOURCE}/*.md")
+                    if "dedupe_key: slug-shape-1" in p.read_text(encoding="utf-8"))
+        self.assertEqual(item.stem, "idee-digest-hebdomadaire")
+        self.assertNotRegex(item.stem, r"^\d{4}-\d{2}-\d{2}-")
+
     def test_source_and_user_cannot_be_spoofed(self):
         err, _ = _call(self.srv, self.token, "create_inbox_item", {
             "title": "Tentative de spoof", "content": "x", "source": "evil-agent"})
