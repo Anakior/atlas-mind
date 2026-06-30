@@ -541,6 +541,7 @@ export class Inbox {
     // last). Captured now, from the visible queue, so it's whatever the user sees come next.
     const next = q[idx + 1] || q[idx - 1] || null;
     const nextPath = next ? next.path : null;
+    const homeIdx = this.inbox!.findIndex((x) => x.path === it.path); // slot to restore to on failure
 
     const body: ActionBody = { action: kind, path: it.path };
 
@@ -554,28 +555,44 @@ export class Inbox {
     if (kind === 'snooze') body.until = this.snoozeDate();
     this.leaving = true;
     this.draw(); // the focus card (same key) gains .ibx-leaving and the swipe-out plays
+
+    // Drop the item when the swipe-out ANIMATION ends, not when the network answers. A faded-out card
+    // (transform+opacity) still holds its full-height box, so gating removal on a slow /action request
+    // left a blank gap above the queue. The request runs in parallel; trash/snooze are reversible and
+    // keep re-creates the inbox item, so a failure just puts the item back (restoreItem). leaving is
+    // still held for the whole 180ms so a second K/X/S can't act on the not-yet-shown next item.
+    setTimeout(() => {
+      if (!this.leaving) return; // a fast failure already rolled this action back
+      this.inbox = this.inbox!.filter((x) => x.path !== it.path);
+      if (Inbox.SKEY[kind]) this.session[Inbox.SKEY[kind]]++;
+      this.activePath = nextPath;
+      this.leaving = false;
+      this.updateBadge();
+      this.draw();
+    }, 180);
     fetch('/api/inbox/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then((r) => {
-        if (r.ok) {
-          // Hold leaving for the WHOLE swipe-out: the next item isn't shown yet, so releasing now
-          // would let a second K/X/S act on it blind. Drop + repin + render after the animation.
-          if (Inbox.SKEY[kind]) this.session[Inbox.SKEY[kind]]++;
-          setTimeout(() => {
-            this.inbox = this.inbox!.filter((x) => x.path !== it.path);
-            delete this.overrides[it.path];
-            this.activePath = nextPath;
-            this.leaving = false;
-            this.draw();
-          }, 180);
-        } else {
-          this.leaving = false;
-          this.draw();
-        }
+        if (r.ok) delete this.overrides[it.path];
+        else this.restoreItem(it, homeIdx, kind as 'keep' | 'trash' | 'snooze');
       })
-      .catch(() => {
-        this.leaving = false;
-        this.draw();
-      });
+      .catch(() => this.restoreItem(it, homeIdx, kind as 'keep' | 'trash' | 'snooze'));
+  }
+
+  // Undo an optimistic Keep/Trash/Snooze when /action fails. Idempotent: re-inserts the item at its
+  // old slot only if it was already dropped (a slow failure), otherwise just cancels the pending
+  // swipe-out removal (a fast failure, before the drop) — never duplicating the row. Silent, as before.
+  private restoreItem(it: InboxItemEdited, homeIdx: number, kind: 'keep' | 'trash' | 'snooze'): void {
+    if (this.inbox && !this.inbox.some((x) => x.path === it.path)) {
+      const arr = this.inbox.slice();
+
+      arr.splice(homeIdx < 0 ? arr.length : Math.min(homeIdx, arr.length), 0, it);
+      this.inbox = arr;
+      if (Inbox.SKEY[kind]) this.session[Inbox.SKEY[kind]] = Math.max(0, this.session[Inbox.SKEY[kind]] - 1);
+    }
+    this.leaving = false;
+    this.activePath = it.path;
+    this.updateBadge();
+    this.draw();
   }
 
   private select(path: string): void {
