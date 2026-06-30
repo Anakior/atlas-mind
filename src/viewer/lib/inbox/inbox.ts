@@ -695,6 +695,7 @@ export class Inbox {
   }
 
   show(): void {
+    this.draw();
     this.startPoll();
   }
 
