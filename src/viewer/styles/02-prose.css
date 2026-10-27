@@ -96,3 +96,12 @@
   .prose table th { color: #ffffff; }
   .prose table tr { border-color: #2a2a32; }
 
+  /* An image doc: fitted to the pane over a checkerboard so transparency reads; a click on an
+     image the pane shrinks shows it at its natural size, scrollable. */
+  .image-doc { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 150px); padding: 1.5rem; background: repeating-conic-gradient(#1b1a21 0% 25%, #23222a 0% 50%) 50% / 24px 24px; }
+  .image-doc img { max-width: 100%; max-height: calc(100vh - 200px); object-fit: contain; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
+  .image-doc--zoomable img { cursor: zoom-in; }
+  .image-doc--actual { display: block; overflow: auto; height: calc(100vh - 150px); }
+  .image-doc--actual img { max-width: none; max-height: none; cursor: zoom-out; }
+  .prose .json-doc-summary { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; color: #9aa6b2; margin: 0 0 0.75rem; }
+  .prose .json-doc-summary--invalid { color: #fca5a5; }

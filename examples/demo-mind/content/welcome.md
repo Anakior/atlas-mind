@@ -22,8 +22,8 @@ endpoint for your AI, but the *reading* experience is exactly this.
   install step to run your own mind in five minutes.
 - **[[features/own-your-data]]** — why plain files in your own git repo beat a
   hosted notes app.
-- **[[multi-formats]]** — Markdown, standalone HTML, PDF and Word, all in
-  one place.
+- **[[multi-formats]]** — Markdown, standalone HTML, PDF, Word, images and
+  JSON, all in one place.
 - **[[features/ai-native]]** — the memory your AI reads and enriches over MCP.
 - **[[features/the-mind-graph]]** — the link graph that turns notes into a *mind*.
 - **[[features/collaboration]]** — share one mind with a team: private, shared and

@@ -119,6 +119,17 @@ class TestAgenticReads(unittest.TestCase):
         self.assertTrue(err)
         self.assertIn("Invalid regex", text)
 
+    def test_grep_hints_at_a_forgotten_regex(self):
+        _, data = _call(self.srv, self.token, "grep_docs", {"pattern": "tarif annuel|tarif mensuel"})
+        self.assertEqual(data["matches"], [])
+        self.assertIn("regex=true", data["hint"])
+        _, data = _call(self.srv, self.token, "grep_docs",
+                        {"pattern": "tarif annuel|tarif mensuel", "regex": True})
+        self.assertEqual(len(data["matches"]), 3)
+        self.assertNotIn("hint", data)
+        _, data = _call(self.srv, self.token, "grep_docs", {"pattern": "introuvable"})
+        self.assertNotIn("hint", data)  # a plain word that isn't there: nothing to suggest
+
 
 class TestAgenticWrites(unittest.TestCase):
     """Mutations → a FRESH server per test."""

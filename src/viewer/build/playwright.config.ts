@@ -25,7 +25,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `python src/cli.py dev .e2e-mind --port ${PORT}`,
+    command: `python src/cli.py dev --port ${PORT}`,
     cwd: repoRoot,
     port: PORT,
     reuseExistingServer: true,

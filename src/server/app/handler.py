@@ -13,6 +13,12 @@ import posixpath
 import re
 import sys
 
+# The content files a browser runs as a page when opened on their own, and their sandbox.
+_CONTENT_SANDBOX = {
+    ".html": "sandbox allow-scripts", ".htm": "sandbox allow-scripts",
+    ".xhtml": "sandbox allow-scripts", ".svg": "sandbox", ".xml": "sandbox",
+}
+
 
 class Handler(SimpleHTTPRequestHandler):
     # Explicit MIME types for /vendor/: the system mimetypes table can miss
@@ -61,6 +67,9 @@ class Handler(SimpleHTTPRequestHandler):
         # still blocks third-party clickjacking. Iframe stays sandbox=allow-scripts.
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         self.send_header("Referrer-Policy", "no-referrer")
+        sandbox = getattr(self, "_content_sandbox", None)
+        if sandbox:
+            self.send_header("Content-Security-Policy", sandbox)
         if _s.CONFIG.auth_enabled:
             self.send_header("Strict-Transport-Security",
                              "max-age=63072000; includeSubDomains")
@@ -728,7 +737,15 @@ class Handler(SimpleHTTPRequestHandler):
                     return
             except (ValueError, OSError):
                 pass
-        return super().do_GET()
+        # A mind's own page or image opened on its own (the viewer's "open full screen", a
+        # link) runs top-level on the atlas origin, where its script could read kb_csrf and
+        # act as the visitor: sandboxed, like a shared .html (route /share) and the viewer's
+        # iframe. A deck keeps its own JS; an .svg or .xml needs none.
+        self._content_sandbox = _CONTENT_SANDBOX.get(posixpath.splitext(_decoded)[1].lower())
+        try:
+            return super().do_GET()
+        finally:
+            self._content_sandbox = None
 
     def do_POST(self):
         if router.dispatch(self, routes_table.POST_ROUTES):

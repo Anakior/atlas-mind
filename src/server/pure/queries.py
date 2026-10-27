@@ -86,10 +86,9 @@ def _headings(lines):
                 yield i, len(m.group(1)), m.group(2)
 
 
-def _snippet(entry: dict, tokens) -> str:
+def _snippet(content: str, content_n: str, tokens) -> str:
     """~180 characters around the earliest query-token occurrence (the doc start when only
     the filename matched), flattened to one line."""
-    content, content_n = entry["content"], entry["content_n"]
     found = [(i, t) for t in tokens if (i := content_n.find(t)) >= 0]
     if not found:
         return content[:160].replace("\n", " ").strip() + ("…" if len(content) > 160 else "")
@@ -100,12 +99,12 @@ def _snippet(entry: dict, tokens) -> str:
             + ("…" if end < len(content) else ""))
 
 
-def _locate(entry: dict, tokens) -> dict:
+def _locate(content: str, content_n: str, tokens) -> dict:
     """1-based line carrying the most query tokens and its heading path ("A > B"), so an
     agent can read just that section. Normalizing keeps line breaks, so the normalized
     lines index the raw ones."""
     best, best_n = None, 0
-    for i, line in enumerate(entry["content_n"].splitlines()):
+    for i, line in enumerate(content_n.splitlines()):
         n = sum(1 for t in tokens if t in line)
         if n > best_n:
             best, best_n = i, n
@@ -114,7 +113,7 @@ def _locate(entry: dict, tokens) -> dict:
     if best is None:
         return {}
     path = []
-    for i, level, title in _headings(entry["content"].splitlines()):
+    for i, level, title in _headings(content.splitlines()):
         if i > best:
             break
         path = [h for h in path if h[0] < level] + [(level, title)]
@@ -170,11 +169,12 @@ def _api_search(q: str, limit: int, ctx=None) -> list:
     ranked.sort(key=lambda r: (-r[0], -r[1]))
     hits = []
     for score, mtime, rel, path, e in ranked[:limit]:
+        content = _s._doc_text(rel, path) or ""
         hit = {"path": rel, "name": path.name, "score": round(score, 3),
-               "snippet": _snippet(e, tokens), "mtime": int(mtime)}
+               "snippet": _snippet(content, e["content_n"], tokens), "mtime": int(mtime)}
         # An .html is indexed as extracted text: its lines don't map back to the file.
         if not rel.lower().endswith(".html"):
-            hit.update(_locate(e, tokens))
+            hit.update(_locate(content, e["content_n"], tokens))
         hits.append(hit)
     return hits
 

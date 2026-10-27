@@ -374,5 +374,33 @@ class TestDirRename(unittest.TestCase):
         self.assertTrue(self.srv.path("renomme/alpha.md").exists())
 
 
+class TestRawContentSandbox(unittest.TestCase):
+    """GET of a content file opened on its own: what the browser would run as a page on the
+    atlas origin (a deck, an image that is code) is sandboxed; plain files are not."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = AtlasServer(mind={
+            "accueil.md": "# Accueil\n",
+            "decks/q3.html": "<!DOCTYPE html><html><body><script>1</script></body></html>",
+            "img/logo.svg": '<svg xmlns="http://www.w3.org/2000/svg"><script>1</script></svg>',
+            "data/stats.json": '{"a": 1}',
+        })
+        cls.srv.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_active_files_are_sandboxed(self):
+        csp = {path: self.srv.get(path).headers.get("Content-Security-Policy")
+               for path in ("/decks/q3.html", "/img/logo.svg", "/data/stats.json", "/accueil.md")}
+        self.assertEqual(csp, {"/decks/q3.html": "sandbox allow-scripts", "/img/logo.svg": "sandbox",
+                               "/data/stats.json": None, "/accueil.md": None})
+
+    def test_the_viewer_shell_is_not(self):
+        self.assertIsNone(self.srv.get("/").headers.get("Content-Security-Policy"))
+
+
 if __name__ == "__main__":
     unittest.main()

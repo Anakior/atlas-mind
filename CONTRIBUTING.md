@@ -29,6 +29,23 @@ Please run the full suite before opening a pull request, and add or update tests
 for any behaviour you change. Tests live in `tests/` (one file per area, plus
 `tests/harness.py`).
 
+### Tool-use evals
+
+The tests check what the MCP tools return; the evals check what an agent manages to
+do with them. `evals/run.py` asks a model the questions in `evals/questions.json`
+through a real MCP client (Claude Code, headless, with only the mind's tools), on
+the demo mind replayed with its history plus a prompt injection planted in a remote
+mirror, and grades each answer, the tools used and the mind's state afterwards:
+
+```bash
+python3 evals/run.py                          # every question, on Sonnet
+python3 evals/run.py --model opus --only week,stale
+```
+
+It needs `claude` on your PATH and runs on its login (no API key). A full run is
+about 25 sessions; the results land in `evals/results/` (gitignored). Run it when
+you change a tool's description, its output or the server instructions.
+
 ## Trying your change
 
 ```bash

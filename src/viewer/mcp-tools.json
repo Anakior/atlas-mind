@@ -268,6 +268,10 @@
               "text"
             ]
           }
+        },
+        "hint": {
+          "type": "string",
+          "description": "Set when nothing matched a literal pattern that reads like a regex: retry with regex=true."
         }
       },
       "required": [

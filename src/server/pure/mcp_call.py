@@ -284,7 +284,14 @@ def _tool_grep_docs(args, ctx):
                     return json_result({"pattern": pattern, "matches": matches, "truncated": True})
                 matches.append({"path": rel, **provenance.mark(rel), "line": n,
                                 "text": line.strip()[:240]})
-    return json_result({"pattern": pattern, "matches": matches, "truncated": False})
+    payload = {"pattern": pattern, "matches": matches, "truncated": False}
+    # Agents write `a|b` and forget regex=true (seen in the evals): say so rather than let an
+    # empty literal search pass for "the mind doesn't mention it". Never retried as a regex
+    # on our own: a literal like `| 29 |` would then match every line.
+    if not matches and not args.get("regex") and re.search(r"[|*+?\\\[\](){}^$]", pattern):
+        payload["hint"] = ("No line contains this exact text. It reads like a regex: pass "
+                           "regex=true to search it as one.")
+    return json_result(payload)
 
 
 def _tool_read_doc(args, ctx):

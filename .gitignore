@@ -37,3 +37,6 @@ src/viewer/build/test-results/
 src/viewer/build/playwright-report/
 
 key.pem
+
+# Tool-use eval runs (evals/run.py): local, per model and date.
+evals/results/

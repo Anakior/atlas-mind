@@ -5,7 +5,7 @@ import { IS_OFFLINE_BUILD, SITE_PREFIX, TAGLINE } from '../core/data-csrf';
 import { t, LANG } from '../core/i18n';
 import { currentFile, setCurrentFile, mdCount } from '../core/state';
 import { todos, loadContent } from '../content/content-tree';
-import { docRenderer } from '../content/doc-renderer';
+import { docRenderer, isViewable } from '../content/doc-renderer';
 import { tagBrowsePage } from '../content/tag-browse';
 import { mindGraph } from '../graph/graph-boot';
 import { Dialogs } from '../modals/dialogs';
@@ -138,7 +138,7 @@ export class HomeView {
 
     const f = fileMap[hash];
 
-    if (f && f.ext === '.md') {
+    if (f && isViewable(f.ext)) {
       docRenderer.show(f);
 
       return;

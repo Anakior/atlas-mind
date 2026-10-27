@@ -8,6 +8,38 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-27
+
+Images and JSON open in the viewer, a model now sits an exam on the MCP surface (and
+already caught a friction), and the server keeps less in memory.
+
+### Added
+- **Images and JSON open in the viewer.** An image (PNG, JPEG, GIF, WebP, AVIF, SVG…) is
+  fitted to the pane over a checkerboard, its size in the banner; a click shows it at
+  full size. A `.json` is pretty-printed and highlighted under a one-line summary (an
+  array's length, an object's keys, the size); an invalid one is shown as is, under
+  where it breaks. Both used to open raw in a new tab. A link to any viewable file
+  (`#path`) now opens it, not only a Markdown doc.
+- **Tool-use evals** (`evals/run.py`): 24 real questions asked to a model through a real
+  MCP client on the demo mind, graded on the answer, the tools used and the mind's state
+  after, with calls and tokens per question. One of them plants a prompt injection in a
+  remote mirror.
+
+### Changed
+- `grep_docs`: a literal pattern that matches nothing but reads like a regex (`a|b`) now
+  says to pass `regex=true`. The evals caught a model searching `Ctrl|Cmd|shortcut`
+  literally and concluding the mind didn't document the shortcut; with the hint it
+  retries as a regex and finds it.
+- The search cache holds 45 % less memory (95 → 52 MB on a mind of 350 docs): a doc's
+  text is no longer kept, only re-read for the few hits a search returns, and a word is
+  stored once for all docs. Same results.
+
+### Security
+- A mind's `.html`, `.svg` or `.xml` opened on its own (the viewer's "open full screen",
+  a direct link) is now sandboxed, as a shared `.html` already was: its scripts can no
+  longer run on the atlas origin, where they could read the CSRF token and act as the
+  person viewing it. A deck mirrored from another node was the exposed case.
+
 ## [1.4.1] - 2026-10-27
 
 ### Fixed

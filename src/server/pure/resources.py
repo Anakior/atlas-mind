@@ -27,8 +27,8 @@ def _mime(rel: str) -> str:
 
 def _title(rel: str, path) -> str:
     """The first Markdown heading, else the file name."""
-    entry = _s._doc_entry(rel, path) if rel.lower().endswith(".md") else None
-    for line in (entry["content"].splitlines() if entry else []):
+    text = _s._doc_text(rel, path) if rel.lower().endswith(".md") else None
+    for line in (text or "").splitlines():
         if line.startswith("# "):
             return line[2:].strip()
     return path.stem

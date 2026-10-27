@@ -1,5 +1,5 @@
 // The document renderer. DocRenderer.show owns #content: it writes the skeleton, gates the breadcrumb
-// chrome, dispatches by extension (.html/.pdf/.docx → an isolated frame, else the markdown pipeline)
+// chrome, dispatches by extension (.html/.pdf/.docx/images/.json → frames.ts, else the markdown pipeline)
 // and fires the post-render hooks. The DOM is written exactly as before (innerHTML/createElement/
 // appendChild) — no reconciliation refactor — so the goldens stay byte-stable; the one structural
 // change is that the tree's active/ancestor-open highlight is derived by content-tree.ts via
@@ -25,6 +25,14 @@ import { attachCopyButtons, highlightFirstMatch } from './content-decorators';
 import { taskCheckboxes } from './task-checkboxes';
 import { renderBacklinksFor } from './backlinks';
 import { notesPanel } from './notes/notes-panel';
+
+export const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg', '.bmp', '.ico'];
+const VIEWABLE_EXTS = new Set(['.md', '.html', '.pdf', '.docx', '.json', ...IMAGE_EXTS]);
+
+// What DocRenderer.show displays; any other file in the tree is a plain link to it.
+export function isViewable(ext: string): boolean {
+  return VIEWABLE_EXTS.has(ext);
+}
 
 export class DocRenderer {
   // THE document renderer that owns #content. Writes the skeleton, gates the breadcrumb chrome,
@@ -119,6 +127,18 @@ export class DocRenderer {
     // Word document → converted to readable HTML in the browser (read-only).
     if (file.ext === '.docx') {
       frameRenderer.renderDocx(file);
+
+      return;
+    }
+
+    if (IMAGE_EXTS.includes(file.ext)) {
+      frameRenderer.renderImage(file);
+
+      return;
+    }
+
+    if (file.ext === '.json') {
+      frameRenderer.renderJson(file);
 
       return;
     }

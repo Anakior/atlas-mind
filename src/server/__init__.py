@@ -634,7 +634,7 @@ def sync_remote(remote: dict) -> dict:
     return _CTX.remote_sync.sync_one(remote)
 
 
-from server.render.search_cache import _doc_entry, _DOC_CACHE  # noqa: F401
+from server.render.search_cache import _doc_entry, _doc_text, _DOC_CACHE  # noqa: F401
 from server.render.mcp_tools import _mcp_tools  # noqa: F401
 
 
