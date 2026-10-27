@@ -32,6 +32,10 @@ SAVE = """# Save Claude — Refonte de l'auth
 - Migrer les jetons existants : un script par lot, à lancer
   hors des heures de pointe.
 - Purger les vieilles sessions.
+- Ouverts à la clôture :
+  - le jeton expire trop tôt sur mobile ;
+  - la révocation n'atteint pas
+    les sessions déjà ouvertes.
 
 ### Deux questions à trancher
 
@@ -109,6 +113,11 @@ class TestResumeSession(unittest.TestCase):
         self.assertNotIn("Deux questions à trancher", points)  # a heading over a list only groups it
         self.assertEqual(points["⭐ La page de consentement"]["refs"], ["notes/plan.md"])
         self.assertNotIn("pas un point", points)  # inside a code fence
+        # An item ending with a colon introduces the real points, in its sub-items.
+        self.assertNotIn("Ouverts à la clôture :", points)
+        self.assertEqual(points["la révocation n'atteint pas les sessions déjà ouvertes."]["group"],
+                         "Ouverts à la clôture")
+        self.assertIn("le jeton expire trop tôt sur mobile ;", points)
 
     def test_history_and_what_changed_since(self):
         self.edit(PATH, "- Purger les vieilles sessions.\n", "- Documenter le flux.\n")
@@ -131,6 +140,16 @@ class TestResumeSession(unittest.TestCase):
         self.assertEqual(data["save"]["path"], "ai-sessions/refonte-auth-suite.md")
         self.assertEqual({c["path"] for c in data["chain"]}, {PATH, "ai-sessions/refonte-auth-suite.md"})
         self.assertEqual([m["path"] for m in data["other_matches"]], [PATH])
+
+    def test_a_newer_save_is_flagged(self):
+        # The best match is an older step of the work: the save written after it is named
+        # first, so the agent can resume where the work actually is.
+        self.edit("ai-sessions/refonte-auth-suite.md", "- Ship it.", "- Ship it this week.")
+        _, data = self.call(topic="refonte auth sessions maison")
+        self.assertEqual(data["save"]["path"], PATH)
+        self.assertEqual(data["other_matches"][0], {
+            "path": "ai-sessions/refonte-auth-suite.md", "title": "Refonte de l'auth, suite",
+            "last_commit": data["other_matches"][0]["last_commit"], "newer": True})
 
     def test_the_resume_prompt(self):
         def text(**arguments):

@@ -123,18 +123,19 @@ def _locate(content: str, content_n: str, tokens) -> dict:
     return out
 
 
-def _api_search(q: str, limit: int, ctx=None) -> list:
+def _api_search(q: str, limit: int, ctx=None, only=None) -> list:
     """BM25 ranking (an occurrence in the filename weighs three in the body), with typo
     tolerance (a token that can't be found is corrected to the closest word in the
     vocabulary). Tokens match as substrings, so 'auth' still finds 'authentication'.
-    Content read via the _doc_entry in-memory cache."""
+    `only` (a set of paths) ranks those docs among themselves. Content read via the
+    _doc_entry in-memory cache."""
     import difflib
     tokens = [t for t in _s._normalize_text(q).split() if t]
     if not tokens:
         return []
     entries = []
     for rel, path in _s._iter_doc_files():
-        if not _visible(rel, ctx):
+        if not _visible(rel, ctx) or (only is not None and rel not in only):
             continue
         e = _s._doc_entry(rel, path)
         if e is not None:

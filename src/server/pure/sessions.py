@@ -71,7 +71,7 @@ def _points(text: str) -> list:
     wikilink = _s._import_build()._WIKILINK_RE
     points, seen = [], set()
     for start, end in _spans(lines, _OPEN_RE):
-        group = current = None
+        group = current = lead = None
         fenced = False
         for line in lines[start + 1:end]:
             if line.lstrip().startswith(("```", "~~~")):
@@ -80,14 +80,22 @@ def _points(text: str) -> list:
             if fenced:
                 continue
             heading, item = _SUBHEADING_RE.match(line), _ITEM_RE.match(line)
+            nested = _ITEM_RE.match(line.lstrip()) if line[:1].isspace() else None
             if heading:
                 group = _clean(heading.group(1))
                 current = {"text": group, "links": [], "heading": True, "open": False}
+                lead = None
                 points.append(current)
             elif item:
-                current = {"text": item.group(1), "links": [], "open": True}
+                current = lead = {"text": item.group(1), "links": [], "open": True}
                 if group:
                     current["group"] = group
+                points.append(current)
+            elif nested and lead is not None and _clean(lead["text"]).endswith(":"):
+                # An item ending with a colon introduces a list: its sub-items are the points.
+                lead["parent"] = True
+                current = {"text": nested.group(1), "links": [], "open": True,
+                           "group": _clean(lead["text"]).rstrip(" :")}
                 points.append(current)
             elif current is not None and current["open"]:
                 # A wrapped line continues the item; a blank line or a nested list ends its text.
@@ -101,8 +109,9 @@ def _points(text: str) -> list:
     out = []
     for p in points:
         is_heading, p["text"] = p.pop("heading", False), _clean(p["text"])
+        is_parent = p.pop("parent", False)
         del p["open"]
-        if (is_heading and p["text"] in groups) or not p["text"] or _key(p["text"]) in seen:
+        if is_parent or (is_heading and p["text"] in groups) or not p["text"] or _key(p["text"]) in seen:
             continue
         seen.add(_key(p["text"]))
         out.append(p)
@@ -254,11 +263,15 @@ def resume(args: dict, ctx) -> dict:
             raise ValueError(f"{path} is not a session save (it has no 'How to resume' section).")
         target = path
     elif topic:
-        hits = [h["path"] for h in _api_search(topic, 50, ctx) if h["path"] in saves]
+        hits = [h["path"] for h in _api_search(topic, len(saves), ctx, only=set(saves))]
         if not hits:
             raise ValueError(f"No session save matches '{topic}'. Call resume_session without "
                              "arguments to list the saves.")
-        target, candidates = hits[0], hits[1:5]
+        # The best match may be an older step of the same work: newer saves come first, for
+        # the agent to judge (scores alone can't tell a continuation from a namesake).
+        target = hits[0]
+        newer = sorted((p for p in hits if recency(p) > recency(target)), key=recency, reverse=True)
+        candidates = (newer + [p for p in hits[1:] if p not in newer])[:5]
     else:
         recent = sorted(saves, key=recency, reverse=True)[:_LISTED]
         return {"saves": [card(rel) for rel in recent],
@@ -302,6 +315,7 @@ def resume(args: dict, ctx) -> dict:
         payload["chain"] = [{**card(rel), **({"this": True} if rel == target else {})}
                             for rel in sorted(chain, key=recency)]
     if candidates:
-        payload["other_matches"] = [{k: c[k] for k in ("path", "title", "last_commit") if k in c}
+        payload["other_matches"] = [{**{k: c[k] for k in ("path", "title", "last_commit") if k in c},
+                                     **({"newer": True} if recency(c["path"]) > recency(target) else {})}
                                     for c in map(card, candidates)]
     return payload

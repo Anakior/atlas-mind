@@ -8,6 +8,16 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-27
+
+### Fixed
+- `resume_session` on a broad topic named an older step of the work: the best-scoring save
+  wins, but the saves written after it now come first in `other_matches`, flagged `newer`,
+  and the `resume` prompt resumes the newer one when it continues the same work. Saves are
+  ranked among themselves, so a save far down the whole mind's results is no longer missed.
+- Open points listed under an item ending with a colon ("Open at closure:") are now read:
+  its sub-items are the points, grouped under it.
+
 ## [1.6.0] - 2026-10-27
 
 Pick up a saved work session where it stopped, from any assistant: `/atlas:resume <topic>`.
