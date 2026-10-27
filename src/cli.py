@@ -258,8 +258,9 @@ connects, so keep it short and directive (capped at 8,000 characters).
 ## Access via MCP
 
 The Atlas exposes an MCP server: twenty-nine tools to read, write, triage, map,
-rewind and audit your mind. Each user mints their own token from the web UI (**Settings → Tokens**,
-or `atlas token create <mind>` locally) and points their assistant at
+rewind and audit your mind. Point your assistant at `https://<your-atlas>/mcp`: it
+signs you in over OAuth and asks what it may do (read, inbox, write). Or mint a token
+yourself (**Settings → Tokens**, or `atlas token create <mind>` locally) and use
 `https://<your-atlas>/mcp/<token>`. The AI can then search, read and create
 documents directly in your memory palace.
 
@@ -399,10 +400,12 @@ connexion, donc garde-le court et directif (plafonné à 8 000 caractères).
 ## Accès via MCP
 
 L'Atlas expose un serveur MCP : vingt-neuf outils pour lire, écrire, trier,
-cartographier, rembobiner et auditer ton mind. Chaque utilisateur crée son propre token depuis l'UI web
-(**Paramètres → Tokens**, ou `atlas token create <mind>` en local) et branche son
-assistant sur `https://<ton-atlas>/mcp/<token>`. L'IA peut alors chercher, lire et
-créer des documents directement dans ton palais mental.
+cartographier, rembobiner et auditer ton mind. Branche ton assistant sur
+`https://<ton-atlas>/mcp` : il te connecte en OAuth et te demande ce qu'il peut faire
+(lecture, inbox, écriture). Ou crée toi-même un token (**Paramètres → Tokens**, ou
+`atlas token create <mind>` en local) et utilise `https://<ton-atlas>/mcp/<token>`.
+L'IA peut alors chercher, lire et créer des documents directement dans ton palais
+mental.
 
 ## Conventions de rangement (à adapter)
 

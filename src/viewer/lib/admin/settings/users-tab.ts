@@ -23,7 +23,6 @@ export class SettingsUsers {
   }
 
   async load(): Promise<void> {
-    this.list.innerHTML = '';
 
     try {
       const users = await this.ctx.fetch<any[]>('/api/admin/users');

@@ -69,6 +69,7 @@ input.code.recovery{letter-spacing:0.12em;font-size:15px}
   __ERROR_HTML__
   <!-- Étape 1 : email + mot de passe. POST classique en repli si JS off. -->
   <form id="login-step-credentials" method="post" action="/login">
+    <input type="hidden" name="next" value="__NEXT__">
     <input id="login-email" name="email" type="email" placeholder="__EMAIL_PLACEHOLDER__" autocomplete="username" required autofocus>
     <input id="login-password" name="password" type="password" placeholder="__PASSWORD_PLACEHOLDER__" autocomplete="current-password" required>
     <button type="submit">__SUBMIT_LABEL__</button>
@@ -94,6 +95,8 @@ input.code.recovery{letter-spacing:0.12em;font-size:15px}
 (function() {
   var STEP1 = "__LOGIN_SUBTITLE__", STEP2 = "__TOTP_SUBTITLE__";
   var GENERIC = "__GENERIC_ERROR__";
+  // Where a successful sign-in lands (server-vetted local path, e.g. an OAuth consent).
+  var NEXT = document.querySelector('#login-step-credentials input[name=next]').value || '/';
   var subtitle = document.getElementById('login-subtitle');
   var errBox = document.getElementById('login-error');
   var fCred = document.getElementById('login-step-credentials');
@@ -117,7 +120,7 @@ input.code.recovery{letter-spacing:0.12em;font-size:15px}
   // fetch suit la redirection : res.redirected===true ⇒ session ouverte.
   function submitLogin(extra) {
     clearError();
-    var body = { email: email.value.trim().toLowerCase(), password: pw.value };
+    var body = { email: email.value.trim().toLowerCase(), password: pw.value, next: NEXT };
     if (extra) { for (var k in extra) body[k] = extra[k]; }
     var sentSecondFactor = !!(extra && (extra.totp_code || extra.recovery_code));
     return fetch('/login', {
@@ -126,8 +129,8 @@ input.code.recovery{letter-spacing:0.12em;font-size:15px}
       body: JSON.stringify(body),
       redirect: 'follow',
     }).then(function(res) {
-      if (res.redirected || res.url.indexOf('/login') === -1) { window.location = '/'; return; }
-      if (res.status === 303 || (res.status >= 200 && res.status < 300 && res.headers.get('Set-Cookie'))) { window.location = '/'; return; }
+      if (res.redirected || res.url.indexOf('/login') === -1) { window.location = NEXT; return; }
+      if (res.status === 303 || (res.status >= 200 && res.status < 300 && res.headers.get('Set-Cookie'))) { window.location = NEXT; return; }
       return res.json().catch(function() { return {}; }).then(function(data) {
         if (data.totp_required) {
           // Challenge initial (aucun code soumis) : on révèle juste l'étape 2,

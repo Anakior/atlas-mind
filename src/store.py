@@ -270,6 +270,14 @@ def normalize_scopes(raw) -> list:
     return [s for s in API_SCOPES if s in wanted]
 
 
+def _last_used_key(identity: dict) -> str:
+    """state.json key of an identity's last use: its token hash, except for an OAuth grant
+    whose access token rotates hourly, keyed by its stable email instead."""
+    if identity.get("oauth_client_id"):
+        return identity.get("email") or ""
+    return identity.get("api_token_hash") or identity.get("email") or ""
+
+
 def new_api_token_fields(label: str, *, set_unusable_password: bool) -> tuple:
     """Generate an API token and the block of fields to upsert for its account.
 
@@ -356,6 +364,7 @@ def _public_api_identity(user: dict) -> dict:
         "label": user.get("label"),
         "acts_as": user.get("acts_as"),
         "scopes": user.get("scopes") or list(API_SCOPES),
+        "oauth": bool(user.get("oauth_client_id")),
         "role": API_ROLE,
         "created_at": user.get("api_token_created_at"),
         "last_used_at": user.get("api_last_used_at"),
@@ -420,6 +429,7 @@ class FileStore:
     ACL_FILE = "acl.json"        # per-document ACL: {path: {owner, grants[]}}
     GROUPS_FILE = "groups.json"  # principals: {group_name: [emails]}
     TODOS_FILE = "todos.json"    # per-member todos (private, not git): {email: [items]}
+    OAUTH_CLIENTS_FILE = "oauth_clients.json"  # OAuth clients registered via DCR
 
     def __init__(self, base_dir):
         self.base = Path(base_dir)
@@ -432,6 +442,7 @@ class FileStore:
             self.ACL_FILE: threading.Lock(),
             self.GROUPS_FILE: threading.Lock(),
             self.TODOS_FILE: threading.Lock(),
+            self.OAUTH_CLIENTS_FILE: threading.Lock(),
         }
         self._cache: dict = {}  # name -> (mtime_ns, data)
         self._ensure_gitignore()
@@ -600,7 +611,8 @@ class FileStore:
                     continue
                 stored = user.get("api_token_hash") or ""
                 if stored and hmac.compare_digest(stored, token_sha256):
-                    return dict(user)
+                    expires = user.get("api_token_expires_at")  # OAuth access tokens only
+                    return dict(user) if not expires or time.time() < expires else None
         return None
 
     def find_user_by_invite_token(self, token_sha256: str):
@@ -620,7 +632,7 @@ class FileStore:
     def touch_last_used(self, identity: dict) -> None:
         """last_used_at in state.json ONLY (never in users.json): this file is
         volatile, the durable files don't churn on every Bearer request."""
-        key = identity.get("api_token_hash") or identity.get("email") or ""
+        key = _last_used_key(identity)
         if not key:
             return
         with self._locks[self.STATE_FILE]:
@@ -800,7 +812,7 @@ class FileStore:
         identities = []
         for user in users:
             meta = _public_api_identity(user)
-            key = user.get("api_token_hash") or user.get("email") or ""
+            key = _last_used_key(user)
             if key in state:
                 meta["last_used_at"] = state[key]
             identities.append(meta)
@@ -854,9 +866,109 @@ class FileStore:
                     return False  # already revoked
                 user["api_token_hash"] = None
                 user["api_token_revoked_at"] = int(time.time())
+                if user.get("oauth_client_id"):  # a grant: its refresh token dies with it
+                    user.update(oauth_refresh_hash=None, oauth_refresh_prev_hash=None)
                 self._write(self.USERS_FILE, users)
                 return True
         return False
+
+    # ── OAuth 2.1: clients registered via DCR, and grants ─────────────────────
+    # A grant IS an 'api' identity acting for the person who consented, so ACL, scopes,
+    # attribution and revocation work unchanged. Its access token expires and is renewed
+    # with a rotating refresh token; presenting a refresh token a rotation already
+    # replaced means two parties hold it, so the whole grant is revoked.
+
+    MAX_OAUTH_CLIENTS = 500
+
+    def register_oauth_client(self, client_name: str, redirect_uris: list) -> dict:
+        """Store a DCR-registered public client and return it with its new client_id.
+        Past MAX_OAUTH_CLIENTS the oldest registration is dropped: an unauthenticated
+        endpoint must not grow the file without bound."""
+        import secrets  # local: the boot does not need it
+
+        client = {"client_id": "atlas-" + secrets.token_urlsafe(18), "client_name": client_name,
+                  "redirect_uris": list(redirect_uris), "created_at": int(time.time())}
+        with self._rmw(self.OAUTH_CLIENTS_FILE):
+            clients = list(self._load(self.OAUTH_CLIENTS_FILE))[-(self.MAX_OAUTH_CLIENTS - 1):]
+            clients.append(client)
+            self._write(self.OAUTH_CLIENTS_FILE, clients)
+        return dict(client)
+
+    def get_oauth_client(self, client_id: str):
+        with self._locks[self.OAUTH_CLIENTS_FILE]:
+            return next((dict(c) for c in self._load(self.OAUTH_CLIENTS_FILE)
+                         if c.get("client_id") == client_id), None)
+
+    def save_oauth_grant(self, client_id: str, client_name: str, acts_as: str, scopes,
+                         resource: str, access_ttl: int, refresh_ttl: int) -> tuple:
+        """Create or renew the grant of `client_id` for `acts_as`: one identity per client
+        per person, so authorizing again replaces the previous tokens. Returns (meta,
+        access_token, refresh_token); only their SHA256 is stored."""
+        import secrets  # local: the boot does not need it
+
+        try:
+            name = slugify_token_label(client_name)[:40]
+        except ValueError:
+            name = "client"
+        tag = hashlib.sha256(client_id.encode()).hexdigest()[:6]
+        email = token_email(f"{name}-oauth-{tag}", owner=acts_as)
+        access, refresh = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+        now = int(time.time())
+        fields = {
+            "role": API_ROLE, "label": client_name, "acts_as": acts_as,
+            "scopes": normalize_scopes(scopes),
+            "api_token_hash": hash_api_token(access), "api_token_expires_at": now + access_ttl,
+            "api_token_revoked_at": None,
+            "oauth_client_id": client_id, "oauth_resource": resource,
+            "oauth_refresh_hash": hash_api_token(refresh), "oauth_refresh_prev_hash": None,
+            "oauth_refresh_expires_at": now + refresh_ttl,
+        }
+        with self._rmw(self.USERS_FILE):
+            users = [dict(u) for u in self._load(self.USERS_FILE)]
+            existing = next((u for u in users if u.get("email") == email), None)
+            if existing is not None and existing.get("role") != API_ROLE:
+                raise ValueError(f"{email} is already taken by a {existing.get('role')!r} account")
+            if existing is None:
+                users.append({"email": email, "password_hash": UNUSABLE_PASSWORD_HASH,
+                              "api_token_created_at": now, **fields})
+            else:
+                existing.update(fields)
+            self._write(self.USERS_FILE, users)
+        return _public_api_identity({"email": email, **fields}), access, refresh
+
+    def rotate_oauth_refresh(self, refresh_sha256: str, client_id: str,
+                             access_ttl: int, refresh_ttl: int):
+        """Swap a live refresh token of `client_id` for a new access + refresh pair, the
+        refresh lifetime sliding. Returns (identity, access, refresh), or None for an
+        unknown, expired or replayed one (a replay revokes the grant)."""
+        import secrets  # local: the boot does not need it
+
+        now = int(time.time())
+        with self._rmw(self.USERS_FILE):
+            users = [dict(u) for u in self._load(self.USERS_FILE)]
+            for user in users:
+                if user.get("role") != API_ROLE or user.get("oauth_client_id") != client_id:
+                    continue
+                current = user.get("oauth_refresh_hash") or ""
+                previous = user.get("oauth_refresh_prev_hash") or ""
+                if previous and hmac.compare_digest(previous, refresh_sha256):
+                    user.update(api_token_hash=None, api_token_revoked_at=now,
+                                oauth_refresh_hash=None, oauth_refresh_prev_hash=None)
+                    self._write(self.USERS_FILE, users)
+                    return None
+                if not (current and hmac.compare_digest(current, refresh_sha256)):
+                    continue
+                if now >= (user.get("oauth_refresh_expires_at") or 0):
+                    return None
+                access, refresh = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+                user.update(api_token_hash=hash_api_token(access),
+                            api_token_expires_at=now + access_ttl,
+                            oauth_refresh_hash=hash_api_token(refresh),
+                            oauth_refresh_prev_hash=current,
+                            oauth_refresh_expires_at=now + refresh_ttl)
+                self._write(self.USERS_FILE, users)
+                return dict(user), access, refresh
+        return None
 
     # ── shares ───────────────────────────────────────────────────────────────
 

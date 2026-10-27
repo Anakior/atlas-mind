@@ -118,6 +118,7 @@ _KNOWN_TOML_KEYS = {
     "todo": frozenset({"file", "categories"}),
     "build": frozenset({"excluded_names"}),
     "site": frozenset({"url", "description", "og_image"}),
+    "oauth": frozenset({"client_metadata_fetch"}),
 }
 _KNOWN_TOML_TOP_LEVEL = (frozenset({"prefix", "tagline", "lang"})
                          | frozenset(_KNOWN_TOML_KEYS))
@@ -471,6 +472,15 @@ class AtlasConfig:
         self.site_url = _toml_str(site, "site", "url", "").strip()
         self.site_description = _toml_str(site, "site", "description", "").strip()
         self.og_image = _toml_str(site, "site", "og_image", "").strip()
+
+        # ── oauth (MCP authorization) ──────────────────────────────────────
+        # An MCP client may identify itself by the HTTPS URL of a metadata document
+        # (CIMD), which Atlas then fetches: the one outbound call besides the update
+        # check, made only when a signed-in person connects that client. false keeps
+        # zero outbound calls; clients then register themselves (DCR) instead.
+        oauth = _table(data, "oauth")
+        self.oauth_client_metadata_fetch = _toml_bool(
+            oauth, "oauth", "client_metadata_fetch", True)
 
     @property
     def site_name(self) -> str:

@@ -32,7 +32,8 @@
   #reset-pw-backdrop, #totp-backdrop { z-index: 65; }
   /* Confirmation flash after copy (token / MCP URL) */
   #settings-token-copy.is-copied,
-  #settings-token-mcp-copy.is-copied { background-color: #10b981 !important; color: #fff !important; }
+  #settings-token-mcp-copy.is-copied,
+  #settings-oauth-copy.is-copied { background-color: #10b981 !important; color: #fff !important; }
   /* ─── Admin components (colors/layouts not guaranteed by the vendored
      Tailwind CSS: we make them explicit here so they render without recompilation) ─── */
   /* Admin error banners (reset validation, panel errors): colors
@@ -59,6 +60,16 @@
   @media (min-width: 640px) {
     .admin-row { flex-direction: row; align-items: center; }
     .admin-row__actions > button { min-height: 0; flex: 0 0 auto; }
+  }
+  /* The Settings loading placeholder (#settings-pane-loading): the .skeleton shimmer in the
+     shape of a list row — a title, a meta line, an action button. */
+  .settings-skeleton .sk-title { height: 0.85rem; width: 38%; }
+  .settings-skeleton .sk-meta { height: 0.65rem; width: 22%; margin-top: 0.5rem; }
+  .settings-skeleton .sk-action { height: 2rem; width: 5.5rem; flex-shrink: 0; border-radius: 0.375rem; }
+  /* The Settings dialog follows its content's height (settings-panel.ts pins it in px), so a
+     tab switch or a list arriving glides to the new size instead of jumping. */
+  @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+    #settings-panel { transition: height 0.2s ease; }
   }
   /* Pending-invite badge: an amber pill with a status dot, sitting next to the
      role label. Cased/spaced on its own so it reads as a status, not as a word

@@ -235,10 +235,11 @@ class Handler(SimpleHTTPRequestHandler):
         sys.stderr.flush()
         return sess
 
-    def _send_login_page(self, error=None, status=200):
+    def _send_login_page(self, error=None, status=200, next_url="/"):
         error_html = f'<p class="err">{html.escape(error)}</p>' if error else ""
         body = _s.render_page("login",
             error_html=error_html,
+            next=html.escape(next_url, quote=True),
             site_name=html.escape(_s.CONFIG.site_name, quote=True),
             site_prefix=html.escape(_s.CONFIG.prefix, quote=True),
             lang=html.escape(_s.CONFIG.lang, quote=True),
@@ -263,6 +264,17 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _public_url(self, suffix=""):
+        """Absolute URL for `suffix` from the request Host — https in real cloud, http on
+        dev/local loopback. Falls back to the relative `suffix` when there's no Host."""
+        host = self.headers.get("Host", "")
+        if not host:
+            return suffix
+        loopback = host.rsplit(":", 1)[0] in ("localhost", "127.0.0.1", "[::1]")
+        scheme = ("https" if _s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode and not loopback
+                  else "http")
+        return f"{scheme}://{host}{suffix}"
 
     def _client_ip(self) -> str:
         """Real client IP behind a reverse proxy.
@@ -304,11 +316,11 @@ class Handler(SimpleHTTPRequestHandler):
              f"SameSite=Lax; Max-Age={max_age}{secure}"),
         ]
 
-    def _open_session_response(self, email: str, role: str):
-        """303 to / with the session+CSRF cookies set (form login)."""
+    def _open_session_response(self, email: str, role: str, location: str = "/"):
+        """303 to `location` (a vetted local path) with the session+CSRF cookies set."""
         epoch = _s.current_session_epoch(email)
         self.send_response(303)
-        self.send_header("Location", "/")
+        self.send_header("Location", location)
         for cookie in self._session_cookie_pair(email, role, epoch):
             self.send_header("Set-Cookie", cookie)
         self.end_headers()

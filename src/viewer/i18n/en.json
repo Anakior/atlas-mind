@@ -63,5 +63,18 @@
   "share_invalid_hint": "The URL may be incomplete or badly copied.",
   "share_unavailable_title": "Link temporarily unavailable",
   "share_unavailable_message": "The link verification service is temporarily unreachable.",
-  "share_unavailable_hint": "Try again in a moment."
+  "share_unavailable_hint": "Try again in a moment.",
+  "oauth_title": "Authorize an application",
+  "oauth_intro": "{client} is asking to access this Atlas on your behalf.",
+  "oauth_redirect": "Once you agree, you will be sent back to {host}.",
+  "oauth_scopes_hint": "Untick what you don't want to grant:",
+  "oauth_scope_read": "Read your documents, their history and the activity",
+  "oauth_scope_inbox": "Drop items into your inbox",
+  "oauth_scope_write": "Create, edit, move and delete documents",
+  "oauth_allow": "Allow",
+  "oauth_deny": "Deny",
+  "oauth_signed_in_as": "Signed in as {email}",
+  "oauth_error_title": "Authorization failed",
+  "oauth_error_client": "This application could not be verified: {reason}.",
+  "oauth_error_session": "Your session expired or the request is no longer valid. Start the connection again from the application."
 }

@@ -12,7 +12,7 @@ from server.app import router
 from server.constants import _SHARE_ID_PATTERN
 from server.routes import (
     system, auth, setup, invite, share, docs, todos, notes, admin,
-    account, hive, apiv1, mcp, acl,
+    account, hive, apiv1, mcp, acl, oauth,
 )
 
 _RK = router.RouteKind
@@ -30,7 +30,7 @@ def _when_cloud(handler) -> bool:
 # guard → navigable static tail.
 GET_ROUTES = [
     router.Route(_RK.EXACT, "/healthz", system.healthz, _G.PUBLIC),
-    router.Route(_RK.EXACT, "/login", auth.login_page, _G.PUBLIC, when=_when_cloud),
+    router.Route(_RK.EXACT_NOQUERY, "/login", auth.login_page, _G.PUBLIC, when=_when_cloud),
     router.Route(_RK.EXACT, "/logout", auth.logout, _G.PUBLIC, when=_when_cloud),
     router.Route(_RK.ANY_OF, ("/manifest.json", "/icon.svg", "/favicon.ico"), system.static_get, _G.PUBLIC),
     router.Route(_RK.PREFIX_NOQUERY, "/vendor/", system.static_get, _G.PUBLIC),
@@ -66,7 +66,17 @@ GET_ROUTES = [
     router.Route(_RK.EXACT, "/api/events", system.events, _G.AUTH),
     router.Route(_RK.EXACT, "/.well-known/openapi.json", system.openapi, _G.PUBLIC),
     router.Route(_RK.PREFIX, "/api/v1/", apiv1.get, _G.BEARER),
+    router.Route(_RK.EXACT_NOQUERY, "/mcp", mcp.handle, _G.BEARER),
     router.Route(_RK.PREFIX, "/mcp/", mcp.handle, _G.BEARER),
+    # OAuth for the MCP endpoint (cloud: a grant acts for a signed-in person). The
+    # authorize page self-verifies the session (else → /login?next=…).
+    router.Route(_RK.ANY_OF, ("/.well-known/oauth-protected-resource",
+                              "/.well-known/oauth-protected-resource/mcp"),
+                 oauth.protected_resource, _G.PUBLIC, when=_when_cloud),
+    router.Route(_RK.EXACT, "/.well-known/oauth-authorization-server",
+                 oauth.authorization_server, _G.PUBLIC, when=_when_cloud),
+    router.Route(_RK.EXACT_NOQUERY, "/oauth/authorize", oauth.authorize_get, _G.PUBLIC,
+                 when=_when_cloud),
 ]
 
 # POST: login/setup (cloud-only), the github webhook, admin (ADMIN_CSRF), account +
@@ -100,7 +110,13 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/inbox/action", docs.inbox_action, _G.CSRF_BASE),  # inbox triage: owner-gated
     router.Route(_RK.EXACT, "/api/dir/rename", docs.dir_rename, _G.CSRF_BASE),  # per-folder: owner (can_manage)
     router.Route(_RK.PREFIX, "/api/v1/", apiv1.post, _G.BEARER),
+    router.Route(_RK.EXACT_NOQUERY, "/mcp", mcp.handle, _G.BEARER),
     router.Route(_RK.PREFIX, "/mcp/", mcp.handle, _G.BEARER),
+    # OAuth endpoints self-verify: register + token are for clients (no cookie), the
+    # consent POST checks its session and the session-bound CSRF token in the form.
+    router.Route(_RK.EXACT, "/oauth/register", oauth.register, _G.PUBLIC, when=_when_cloud),
+    router.Route(_RK.EXACT, "/oauth/token", oauth.token, _G.PUBLIC, when=_when_cloud),
+    router.Route(_RK.EXACT, "/oauth/authorize", oauth.authorize_post, _G.PUBLIC, when=_when_cloud),
 ]
 
 # PATCH: per-route guards (do_PATCH no longer blanket-admins). notes + share

@@ -1175,6 +1175,12 @@ def _tool_scope(tool: dict) -> str:
     return "read" if tool.get("annotations", {}).get("readOnlyHint") else "write"
 
 
+def _needed_scope(name: str):
+    """The scope tool `name` needs, or None for an unknown tool."""
+    tool = next((t for t in _s._mcp_tools() if t["name"] == name), None)
+    return _tool_scope(tool) if tool else None
+
+
 def _allowed_tools(ctx) -> list:
     """The tools ctx's token may call: a scoped token never even sees the others."""
     scopes = getattr(ctx, "scopes", None)

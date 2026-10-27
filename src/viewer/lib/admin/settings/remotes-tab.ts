@@ -9,7 +9,11 @@ import { setStatus } from '../../core/net';
 import { Dialogs } from '../../modals/dialogs';
 import { refreshTreeOrReload } from '../../modals/new-file-modal';
 import { homeView } from '../../home/home-view';
-import { SettingsContext, remoteNodeInfo, shareFormatDate } from './settings-shared';
+import {
+  remoteNodeInfo,
+  SettingsContext,
+  shareFormatDate,
+} from './settings-shared';
 
 export class SettingsRemotes {
   private readonly list = document.getElementById('settings-remotes-list')!;
@@ -23,7 +27,6 @@ export class SettingsRemotes {
   }
 
   async load(): Promise<void> {
-    this.list.innerHTML = '';
 
     try {
       const remotes = await this.ctx.fetch<any[]>('/api/admin/remotes');

@@ -63,5 +63,18 @@
   "share_invalid_hint": "L'URL est peut-&ecirc;tre incompl&egrave;te ou mal copi&eacute;e.",
   "share_unavailable_title": "Lien momentan&eacute;ment indisponible",
   "share_unavailable_message": "Le service de v&eacute;rification du lien est temporairement injoignable.",
-  "share_unavailable_hint": "R&eacute;essaie dans un instant."
+  "share_unavailable_hint": "R&eacute;essaie dans un instant.",
+  "oauth_title": "Autoriser une application",
+  "oauth_intro": "{client} demande à accéder à cet Atlas en ton nom.",
+  "oauth_redirect": "Après ton accord, tu seras renvoyé vers {host}.",
+  "oauth_scopes_hint": "Décoche ce que tu ne veux pas lui accorder :",
+  "oauth_scope_read": "Lire tes documents, leur historique et l'activité",
+  "oauth_scope_inbox": "Déposer des éléments dans ton inbox",
+  "oauth_scope_write": "Créer, modifier, déplacer et supprimer des documents",
+  "oauth_allow": "Autoriser",
+  "oauth_deny": "Refuser",
+  "oauth_signed_in_as": "Connecté en tant que {email}",
+  "oauth_error_title": "Autorisation impossible",
+  "oauth_error_client": "Cette application n'a pas pu être vérifiée : {reason}.",
+  "oauth_error_session": "Ta session a expiré ou la demande n'est plus valide. Relance la connexion depuis l'application."
 }

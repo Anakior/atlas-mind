@@ -14,7 +14,6 @@ export class SettingsShares {
   }
 
   async load(): Promise<void> {
-    this.list.innerHTML = '';
 
     try {
       const shares = await this.ctx.fetch<any[]>('/api/share/list');

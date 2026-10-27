@@ -2,7 +2,7 @@
     "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "name": "app.anakior/atlas-mind",
     "description": "Self-hosted git-native knowledge base with an MCP endpoint your AI reads, writes and rewinds",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "website_url": "https://atlas-mind.anakior.app/",
     "repository": {
         "url": "https://github.com/Anakior/atlas-mind",
@@ -11,10 +11,21 @@
     "remotes": [
         {
             "type": "streamable-http",
+            "url": "https://{ATLAS_HOST}/mcp",
+            "variables": {
+                "ATLAS_HOST": {
+                    "description": "Host of your running Atlas Mind instance, WITHOUT the leading https:// (e.g. your-atlas.example.com). The client signs you in over OAuth and you choose what it may do.",
+                    "isRequired": true,
+                    "format": "string"
+                }
+            }
+        },
+        {
+            "type": "streamable-http",
             "url": "https://{ATLAS_MCP_URL}",
             "variables": {
                 "ATLAS_MCP_URL": {
-                    "description": "Host + path (including the token) of your running Atlas Mind instance's MCP endpoint, WITHOUT the leading https:// - minted in Settings -> Tokens in the web UI (or `atlas token create` locally). Example: your-atlas.example.com/mcp/<token>",
+                    "description": "For a client without OAuth: host + path (including the token) of your instance's MCP endpoint, WITHOUT the leading https:// - minted in Settings -> Tokens in the web UI (or `atlas token create` locally). Example: your-atlas.example.com/mcp/<token>",
                     "isRequired": true,
                     "isSecret": true,
                     "format": "string"

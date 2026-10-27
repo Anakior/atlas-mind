@@ -5,7 +5,11 @@
 import { t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
 import { Dialogs } from '../../modals/dialogs';
-import { SettingsContext, shareFormatDate, suggestNodeName } from './settings-shared';
+import {
+  SettingsContext,
+  shareFormatDate,
+  suggestNodeName,
+} from './settings-shared';
 
 export class SettingsNodes {
   private readonly list = document.getElementById('settings-nodes-list')!;
@@ -22,7 +26,6 @@ export class SettingsNodes {
   }
 
   async load(): Promise<void> {
-    this.list.innerHTML = '';
 
     try {
       const nodes = await this.ctx.fetch<any[]>('/api/admin/nodes');

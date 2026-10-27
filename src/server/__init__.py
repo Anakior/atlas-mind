@@ -287,7 +287,7 @@ from server.pure.contradictions import (  # noqa: F401  13c same-subject pair ge
     find_contradictions, find_doc_neighbors,
 )
 from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
-    _soft_delete, _mcp_call_tool, _mcp_jsonrpc, _mcp_http_status, _span_hash,
+    _soft_delete, _mcp_call_tool, _mcp_jsonrpc, _mcp_http_status, _needed_scope, _span_hash,
 )
 from server.extensions import load_server_extensions  # noqa: F401
 

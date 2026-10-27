@@ -11,18 +11,6 @@ from server import _is_newer, PROJECT_URL
 import server as _s
 
 
-def _public_url(handler, suffix=""):
-    """Absolute URL for `suffix` from the request Host — https in real cloud, http on
-    dev/local loopback. Falls back to the relative `suffix` when there's no Host."""
-    host = handler.headers.get("Host", "")
-    if not host:
-        return suffix
-    loopback = host.rsplit(":", 1)[0] in ("localhost", "127.0.0.1", "[::1]")
-    scheme = ("https" if _s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode and not loopback
-              else "http")
-    return f"{scheme}://{host}{suffix}"
-
-
 def users_get(handler):
     try:
         users = _s.get_store().list_admin_facing_users()
@@ -60,7 +48,7 @@ def users_post(handler):
         _s.registry_503(handler, "[admin] invite user", e)
         return
     # Invite URL from the request host (https in real cloud, http on dev/local).
-    invite_url = _public_url(handler, f"/invite/{token}")
+    invite_url = handler._public_url(f"/invite/{token}")
     handler._send_json(201, {"email": email, "role": role,
                              "invite_url": invite_url})
 
@@ -171,7 +159,7 @@ def tokens_post(handler):
         _s.registry_503(handler, "[admin] create token", e)
         return
     # mcp_url from the request host (https in real cloud, http on dev/local).
-    mcp_url = _public_url(handler, f"/mcp/{token}")
+    mcp_url = handler._public_url(f"/mcp/{token}")
     # The PLAINTEXT token is returned only HERE, a single time.
     handler._send_json(201, {
         "token": token,
@@ -257,7 +245,7 @@ def nodes_post(handler):
     except Exception as e:
         _s.registry_503(handler, "[admin] create node", e)
         return
-    origin = _public_url(handler)
+    origin = handler._public_url()
     # The PLAINTEXT token is returned only HERE, wrapped in the copyable link.
     handler._send_json(201, {
         "name": name,

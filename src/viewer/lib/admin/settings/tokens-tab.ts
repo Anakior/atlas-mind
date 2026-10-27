@@ -39,11 +39,15 @@ export class SettingsTokens {
       this.ctx.copyFromInput(e.currentTarget as HTMLElement, 'settings-token-mcp'),
     );
     document.getElementById('settings-token-close')!.addEventListener('click', () => this.hideResult());
+    // The OAuth entry point an assistant connects to (it then signs the person in).
+    (document.getElementById('settings-oauth-url') as HTMLInputElement).value = location.origin + '/mcp';
+    document.getElementById('settings-oauth-copy')!.addEventListener('click', (e) =>
+      this.ctx.copyFromInput(e.currentTarget as HTMLElement, 'settings-oauth-url'),
+    );
     this.list.addEventListener('click', (e) => this.onClick(e));
   }
 
   async load(): Promise<void> {
-    this.list.innerHTML = '';
 
     try {
       const tokens = await this.ctx.fetch<any[]>('/api/tokens');
@@ -61,6 +65,7 @@ export class SettingsTokens {
           const created = [
             tk.created_at ? t('createdShort', shareFormatDate(tk.created_at)) : '',
             scopeLabel(tk.scopes),
+            tk.oauth ? 'OAuth' : '',
           ]
             .filter(Boolean)
             .join(' · ');
@@ -81,7 +86,7 @@ export class SettingsTokens {
             '</div>' +
             '<div class="admin-row__actions">' +
             '<button class="settings-token-revoke px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
-            escapeHtml(tk.id || '') +
+            escapeHtml(tk.email || '') +
             '" data-label="' +
             labelEsc +
             '">' +
@@ -145,7 +150,8 @@ export class SettingsTokens {
     if (!ok) return;
 
     try {
-      // Prefer id over label: the label may be reused after revocation.
+      // The identity email, not the label: a label may be shared (an OAuth client named
+      // like one of your tokens) or reused after revocation.
       const body = revokeBtn.dataset.id
         ? { id: revokeBtn.dataset.id }
         : { label: revokeBtn.dataset.label };

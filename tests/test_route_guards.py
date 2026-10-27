@@ -3,8 +3,9 @@
 POST/PUT/PATCH/DELETE routes carry per-route Guards (do_<VERB> just dispatches),
 so a route accidentally left PUBLIC would be reachable with NO auth and NO CSRF.
 This locks the route table: PUT/PATCH/DELETE are never PUBLIC, and the only PUBLIC
-POST routes are the unauthenticated entry points (login / setup / invite / webhook),
-which protect themselves (credentials / single-use token / HMAC signature).
+POST routes are the unauthenticated entry points (login / setup / invite / webhook /
+OAuth), which protect themselves (credentials / single-use token / HMAC signature /
+PKCE + session-bound consent).
 """
 import sys
 import unittest
@@ -24,6 +25,9 @@ ALLOWED_PUBLIC_POST = {
     "/api/setup",       # constant-time setup token (first admin)
     "/api/invite",      # single-use invite token (C1)
     "/webhook/github",  # HMAC signature
+    "/oauth/register",  # DCR is unauthenticated by spec: rate-limited, stores a client only
+    "/oauth/token",     # the code + its PKCE verifier, or a rotating refresh token
+    "/oauth/authorize",  # session + the session-bound CSRF token in the consent form
 }
 
 

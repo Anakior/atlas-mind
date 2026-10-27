@@ -6,10 +6,21 @@ from urllib.parse import parse_qs
 import server as _s
 
 
+def _safe_next(value) -> str:
+    """Where to land after signing in: a local path only (never //host or a scheme),
+    so the login page can't be turned into an open redirect."""
+    v = value if isinstance(value, str) else ""
+    if (not v.startswith("/") or v.startswith(("//", "/\\")) or len(v) > 2048
+            or any(ord(c) < 0x20 for c in v)):
+        return "/"
+    return v
+
+
 def login_page(handler):
     """GET /login (cloud) — render the login page. Thin wrapper over the Handler's
-    _send_login_page plumbing (also called by the login flow with error/status)."""
-    handler._send_login_page()
+    _send_login_page plumbing (also called by the login flow with error/status).
+    `next` (e.g. an OAuth authorize URL) is where a successful sign-in lands."""
+    handler._send_login_page(next_url=_safe_next((handler._query().get("next") or [""])[0]))
 
 
 def login(handler):
@@ -74,7 +85,7 @@ def login(handler):
             return
 
     _s.reset_login_failures(email)
-    handler._open_session_response(email, role)
+    handler._open_session_response(email, role, _safe_next(data.get("next")))
 
 
 def logout(handler):

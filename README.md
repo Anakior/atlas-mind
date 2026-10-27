@@ -20,7 +20,7 @@ Own the data. Own the engine. Own the mind.
 
 - **Multi-format, not just Markdown.** Markdown is first-class (rendered, linked, searched). Standalone **HTML** decks and dashboards, **PDFs**, and **Word `.docx`** are previewed inline, converted to readable HTML in your browser, nothing uploaded anywhere.
 - **AI-native.** It exposes an **MCP** endpoint (twenty-nine tools to read, write, triage, map, rewind and audit your mind), and `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how to use your mind.
-- **Lightweight & self-contained.** A single Python HTTP server on the **standard library**: **no database**, accounts and share links live as plain JSON on disk, frontend libraries and fonts are vendored. A running instance makes **no third-party network calls**: your mind never leaves your disk, and nothing you write trains anyone's model.
+- **Lightweight & self-contained.** A single Python HTTP server on the **standard library**: **no database**, accounts and share links live as plain JSON on disk, frontend libraries and fonts are vendored. A running instance **never sends your content anywhere**: your mind never leaves your disk, and nothing you write trains anyone's model. Its only outbound request by default is reading an MCP client's public metadata when you connect that client over OAuth (switchable off).
 
 It is not a multi-tenant SaaS, a real-time collaborative editor, or a plugin marketplace. One focused mind per instance, fully yours.
 
@@ -55,9 +55,11 @@ See `atlas --help` for all commands (`user`, `token`, `share`, `deploy`).
 
 ## Use it with your AI (MCP)
 
-Atlas Mind is designed to be the external memory your assistant reads and writes. On a deployed instance, each user mints their **own** token from the web UI — **Settings → Tokens** — bound to their account; it prints the MCP URL to point your AI at.
+Atlas Mind is designed to be the external memory your assistant reads and writes. On a deployed instance, point your assistant at **`https://<your-atlas>/mcp`** and it connects over **OAuth**: you sign in to your Atlas (2FA included), review what the assistant asks for (read, inbox, write — untick what you don't want to grant) and allow it. The connection shows up in **Settings → Tokens**, where you can revoke it; it renews itself silently, and only asks again after 30 days unused.
 
-Locally (or to script it), the CLI does the same:
+Clients either register themselves (dynamic client registration) or identify by the URL of a public metadata document, which Atlas fetches when you connect them; `[oauth] client_metadata_fetch = false` in `atlas.toml` turns that fetch off.
+
+You can also mint a token yourself, from the web UI — **Settings → Tokens**, bound to your account — which prints a URL with the token in it. Locally (or to script it), the CLI does the same:
 
 ```bash
 atlas token create ~/my-mind --label claude

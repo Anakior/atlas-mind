@@ -8,6 +8,44 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-27
+
+Assistants connect over OAuth 2.1: point one at `https://<your-atlas>/mcp`, sign in, and
+choose what it may do; no secret in a URL anymore. Settings says how, and no longer
+pieces itself together on screen.
+
+### Added
+- **OAuth 2.1 for MCP.** Point an assistant at `https://<your-atlas>/mcp`: it signs you
+  in to your Atlas (2FA included), shows a consent screen where you can narrow what it
+  gets (read / inbox / write), and connects without a token in any URL. The grant shows
+  up in Settings → Tokens (marked OAuth) and revokes like a token. Access tokens last an
+  hour and renew silently through a rotating refresh token (30 days unused → asked
+  again); a replayed refresh token revokes the whole grant. PKCE S256, resource-bound
+  tokens (`iss` in the authorization response), 401 / 403 `insufficient_scope`
+  challenges for step-up.
+- Clients register themselves (DCR) or identify by the HTTPS URL of a metadata document
+  (CIMD), fetched on connect with an SSRF guard (public addresses only, pinned
+  connection, no redirect, size and time caps). `[oauth] client_metadata_fetch = false`
+  in `atlas.toml` turns that fetch off.
+- `/mcp` also takes any API token as `Authorization: Bearer`, so no client has to put a
+  token in the URL. `/mcp/<token>` keeps working.
+- Settings → Tokens opens on **Connect an assistant**: the `/mcp` address to paste, and
+  what will happen; a hand-made token is offered as the fallback for clients without
+  OAuth.
+
+### Fixed
+- The Settings dialog no longer pieces itself together: a tab is shown once everything
+  it needs has loaded (Nodes waits for both of its lists), the previous one staying up
+  meanwhile, and only a slow load shows a placeholder. The dialog still fits its
+  content, gliding once to the new height instead of jumping.
+
+### Changed
+- An OAuth access token is refused on the REST API and in an `/mcp/<token>` URL: its
+  audience is the MCP endpoint, as a Bearer header.
+- The login page honours a local `next` path (and only a local one) after sign-in.
+- Settings → Tokens revokes by identity email, so a token and an OAuth grant sharing a
+  name can't be confused.
+
 ## [1.1.0] - 2026-10-27
 
 Atlas speaks the stateless MCP `2026-07-28` revision and becomes a place agents can

@@ -384,6 +384,10 @@ export const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
     settingsTokenLabel: 'Libellé',
     settingsTokenLabelPlaceholder: 'claude, mcp-perso...',
     settingsCreateToken: 'Créer un token',
+    settingsOauthTitle: 'Connecter un assistant',
+    settingsOauthHint:
+      'Colle cette adresse dans ton assistant (Claude, ChatGPT…) : il te demandera de te connecter et de choisir ce qu’il peut faire. Ses accès apparaissent ensuite ci-dessous, marqués OAuth, et se révoquent comme un token.',
+    settingsTokenManualHint: 'Pour un client sans OAuth, crée plutôt un token : son URL contient le secret.',
     settingsTokenScope: 'Accès',
     settingsScopeFull: 'Complet (lecture + écriture)',
     settingsScopeReadInbox: 'Lecture + inbox',
@@ -953,6 +957,10 @@ export const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
     settingsTokenLabel: 'Label',
     settingsTokenLabelPlaceholder: 'claude, my-mcp...',
     settingsCreateToken: 'Create token',
+    settingsOauthTitle: 'Connect an assistant',
+    settingsOauthHint:
+      'Paste this address into your assistant (Claude, ChatGPT…): it will ask you to sign in and choose what it may do. Its access then shows up below, marked OAuth, and revokes like a token.',
+    settingsTokenManualHint: 'For a client without OAuth, create a token instead: its URL carries the secret.',
     settingsTokenScope: 'Access',
     settingsScopeFull: 'Full (read + write)',
     settingsScopeReadInbox: 'Read + inbox',

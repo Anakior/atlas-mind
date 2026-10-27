@@ -11,9 +11,11 @@ protocol — it never pulls your brain into its own.
 
 ## How it connects: MCP
 
-A running instance exposes an **MCP** (Model Context Protocol) endpoint. Each user
-mints their own token from the web UI (**Settings → Tokens**, or `atlas token
-create <mind>` locally) and points their assistant at
+A running instance exposes an **MCP** (Model Context Protocol) endpoint. Point
+your assistant at `https://<your-atlas>/mcp` and it connects over **OAuth**: you
+sign in to your Atlas, see what it asks for (read, inbox, write), untick what you
+don't want to grant, and allow it. You can also mint a token yourself (**Settings →
+Tokens**, or `atlas token create <mind>` locally) and use
 `https://<your-atlas>/mcp/<token>`. From then on the AI works your mind through
 **twenty-nine tools**, grouped into six superpowers.
 

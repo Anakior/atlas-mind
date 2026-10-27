@@ -223,7 +223,8 @@ def verify_api_bearer(authorization_header: str):
     token_hash = _hash_api_token(token)
     try:
         user = _s.get_store().find_api_identity(token_hash)
-        if not user:
+        # An OAuth access token's audience is the MCP endpoint alone, never this API.
+        if not user or user.get("oauth_client_id"):
             return None
         # Best-effort: a store write hiccup must not fail auth.
         try:
@@ -253,7 +254,7 @@ def resolve_mcp_identity(token: str):
             pass
         return {"email": user.get("email", "claude@api.local"),
                 "role": _s.API_ROLE, "acts_as": user.get("acts_as"),
-                "scopes": user.get("scopes")}
+                "scopes": user.get("scopes"), "resource": user.get("oauth_resource")}
     except Exception as e:
         print(f"[resolve_mcp_identity] registry lookup failed: {e}", file=sys.stderr)
         return None

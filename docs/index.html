@@ -38,7 +38,7 @@
       "@type": "SoftwareApplication",
       "@id": "https://atlas-mind.anakior.app/#app",
       "name": "Atlas Mind",
-      "description": "A self-hostable wiki / knowledge-base engine. Your notes stay plain files in your own private git repository, served by a single Python standard-library server with no database and no third-party network calls. AI-native via MCP (Model Context Protocol): 29 tools give an AI a persistent, local read-and-write memory.",
+      "description": "A self-hostable wiki / knowledge-base engine. Your notes stay plain files in your own private git repository, served by a single Python standard-library server with no database, sending your content nowhere. AI-native via MCP (Model Context Protocol): 29 tools give an AI a persistent, local read-and-write memory.",
       "applicationCategory": "DeveloperApplication",
       "applicationSubCategory": "Knowledge base / Personal knowledge management",
       "operatingSystem": "Linux, macOS, Windows",
@@ -389,7 +389,7 @@
 <section id="pillars" class="center"><div class="wrap">
   <div class="kicker">Built on three ideas</div>
   <h2>One place for your knowledge,<br>whatever shape it takes.</h2>
-  <p class="sub">Everything ships in the box — a single Python server on the standard library, no database, no third-party network calls.</p>
+  <p class="sub">Everything ships in the box — a single Python server on the standard library, no database, nothing of yours sent anywhere.</p>
   <div class="pillars">
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M21 8.5 12 3 3 8.5 12 14l9-5.5Z"/><path d="m3 13 9 5.5 9-5.5"/></svg></div>
@@ -400,13 +400,13 @@
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
       <h3>AI-native by design</h3>
-      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with twenty-nine tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects.</p>
+      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with twenty-nine tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects. Assistants sign in over <b>OAuth</b>: you choose what each may do, and revoke it in a click.</p>
       <div class="tag"><a href="#superpowers">MCP · 29 tools · REST API →</a></div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M20 4c-7 0-13 4-13 11v3l11-11"/><path d="M7 18c-1.2 1.2-2 2.4-2.5 3.5"/><path d="M16 8.5 9.5 15"/></svg></div>
       <h3>Lightweight &amp; self-contained</h3>
-      <p>A self-hosted Markdown wiki with <b>no database</b>: one Python HTTP server plus a build step, entirely on the standard library. Accounts and share links are plain JSON on disk, fonts and libraries vendored, so it makes no outside calls.</p>
+      <p>A self-hosted Markdown wiki with <b>no database</b>: one Python HTTP server plus a build step, entirely on the standard library. Accounts and share links are plain JSON on disk, fonts and libraries vendored, so nothing of yours goes out.</p>
       <div class="tag">stdlib · no DB · vendored</div>
     </div>
   </div>

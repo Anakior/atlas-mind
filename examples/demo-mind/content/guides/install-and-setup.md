@@ -101,11 +101,12 @@ stay in **separate** repositories — own the engine, own the data.
 ## 6 — Connect your AI (optional)
 
 A running instance exposes an **MCP** endpoint so an assistant can search, read
-and write your mind. On a deployed instance, each user mints their **own** token
-from the web UI — **Settings → Tokens** — bound to their account; it prints the
-MCP URL to point the AI at.
+and write your mind. On a deployed instance, point the AI at
+`https://<your-atlas>/mcp`: it signs you in over OAuth and you choose what it may
+do. Or mint your **own** token from the web UI — **Settings → Tokens**, bound to
+your account — which prints a URL with the token in it.
 
-Locally (or to script it), the CLI does the same:
+Locally (or to script it), the CLI mints one too:
 
 ```bash
 atlas token create ~/my-mind --label claude

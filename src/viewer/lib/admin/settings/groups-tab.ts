@@ -18,7 +18,6 @@ export class SettingsGroups {
     const list = document.getElementById('settings-groups-list');
 
     if (!list) return;
-    list.innerHTML = '';
 
     try {
       const groups = await this.ctx.fetch<Record<string, string[]>>('/api/admin/groups'); // { name: [emails] }
