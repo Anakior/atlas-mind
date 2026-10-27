@@ -29,23 +29,22 @@ def _derive_site_name(site_prefix: str) -> str:
 
 
 def _engine_version() -> str:
-    """Running atlas-mind version, shown in the sidebar footer. Installed →
-    package metadata; source run → parse __version__ from the sibling
-    __init__.py. Empty string if neither is available (footer just omits it)."""
+    """Running atlas-mind version, shown in the sidebar footer: the __version__ of
+    the package this code belongs to (src/__init__.py from source, atlas_mind/__init__.py
+    installed), so a source run never reports an older pip install found on the path.
+    Package metadata as a fallback; empty string if neither (the footer omits it)."""
     try:
-        from importlib.metadata import version
-        return version("atlas-mind")
-    except Exception:
-        pass
-    try:
-        # The atlas_mind package __init__ (src/__init__.py) holds __version__.
         init = (Path(__file__).resolve().parent.parent / "__init__.py").read_text(encoding="utf-8")
         match = re.search(r'__version__\s*=\s*"([^"]+)"', init)
         if match:
             return match.group(1)
     except OSError:
         pass
-    return ""
+    try:
+        from importlib.metadata import version
+        return version("atlas-mind")
+    except Exception:
+        return ""
 
 
 # og:locale wants a territory, not just a bare language code.

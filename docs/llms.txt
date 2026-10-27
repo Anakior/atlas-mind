@@ -11,10 +11,11 @@ Atlas Mind is a self-hosted wiki / knowledge-base engine and an external brain y
 ## Project
 - [GitHub repository](https://github.com/Anakior/atlas-mind): source (Python, standard library only), install and self-hosting documentation, AGPL-3.0.
 - [PyPI package](https://pypi.org/project/atlas-mind/): install with `uv tool install atlas-mind` or `pipx install atlas-mind`, then `atlas serve ~/my-mind`.
-- [MCP server](https://registry.modelcontextprotocol.io/): published as `app.anakior/atlas-mind`: 24 tools to read, write, triage, map, rewind and audit a knowledge base over MCP.
+- [MCP server](https://registry.modelcontextprotocol.io/): published as `app.anakior/atlas-mind`: 29 tools to read, write, triage, map, rewind and audit a knowledge base over MCP.
 
 ## What it does
 - Multi-format: Markdown is first-class (rendered, linked, searched); standalone HTML decks, PDF and Word `.docx` are previewed inline, converted in the browser.
-- AI-native: an MCP endpoint exposes 24 tools across six groups: read, write (with backlink fixups), graph traversal, time-travel over git history, an activity/attribution layer (who changed what, AI-authored detection, stale docs, same-topic contradictions), and an inbox that agents stage ready-to-file items into for you to triage. It is a persistent, local, read-and-write memory for an AI.
+- AI-native: an MCP endpoint exposes 29 tools across six groups: read, write (with backlink fixups), graph traversal, time-travel over git history, an activity/attribution layer (who changed what, AI-authored detection, stale docs, same-topic contradictions), and an inbox that agents stage ready-to-file items into for you to triage. It is a persistent, local, read-and-write memory for an AI.
+- Built for agents: a one-call topic brief within a token budget, search hits that carry how far to trust them (last editor, AI or human, stale, contradicted), edits returned as diffs with dry runs and a concurrent-change guard, a cursor to catch up on what changed, and an agent's whole work session undoable as one commit. Tokens can be limited to read, inbox and/or write; the mind's AGENTS.md is sent to every MCP client as its instructions. Speaks MCP 2026-07-28 (stateless) and the earlier revisions.
 - Lightweight and self-contained: one Python HTTP server on the standard library, no database (accounts and share links are plain JSON on disk), vendored fonts and libraries, zero third-party network calls — your mind never leaves your disk.
 - Collaboration: per-document access control in cloud mode, plus a pull-based "Hive Mind" that mirrors a slice of another instance's content as read-only nodes.

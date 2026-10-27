@@ -56,12 +56,13 @@ def iter_doc_files(content_root, excluded):
         yield path.relative_to(content_root).as_posix(), path
 
 
-def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build):
+def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run=False):
     """Move/rename a .md AND rewrite the incoming [[wikilinks]] that target it.
 
     The disk rename is the priority operation; relinking is best-effort on top.
     Links to fix are detected BEFORE the move (source still resolves to its old
     path), new bodies computed in memory, then the move, then the rewrites.
+    dry_run stops after that computation: same payload, nothing touched on disk.
 
     Returns (status, payload):
       "ok"  → payload = {"from","to","rewrites":[{path,count}],"links_updated":N}
@@ -121,6 +122,10 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build):
         new_body = build._WIKILINK_RE.sub(_make_replacer(counter), f["body"])
         if counter[0]:
             pending.append((f["path"], new_body, counter[0]))
+    if dry_run:
+        rewrites = [{"path": rel, "count": count} for rel, _, count in pending]
+        return ("ok", {"from": src_canon, "to": dst_canon, "rewrites": rewrites,
+                       "links_updated": sum(r["count"] for r in rewrites)})
 
     # The move first (the requested operation), then the relinks (best-effort).
     dst.parent.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-"""Search document cache: a per-doc {content, content_n, name_n, tokens, mtime}
+"""Search document cache: a per-doc {content, content_n, name_n, tokens, length, mtime}
 reloaded only when the file's mtime changes. Avoids re-reading + normalizing the
 whole corpus on every /api/search request. Module-level, mtime-self-invalidating,
 NO lock (a stale read at worst re-reads one file)."""
@@ -10,7 +10,7 @@ _DOC_CACHE: dict = {}
 
 
 def _doc_entry(rel: str, path):
-    """Returns a cached {content, content_n, name_n, tokens, mtime}, reloaded only
+    """Returns a cached {content, content_n, name_n, tokens, length, mtime}, reloaded only
     if the file's mtime has changed. None if the file cannot be read."""
     try:
         mtime = path.stat().st_mtime
@@ -34,6 +34,7 @@ def _doc_entry(rel: str, path):
         "content_n": content_n,
         "name_n": _s._normalize_text(path.name),
         "tokens": set(re.findall(r"[a-z0-9]{2,}", content_n)),
+        "length": len(content_n.split()),  # BM25 length normalization
     }
     _DOC_CACHE[rel] = ent
     return ent

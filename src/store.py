@@ -253,6 +253,23 @@ def token_email(label: str, owner=None) -> str:
     return f"{slug}@api.local"
 
 
+# What an API/MCP token may do: read, drop items in its inbox lane, write the mind. A
+# token without `scopes` predates them and keeps all three.
+API_SCOPES = ("read", "inbox", "write")
+
+
+def normalize_scopes(raw) -> list:
+    """A list or comma-separated string of scopes → the canonical ordered list.
+    Raises ValueError on an unknown scope or an empty set."""
+    items = raw.split(",") if isinstance(raw, str) else list(raw or [])
+    wanted = {str(s).strip().lower() for s in items if str(s).strip()}
+    unknown = wanted - set(API_SCOPES)
+    if unknown or not wanted:
+        raise ValueError(f"scopes must be among {', '.join(API_SCOPES)}"
+                         + (f" (unknown: {', '.join(sorted(unknown))})" if unknown else ""))
+    return [s for s in API_SCOPES if s in wanted]
+
+
 def new_api_token_fields(label: str, *, set_unusable_password: bool) -> tuple:
     """Generate an API token and the block of fields to upsert for its account.
 
@@ -338,6 +355,7 @@ def _public_api_identity(user: dict) -> dict:
         "email": user.get("email"),
         "label": user.get("label"),
         "acts_as": user.get("acts_as"),
+        "scopes": user.get("scopes") or list(API_SCOPES),
         "role": API_ROLE,
         "created_at": user.get("api_token_created_at"),
         "last_used_at": user.get("api_last_used_at"),
@@ -788,12 +806,14 @@ class FileStore:
             identities.append(meta)
         return identities
 
-    def create_api_identity(self, label: str, acts_as=None) -> tuple:
+    def create_api_identity(self, label: str, acts_as=None, scopes=None) -> tuple:
         """Create (or regenerate) the label's 'api' account, returns (meta, token).
+        `scopes` (see normalize_scopes) narrows what the token may do; None = all.
 
         The cleartext is returned only HERE, once; only its SHA256 is stored.
         Critical section under the USERS_FILE lock: no TOCTOU between the
         existence check and the write."""
+        scopes = normalize_scopes(scopes) if scopes is not None else None
         email = token_email(label, owner=acts_as)
         with self._rmw(self.USERS_FILE):
             users = [dict(u) for u in self._load(self.USERS_FILE)]
@@ -804,6 +824,7 @@ class FileStore:
                     f"{existing.get('role')!r} account")
             token, fields = new_api_token_fields(
                 label, set_unusable_password=existing is None)
+            fields["scopes"] = scopes  # a regenerated token takes the new scopes, never the old
             if acts_as is not None:
                 fields["acts_as"] = acts_as
             if existing is not None:

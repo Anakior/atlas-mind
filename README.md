@@ -19,7 +19,7 @@ Own the data. Own the engine. Own the mind.
 **Atlas Mind** is a self-hostable wiki / knowledge base engine, and an external brain you share with your AI. It serves a single-page viewer from a folder of documents (a *mind*), keeping the **engine** (the code) cleanly decoupled from your **content** (your notes, in their own git repository). Built on three ideas:
 
 - **Multi-format, not just Markdown.** Markdown is first-class (rendered, linked, searched). Standalone **HTML** decks and dashboards, **PDFs**, and **Word `.docx`** are previewed inline, converted to readable HTML in your browser, nothing uploaded anywhere.
-- **AI-native.** It exposes an **MCP** endpoint (twenty-four tools to read, write, triage, map, rewind and audit your mind), and `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how to use your mind.
+- **AI-native.** It exposes an **MCP** endpoint (twenty-nine tools to read, write, triage, map, rewind and audit your mind), and `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how to use your mind.
 - **Lightweight & self-contained.** A single Python HTTP server on the **standard library**: **no database**, accounts and share links live as plain JSON on disk, frontend libraries and fonts are vendored. A running instance makes **no third-party network calls**: your mind never leaves your disk, and nothing you write trains anyone's model.
 
 It is not a multi-tenant SaaS, a real-time collaborative editor, or a plugin marketplace. One focused mind per instance, fully yours.
@@ -64,16 +64,16 @@ atlas token create ~/my-mind --label claude
 # → prints the MCP URL: https://<your-atlas>/mcp/<token>
 ```
 
-The MCP endpoint exposes **twenty-four tools** in six groups:
+The MCP endpoint exposes **twenty-nine tools** in six groups:
 
-- **read**: `search_docs`, `read_doc`, `list_tree`, `recent_docs`
-- **write**: `create_doc`, `edit_doc`, `move_doc` (fixes incoming `[[backlinks]]`), `delete_doc` (soft-delete to `.trash/`)
+- **read**: `brief` (a context pack on a topic: the best sections, within a token budget), `search_docs` (ranked, each hit with its section and how far to trust it: last editor, AI or human, stale, contested), `grep_docs` (exact lines), `read_doc` (whole doc, a line range or one section), `list_tree`, `recent_docs`, `changes_since` (what changed since a cursor the agent keeps)
+- **write**: `create_doc`, `edit_doc` (returns the diff; `dry_run`, and a `base_version` guard so a concurrent change is never overwritten), `move_doc` (fixes incoming `[[backlinks]]`), `delete_doc` (soft-delete to `.trash/`)
 - **graph**: `get_links`, `get_backlinks`, `list_by_tag`, `get_mind_topology`
 - **time-travel** (your mind is a git repo): `doc_history`, `doc_at`, `doc_diff`, `search_history`, `changelog`, `doc_blame`, `doc_revert`
-- **activity** (the attribution layer's read side): `activity` (who changed what, with AI-author detection), `stale` (docs untouched for months: obsolescence), `contradictions` (same-topic doc pairs to review), `judge_contradiction` (record a verdict on a pair)
+- **activity** (the attribution layer's read side): `activity` (who changed what, with AI-author detection), `agent_runs` + `undo_run` (an agent's work session, undone as one commit), `stale` (docs untouched for months: obsolescence), `contradictions` (same-topic doc pairs to review), `judge_contradiction` (record a verdict on a pair)
 - **inbox**: `create_inbox_item` (an agent stages a ready-to-file item in your inbox for triage)
 
-`atlas init` scaffolds `AGENTS.md` + `content/agents/` + `content/ai-sessions/` so the assistant knows your conventions. There is also a **REST API v1** (Bearer tokens, create-only writes) with a published **OpenAPI 3.1** spec.
+`atlas init` scaffolds `AGENTS.md` + `content/agents/` + `content/ai-sessions/`, and the endpoint hands your `AGENTS.md` to every client as its server instructions, so any assistant follows your conventions the moment it connects. Tools carry read-only / destructive hints (clients can run reads without asking), a token can be limited to `read`, `inbox` and/or `write` (an agent fed untrusted mail never needs to edit), and the endpoint speaks both the stateless MCP `2026-07-28` revision and the earlier `initialize`-based ones. There is also a **REST API v1** (Bearer tokens, create-only writes) with a published **OpenAPI 3.1** spec.
 
 ## Features
 

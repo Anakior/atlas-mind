@@ -110,9 +110,9 @@ class TestMcpGraphAndTags(unittest.TestCase):
         self.assertEqual(set(data["documents"]), {"projets/alpha.md", "projets/beta.md"})
 
     def test_list_by_tag_unknown_returns_none(self):
-        err, text = _call(self.srv, self.token, "list_by_tag", {"tag": "does-not-exist"})
+        err, data = _call(self.srv, self.token, "list_by_tag", {"tag": "does-not-exist"})
         self.assertFalse(err)
-        self.assertIn("No document tagged", text)
+        self.assertEqual(data, {"tag": "does-not-exist", "documents": []})
 
     def test_mind_topology_overview(self):
         err, data = _call(self.srv, self.token, "get_mind_topology")
@@ -125,10 +125,10 @@ class TestMcpGraphAndTags(unittest.TestCase):
     def test_search_docs_tag_filter_is_additive(self):
         # 'accueil' matches accueil.md (untagged) AND projets/alpha.md (tag projets).
         _, unfiltered = _call(self.srv, self.token, "search_docs", {"q": "accueil"})
-        self.assertIn("accueil.md", [h["path"] for h in unfiltered])
+        self.assertIn("accueil.md", [h["path"] for h in unfiltered["hits"]])
         _, filtered = _call(self.srv, self.token, "search_docs",
                             {"q": "accueil", "tag": "projets"})
-        paths = [h["path"] for h in filtered]
+        paths = [h["path"] for h in filtered["hits"]]
         self.assertNotIn("accueil.md", paths)        # untagged doc filtered out
         self.assertIn("projets/alpha.md", paths)     # tagged doc kept
 

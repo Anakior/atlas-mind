@@ -73,6 +73,19 @@
             <input id="settings-token-label" type="text" autocomplete="off" placeholder="claude, mcp-perso&hellip;" data-i18n-placeholder="settingsTokenLabelPlaceholder"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
+          <!-- What the token may do (MCP + REST): an agent fed untrusted input gets the least it needs. -->
+          <div class="flex-shrink-0">
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenScope">Acc&egrave;s</label>
+            <div class="relative">
+              <select id="settings-token-scope" class="w-full appearance-none px-3 pr-9 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+                <option value="" data-i18n="settingsScopeFull">Complet (lecture + &eacute;criture)</option>
+                <option value="read,inbox" data-i18n="settingsScopeReadInbox">Lecture + inbox</option>
+                <option value="read" data-i18n="settingsScopeRead">Lecture seule</option>
+                <option value="inbox" data-i18n="settingsScopeInbox">Inbox seule</option>
+              </select>
+              <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+          </div>
           <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0" data-i18n="settingsCreateToken">Cr&eacute;er un token</button>
         </form>
         <!-- One-time display of the token in plain text + MCP connector URL. Strong

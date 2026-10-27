@@ -7,6 +7,22 @@ import { escapeHtml } from '../../core/utils';
 import { Dialogs } from '../../modals/dialogs';
 import { SettingsContext, shareFormatDate } from './settings-shared';
 
+// The access presets of the creation form, keyed by their scopes (store.API_SCOPES order).
+const SCOPE_LABELS: Record<string, string> = {
+  'read,inbox': 'settingsScopeReadInbox',
+  read: 'settingsScopeRead',
+  inbox: 'settingsScopeInbox',
+};
+
+/** A limited token's access, as the form names it; '' for a full one. */
+function scopeLabel(scopes: string[] | undefined): string {
+  const key = (scopes || []).join(',');
+
+  if (!key || key === 'read,inbox,write') return '';
+
+  return SCOPE_LABELS[key] ? t(SCOPE_LABELS[key]) : (scopes || []).join(' + ');
+}
+
 export class SettingsTokens {
   private readonly list = document.getElementById('settings-tokens-list')!;
   private readonly form = document.getElementById('settings-token-form') as HTMLFormElement;
@@ -42,7 +58,12 @@ export class SettingsTokens {
 
       this.list.innerHTML = active
         .map((tk) => {
-          const created = tk.created_at ? t('createdShort', shareFormatDate(tk.created_at)) : '';
+          const created = [
+            tk.created_at ? t('createdShort', shareFormatDate(tk.created_at)) : '',
+            scopeLabel(tk.scopes),
+          ]
+            .filter(Boolean)
+            .join(' · ');
           const labelText = tk.label || tk.email || '';
           const labelEsc = escapeHtml(labelText);
 
@@ -80,6 +101,7 @@ export class SettingsTokens {
     e.preventDefault();
     this.ctx.clearError();
     const labelInput = document.getElementById('settings-token-label') as HTMLInputElement;
+    const scopeSelect = document.getElementById('settings-token-scope') as HTMLSelectElement;
     const label = labelInput.value.trim();
 
     if (!label) return;
@@ -87,7 +109,7 @@ export class SettingsTokens {
     try {
       const data = await this.ctx.fetch<any>('/api/tokens', {
         method: 'POST',
-        body: JSON.stringify({ label }),
+        body: JSON.stringify(scopeSelect.value ? { label, scopes: scopeSelect.value } : { label }),
       });
 
       // One-time display: the plaintext token NEVER comes back after this point.
@@ -95,6 +117,7 @@ export class SettingsTokens {
       (document.getElementById('settings-token-mcp') as HTMLInputElement).value = data.mcp_url || '';
       this.result.classList.remove('hidden');
       labelInput.value = '';
+      scopeSelect.value = '';
       this.load();
     } catch (err) {
       this.ctx.showError((err as Error).message);

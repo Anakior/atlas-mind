@@ -1,7 +1,105 @@
 [
   {
+    "name": "brief",
+    "description": "Start here on a topic. One call instead of search_docs → read_doc → get_backlinks: the best-matching section of each relevant doc (best first) within a token budget, each with the trust signals of search_docs (last_modified, last_editor, ai, stale, contested_with), plus the docs linked around the top ones (`related`) and the matches that did not fit (`omitted`). read_doc a source when you need more of it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "What you need context on, in the words the docs would use."
+        },
+        "budget_tokens": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 300,
+          "maximum": 8000,
+          "description": "Roughly how many tokens of source text to return."
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "budget_tokens": {
+          "type": "integer"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "section": {
+                "type": "string"
+              },
+              "lines": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "last_modified": {
+                "type": "string"
+              },
+              "last_editor": {
+                "type": "string"
+              },
+              "ai": {
+                "type": "string"
+              },
+              "stale": {
+                "type": "boolean"
+              },
+              "contested_with": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "path",
+              "text"
+            ]
+          }
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "omitted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "topic",
+        "sources",
+        "related",
+        "omitted"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "search_docs",
-    "description": "Full-text search across the knowledge base. Returns the documents matching the query, ranked by relevance. Use terms in the language of the indexed content.",
+    "description": "Ranked full-text search (BM25) across the knowledge base. Lexical, not semantic: it matches the words you give (case- and accent-insensitive, substrings, small typos), so when hits are few, retry with synonyms or in the content's other language. Each hit gives the best-matching `line` and its heading `section` (feed them to read_doc), plus what to weigh it by: `last_modified` (git date), `last_editor`, `ai` (set when that last edit came from an AI), `stale` (untouched 6+ months) and `contested_with` (docs it was judged to contradict).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -23,22 +121,186 @@
       "required": [
         "q"
       ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "hits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "score": {
+                "type": "number"
+              },
+              "snippet": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              },
+              "section": {
+                "type": "string"
+              },
+              "last_modified": {
+                "type": "string"
+              },
+              "last_editor": {
+                "type": "string"
+              },
+              "ai": {
+                "type": "string"
+              },
+              "stale": {
+                "type": "boolean"
+              },
+              "contested_with": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "path",
+              "score",
+              "snippet",
+              "last_modified"
+            ]
+          }
+        }
+      },
+      "required": [
+        "query",
+        "hits"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "grep_docs",
+    "description": "Find the exact lines matching a string (or a regex with regex=true) across the current documents, like grep: returns path, line number and line text. Use it to locate a precise fact, name or figure; search_docs ranks whole documents instead. Case-insensitive unless case_sensitive=true. For past versions, use search_history.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Text to find (a regex if regex=true)."
+        },
+        "regex": {
+          "type": "boolean",
+          "default": false,
+          "description": "Treat pattern as a Python regular expression."
+        },
+        "case_sensitive": {
+          "type": "boolean",
+          "default": false
+        },
+        "path_prefix": {
+          "type": "string",
+          "description": "Optional: restrict to a folder or file (e.g. 'projets')."
+        },
+        "limit": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "line",
+              "text"
+            ]
+          }
+        }
+      },
+      "required": [
+        "pattern",
+        "matches",
+        "truncated"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
     "name": "read_doc",
-    "description": "Read the full raw content of a document (.md OR .html). For a .html you get the complete HTML source (not extracted text).",
+    "description": "Read a document (.md OR .html; for a .html you get the HTML source, not extracted text). Whole file by default; pass start_line/end_line, or section (a heading's text), to read just that part: cheaper on long docs, and search_docs/grep_docs give you the line. A last content block reports the line count and the doc's `version`: pass it to edit_doc as base_version.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "path": {
           "type": "string",
           "description": "Relative path of the .md or .html (e.g. notes/example.md, projects/deck-may.html). Use list_tree or search_docs to discover paths."
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based first line to read."
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Last line to read, inclusive (omit: to the end)."
+        },
+        "section": {
+          "type": "string",
+          "description": "Read only the section under the first Markdown heading containing this text (case-insensitive), down to the next heading of the same or a higher level."
         }
       },
       "required": [
         "path"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -47,6 +309,13 @@
     "inputSchema": {
       "type": "object",
       "properties": {}
+    },
+    "outputSchema": {
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -68,6 +337,112 @@
           "maximum": 100
         }
       }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "days": {
+          "type": "integer"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "days",
+        "documents"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "changes_since",
+    "description": "What changed in the mind since you last looked, net per document (added, modified, moved with its `from`, deleted), with who edited it last and whether an AI did. Pass the `cursor` a previous call returned to get only what is new since then (keep it in your session notes); without one, covers the last `days`. Every call returns a fresh cursor. For commit-level detail, use changelog.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "The cursor a previous changes_since returned."
+        },
+        "days": {
+          "type": "integer",
+          "default": 7,
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Window when no cursor is given."
+        },
+        "limit": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": []
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "change": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "commits": {
+                "type": "integer"
+              },
+              "date": {
+                "type": "string"
+              },
+              "last_editor": {
+                "type": "string"
+              },
+              "ai": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "change"
+            ]
+          }
+        }
+      },
+      "required": [
+        "cursor",
+        "since",
+        "documents",
+        "truncated"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -94,6 +469,10 @@
         "content",
         "ai"
       ]
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -138,11 +517,15 @@
         "title",
         "content"
       ]
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false
     }
   },
   {
     "name": "edit_doc",
-    "description": "Edit an EXISTING document (.md OR .html). Two mutually exclusive modes:\n1. Targeted replacement: pass 'old_string' + 'new_string'. 'old_string' must appear exactly once in the document (otherwise an error) — add surrounding context to make it unique. Token-efficient, preferred on large docs (and .html, often big).\n2. Full rewrite: pass 'content' (replaces the whole file).\nAt least one of the two modes is required. The document must already exist (use create_doc to create a new one). Read the doc with read_doc before editing.",
+    "description": "Edit an EXISTING document (.md OR .html). Two mutually exclusive modes:\n1. Targeted replacement: pass 'old_string' + 'new_string'. 'old_string' must appear exactly once in the document (otherwise the error shows the closest passage, or the lines of each occurrence) — add surrounding context to make it unique. Token-efficient, preferred on large docs (and .html, often big).\n2. Full rewrite: pass 'content' (replaces the whole file).\nAt least one of the two modes is required. The document must already exist (use create_doc to create a new one). Read the doc with read_doc first and pass its `version` as base_version, so a change made in between is never overwritten. Returns the diff and the new version; dry_run=true returns the diff without writing.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -169,17 +552,30 @@
         "ai": {
           "type": "string",
           "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
+        },
+        "base_version": {
+          "type": "string",
+          "description": "The `version` read_doc reported. If the doc changed since, the edit is refused instead of overwriting that change. Strongly recommended with a full rewrite."
+        },
+        "dry_run": {
+          "type": "boolean",
+          "default": false,
+          "description": "Return the diff the edit would make; write nothing."
         }
       },
       "required": [
         "path",
         "ai"
       ]
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false
     }
   },
   {
     "name": "move_doc",
-    "description": "Move OR rename an existing document (.md or .html), AUTOMATICALLY rewriting the incoming [[wikilinks]] that point at it (no broken backlinks). Renaming = a move within the same folder (just change the filename in 'to'). Refuses if the target already exists (no overwrite). Read list_tree/search_docs first for the exact path.",
+    "description": "Move OR rename an existing document (.md or .html), AUTOMATICALLY rewriting the incoming [[wikilinks]] that point at it (no broken backlinks). Renaming = a move within the same folder (just change the filename in 'to'). Refuses if the target already exists (no overwrite). Read list_tree/search_docs first for the exact path. dry_run=true lists the wikilinks that would be rewritten, without moving anything.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -194,6 +590,11 @@
         "ai": {
           "type": "string",
           "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
+        },
+        "dry_run": {
+          "type": "boolean",
+          "default": false,
+          "description": "Report what the move would rewrite; move nothing."
         }
       },
       "required": [
@@ -201,6 +602,10 @@
         "to",
         "ai"
       ]
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -217,6 +622,28 @@
       "required": [
         "path"
       ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "links"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -233,6 +660,28 @@
       "required": [
         "path"
       ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "backlinks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "backlinks"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -241,6 +690,48 @@
     "inputSchema": {
       "type": "object",
       "properties": {}
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "counts": {
+          "type": "object"
+        },
+        "density": {
+          "type": "number"
+        },
+        "hubs": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "orphans": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "orphans_total": {
+          "type": "integer"
+        },
+        "top_tags": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "counts",
+        "hubs",
+        "orphans",
+        "top_tags"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -257,6 +748,28 @@
       "required": [
         "tag"
       ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "tag",
+        "documents"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -278,6 +791,10 @@
         "path",
         "ai"
       ]
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -312,6 +829,40 @@
       "required": [
         "path"
       ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "created": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "last_modified": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "revisions"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -336,6 +887,10 @@
       "required": [
         "path"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -361,6 +916,10 @@
       "required": [
         "path"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -392,6 +951,31 @@
       "required": [
         "query"
       ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "regex": {
+          "type": "boolean"
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "query",
+        "matches"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -422,6 +1006,28 @@
           "maximum": 200
         }
       }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "since_days": {
+          "type": "integer"
+        },
+        "commits": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "since_days",
+        "commits"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -452,6 +1058,111 @@
           "maximum": 200
         }
       }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "since_days": {
+          "type": "integer"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "since_days",
+        "events"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "agent_runs",
+    "description": "The work sessions of AI agents on the mind. A run groups one agent's consecutive commits (same AI, same token, same person it acts for, no pause over 30 minutes), with the docs it changed. Use it to review what an agent did, or to get the `id` undo_run takes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "days": {
+          "type": "integer",
+          "default": 7,
+          "minimum": 1,
+          "maximum": 30,
+          "description": "Runs that ended within this many days."
+        },
+        "limit": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": []
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "days": {
+          "type": "integer"
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "ai": {
+                "type": "string"
+              },
+              "token": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "author": {
+                "type": "string"
+              },
+              "start": {
+                "type": "string"
+              },
+              "end": {
+                "type": "string"
+              },
+              "commits": {
+                "type": "integer"
+              },
+              "documents": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "ai",
+              "commits",
+              "documents"
+            ]
+          }
+        }
+      },
+      "required": [
+        "days",
+        "runs"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -474,6 +1185,28 @@
           "maximum": 100
         }
       }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "months": {
+          "type": "integer"
+        },
+        "stale": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "months",
+        "stale"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -494,6 +1227,24 @@
           "description": "Include pairs already dismissed as `none` (false positives). Default false."
         }
       }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "candidates"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -541,6 +1292,10 @@
         "verdict",
         "ai"
       ]
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -571,6 +1326,32 @@
       "required": [
         "path"
       ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "truncated",
+        "lines"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -597,6 +1378,40 @@
         "rev",
         "ai"
       ]
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "undo_run",
+    "description": "Undo a whole agent run (an id from agent_runs) in ONE commit, all or nothing: its edits reverted, the docs it created removed, the docs it moved or deleted put back. Refused, with nothing changed, if a later change touches the same lines. Only the person the agent acted for, or an admin, may undo a run. Nothing is lost: the undo is a commit like any other. dry_run=true lists what would be reverted.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "string",
+          "description": "The run id, from agent_runs."
+        },
+        "dry_run": {
+          "type": "boolean",
+          "default": false,
+          "description": "List what would be reverted; change nothing."
+        },
+        "ai": {
+          "type": "string",
+          "description": "REQUIRED. Identify yourself by your AI FAMILY in lowercase — e.g. 'claude', 'chatgpt', 'gemini' — NOT the model variant (not 'opus', 'gpt-4o'). Attributes this change."
+        }
+      },
+      "required": [
+        "run",
+        "ai"
+      ]
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false
     }
   }
 ]

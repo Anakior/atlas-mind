@@ -50,5 +50,7 @@ _SHARE_ID_PATTERN = (
     r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
 )
 
-# MCP JSON-RPC protocol version advertised on initialize.
-MCP_PROTOCOL_VERSION = "2025-03-26"
+# MCP revisions served, newest first. 2026-07-28 is stateless (each request declares its
+# version in _meta); the legacy ones open with an initialize handshake.
+MCP_MODERN_VERSIONS = ("2026-07-28",)
+MCP_LEGACY_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")

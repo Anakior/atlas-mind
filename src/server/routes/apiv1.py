@@ -53,11 +53,23 @@ _GET = {
 }
 
 
-def get(handler):
+def _scoped_ctx(handler, need):
+    """The bearer's ACL context, or None after a 401/403 (missing token, or a token whose
+    scopes don't include `need`)."""
     sess = handler._require_api_bearer()
     if not sess:
-        return
+        return None
     ctx = _s.viewer_ctx(sess)  # per-document ACL context (model B)
+    if ctx.scopes is not None and need not in ctx.scopes:
+        handler._send_json(403, {"error": f"token lacks the '{need}' scope"})
+        return None
+    return ctx
+
+
+def get(handler):
+    ctx = _scoped_ctx(handler, "read")
+    if not ctx:
+        return
     from urllib.parse import urlparse, parse_qs as _pqs
     parsed = urlparse(handler.path)
     fn = _GET.get(parsed.path)
@@ -68,10 +80,9 @@ def get(handler):
 
 
 def post(handler):
-    sess = handler._require_api_bearer()
-    if not sess:
+    ctx = _scoped_ctx(handler, "write")
+    if not ctx:
         return
-    ctx = _s.viewer_ctx(sess)
     if handler.path != "/api/v1/file":
         handler._send_json(404, {"error": "unknown endpoint"})
         return

@@ -15,16 +15,19 @@ A running instance exposes an **MCP** (Model Context Protocol) endpoint. Each us
 mints their own token from the web UI (**Settings → Tokens**, or `atlas token
 create <mind>` locally) and points their assistant at
 `https://<your-atlas>/mcp/<token>`. From then on the AI works your mind through
-**twenty-two tools**, grouped into five superpowers.
+**twenty-nine tools**, grouped into six superpowers.
 
 ### 1. Reads your whole mind
 
 | Tool          | What the AI does with it                        |
 |---------------|--------------------------------------------------|
-| `search_docs` | full-text search across the whole mind           |
-| `read_doc`    | read a specific document (Markdown or HTML)      |
+| `brief`       | the best sections on a topic, within a token budget |
+| `search_docs` | ranked search, each hit with its section and how far to trust it |
+| `grep_docs`   | find the exact lines that state a fact          |
+| `read_doc`    | read a document, a line range or one section     |
 | `list_tree`   | browse the folder structure                      |
 | `recent_docs` | see what changed lately                          |
+| `changes_since` | what changed since the AI last looked (a cursor it keeps) |
 
 ### 2. Writes it back
 
@@ -34,6 +37,10 @@ create <mind>` locally) and points their assistant at
 | `edit_doc`   | update a document — full rewrite or a surgical replace    |
 | `move_doc`   | move/rename, fixing every incoming `[[backlink]]`         |
 | `delete_doc` | archive a note (soft-deleted to trash, never erased)      |
+
+Every edit comes back as a diff the AI can check, can be rehearsed with `dry_run`, and
+is refused if you changed the document since the AI read it, so it never overwrites
+your work.
 
 ### 3. Sees the connections
 
@@ -70,8 +77,22 @@ mind carries an [[features/activity-and-attribution|activity layer]] the AI can 
 | Tool             | What the AI does with it                                       |
 |------------------|----------------------------------------------------------------|
 | `activity`       | the attributed feed: who changed what, when, AI or human       |
+| `agent_runs`     | an agent's work sessions, with the documents each one changed  |
+| `undo_run`       | undo a whole session in one commit, all or nothing             |
 | `stale`          | documents untouched for months — obsolescence to revisit       |
 | `contradictions` | same-topic document pairs that may now disagree, to review     |
+| `judge_contradiction` | record a verdict on a pair, so a false positive stops resurfacing |
+
+### 6. Stages things for you
+
+| Tool                | What the AI does with it                                        |
+|---------------------|------------------------------------------------------------------|
+| `create_inbox_item` | drop an item (a mail worth keeping, an alert) into your inbox to triage |
+
+Read-only tools are flagged as such, so your assistant can run them without asking,
+and the destructive ones (`edit_doc`, `delete_doc`, `doc_revert`, `undo_run`) are
+flagged too. A token can also be narrowed to reading, the inbox, or both: an agent that
+triages your mail never gets to edit anything.
 
 ## The loop
 
@@ -85,7 +106,9 @@ mind carries an [[features/activity-and-attribution|activity layer]] the AI can 
 The convention is simple and lives in an `AGENTS.md` at the root of your mind:
 **the Atlas is the source of truth**; before answering on a documented topic the
 AI consults it rather than guessing, and any lasting output is written into the
-Atlas, not lost in a chat thread.
+Atlas, not lost in a chat thread. Atlas hands that file to the AI as its
+instructions the moment it connects, so every assistant follows your rules
+without you pasting them anywhere.
 
 This is what makes a pile of notes into a [[features/the-mind-graph|mind]] that
 compounds over time. And because you [[features/own-your-data|own the data and

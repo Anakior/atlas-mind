@@ -9,7 +9,7 @@ sizing up the project before they run it.
 
 | metric | value |
 |---|---|
-| MCP tools exposed | 24 |
+| MCP tools exposed | 29 |
 | interface languages | 2 |
 | runtime dependencies | 0 |
 

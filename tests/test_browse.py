@@ -227,19 +227,23 @@ class TestBrowseMind(unittest.TestCase):
         self.assertEqual(resp.headers.get("Content-Type"),
                          "application/json; charset=utf-8")
         hits = resp.json()
-        # Occurrence in the name = 3 points, in the content = 1 point:
-        # girafe.md (name only, 3) beats savane.md (2 content occurrences, 2).
-        self.assertEqual([(h["path"], h["score"]) for h in hits],
-                         [("recherche/girafe.md", 3), ("recherche/savane.md", 2)])
+        # BM25 where a filename occurrence weighs three body ones: girafe.md (name
+        # only, tf 3) beats savane.md (2 content occurrences, tf 2).
+        self.assertEqual([h["path"] for h in hits],
+                         ["recherche/girafe.md", "recherche/savane.md"])
+        self.assertGreater(hits[0]["score"], hits[1]["score"])
 
     def test_search_accent_and_case_insensitive(self):
         # Uppercase + accent query, accented content: everything is normalized
-        # NFD/lowercase. Score = name (1×3) + content ("# Zèbre" + "Le zèbre" = 2).
+        # NFD/lowercase, so both spellings score the same doc identically.
+        scores = set()
         for q in ("ZÈBRE", "zebre"):
             hits = _quoted_search(self.srv, q).json()
             self.assertEqual(len(hits), 1, q)
             self.assertEqual(hits[0]["path"], "recherche/zebre.md")
-            self.assertEqual(hits[0]["score"], 5)
+            scores.add(hits[0]["score"])
+        self.assertEqual(len(scores), 1)
+        self.assertGreater(scores.pop(), 0)
 
     def test_search_fuzzy_typo_correction(self):
         # "pissenlots" exists nowhere: token of ≥ 4 letters absent from the

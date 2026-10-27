@@ -8,6 +8,58 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-27
+
+Atlas speaks the stateless MCP `2026-07-28` revision and becomes a place agents can
+work in safely: they find the right passage and know how far to trust it, check every
+write before and after making it, pick up where they left off, and a whole session of
+theirs can be undone in one go.
+
+### Added
+- **MCP `2026-07-28`.** The endpoint speaks the stateless revision (version in each
+  request's `_meta`, `server/discover`, caching hints, header validation) alongside
+  the earlier `initialize`-based ones, on the same URL.
+- **Your `AGENTS.md` becomes the server instructions.** Every MCP client receives it
+  when it connects, so your conventions follow you into claude.ai, ChatGPT or any
+  other assistant (a built-in primer stands in when the mind has none).
+- **Tool annotations.** Read-only tools say so (clients can run them without asking);
+  `edit_doc`, `delete_doc` and `doc_revert` are flagged destructive.
+- **Search an agent can trust.** `search_docs` ranks with BM25 and each hit points at its
+  line and heading section, with what to weigh it by: last edit date and editor, the AI
+  behind it if any, `stale`, and `contested_with` (docs it was judged to contradict).
+- **`grep_docs`**, the 25th tool: exact matching lines (string or regex) across the mind.
+- **Partial reads.** `read_doc` takes a line range or a section heading, and reports the
+  doc's `version`.
+- **Safer, verifiable edits.** `edit_doc` returns the diff and the new version, takes
+  `dry_run`, and refuses a `base_version` that is no longer current instead of
+  overwriting a concurrent change. `move_doc` takes `dry_run` too.
+- **Errors that say what to do.** A wrong path suggests the likely ones; an `old_string`
+  that doesn't match quotes the closest passage, an ambiguous one lists its lines.
+- **`brief`**: a context pack on a topic in one call, the best section of each relevant
+  doc within a token budget, with trust signals and the docs linked around them.
+- **`changes_since`**: what changed, net per document, since a cursor the agent keeps
+  between sessions.
+- **Agent runs, undone in one go.** `agent_runs` groups an agent's consecutive commits
+  (same AI, token and person, no pause over 30 minutes); `undo_run` reverts a whole run
+  as one commit, all or nothing, putting moved and deleted docs back with their access
+  rights. Only the person the agent acted for, or an admin, may undo it. MCP writes now
+  name their token in an `X-Atlas-Token` trailer.
+- **Scoped tokens.** A token can be limited to `read`, `inbox` and/or `write`, from
+  Settings → Tokens or `atlas token create --scope read,inbox`. A scoped token only sees
+  the MCP tools it may call, and the REST API answers 403 beyond its scopes.
+
+### Changed
+- MCP tools return compact JSON with a matching `structuredContent` (and an
+  `outputSchema`); an empty result is an empty list, no longer a sentence. Search
+  scores are BM25 floats in the viewer and the REST API too.
+- `changelog` and `search_history` now show soft-deleted docs as deletions (and a
+  restore as an addition) instead of leaving them out.
+- The MCP URL shown when a token is created uses `http://` on localhost.
+- `initialize` answers with a revision Atlas actually serves instead of echoing any
+  value, and `serverInfo` reports the real engine version.
+- The MCP endpoint no longer holds a GET event stream open (it never carried a
+  message): GET now answers 405, and notifications answer 202 as the spec requires.
+
 ## [1.0.0] - 2026-06-28
 
 The viewer is now strict TypeScript built as real ES modules (esbuild `--bundle`) —

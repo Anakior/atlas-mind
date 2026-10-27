@@ -128,6 +128,33 @@ class GitSync:
             args += ["--author", f"{author[0]} <{author[1]}>"]
         self.run(*args, "--", *paths)
 
+    def revert(self, shas, subject, *, author=None, trailers=()):
+        """Revert `shas` (newest first) as ONE attributed commit, under the repo lock.
+        All or nothing: on a conflict `revert --abort` puts the tree back as it was.
+        Returns (new commit sha, None) or (None, why it could not apply)."""
+        if self._config.dev_mode:
+            return None, "dev mode keeps no git history"
+        with self._lock:
+            if self.run("diff", "--cached", "--quiet").returncode != 0:
+                return None, "the index holds staged changes"
+            r = self.run("revert", "--no-commit", *shas)
+            if r.returncode != 0:
+                self.run("revert", "--abort")
+                # The CONFLICT lines name the files at fault; else git's own error line.
+                why = [ln for ln in r.stdout.splitlines() if ln.startswith("CONFLICT")]
+                return None, "; ".join(why or r.stderr.strip().splitlines()[:1] or ["revert failed"])
+            msg = " ".join(subject.split()) + ("\n\n" + "\n".join(trailers) if trailers else "")
+            args = ["commit", "-m", msg, "--quiet"]
+            if author:
+                args += ["--author", f"{author[0]} <{author[1]}>"]
+            c = self.run(*args)
+            if c.returncode != 0:
+                self.run("revert", "--abort")
+                return None, (c.stdout or c.stderr).strip() or "commit failed"
+            sha = self.run("rev-parse", "HEAD").stdout.strip()
+        self._request_push()
+        return sha, None
+
     def _request_push(self) -> None:
         """Wake a single background worker to pull/rebuild/push; coalesces a burst."""
         with self._push_lock:

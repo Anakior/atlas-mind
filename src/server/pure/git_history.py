@@ -72,18 +72,27 @@ def _safe_path_prefix(prefix: str):
     return prefix.strip("/")
 
 
+# The usual log format plus the attribution _parse_namestatus_log then keeps per commit:
+# author email, the AI family (X-Atlas-Author) and the MCP token (X-Atlas-Token).
+_ATTRIBUTED_FORMAT = ("%x1e%H\x1f%an\x1f%aI\x1f%s\x1f%ae\x1f"
+                      "%(trailers:key=X-Atlas-Author,valueonly)\x1f"
+                      "%(trailers:key=X-Atlas-Token,valueonly)")
+
+
 def _parse_namestatus_log(stdout: str, excluded) -> list:
     """Parse `git log --format=%x1e… --name-status -z` into commit dicts with their
     changed DOC files. The leading \\x1e (record separator) delimits commits so the
-    flat -z stream is unambiguous; R/C statuses carry two paths (old + new). Commits
-    whose changed files are all excluded/non-doc are dropped."""
+    flat -z stream is unambiguous; R/C statuses carry two paths (old + new). A rename
+    into .trash/ (soft delete) reads as D, one out of it (restore) as A. Commits whose
+    changed files are all excluded/non-doc are dropped."""
     out = []
     for rec in stdout.split("\x1e"):
         rec = rec.strip("\n")
         if not rec:
             continue
         head, _, rest = rec.partition("\x00")
-        sha, an, aI, subj = (head.split("\x1f") + ["", "", "", ""])[:4]
+        fields = head.split("\x1f")
+        sha, an, aI, subj = (fields + ["", "", "", ""])[:4]
         if not sha:
             continue
         # git inserts a '\n' between the format's \x00 terminator and the name-status
@@ -94,10 +103,15 @@ def _parse_namestatus_log(stdout: str, excluded) -> list:
         while i < len(tokens):
             status = tokens[i]
             if status[:1] in ("R", "C") and i + 2 < len(tokens):
-                new_rel = _strip_content(tokens[i + 2])
-                if new_rel is not None and _history_path_included(new_rel, excluded):
-                    files.append({"status": status[:1], "path": new_rel,
-                                  "old_path": _strip_content(tokens[i + 1])})
+                old_rel, new_rel = _strip_content(tokens[i + 1]), _strip_content(tokens[i + 2])
+                old_in = old_rel is not None and _history_path_included(old_rel, excluded)
+                new_in = new_rel is not None and _history_path_included(new_rel, excluded)
+                if old_in and new_in:
+                    files.append({"status": status[:1], "path": new_rel, "old_path": old_rel})
+                elif new_in:
+                    files.append({"status": "A", "path": new_rel})
+                elif old_in:
+                    files.append({"status": "D", "path": old_rel})
                 i += 3
             else:
                 path = tokens[i + 1] if i + 1 < len(tokens) else ""
@@ -106,8 +120,39 @@ def _parse_namestatus_log(stdout: str, excluded) -> list:
                     files.append({"status": status[:1] or "?", "path": rel})
                 i += 2
         if files:
-            out.append({"sha": sha, "short_sha": sha[:7], "author": an,
-                        "date": aI, "subject": subj, "files": files})
+            commit = {"sha": sha, "short_sha": sha[:7], "author": an,
+                      "date": aI, "subject": subj, "files": files}
+            if len(fields) == 7:  # _ATTRIBUTED_FORMAT
+                commit.update(email=fields[4], ai=_s.parse_ai_trailer(fields[5]),
+                              token=fields[6].strip() or None)
+            out.append(commit)
+    return out
+
+
+def _attributed_log(*selector):
+    """Doc-touching commits over content/ (newest first) with their attribution, for a
+    git log `selector` (a range, --since=…). None when git fails."""
+    result = _s.git("log", "--format=" + _ATTRIBUTED_FORMAT, "--name-status", "-M", "-z",
+                    *selector, "--", "content")
+    if result.returncode != 0:
+        return None
+    return _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES)
+
+
+def _name_status(a: str, b: str) -> list:
+    """[(status, path, new_path|None)] of what changes under content/ from rev `a` to `b`,
+    renames detected, content-relative paths (so .trash/ ones included)."""
+    result = _s.git("diff", "--name-status", "-M", "-z", a, b, "--", "content")
+    tokens = [t for t in result.stdout.split("\x00") if t] if result.returncode == 0 else []
+    out, i = [], 0
+    while i < len(tokens):
+        status = tokens[i][:1]
+        if status in ("R", "C") and i + 2 < len(tokens):
+            out.append((status, _strip_content(tokens[i + 1]), _strip_content(tokens[i + 2])))
+            i += 3
+        else:
+            out.append((status, _strip_content(tokens[i + 1]) if i + 1 < len(tokens) else None, None))
+            i += 2
     return out
 
 

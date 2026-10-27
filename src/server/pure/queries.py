@@ -1,6 +1,8 @@
 """Read-side aggregates over the doc corpus, shared by REST routes and MCP tools."""
 import datetime
+import math
 import posixpath
+import re
 import time
 
 import server as _s
@@ -66,10 +68,67 @@ def _strip_content(p: str):
     return p[len("content/"):] if p.startswith("content/") else None
 
 
+_BM25_K1 = 1.2
+_BM25_B = 0.75
+_NAME_WEIGHT = 3  # an occurrence in the filename weighs three in the body
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+
+
+def _headings(lines):
+    """(0-based line index, level, title) of each Markdown heading, code fences skipped."""
+    fenced = False
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif not fenced:
+            m = _HEADING_RE.match(line)
+            if m:
+                yield i, len(m.group(1)), m.group(2)
+
+
+def _snippet(entry: dict, tokens) -> str:
+    """~180 characters around the earliest query-token occurrence (the doc start when only
+    the filename matched), flattened to one line."""
+    content, content_n = entry["content"], entry["content_n"]
+    found = [(i, t) for t in tokens if (i := content_n.find(t)) >= 0]
+    if not found:
+        return content[:160].replace("\n", " ").strip() + ("…" if len(content) > 160 else "")
+    idx, token = min(found)
+    start = max(0, idx - 60)
+    end = min(len(content), idx + len(token) + 120)
+    return (("…" if start > 0 else "") + content[start:end].replace("\n", " ").strip()
+            + ("…" if end < len(content) else ""))
+
+
+def _locate(entry: dict, tokens) -> dict:
+    """1-based line carrying the most query tokens and its heading path ("A > B"), so an
+    agent can read just that section. Normalizing keeps line breaks, so the normalized
+    lines index the raw ones."""
+    best, best_n = None, 0
+    for i, line in enumerate(entry["content_n"].splitlines()):
+        n = sum(1 for t in tokens if t in line)
+        if n > best_n:
+            best, best_n = i, n
+            if n == len(tokens):
+                break
+    if best is None:
+        return {}
+    path = []
+    for i, level, title in _headings(entry["content"].splitlines()):
+        if i > best:
+            break
+        path = [h for h in path if h[0] < level] + [(level, title)]
+    out = {"line": best + 1}
+    if path:
+        out["section"] = " > ".join(title for _, title in path)
+    return out
+
+
 def _api_search(q: str, limit: int, ctx=None) -> list:
-    """Scoring: weighted occurrences (name x3, content x1), with typo tolerance
-    (a token that can't be found is corrected to the closest word in the
-    vocabulary). Content read via the _doc_entry in-memory cache."""
+    """BM25 ranking (an occurrence in the filename weighs three in the body), with typo
+    tolerance (a token that can't be found is corrected to the closest word in the
+    vocabulary). Tokens match as substrings, so 'auth' still finds 'authentication'.
+    Content read via the _doc_entry in-memory cache."""
     import difflib
     tokens = [t for t in _s._normalize_text(q).split() if t]
     if not tokens:
@@ -94,42 +153,30 @@ def _api_search(q: str, limit: int, ctx=None) -> list:
             near = difflib.get_close_matches(t, vocab, n=1, cutoff=0.78)
             corrected.append(near[0] if near else t)
     tokens = corrected
-    hits = []
+    scored = []
     for rel, path, e in entries:
-        name_n = e["name_n"]
-        content_n = e["content_n"]
-        content = e["content"]
-        score = 0
-        first_idx = -1
-        first_token = None
-        for t in tokens:
-            n_name = name_n.count(t)
-            n_content = content_n.count(t)
-            score += n_name * 3 + n_content
-            if n_content:
-                idx = content_n.find(t)
-                if first_idx == -1 or (idx >= 0 and idx < first_idx):
-                    first_idx = idx
-                    first_token = t
-        if score == 0:
-            continue
-        if first_idx >= 0 and first_token:
-            start = max(0, first_idx - 60)
-            end = min(len(content), first_idx + len(first_token) + 120)
-            snippet = (("…" if start > 0 else "")
-                       + content[start:end].replace("\n", " ").strip()
-                       + ("…" if end < len(content) else ""))
-        else:
-            snippet = content[:160].replace("\n", " ").strip() + ("…" if len(content) > 160 else "")
-        hits.append({
-            "path": rel,
-            "name": path.name,
-            "score": score,
-            "snippet": snippet,
-            "mtime": int(e["mtime"]),
-        })
-    hits.sort(key=lambda h: (-h["score"], -h["mtime"]))
-    return hits[:limit]
+        tf = [e["name_n"].count(t) * _NAME_WEIGHT + e["content_n"].count(t) for t in tokens]
+        if any(tf):
+            scored.append((rel, path, e, tf))
+    n = len(entries)
+    avgdl = (sum(e["length"] for _, _, e in entries) / n if n else 0) or 1
+    idf = [math.log(1 + (n - df + 0.5) / (df + 0.5))
+           for df in (sum(1 for *_, tf in scored if tf[i]) for i in range(len(tokens)))]
+    ranked = []
+    for rel, path, e, tf in scored:
+        norm = _BM25_K1 * (1 - _BM25_B + _BM25_B * e["length"] / avgdl)
+        score = sum(w * f * (_BM25_K1 + 1) / (f + norm) for w, f in zip(idf, tf) if f)
+        ranked.append((score, e["mtime"], rel, path, e))
+    ranked.sort(key=lambda r: (-r[0], -r[1]))
+    hits = []
+    for score, mtime, rel, path, e in ranked[:limit]:
+        hit = {"path": rel, "name": path.name, "score": round(score, 3),
+               "snippet": _snippet(e, tokens), "mtime": int(mtime)}
+        # An .html is indexed as extracted text: its lines don't map back to the file.
+        if not rel.lower().endswith(".html"):
+            hit.update(_locate(e, tokens))
+        hits.append(hit)
+    return hits
 
 
 def _api_recent(days: int, limit: int, ctx=None) -> list:

@@ -17,7 +17,9 @@ def _public_url(handler, suffix=""):
     host = handler.headers.get("Host", "")
     if not host:
         return suffix
-    scheme = "https" if (_s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode) else "http"
+    loopback = host.rsplit(":", 1)[0] in ("localhost", "127.0.0.1", "[::1]")
+    scheme = ("https" if _s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode and not loopback
+              else "http")
     return f"{scheme}://{host}{suffix}"
 
 
@@ -150,12 +152,17 @@ def tokens_post(handler):
     except ValueError:
         handler._send_json(400, {"error": "invalid label"})
         return
+    try:
+        scopes = store.normalize_scopes(data["scopes"]) if data.get("scopes") else None
+    except ValueError as e:
+        handler._send_json(400, {"error": str(e)})
+        return
     # acts_as = the creator: the token acts in their name (commons + their private
     # space). The UI never binds a token to someone else — that would impersonate them.
     # (The CLI may: that operator has server access, a different trust level.)
     creator = (handler._session() or {}).get("email")
     try:
-        meta, token = _s.get_store().create_api_identity(label, acts_as=creator)
+        meta, token = _s.get_store().create_api_identity(label, acts_as=creator, scopes=scopes)
     except ValueError as e:
         # Label colliding with a non-'api' account.
         handler._send_json(409, {"error": str(e)})
@@ -172,6 +179,7 @@ def tokens_post(handler):
         "label": label,
         "email": meta.get("email"),
         "acts_as": creator,
+        "scopes": meta.get("scopes"),
     })
 
 

@@ -62,7 +62,7 @@ sys.modules.setdefault("server", sys.modules[__name__])
 from server.constants import (  # noqa: F401
     COOKIE_NAME, CSRF_COOKIE_NAME, MAX_BODY_BYTES, _EMAIL_PATTERN, MAX_EMAIL_LEN,
     MAX_TOKEN_LABEL_LEN, API_ROLE, NODE_LINK_PREFIX, REMOTES_DIR,
-    MAX_NODE_FILE_BYTES, PROJECT_URL, _GIT_REV_RE, MCP_PROTOCOL_VERSION,
+    MAX_NODE_FILE_BYTES, PROJECT_URL, _GIT_REV_RE, MCP_MODERN_VERSIONS, MCP_LEGACY_VERSIONS,
     _SHARE_ID_PATTERN,
 )
 
@@ -287,7 +287,7 @@ from server.pure.contradictions import (  # noqa: F401  13c same-subject pair ge
     find_contradictions, find_doc_neighbors,
 )
 from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
-    _soft_delete, _mcp_call_tool, _mcp_jsonrpc, _span_hash,
+    _soft_delete, _mcp_call_tool, _mcp_jsonrpc, _mcp_http_status, _span_hash,
 )
 from server.extensions import load_server_extensions  # noqa: F401
 
@@ -433,23 +433,21 @@ def _mask_url(s: str) -> str:
 # disabled when CONFIG.update_check is False.
 
 def current_version():
-    """Running atlas-mind version, in both install modes. Installed → package
-    metadata; source run → parse __version__ from the sibling __init__.py."""
+    """Running atlas-mind version: the __version__ of the package this code belongs to
+    (two levels up from this server sub-package, in both install modes), so a source run
+    never reports an older pip install found on the path. Package metadata as a fallback."""
     try:
-        from importlib.metadata import version
-        return version("atlas-mind")
-    except Exception:
-        pass
-    try:
-        # The atlas_mind package __init__ (src/__init__.py) holds __version__,
-        # two levels up from this server sub-package.
         init = (Path(__file__).resolve().parent.parent / "__init__.py").read_text(encoding="utf-8")
         match = re.search(r'__version__\s*=\s*"([^"]+)"', init)
         if match:
             return match.group(1)
     except OSError:
         pass
-    return None
+    try:
+        from importlib.metadata import version
+        return version("atlas-mind")
+    except Exception:
+        return None
 
 
 def latest_pypi_version():
@@ -552,6 +550,14 @@ def commit_change(ctx, subject, *paths, ai=None):
         _CTX.git_sync.trigger_sync()         # content is on disk; let the backstop catch it
 
 
+def revert_commits(ctx, subject, shas, ai=None):
+    """Undo `shas` (newest first) as one commit attributed to `ctx` (+ its AI). Returns
+    (new commit sha, None), or (None, why) with the tree left untouched."""
+    from server.pure import acl
+    author, trailers = acl.attribution_for(ctx, ai=ai)
+    return _CTX.git_sync.revert(shas, subject, author=author, trailers=trailers)
+
+
 def _clean_subject(text, limit=100):
     """Collapse free-form text (an AI commit_message, a task label) into a single,
     length-capped line — so it can't break the commit subject or inject a trailer."""
@@ -629,10 +635,11 @@ from server.render.search_cache import _doc_entry, _DOC_CACHE  # noqa: F401
 from server.render.mcp_tools import _mcp_tools  # noqa: F401
 
 
-def _move_md_with_relink(src_rel: str, dst_rel: str):
+def _move_md_with_relink(src_rel: str, dst_rel: str, dry_run=False):
     """Move a .md/.html and rewrite the incoming [[wikilinks]] that target it.
     Injects the content root + build module into docs.move_md_with_relink."""
-    return docs.move_md_with_relink(src_rel, dst_rel, CONFIG.content_root, _import_build())
+    return docs.move_md_with_relink(src_rel, dst_rel, CONFIG.content_root, _import_build(),
+                                    dry_run)
 
 
 from server.app.handler import Handler  # noqa: E402

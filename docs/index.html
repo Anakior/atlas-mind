@@ -38,7 +38,7 @@
       "@type": "SoftwareApplication",
       "@id": "https://atlas-mind.anakior.app/#app",
       "name": "Atlas Mind",
-      "description": "A self-hostable wiki / knowledge-base engine. Your notes stay plain files in your own private git repository, served by a single Python standard-library server with no database and no third-party network calls. AI-native via MCP (Model Context Protocol): 22 tools give an AI a persistent, local read-and-write memory.",
+      "description": "A self-hostable wiki / knowledge-base engine. Your notes stay plain files in your own private git repository, served by a single Python standard-library server with no database and no third-party network calls. AI-native via MCP (Model Context Protocol): 29 tools give an AI a persistent, local read-and-write memory.",
       "applicationCategory": "DeveloperApplication",
       "applicationSubCategory": "Knowledge base / Personal knowledge management",
       "operatingSystem": "Linux, macOS, Windows",
@@ -400,8 +400,8 @@
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
       <h3>AI-native by design</h3>
-      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with twenty-two tools — read, write, map, rewind and audit your mind — and <code>atlas init</code> scaffolds the conventions so an AI knows how to use it.</p>
-      <div class="tag"><a href="#superpowers">MCP · 22 tools · REST API →</a></div>
+      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with twenty-nine tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects.</p>
+      <div class="tag"><a href="#superpowers">MCP · 29 tools · REST API →</a></div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M20 4c-7 0-13 4-13 11v3l11-11"/><path d="M7 18c-1.2 1.2-2 2.4-2.5 3.5"/><path d="M16 8.5 9.5 15"/></svg></div>
@@ -415,20 +415,20 @@
 <section id="superpowers" class="powers center"><div class="wrap">
   <div class="kicker">AI-native · Model Context Protocol</div>
   <h2>Give your mind <span class="grad">superpowers</span>.</h2>
-  <p class="sub" style="margin:14px auto 0">Connect Atlas to Claude (or any MCP client) and your knowledge base stops being a passive archive: it becomes a <b>persistent memory for Claude</b>, an MCP server for your notes it can <b>read, write, triage, map, rewind and audit</b>, on your own machine, with nothing shipped to anyone's cloud. <b>Twenty-four tools, six superpowers.</b></p>
+  <p class="sub" style="margin:14px auto 0">Connect Atlas to Claude (or any MCP client) and your knowledge base stops being a passive archive: it becomes a <b>persistent memory for Claude</b>, an MCP server for your notes it can <b>read, write, triage, map, rewind and audit</b>, on your own machine, with nothing shipped to anyone's cloud. <b>Twenty-nine tools, six superpowers.</b></p>
   <div class="powers-grid">
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></div>
       <h3>Reads your whole mind</h3>
-      <p>Ask in plain language and your AI searches the full text, opens any document, walks the tree and surfaces what you touched lately — across Markdown, HTML decks, PDFs and Word files alike.</p>
-      <div class="tools"><code>search_docs</code><code>read_doc</code><code>list_tree</code><code>recent_docs</code></div>
+      <p>Ask in plain language and your AI gets a ready-made <b>brief</b> on the topic — the right sections, within a token budget — finds the exact line that states a fact, and catches up on what changed since it last looked. Every hit says <b>how far to trust it</b>: who edited it last, whether an AI did, whether it went stale or was judged contradicted.</p>
+      <div class="tools"><code>brief</code><code>search_docs</code><code>grep_docs</code><code>read_doc</code><code>list_tree</code><code>recent_docs</code><code>changes_since</code></div>
     </div>
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
       <h3>Writes it back</h3>
-      <p>It doesn't just answer — it files. Capture a decision, rewrite a section surgically, rename or refile a note with every <b>[[backlink]]</b> fixed automatically, archive what's stale (soft-deleted to trash, never erased).</p>
+      <p>It doesn't just answer — it files. Capture a decision, rewrite a section surgically, rename or refile a note with every <b>[[backlink]]</b> fixed automatically, archive what's stale (soft-deleted to trash, never erased). Every edit comes back as a diff, can be rehearsed first, and is refused if you changed the note since the AI read it.</p>
       <div class="tools"><code>create_doc</code><code>edit_doc</code><code>move_doc</code><code>delete_doc</code></div>
     </div>
 
@@ -449,8 +449,8 @@
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
       <h3>Knows who did what</h3>
-      <p>Every change is attributed in the git history — who wrote it, when, and whether an <b>AI</b> made the edit. Your assistant reads the activity stream, surfaces <b>stale</b> notes untouched for months, and flags <b>same-topic documents</b> that may now contradict each other — then reviews them for you.</p>
-      <div class="tools"><code>activity</code><code>stale</code><code>contradictions</code><code>judge_contradiction</code></div>
+      <p>Every change is attributed in the git history — who wrote it, when, and whether an <b>AI</b> made the edit. Your assistant reads the activity stream, surfaces <b>stale</b> notes untouched for months, and flags <b>same-topic documents</b> that may now contradict each other — then reviews them for you. And when an agent's session went wrong, it <b>undoes the whole run</b> in one commit.</p>
+      <div class="tools"><code>activity</code><code>agent_runs</code><code>undo_run</code><code>stale</code><code>contradictions</code><code>judge_contradiction</code></div>
     </div>
 
     <div class="power">
@@ -461,7 +461,7 @@
     </div>
 
   </div>
-  <p class="powers-note">Every tool runs <b>locally</b> and respects the same boundaries as the viewer — shared mirrors stay read-only, deletes are reversible, and not a byte leaves your disk. Your assistant gets a memory; you keep the keys.</p>
+  <p class="powers-note">Every tool runs <b>locally</b> and respects the same boundaries as the viewer — shared mirrors stay read-only, deletes are reversible, a token can be limited to reading or the inbox, and not a byte leaves your disk. Your assistant gets a memory; you keep the keys.</p>
 </div></section>
 
 <section id="activity" class="center"><div class="wrap">

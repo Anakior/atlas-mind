@@ -67,6 +67,8 @@ def openapi(handler):
                         "score": {"type": "number"},
                         "snippet": {"type": "string"},
                         "mtime": {"type": "integer", "description": "Unix epoch seconds"},
+                        "line": {"type": "integer", "description": "1-based line of the best match (Markdown only)"},
+                        "section": {"type": "string", "description": "Heading path of that line, e.g. 'Spec > Pricing'"},
                     },
                 },
                 "FileContent": {

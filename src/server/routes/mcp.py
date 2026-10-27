@@ -1,5 +1,4 @@
 """MCP streamable-HTTP transport route (token in the path; self-verified bearer)."""
-import time
 import json
 import server as _s
 
@@ -8,9 +7,9 @@ def handle(handler):
     """Streamable HTTP transport for the MCP protocol. Token in the path.
 
     URL: /mcp/<token>[/...].
-    - POST JSON-RPC body → JSON-RPC response (or 204 if notification)
-    - GET with Accept: text/event-stream → SSE stream (keep-alive, for
-      server→client notifications); otherwise 405.
+    - POST JSON-RPC body → JSON-RPC response (or 202 if notification)
+    - anything else → 405: no server→client stream (legacy revisions allow
+      the 405, 2026-07-28 removed the GET endpoint altogether).
     """
     parts = handler.path.split("?", 1)[0].strip("/").split("/")
     if len(parts) < 2 or parts[0] != "mcp":
@@ -29,63 +28,36 @@ def handle(handler):
         handler._send_json(429, {"error": "rate limit exceeded"})
         return
 
-    if handler.command == "GET":
-        # SSE keep-alive stream (server→client notifications are not used
-        # by our tools, but Claude.ai may open the connection for
-        # discovery). We keep it open with a ping every 30s.
-        accept = handler.headers.get("Accept", "")
-        if "text/event-stream" not in accept:
-            handler._send_json(405, {"error": "method not allowed (use Accept: text/event-stream)"})
-            return
-        # Bound the held-open SSE streams: refuse once the global cap is reached so a
-        # flood of never-closing connections can't pin a thread each (DoS).
-        if not _s.SSE_GATE.try_acquire():
-            handler._send_json(503, {"error": "SSE connection limit reached"})
-            return
-        try:
-            handler.send_response(200)
-            handler.send_header("Content-Type", "text/event-stream")
-            handler.send_header("Cache-Control", "no-cache")
-            handler.send_header("Connection", "keep-alive")
-            handler.end_headers()
-            handler.wfile.write(b": connected\n\n")
-            handler.wfile.flush()
-            while True:
-                time.sleep(30)
-                try:
-                    handler.wfile.write(b": ping\n\n")
-                    handler.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError, OSError):
-                    break
-        except Exception:
-            pass
-        finally:
-            _s.SSE_GATE.release()
+    if handler.command != "POST":
+        handler._send_json(405, {"error": "method not allowed"})
         return
 
-    if handler.command == "POST":
-        try:
-            raw = handler._read_body() or b"{}"
-            req = json.loads(raw)
-        except (ValueError, json.JSONDecodeError):
-            handler._send_json(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
-            return
-
-        if isinstance(req, list):
-            responses = [r for r in (_s._mcp_jsonrpc(item, ctx) for item in req) if r is not None]
-            if not responses:
-                handler.send_response(204)
-                handler.end_headers()
-                return
-            handler._send_json(200, responses)
-            return
-
-        response = _s._mcp_jsonrpc(req, ctx)
-        if response is None:
-            handler.send_response(204)
-            handler.end_headers()
-            return
-        handler._send_json(200, response)
+    try:
+        raw = handler._read_body() or b"{}"
+        req = json.loads(raw)
+    except (ValueError, json.JSONDecodeError):
+        handler._send_json(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
         return
 
-    handler._send_json(405, {"error": "method not allowed"})
+    # A JSON-RPC batch is legacy-only (2025-03-26), so it always answers 200.
+    if isinstance(req, list):
+        responses = [r for r in (_s._mcp_jsonrpc(item, ctx, handler.headers) for item in req)
+                     if r is not None]
+        if not responses:
+            _accepted(handler)
+            return
+        handler._send_json(200, responses)
+        return
+
+    response = _s._mcp_jsonrpc(req, ctx, handler.headers)
+    if response is None:
+        _accepted(handler)
+        return
+    handler._send_json(_s._mcp_http_status(req, response), response)
+
+
+def _accepted(handler):
+    """202 for a notification, as every Streamable HTTP revision requires."""
+    handler.send_response(202)
+    handler.send_header("Content-Length", "0")
+    handler.end_headers()

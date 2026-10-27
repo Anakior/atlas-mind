@@ -244,7 +244,8 @@ AGENTS_MD_EN = """\
 
 This Atlas is the external memory shared between you and your AI assistant. This
 file tells the AI how to read and enrich your Atlas. Adapt it to your
-conventions (and duplicate it as `CLAUDE.md` if you use Claude Code).
+conventions: every MCP client receives it as the server's instructions when it
+connects, so keep it short and directive (capped at 8,000 characters).
 
 ## Principle
 
@@ -256,8 +257,8 @@ conventions (and duplicate it as `CLAUDE.md` if you use Claude Code).
 
 ## Access via MCP
 
-The Atlas exposes an MCP server: nineteen tools to read, write, map and rewind
-your mind. Each user mints their own token from the web UI (**Settings → Tokens**,
+The Atlas exposes an MCP server: twenty-nine tools to read, write, triage, map,
+rewind and audit your mind. Each user mints their own token from the web UI (**Settings → Tokens**,
 or `atlas token create <mind>` locally) and points their assistant at
 `https://<your-atlas>/mcp/<token>`. The AI can then search, read and create
 documents directly in your memory palace.
@@ -385,7 +386,8 @@ AGENTS_MD_FR = """\
 
 Cet Atlas est la mémoire externe partagée entre toi et ton assistant IA. Ce
 fichier dit à l'IA comment lire et enrichir ton Atlas. Adapte-le à tes
-conventions (et duplique-le en `CLAUDE.md` si tu utilises Claude Code).
+conventions : chaque client MCP le reçoit comme instructions du serveur à la
+connexion, donc garde-le court et directif (plafonné à 8 000 caractères).
 
 ## Principe
 
@@ -396,8 +398,8 @@ conventions (et duplique-le en `CLAUDE.md` si tu utilises Claude Code).
 
 ## Accès via MCP
 
-L'Atlas expose un serveur MCP : dix-neuf outils pour lire, écrire, cartographier
-et rembobiner ton mind. Chaque utilisateur crée son propre token depuis l'UI web
+L'Atlas expose un serveur MCP : vingt-neuf outils pour lire, écrire, trier,
+cartographier, rembobiner et auditer ton mind. Chaque utilisateur crée son propre token depuis l'UI web
 (**Paramètres → Tokens**, ou `atlas token create <mind>` en local) et branche son
 assistant sur `https://<ton-atlas>/mcp/<token>`. L'IA peut alors chercher, lire et
 créer des documents directement dans ton palais mental.
@@ -1633,6 +1635,10 @@ def cmd_token_create(args) -> int:
             raise CliError(
                 f"--acts-as {acts_as}: no human (admin/viewer) account with that email.")
         fields["acts_as"] = acts_as
+    try:
+        fields["scopes"] = store.normalize_scopes(args.scope) if args.scope else None
+    except ValueError as e:
+        raise CliError(f"--scope: {e}")
     file_store.upsert_user(email, fields)
 
     action = "regenerated (the old one is revoked)" if existing else "created"
@@ -1646,6 +1652,8 @@ def cmd_token_create(args) -> int:
     print("This token will never be shown again. Copy it now.")
     if fields.get("acts_as"):
         print(f"Bound to {fields['acts_as']} — the AI also sees that account's private space.")
+    if fields["scopes"]:
+        print(f"Limited to: {', '.join(fields['scopes'])}.")
     print()
     print("Usage:")
     print("  REST : header  Authorization: Bearer <token>  on /api/v1/*")
@@ -1668,7 +1676,8 @@ def cmd_token_list(args) -> int:
         email = record.get("email", "?")
         state = "active" if record.get("api_token_hash") else "revoked"
         created = _format_timestamp(record.get("api_token_created_at"))
-        print(f"{label}  {email}  {state}  created on {created}")
+        scopes = ",".join(record.get("scopes") or store.API_SCOPES)
+        print(f"{label}  {email}  {state}  {scopes}  created on {created}")
     return 0
 
 
@@ -1990,6 +1999,10 @@ def build_parser() -> argparse.ArgumentParser:
                                 help="Bind the token to a human account (email): the "
                                      "AI then also sees that person's PRIVATE space, "
                                      "not just the commons.")
+    p_token_create.add_argument("--scope", default=None, metavar="SCOPES",
+                                help="Limit the token, comma-separated among "
+                                     f"{','.join(store.API_SCOPES)} (default: all). E.g. "
+                                     "read,inbox for a triage agent that must never edit.")
     p_token_create.set_defaults(func=cmd_token_create)
     p_token_list = token_sub.add_parser("list", help="List the tokens.")
     p_token_list.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")

@@ -1,6 +1,11 @@
 """MCP tool dispatch (read-side queries live in pure/queries.py, git parsing in pure/git_history.py)."""
+import base64
+import datetime
+import difflib
+import functools
 import json
 import posixpath
+import re
 import sys
 import time
 from pathlib import Path
@@ -9,12 +14,13 @@ import server as _s
 from store import slugify_token_label, slugify_title
 from server.pure.queries import (
     _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
-    _api_stale, _activity_events,
+    _api_stale, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
 )
 from server.pure import contradictions
 from server.pure.git_history import (
     _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
     _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
+    _attributed_log, _name_status,
 )
 from server.pure.params import clamp_int
 
@@ -47,6 +53,161 @@ def text_result(s: str, is_error: bool = False) -> dict:
     return out
 
 
+def json_result(payload: dict) -> dict:
+    """A JSON tool result: compact text for the model, the same object as structuredContent
+    for clients that consume it programmatically."""
+    text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return {"content": [{"type": "text", "text": text}], "structuredContent": payload}
+
+
+def _version(text: str) -> str:
+    """The content fingerprint read_doc reports and edit_doc's base_version is checked against."""
+    return _s.doc_hash(text)
+
+
+def _near_paths(rel: str, ctx, n: int = 3) -> list:
+    """Visible doc paths closest to `rel`: the same filename in another folder first, then
+    near spellings of the whole path."""
+    by_path, by_name = {}, {}
+    for p, _ in _s._iter_doc_files():
+        if _visible(p, ctx):
+            by_path[p.lower()] = p
+            by_name.setdefault(posixpath.basename(p).lower(), []).append(p)
+    rel = rel.lower()
+    near = [p for m in difflib.get_close_matches(posixpath.basename(rel), by_name, n, 0.6)
+            for p in by_name[m]]
+    near += [by_path[m] for m in difflib.get_close_matches(rel, by_path, n, 0.6)]
+    return list(dict.fromkeys(near))[:n]
+
+
+def _not_found(rel: str, ctx, hint: str = "") -> dict:
+    """'Document not found' plus the likeliest intended paths: agents misremember a folder
+    or a slug far more often than they ask for a doc that doesn't exist."""
+    near = _near_paths(rel, ctx)
+    tip = (f" Did you mean: {', '.join(near)}?" if near
+           else " Use search_docs or list_tree to find the right path.")
+    return text_result(f"Document not found: {rel}{hint}.{tip}", is_error=True)
+
+
+_PASSAGE_MAX_LINES = 15
+_DIFF_MAX_LINES = 60
+
+
+def _closest_passage(text: str, needle: str) -> str:
+    """Where `needle` most likely sits in `text` (its first line fuzzily matched), quoted
+    verbatim so the agent can copy the real text instead of re-reading the whole doc."""
+    first = next((ln.strip() for ln in needle.splitlines() if ln.strip()), "")
+    lines = text.splitlines()
+    stripped = [ln.strip() for ln in lines]
+    match = difflib.get_close_matches(first, stripped, 1, 0.6) if first else []
+    if not match:
+        return " No similar passage either: read_doc it to see the current text."
+    lo = stripped.index(match[0])
+    hi = min(len(lines), lo + min(max(1, len(needle.splitlines())), _PASSAGE_MAX_LINES))
+    return f" Closest passage (lines {lo + 1}-{hi}):\n" + "\n".join(lines[lo:hi])
+
+
+def _occurrence_lines(text: str, needle: str, cap: int = 10) -> list:
+    """1-based lines where `needle` starts, to point at what makes an old_string ambiguous."""
+    out, i = [], text.find(needle)
+    while i != -1 and len(out) < cap:
+        out.append(text.count("\n", 0, i) + 1)
+        i = text.find(needle, i + 1)
+    return out
+
+
+def _diff(old: str, new: str) -> str:
+    """Unified diff of an edit (one line of context), capped: enough for the agent to check
+    its change without reading the doc back."""
+    lines = list(difflib.unified_diff(old.splitlines(), new.splitlines(), n=1, lineterm=""))[2:]
+    if len(lines) > _DIFF_MAX_LINES:
+        lines = lines[:_DIFF_MAX_LINES] + [f"… ({len(lines) - _DIFF_MAX_LINES} more diff lines)"]
+    return "\n".join(lines)
+
+
+_STALE_MONTHS = 6  # the stale tool's default threshold
+
+
+def _last_commits(rels) -> dict:
+    """{rel: (unix ts, author, AI family or None)} of the latest commit touching each doc,
+    from a single git log."""
+    if not rels:
+        return {}
+    result = _s.git("--literal-pathspecs", "log", "--no-renames", "--name-only", "-z",
+                    "--format=%x1e%ct%x1f%an%x1f%(trailers:key=X-Atlas-Author,valueonly)",
+                    "--", *("content/" + r for r in rels))
+    last = {}
+    if result.returncode != 0:
+        return last
+    for rec in result.stdout.split("\x1e"):
+        head, _, files = rec.partition("\x00")
+        ts, author, trailer = (head.split("\x1f") + ["", ""])[:3]
+        if not ts.strip().isdigit():
+            continue
+        for f in files.split("\x00"):
+            rel = _strip_content(f.strip("\n"))
+            if rel and rel not in last:
+                last[rel] = (int(ts), author, _s.parse_ai_trailer(trailer))
+    return last
+
+
+def _contested(paths: set, ctx) -> dict:
+    """{path: [docs it was judged to contradict]} for 'real' verdicts that still hold and
+    whose two sides ctx can see."""
+    out = {}
+    for e in _s.load_verdicts():
+        a, b = e.get("a") or "", e.get("b") or ""
+        if e.get("verdict") != "real" or (a not in paths and b not in paths):
+            continue
+        ta, tb = _s._validate_doc_path(a), _s._validate_doc_path(b)
+        if not (ta and tb and _visible(a, ctx) and _visible(b, ctx)):
+            continue
+        try:
+            xa, xb = ta.read_text(encoding="utf-8-sig"), tb.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not _s.verdict_holds(e, _s.doc_hash(xa), _s.doc_hash(xb),
+                                _s.line_hashes(xa), _s.line_hashes(xb)):
+            continue
+        for doc, other in ((a, b), (b, a)):
+            if doc in paths and other not in out.setdefault(doc, []):
+                out[doc].append(other)
+    return out
+
+
+def _add_trust_signals(hits: list, ctx) -> None:
+    """What an agent needs to weigh each hit: date and author of its last edit (and the AI
+    behind it, if any), staleness, and the docs it was judged to contradict. Replaces mtime,
+    which is the boot time on a cloud clone."""
+    paths = [h["path"] for h in hits]
+    last, contested = _last_commits(paths), _contested(set(paths), ctx)
+    stale_before = time.time() - _STALE_MONTHS * _MONTH_SECONDS
+    for h in hits:
+        ts, author, ai = last.get(h["path"], (h["mtime"], None, None))
+        del h["mtime"]
+        h["last_modified"] = time.strftime("%Y-%m-%d", time.gmtime(ts))
+        if author:
+            h["last_editor"] = author
+        if ai:
+            h["ai"] = ai
+        if ts < stale_before:
+            h["stale"] = True
+        if h["path"] in contested:
+            h["contested_with"] = contested[h["path"]]
+
+
+def _section_span(lines: list, query: str):
+    """1-based (start, end) of the first heading containing `query` (case and accent
+    insensitive), down to the next heading of the same or a higher level."""
+    want = _s._normalize_text(query)
+    heads = list(_headings(lines))
+    for k, (i, level, title) in enumerate(heads):
+        if want in _s._normalize_text(title):
+            end = next((j for j, lv, _ in heads[k + 1:] if lv <= level), len(lines))
+            return i + 1, end
+    return None
+
+
 def _tool_search_docs(args, ctx):
     q = (args.get("q") or "").strip()
     if not q:
@@ -68,18 +229,69 @@ def _tool_search_docs(args, ctx):
             if len(kept) >= limit:
                 break
         hits = kept
-    if not hits:
-        return text_result(f"No results for: {q}" + (f" (tag: {tag})" if tag else ""))
-    return text_result(json.dumps(hits, ensure_ascii=False, indent=2))
+    _add_trust_signals(hits, ctx)
+    payload = {"query": q, "hits": hits}
+    if tag:
+        payload["tag"] = tag
+    return json_result(payload)
+
+
+_GREP_LINE_MAX = 1000  # matched per line: bounds what a pathological regex can backtrack over
+
+
+def _tool_grep_docs(args, ctx):
+    pattern = args.get("pattern")
+    if not isinstance(pattern, str) or not pattern.strip():
+        return text_result("Error: missing 'pattern' parameter", is_error=True)
+    prefix = _safe_path_prefix(args.get("path_prefix") or "")
+    if prefix is None:
+        return text_result("Invalid 'path_prefix'", is_error=True)
+    limit = clamp_int(args.get("limit"), 50, 1, 200)
+    flags = 0 if args.get("case_sensitive") else re.IGNORECASE
+    try:
+        rx = re.compile(pattern if args.get("regex") else re.escape(pattern), flags)
+    except re.error as e:
+        return text_result(f"Invalid regex: {e}", is_error=True)
+    matches = []
+    for rel, _name, text in sorted(_doc_corpus(ctx)):
+        if prefix and rel != prefix and not rel.startswith(prefix + "/"):
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            if rx.search(line[:_GREP_LINE_MAX]):
+                if len(matches) == limit:
+                    return json_result({"pattern": pattern, "matches": matches, "truncated": True})
+                matches.append({"path": rel, "line": n, "text": line.strip()[:240]})
+    return json_result({"pattern": pattern, "matches": matches, "truncated": False})
 
 
 def _tool_read_doc(args, ctx):
     rel = (args.get("path") or "").strip()
     target = _s._validate_doc_path(rel)
     if not target or not target.exists() or not _visible(rel, ctx):
-        return text_result(f"Document not found: {rel}", is_error=True)
+        return _not_found(rel, ctx)
     text = target.read_text(encoding="utf-8")
-    return text_result(text)
+    lines = text.splitlines()
+    start = clamp_int(args.get("start_line"), 0, 0)
+    end = clamp_int(args.get("end_line"), 0, 0)
+    section = (args.get("section") or "").strip()
+    if section:
+        span = _section_span(lines, section)
+        if span is None:
+            titles = [title for _, _, title in _headings(lines)][:30]
+            return text_result(f"No section matching '{section}' in {rel}. Its headings: "
+                               + ("; ".join(titles) if titles else "none"), is_error=True)
+        start, end = span
+    if start or end:
+        start, end = max(start, 1), min(end or len(lines), len(lines))
+        if start > end:
+            return text_result(f"Line range out of bounds: {rel} has {len(lines)} lines.",
+                               is_error=True)
+        body, scope = "\n".join(lines[start - 1:end]), f"lines {start}-{end} of {len(lines)}"
+    else:
+        body, scope = text, f"{len(lines)} lines"
+    # Its own block, so the version never gets copied into an edit along with the text.
+    return {"content": [{"type": "text", "text": body},
+                        {"type": "text", "text": f"[{rel} · {scope} · version {_version(text)}]"}]}
 
 
 def _tool_list_tree(args, ctx):
@@ -87,7 +299,7 @@ def _tool_list_tree(args, ctx):
         tree = _s._import_build().walk(_s.CONFIG.content_root)
         if ctx is not None:
             tree = _s._filter_tree(tree, lambda p: _s.can_read(p, ctx))
-        return text_result(json.dumps(tree, ensure_ascii=False, indent=2))
+        return json_result(tree or {})
     except Exception as e:
         print(f"[mcp] list_tree failed: {e}", file=sys.stderr)
         return text_result("Error listing the tree", is_error=True)
@@ -96,10 +308,7 @@ def _tool_list_tree(args, ctx):
 def _tool_recent_docs(args, ctx):
     days = clamp_int(args.get("days"), 7, 1)
     limit = clamp_int(args.get("limit"), 20, 1, 100)
-    hits = _api_recent(days, limit, ctx)
-    if not hits:
-        return text_result(f"No document modified in the last {days} days")
-    return text_result(json.dumps(hits, ensure_ascii=False, indent=2))
+    return json_result({"days": days, "documents": _api_recent(days, limit, ctx)})
 
 
 def _create_doc_impl(rel, content, ai, ctx, subject=None):
@@ -116,7 +325,8 @@ def _create_doc_impl(rel, content, ai, ctx, subject=None):
     if ctx is not None and not _s.can_create(rel, ctx):
         return text_result("Insufficient permission to create at this location.", is_error=True)
     if target.exists():
-        return text_result(f"Document already exists: {rel} (cannot overwrite with this token)", is_error=True)
+        return text_result(f"Document already exists: {rel} (create never overwrites: "
+                           "use edit_doc to change it)", is_error=True)
     if not isinstance(content, str):
         return text_result("'content' must be a string", is_error=True)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -129,7 +339,7 @@ def _create_doc_impl(rel, content, ai, ctx, subject=None):
         except Exception as e:
             print(f"[create_doc owner] {e}", file=sys.stderr)
     _s.commit_change(ctx, subject or f"created: {target.stem}", target, ai=ai)
-    return text_result(f"Document created: {rel}")
+    return text_result(f"Document created: {rel} (version {_version(target.read_text(encoding='utf-8'))})")
 
 
 def _tool_create_doc(args, ctx):
@@ -272,10 +482,15 @@ def _tool_edit_doc(args, ctx):
     if _s._is_readonly_path(rel):
         return text_result("Read-only document (remote node mirror). Use \"Appropriate\" to make an editable copy.", is_error=True)
     if not target.exists() or not _visible(rel, ctx):
-        return text_result(f"Document not found: {rel} (use create_doc to create a new one)", is_error=True)
+        return _not_found(rel, ctx, " (use create_doc to create a new one)")
     if ctx is not None and not _s.can_write(rel, ctx, "edit"):
         return text_result("Insufficient permission (need edit on this document).", is_error=True)
-    subject = _s._clean_subject(args.get("commit_message")) or f"edited: {target.stem}"
+    current = target.read_text(encoding="utf-8")
+    base = (args.get("base_version") or "").strip()
+    if base and base != _version(current):
+        return text_result(f"{rel} changed since you read it (now version {_version(current)}, "
+                           f"you edited {base}): read_doc it again and redo the edit on the "
+                           "current text.", is_error=True)
     old_string = args.get("old_string")
     new_string = args.get("new_string")
     content = args.get("content")
@@ -285,22 +500,32 @@ def _tool_edit_doc(args, ctx):
             return text_result("'old_string' and 'new_string' must be strings", is_error=True)
         if old_string == "":
             return text_result("'old_string' cannot be empty", is_error=True)
-        current = target.read_text(encoding="utf-8")
         count = current.count(old_string)
         if count == 0:
-            return text_result("'old_string' not found in the document (check it with read_doc)", is_error=True)
+            return text_result("'old_string' not found in the document."
+                               + _closest_passage(current, old_string), is_error=True)
         if count > 1:
-            return text_result(f"'old_string' appears {count} times — it must be unique. Add surrounding context to make it unique.", is_error=True)
-        target.write_text(current.replace(old_string, new_string, 1), encoding="utf-8")
-        _s.commit_change(ctx, subject, target, ai=args.get("ai"))
-        return text_result(f"Document edited (targeted replacement): {rel}")
-    if content is not None:
+            where = ", ".join(map(str, _occurrence_lines(current, old_string)))
+            return text_result(f"'old_string' appears {count} times (lines {where}): it must be "
+                               "unique. Add surrounding context to make it unique.", is_error=True)
+        new, done = current.replace(old_string, new_string, 1), "Document edited (targeted replacement)"
+    elif content is not None:
         if not isinstance(content, str):
             return text_result("'content' must be a string", is_error=True)
-        target.write_text(content, encoding="utf-8")
-        _s.commit_change(ctx, subject, target, ai=args.get("ai"))
-        return text_result(f"Document rewritten: {rel}")
-    return text_result("Provide either 'old_string'+'new_string' (patch) or 'content' (rewrite)", is_error=True)
+        new, done = content, "Document rewritten"
+    else:
+        return text_result("Provide either 'old_string'+'new_string' (patch) or 'content' (rewrite)", is_error=True)
+    if new == current:
+        return text_result(f"No change: {rel} already reads like that (version {_version(current)}).")
+    if args.get("dry_run"):
+        return text_result(f"Dry run, nothing written. {rel} would change like this:\n"
+                           + _diff(current, new))
+    target.write_text(new, encoding="utf-8")
+    subject = _s._clean_subject(args.get("commit_message")) or f"edited: {target.stem}"
+    _s.commit_change(ctx, subject, target, ai=args.get("ai"))
+    # Versioned as read_doc will read it back (newlines normalized).
+    now = target.read_text(encoding="utf-8")
+    return text_result(f"{done}: {rel} (now version {_version(now)})\n" + _diff(current, now))
 
 
 def _tool_move_doc(args, ctx):
@@ -311,7 +536,7 @@ def _tool_move_doc(args, ctx):
     if _s._is_readonly_path(src_rel) or _s._is_readonly_path(dst_rel):
         return text_result("Read-only location (remote node mirror) — \"Appropriate\" it first to get an editable copy.", is_error=True)
     if ctx is not None and not _visible(src_rel, ctx):
-        return text_result(f"Document not found: {src_rel}", is_error=True)
+        return _not_found(src_rel, ctx)
     if ctx is not None and not _s.can_write(src_rel, ctx, "owner"):
         return text_result("Insufficient permission (need owner to move this document).", is_error=True)
     # Gate the DESTINATION too: you can't plant a doc into a space you can't
@@ -319,20 +544,28 @@ def _tool_move_doc(args, ctx):
     if ctx is not None and not _s.can_create(dst_rel, ctx):
         return text_result("Insufficient permission to move to this destination.", is_error=True)
     src_rel = _s._canonical_rel(src_rel)  # match the on-disk ACL key
-    status, payload = _s._move_md_with_relink(src_rel, dst_rel)
+    dry_run = bool(args.get("dry_run"))
+    status, payload = _s._move_md_with_relink(src_rel, dst_rel, dry_run)
+    if status == "not_found":
+        return _not_found(src_rel, ctx)
     if status != "ok":
         return text_result(payload, is_error=True)
+    rewrites = payload["rewrites"]
+    relinked = ", ".join(f"{r['path']} ({r['count']})" for r in rewrites[:20])
+    if dry_run:
+        return text_result(f"Dry run, nothing moved. {payload['from']} -> {payload['to']} would "
+                           + (f"rewrite {payload['links_updated']} incoming wikilink(s) in: {relinked}."
+                              if rewrites else "need no wikilink fix."))
     # Repoint the ACL + shares BEFORE the git sync (privacy travels with the doc).
     _s._repoint_doc(payload["from"], payload["to"])
-    touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
+    touched = [payload["from"], payload["to"], *(r["path"] for r in rewrites)]
     subject = (f"moved: {posixpath.splitext(payload['from'])[0]}"
                f" → {posixpath.splitext(payload['to'])[0]}")
     _s.commit_change(ctx, subject,
                      *(_s.CONFIG.content_root / p for p in touched), ai=args.get("ai"))
-    n, files = payload["links_updated"], len(payload["rewrites"])
     msg = f"Moved: {payload['from']} -> {payload['to']}."
-    msg += (f" {n} incoming wikilink(s) rewritten in {files} doc(s)."
-            if n else " No incoming wikilink to fix.")
+    msg += (f" {payload['links_updated']} incoming wikilink(s) rewritten in: {relinked}."
+            if rewrites else " No incoming wikilink to fix.")
     return text_result(msg)
 
 
@@ -340,22 +573,18 @@ def _tool_get_links(args, ctx):
     rel = (args.get("path") or "").strip()
     target = _s._validate_doc_path(rel)
     if not target or not target.exists() or not _visible(rel, ctx):
-        return text_result(f"Document not found: {rel}", is_error=True)
+        return _not_found(rel, ctx)
     entry = _links_graph(ctx).get(rel) or {"out": [], "in": []}
-    out = [p for p in entry["out"] if _visible(p, ctx)]
-    return text_result(json.dumps({"path": rel, "links": out},
-                                  ensure_ascii=False, indent=2))
+    return json_result({"path": rel, "links": [p for p in entry["out"] if _visible(p, ctx)]})
 
 
 def _tool_get_backlinks(args, ctx):
     rel = (args.get("path") or "").strip()
     target = _s._validate_doc_path(rel)
     if not target or not target.exists() or not _visible(rel, ctx):
-        return text_result(f"Document not found: {rel}", is_error=True)
+        return _not_found(rel, ctx)
     entry = _links_graph(ctx).get(rel) or {"out": [], "in": []}
-    ins = [p for p in entry["in"] if _visible(p, ctx)]
-    return text_result(json.dumps({"path": rel, "backlinks": ins},
-                                  ensure_ascii=False, indent=2))
+    return json_result({"path": rel, "backlinks": [p for p in entry["in"] if _visible(p, ctx)]})
 
 
 def _tool_get_mind_topology(args, ctx):
@@ -385,7 +614,7 @@ def _tool_get_mind_topology(args, ctx):
         "orphans_total": len(orphans),
         "top_tags": top_tags,
     }
-    return text_result(json.dumps(payload, ensure_ascii=False, indent=2))
+    return json_result(payload)
 
 
 def _tool_list_by_tag(args, ctx):
@@ -395,10 +624,7 @@ def _tool_list_by_tag(args, ctx):
     build = _s._import_build()
     matches = sorted(rel for rel, _, text in _doc_corpus(ctx)
                      if tag in _tags_for(build, rel, text))
-    if not matches:
-        return text_result(f"No document tagged: {tag}")
-    return text_result(json.dumps({"tag": tag, "documents": matches},
-                                  ensure_ascii=False, indent=2))
+    return json_result({"tag": tag, "documents": matches})
 
 
 def _tool_delete_doc(args, ctx):
@@ -409,7 +635,7 @@ def _tool_delete_doc(args, ctx):
     if _s._is_readonly_path(rel):
         return text_result("Read-only location (remote node mirror) — cannot delete.", is_error=True)
     if not target.exists() or not _visible(rel, ctx):
-        return text_result(f"Document not found: {rel}", is_error=True)
+        return _not_found(rel, ctx)
     if ctx is not None and not _s.can_write(rel, ctx, "owner"):
         return text_result("Insufficient permission (need owner to delete this document).", is_error=True)
     trashed = _soft_delete(target)
@@ -465,9 +691,8 @@ def _tool_doc_history(args, ctx):
         last_modified = _fmt_commit(newest[0]) if newest else None
     else:
         last_modified = revisions[0] if revisions else None
-    payload = {"path": rel, "created": created,
-               "last_modified": last_modified, "revisions": revisions}
-    return text_result(json.dumps(payload, ensure_ascii=False, indent=2))
+    return json_result({"path": rel, "created": created,
+                        "last_modified": last_modified, "revisions": revisions})
 
 
 def _tool_doc_at(args, ctx):
@@ -565,11 +790,7 @@ def _tool_search_history(args, ctx):
                            else "git history search failed", is_error=True)
     commits = _scrub_commits(
         _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES), ctx)
-    if not commits:
-        return text_result(f"No commit where '{query}' entered or left the history"
-                           + (f" under {prefix}" if prefix else ""))
-    return text_result(json.dumps({"query": query, "regex": regex, "matches": commits},
-                                  ensure_ascii=False, indent=2))
+    return json_result({"query": query, "regex": regex, "matches": commits})
 
 
 def _tool_changelog(args, ctx):
@@ -592,11 +813,7 @@ def _tool_changelog(args, ctx):
         return text_result("git log failed", is_error=True)
     commits = _scrub_commits(
         _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES), ctx)
-    if not commits:
-        return text_result(f"No document changes in the last {days} days"
-                           + (f" under {prefix}" if prefix else ""))
-    return text_result(json.dumps({"since_days": days, "commits": commits},
-                                  ensure_ascii=False, indent=2))
+    return json_result({"since_days": days, "commits": commits})
 
 
 def _tool_activity(args, ctx):
@@ -607,28 +824,19 @@ def _tool_activity(args, ctx):
     events = _activity_events(days, limit, author, type_filter, ctx)
     if events is None:
         return text_result("git log failed", is_error=True)
-    if not events:
-        return text_result(f"No activity in the last {days} days")
-    return text_result(json.dumps({"since_days": days, "events": events},
-                                  ensure_ascii=False, indent=2))
+    return json_result({"since_days": days, "events": events})
 
 
 def _tool_stale(args, ctx):
-    months = clamp_int(args.get("months"), 6, 1, 24)
+    months = clamp_int(args.get("months"), _STALE_MONTHS, 1, 24)
     limit = clamp_int(args.get("limit"), 30, 1, 100)
-    items = _api_stale(months, limit, ctx)
-    if not items:
-        return text_result(f"No document untouched for {months}+ months")
-    return text_result(json.dumps({"months": months, "stale": items},
-                                  ensure_ascii=False, indent=2))
+    return json_result({"months": months, "stale": _api_stale(months, limit, ctx)})
 
 
 def _tool_contradictions(args, ctx):
     limit = clamp_int(args.get("limit"), 15, 1, 50)
     items = contradictions.find_contradictions(ctx, limit, bool(args.get("include_dismissed")))
-    if not items:
-        return text_result("No contradiction candidates found.")
-    return text_result(json.dumps({"candidates": items}, ensure_ascii=False, indent=2))
+    return json_result({"candidates": items})
 
 
 def _span_hash(text: str, line: int) -> str:
@@ -673,7 +881,7 @@ def _tool_doc_blame(args, ctx):
     if target is None:
         return text_result(f"Invalid path: {rel}", is_error=True)
     if not target.exists() or not _visible(rel, ctx):
-        return text_result(f"Document not found: {rel}", is_error=True)
+        return _not_found(rel, ctx)
     pattern = (args.get("pattern") or "").strip()
     start = clamp_int(args.get("start"), 0, 0)
     end = clamp_int(args.get("end"), 0, 0)
@@ -692,8 +900,7 @@ def _tool_doc_blame(args, ctx):
     if not pattern and start == 0 and len(lines) > _MAX_BLAME_LINES:
         lines = lines[:_MAX_BLAME_LINES]
         truncated = True
-    return text_result(json.dumps({"path": rel, "truncated": truncated, "lines": lines},
-                                  ensure_ascii=False, indent=2))
+    return json_result({"path": rel, "truncated": truncated, "lines": lines})
 
 
 def _tool_doc_revert(args, ctx):
@@ -721,9 +928,215 @@ def _tool_doc_revert(args, ctx):
                        "(written as a forward-moving change; the prior version stays in history).")
 
 
+_BRIEF_DOCS = 6
+_BRIEF_MIN_ROOM = 200  # characters: below this, a further source would be a stub
+
+
+def _enclosing_section(lines: list, line: int):
+    """1-based (start, end) of the innermost section holding `line`, or a window around
+    it when no heading precedes it."""
+    heads = list(_headings(lines))
+    above = [k for k, (i, _, _) in enumerate(heads) if i < line]
+    if not above:
+        return max(1, line - 10), min(len(lines), line + 20)
+    k = above[-1]
+    i, level, _ = heads[k]
+    end = next((j for j, lv, _ in heads[k + 1:] if lv <= level), len(lines))
+    return i + 1, end
+
+
+def _tool_brief(args, ctx):
+    """A context pack on a topic in one call: the best-matching section of each relevant
+    doc, best first, within a token budget, with the trust signals of search_docs and the
+    docs linked around the top ones."""
+    topic = (args.get("topic") or "").strip()
+    if not topic:
+        return text_result("Error: missing 'topic' parameter", is_error=True)
+    budget = clamp_int(args.get("budget_tokens"), 2000, 300, 8000)
+    hits = _api_search(topic, _BRIEF_DOCS, ctx)
+    _add_trust_signals(hits, ctx)
+    room = budget * 4  # characters, at ~4 per token
+    sources, omitted = [], []
+    for h in hits:
+        if room < _BRIEF_MIN_ROOM:
+            omitted.append(h["path"])
+            continue
+        source = {k: h[k] for k in ("path", "section", "last_modified", "last_editor", "ai",
+                                    "stale", "contested_with") if k in h}
+        if "line" in h:
+            try:
+                lines = (_s.CONFIG.content_root / h["path"]).read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeDecodeError):
+                continue
+            start, end = _enclosing_section(lines, h["line"])
+            source["lines"] = f"{start}-{end}"
+            text = "\n".join(lines[start - 1:end]).strip()
+        else:  # .html: indexed as extracted text, so only its snippet maps back
+            text = h["snippet"]
+        share = max(_BRIEF_MIN_ROOM * 2, room // 2)  # the best source may take half the room
+        if len(text) > share:
+            text = text[:share].rsplit("\n", 1)[0] + "\n…"
+        source["text"] = text
+        room -= len(text)
+        sources.append(source)
+    graph = _links_graph(ctx)
+    seen = {h["path"] for h in hits}
+    related = []
+    for s in sources[:3]:
+        entry = graph.get(s["path"]) or {"out": [], "in": []}
+        for p in entry["out"] + entry["in"]:
+            if p not in seen and _visible(p, ctx):
+                seen.add(p)
+                related.append(p)
+    return json_result({"topic": topic, "budget_tokens": budget, "sources": sources,
+                        "related": related[:8], "omitted": omitted})
+
+
+def _doc_changes(commits: list) -> list:
+    """Net effect per doc of `commits` (newest first, as git log lists them): added,
+    modified, moved (from its original path) or deleted, with the last edit's date, editor
+    and AI, and how many commits touched it. A doc added then deleted cancels out."""
+    docs = {}
+    for c in reversed(commits):
+        for f in c["files"]:
+            path, status = f["path"], f["status"]
+            if status == "R":
+                entry = docs.pop(f["old_path"], None) or {"change": "moved", "from": f["old_path"]}
+                if entry["change"] == "modified":
+                    entry = {**entry, "change": "moved", "from": f["old_path"]}
+            elif status == "D":
+                entry = docs.pop(path, None) or {}
+                if entry.get("change") == "added":
+                    continue
+                entry = {**entry, "change": "deleted"}
+            else:
+                entry = docs.pop(path, None) or {"change": "added" if status in ("A", "C") else "modified"}
+            entry["commits"] = entry.get("commits", 0) + 1
+            entry.update(date=c["date"], last_editor=c["author"])
+            entry.pop("ai", None)
+            if c.get("ai"):
+                entry["ai"] = c["ai"]
+            docs[path] = entry
+    return [{"path": p, **e} for p, e in sorted(docs.items(), key=lambda d: d[1]["date"], reverse=True)]
+
+
+def _tool_changes_since(args, ctx):
+    cursor = (args.get("cursor") or "").strip()
+    head = _s.git("rev-parse", "HEAD").stdout.strip()
+    if cursor:
+        if not (_s._valid_git_rev(cursor)
+                and _s.git("merge-base", "--is-ancestor", cursor, "HEAD").returncode == 0):
+            return text_result("Unknown cursor (not from this mind, or its history was rewritten): "
+                               "call changes_since without one to get a fresh cursor.", is_error=True)
+        commits, since = _attributed_log(f"{cursor}..HEAD"), cursor
+    else:
+        days = clamp_int(args.get("days"), 7, 1, 365)
+        commits, since = _attributed_log(f"--since={days}.days.ago"), f"{days} days"
+    if commits is None:
+        return text_result("git log failed", is_error=True)
+    limit = clamp_int(args.get("limit"), 50, 1, 200)
+    docs = _doc_changes(_scrub_commits(commits, ctx))
+    return json_result({"cursor": head, "since": since, "documents": docs[:limit],
+                        "truncated": len(docs) > limit})
+
+
+_RUN_GAP_SECONDS = 30 * 60  # an agent silent this long has finished its run
+_RUN_WINDOW_DAYS = 30       # runs are computed over this window, so their ids stay stable
+
+
+def _agent_runs() -> list:
+    """AI commits grouped into runs: consecutive commits by one agent (AI family + token +
+    the person it acts for) with no silence over _RUN_GAP_SECONDS. Newest first, each with
+    its commits newest first. Not ACL-scrubbed: callers filter for their ctx."""
+    runs, open_runs = [], {}
+    for c in reversed(_attributed_log(f"--since={_RUN_WINDOW_DAYS}.days.ago") or []):
+        if not c.get("ai"):
+            continue
+        key = (c["email"], c["ai"], c["token"])
+        ts = datetime.datetime.fromisoformat(c["date"]).timestamp()
+        run = open_runs.get(key)
+        if run is None or ts - run["end_ts"] > _RUN_GAP_SECONDS:
+            run = open_runs[key] = {"commits": []}
+            runs.append(run)
+        run["commits"].insert(0, c)
+        run["end_ts"] = ts
+    for run in runs:
+        first, last = run["commits"][-1], run["commits"][0]
+        run.update(id=f"{first['sha'][:12]}-{last['sha'][:12]}", ai=last["ai"],
+                   token=last["token"], author=last["author"], email=last["email"],
+                   start=first["date"], end=last["date"])
+    return runs[::-1]
+
+
+def _tool_agent_runs(args, ctx):
+    days = clamp_int(args.get("days"), 7, 1, _RUN_WINDOW_DAYS)
+    limit = clamp_int(args.get("limit"), 20, 1, 100)
+    cutoff = time.time() - days * 86400
+    out = []
+    for run in _agent_runs():
+        docs = _doc_changes(_scrub_commits(run["commits"], ctx))
+        if run["end_ts"] >= cutoff and docs:
+            out.append({k: run[k] for k in ("id", "ai", "token", "author", "start", "end")}
+                       | {"commits": len(run["commits"]), "documents": docs})
+    return json_result({"days": days, "runs": out[:limit]})
+
+
+def _may_undo(run: dict, ctx) -> bool:
+    """The person the agent acted for may undo its run; an admin too, but only when they
+    can see every doc it touched (never blind changes inside someone's private space)."""
+    if ctx is None or ctx.superuser or ctx.primary == "user:" + run["email"]:
+        return True
+    if not ctx.is_admin:
+        return False
+    visible = _scrub_commits(run["commits"], ctx)
+    return sum(len(c["files"]) for c in visible) == sum(len(c["files"]) for c in run["commits"])
+
+
+def _tool_undo_run(args, ctx):
+    run_id = (args.get("run") or "").strip()
+    run = next((r for r in _agent_runs() if r["id"] == run_id), None)
+    if run is None:
+        return text_result(f"No agent run '{run_id}' in the last {_RUN_WINDOW_DAYS} days: list them "
+                           "with agent_runs (a run's id changes while the agent keeps going).",
+                           is_error=True)
+    if not _may_undo(run, ctx):
+        return text_result("Only the person this agent acted for, or an admin who can see every "
+                           "doc it touched, can undo its run.", is_error=True)
+    docs = _doc_changes(run["commits"])
+    summary = ", ".join(f"{d['path']} ({d['change']})" for d in docs[:20])
+    shas = [c["sha"] for c in run["commits"]]
+    if args.get("dry_run"):
+        return text_result(f"Dry run, nothing undone. Run {run_id} ({len(shas)} commit(s) by "
+                           f"{run['ai']}) would be reverted for: {summary}.")
+    # Docs the revert moves back (incl. out of .trash/) take their ACL along BEFORE git
+    # writes them, so none is ever readable as commons at its restored path. Only the run's
+    # own docs: the range also spans other people's commits made in between.
+    touched = {p for c in run["commits"] for f in c["files"] for p in (f["path"], f.get("old_path"))}
+    moves = [(old, new) for status, old, new in _name_status(shas[0], shas[-1] + "^")
+             if status == "R" and (old in touched or new in touched)]
+    for frm, to in moves:
+        _s._repoint_doc(frm, to)
+    sha, why = _s.revert_commits(ctx, f"undid: {run['ai']} run of {len(shas)} change(s)", shas,
+                                 ai=args.get("ai"))
+    if sha is None:
+        for frm, to in reversed(moves):
+            _s._repoint_doc(to, frm)
+        return text_result(f"Could not undo run {run_id} cleanly ({why}): a later change touches "
+                           "the same lines. Nothing was changed; restore docs one by one with "
+                           "doc_revert instead.", is_error=True)
+    store = _s.get_store()
+    for status, path, _ in _name_status(sha + "^", sha):
+        if status == "D":  # a doc the run created: drop its ACL and share links with it
+            store.delete_acl(path)
+            store.delete_shares_for_path(path)
+    return text_result(f"Undid run {run_id} in one commit ({sha[:8]}): {summary}. Nothing is lost: "
+                       "doc_history / doc_revert bring any of it back.")
+
+
 # name → handler. _mcp_call_tool looks the tool up here; an unknown name 404s below.
 _TOOLS = {
     "search_docs": _tool_search_docs,
+    "grep_docs": _tool_grep_docs,
     "read_doc": _tool_read_doc,
     "list_tree": _tool_list_tree,
     "recent_docs": _tool_recent_docs,
@@ -747,7 +1160,26 @@ _TOOLS = {
     "judge_contradiction": _tool_judge_contradiction,
     "doc_blame": _tool_doc_blame,
     "doc_revert": _tool_doc_revert,
+    "brief": _tool_brief,
+    "changes_since": _tool_changes_since,
+    "agent_runs": _tool_agent_runs,
+    "undo_run": _tool_undo_run,
 }
+
+
+def _tool_scope(tool: dict) -> str:
+    """The scope a tool needs: read for the read-only ones, inbox for the inbox drop (so a
+    triage agent can stage items without writing the mind), write for the rest."""
+    if tool["name"] == "create_inbox_item":
+        return "inbox"
+    return "read" if tool.get("annotations", {}).get("readOnlyHint") else "write"
+
+
+def _allowed_tools(ctx) -> list:
+    """The tools ctx's token may call: a scoped token never even sees the others."""
+    scopes = getattr(ctx, "scopes", None)
+    tools = _s._mcp_tools()
+    return tools if scopes is None else [t for t in tools if _tool_scope(t) in scopes]
 
 
 def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
@@ -755,11 +1187,101 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
     fn = _TOOLS.get(name)
     if fn is None:
         return text_result(f"Unknown tool: {name}", is_error=True)
+    if not any(t["name"] == name for t in _allowed_tools(ctx)):
+        return text_result(f"This token is limited to {', '.join(sorted(ctx.scopes))}: {name} "
+                           "is outside its scopes.", is_error=True)
     return fn(args, ctx)
 
 
-def _mcp_jsonrpc(req: dict, ctx=None):
-    """Process an MCP JSON-RPC message. Returns response dict, or None for notifications."""
+# 2026-07-28 _meta keys, and the error codes it reserves for the protocol.
+_META_VERSION = "io.modelcontextprotocol/protocolVersion"
+_META_SERVER_INFO = "io.modelcontextprotocol/serverInfo"
+_HEADER_MISMATCH = -32020
+_UNSUPPORTED_VERSION = -32022
+_CAPABILITIES = {"tools": {}}
+_TTL_MS = 3_600_000
+# Clients inject the instructions into every conversation: keep them a primer, not a manual.
+_INSTRUCTIONS_MAX = 8000
+_DEFAULT_INSTRUCTIONS = (
+    "This is the user's Atlas Mind: a git-versioned knowledge base they share with you. "
+    "Treat it as the source of truth: before answering on a topic it may cover, use "
+    "search_docs and read_doc instead of guessing. Write durable output (decisions, recaps, "
+    "analyses) back with create_doc or edit_doc; use create_inbox_item instead when the "
+    "human should triage it first. On first contact, get_mind_topology or list_tree shows "
+    "how the mind is organised. Paths are relative to the mind (e.g. notes/example.md)."
+)
+
+
+def _instructions() -> str:
+    """The mind's AGENTS.md (its owner's rules for AIs), else a built-in primer."""
+    try:
+        text = (_s.CONFIG.root / "AGENTS.md").read_text(encoding="utf-8-sig").strip()
+    except (OSError, UnicodeDecodeError):
+        return _DEFAULT_INSTRUCTIONS
+    if len(text) > _INSTRUCTIONS_MAX:
+        text = text[:_INSTRUCTIONS_MAX].rsplit("\n", 1)[0]
+    return text or _DEFAULT_INSTRUCTIONS
+
+
+@functools.cache
+def _server_info() -> dict:
+    return {"name": _s.CONFIG.site_slug, "version": _s.current_version() or "unknown"}
+
+
+def _modern(result: dict, cache_scope: str | None = None) -> dict:
+    """Stamp a result the 2026-07-28 way; list/discover results also carry caching hints."""
+    result = {**result, "resultType": "complete",
+              "_meta": {_META_SERVER_INFO: _server_info()}}
+    if cache_scope:
+        result.update(ttlMs=_TTL_MS, cacheScope=cache_scope)
+    return result
+
+
+def _request_version(req) -> str | None:
+    """Version a modern (2026-07-28+) request declares in its _meta; None means legacy."""
+    params = req.get("params") if isinstance(req, dict) else None
+    meta = params.get("_meta") if isinstance(params, dict) else None
+    return meta.get(_META_VERSION) if isinstance(meta, dict) else None
+
+
+def _header_value(raw):
+    """A mirrored header value, with the spec's =?base64?…?= sentinel decoded."""
+    if raw and raw.startswith("=?base64?") and raw.endswith("?="):
+        try:
+            return base64.b64decode(raw[9:-2], validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return None
+    return raw
+
+
+def _header_mismatch(req: dict, headers) -> str | None:
+    """Why the mirrored HTTP headers disagree with the body, or None. Checked so a proxy
+    routing on the headers can't be handed a different body."""
+    expected = {"MCP-Protocol-Version": _request_version(req), "Mcp-Method": req.get("method")}
+    if req.get("method") == "tools/call":
+        expected["Mcp-Name"] = (req.get("params") or {}).get("name")
+    for name, want in expected.items():
+        got = _header_value(headers.get(name))
+        if got != want:
+            return f"{name} header {got!r} does not match the body ({want!r})"
+    return None
+
+
+def _mcp_http_status(req, response: dict) -> int:
+    """2026-07-28 mirrors protocol errors into the HTTP status; legacy answers stay 200."""
+    code = (response.get("error") or {}).get("code")
+    if code in (_HEADER_MISMATCH, _UNSUPPORTED_VERSION):
+        return 400
+    if code == -32601 and _request_version(req) is not None:
+        return 404
+    return 200
+
+
+def _mcp_jsonrpc(req: dict, ctx=None, headers=None):
+    """Process an MCP JSON-RPC message. Returns response dict, or None for notifications.
+
+    Dual-era: a request declaring its version in _meta is served statelessly per
+    2026-07-28; anything else gets the legacy, initialize-based behavior."""
     method = req.get("method")
     params = req.get("params") or {}
     req_id = req.get("id")
@@ -773,31 +1295,54 @@ def _mcp_jsonrpc(req: dict, ctx=None):
     def ok(result):
         return {"jsonrpc": "2.0", "id": req_id, "result": result}
 
-    def err(code, message):
-        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
+    def err(code, message, data=None):
+        error = {"code": code, "message": message}
+        if data is not None:
+            error["data"] = data
+        return {"jsonrpc": "2.0", "id": req_id, "error": error}
 
+    version = _request_version(req)
+    supported = [*_s.MCP_MODERN_VERSIONS, *_s.MCP_LEGACY_VERSIONS]
     try:
-        if method == "initialize":
-            # Echo the client's requested protocol version (the MCP-correct
-            # behavior); fall back to our own when the client omits it. Hardcoding
-            # an older version made strict clients (claude.ai web, which negotiates
-            # a newer revision) drop the session after a 200 handshake.
-            client_version = params.get("protocolVersion")
-            return ok({
-                "protocolVersion": client_version or _s.MCP_PROTOCOL_VERSION,
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": _s.CONFIG.site_slug, "version": "1.0.0"},
-            })
-        if method == "ping":
-            return ok({})
+        if version is not None:
+            if version not in _s.MCP_MODERN_VERSIONS:
+                return err(_UNSUPPORTED_VERSION, "Unsupported protocol version",
+                           {"supported": supported, "requested": version})
+            mismatch = headers is not None and _header_mismatch(req, headers)
+            if mismatch:
+                return err(_HEADER_MISMATCH, f"Header mismatch: {mismatch}")
+        if method == "server/discover":
+            # Private: the instructions are this mind's own AGENTS.md.
+            return ok(_modern({
+                "supportedVersions": supported,
+                "capabilities": _CAPABILITIES,
+                "instructions": _instructions(),
+            }, "private"))
         if method == "tools/list":
-            return ok({"tools": _s._mcp_tools()})
+            # Private: a scoped token gets a narrower list.
+            result = {"tools": _allowed_tools(ctx)}
+            return ok(_modern(result, "private") if version else result)
         if method == "tools/call":
             tool_name = params.get("name", "")
             arguments = params.get("arguments") or {}
             sys.stderr.write(f"[mcp] tools/call name={tool_name}\n")
             sys.stderr.flush()
-            return ok(_mcp_call_tool(tool_name, arguments, ctx))
+            result = _mcp_call_tool(tool_name, arguments, ctx)
+            return ok(_modern(result) if version else result)
+        if version is None:  # 2026-07-28 dropped the handshake and ping
+            if method == "initialize":
+                # Echo the client's revision when we serve it (claude.ai drops the session
+                # if a revision it asked for is downgraded), else offer our newest one.
+                asked = params.get("protocolVersion")
+                return ok({
+                    "protocolVersion": (asked if asked in _s.MCP_LEGACY_VERSIONS
+                                        else _s.MCP_LEGACY_VERSIONS[0]),
+                    "capabilities": _CAPABILITIES,
+                    "serverInfo": _server_info(),
+                    "instructions": _instructions(),
+                })
+            if method == "ping":
+                return ok({})
         return err(-32601, f"method not found: {method}")
     except Exception as e:
         # Detail (may carry server paths) to stderr only; client gets a generic message.
