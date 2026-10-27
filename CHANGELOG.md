@@ -8,6 +8,27 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-27
+
+Pick up a saved work session where it stopped, from any assistant: `/atlas:resume <topic>`.
+
+### Added
+- **`resume_session`**, a 30th MCP tool, and a **`resume`** prompt (`/atlas:resume <topic>` in
+  Claude Code): pick up a saved work session where it stopped. A save is any doc with a "How to
+  resume" section (the `ai-sessions/` template, or a mind's own model). In one call: the resume
+  command and machine, the open points with the date each has been carried since and the docs
+  they cite that moved after the save, the points closed along the way, what changed in the
+  mind since (the docs it links to first, commits by humans and by AI, contradictions among
+  them), and the other saves its links tie it to. Without arguments it lists the recent saves;
+  with a topic it finds the save and names the other matches. The demo mind ships a save to
+  try it on, and the evals ask about it: each linked doc comes with its diff excerpt because
+  the models kept calling doc_diff for it (Sonnet went from 6 calls to 3 on that question).
+
+### Changed
+- The README explains how to connect Claude Code under a short name (`claude mcp add
+  --transport http --scope user atlas …`), so the prompts read `/atlas:…`, and to turn off
+  the duplicate claude.ai connector.
+
 ## [1.5.0] - 2026-10-27
 
 Images and JSON open in the viewer, a model now sits an exam on the MCP surface (and

@@ -92,5 +92,10 @@
   "prompt_new_doc_description": "Rédige un document à partir d'un modèle de l'Atlas (décision, réunion, spec…).",
   "prompt_arg_template": "Un modèle parmi : {names}",
   "prompt_arg_subject": "Le sujet du document",
-  "prompt_new_doc_body": "Crée le document « {subject} » à partir du modèle « {template} » ci-dessous. Remplis chaque section avec ce que tu sais de notre conversation, laisse vide ce que tu ignores et demande-moi ce qui manque. Enregistre-le avec create_doc, là où AGENTS.md le prévoit.\n\n{skeleton}"
+  "prompt_new_doc_body": "Crée le document « {subject} » à partir du modèle « {template} » ci-dessous. Remplis chaque section avec ce que tu sais de notre conversation, laisse vide ce que tu ignores et demande-moi ce qui manque. Enregistre-le avec create_doc, là où AGENTS.md le prévoit.\n\n{skeleton}",
+  "prompt_resume_title": "Reprendre une session de travail",
+  "prompt_resume_description": "Reprendre une session sauvegardée là où elle s'est arrêtée : ce qui a bougé depuis, ce qui reste ouvert, comment reprendre.",
+  "prompt_arg_topic": "Le sujet de la session (vide : liste les saves récentes)",
+  "prompt_resume_body": "Reprends notre session de travail sauvegardée sur « {topic} » : appelle resume_session avec ce sujet, et si une autre save de other_matches correspond mieux ou est plus récente, dis-le. Puis dis-moi, brièvement : où on s'était arrêtés (son résumé et son état), ce qui a changé dans l'Atlas depuis (d'abord les docs auxquels la save renvoie, et si c'est une IA qui les a modifiés), les points en suspens encore ouverts, du plus ancien au plus récent, avec les docs cités qui ont bougé, et la commande exacte pour reprendre sur la bonne machine.",
+  "prompt_resume_list_body": "Liste mes sessions de travail sauvegardées avec resume_session (sans argument) et demande-moi laquelle reprendre. Puis reprends-la : où on s'était arrêtés, ce qui a changé dans l'Atlas depuis, les points encore ouverts (du plus ancien au plus récent) et la commande exacte pour reprendre."
 }

@@ -85,6 +85,7 @@ EVENTS = [
     (13, "sasha", "claude", "w", "features/activity-and-attribution.md"),
     (13, "sasha", None, "mv", (MOVE_TMP, MOVE_FINAL)),
     (13, "sasha", None, "w", "welcome.md"),
+    (8, "sasha", "claude", "w", "ai-sessions/hive-node-launch.md"),  # a session save to resume
     (6, "sasha", "claude", "w", "features/own-your-data.md"),
     (6, "bot", None, "w", "remotes/mira-garden/zettelkasten.md"),
     (6, "theo", None, "w", "features/collaboration.md"),

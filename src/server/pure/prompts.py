@@ -6,7 +6,7 @@ in by the server at call time. Two sources:
   frontmatter, the first heading as title, the rest as the text sent. `{{argument}}`
   takes the value given, `{{include path/doc.md}}` the text of that doc (if readable);
 - the engine's built-ins, which compute live context: the week's changes, the open
-  contradictions, a document template.
+  contradictions, a document template; or hand the model the tool to call (resume).
 
 A mind prompt overrides a built-in of the same name."""
 import datetime
@@ -114,6 +114,11 @@ def _triage(args, ctx) -> str:
     return _s._t("prompt_triage_body").format(candidates=_bullets(pairs))
 
 
+def _resume(args, ctx) -> str:
+    topic = args.get("topic", "").strip()
+    return _s._t("prompt_resume_body").format(topic=topic) if topic else _s._t("prompt_resume_list_body")
+
+
 def _templates() -> dict:
     """The new-document skeletons: the engine's, overridden by the mind's templates/."""
     build = _s._import_build()
@@ -142,6 +147,9 @@ def _builtins() -> dict:
         "triage-contradictions": {"title": t("prompt_triage_title"),
                                   "description": t("prompt_triage_description"),
                                   "arguments": [], "render": _triage},
+        "resume": {"title": t("prompt_resume_title"), "description": t("prompt_resume_description"),
+                   "arguments": [{"name": "topic", "description": t("prompt_arg_topic"), "required": False}],
+                   "render": _resume},
         "new-doc": {"title": t("prompt_new_doc_title"), "description": t("prompt_new_doc_description"),
                     "arguments": [{"name": "template", "required": True,
                                    "description": t("prompt_arg_template").format(

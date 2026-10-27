@@ -257,7 +257,7 @@ connects, so keep it short and directive (capped at 8,000 characters).
 
 ## Access via MCP
 
-The Atlas exposes an MCP server: twenty-nine tools to read, write, triage, map,
+The Atlas exposes an MCP server: thirty tools to read, write, triage, map,
 rewind and audit your mind. Point your assistant at `https://<your-atlas>/mcp`: it
 signs you in over OAuth and asks what it may do (read, inbox, write). Or mint a token
 yourself (**Settings → Tokens**, or `atlas token create <mind>` locally) and use
@@ -422,7 +422,7 @@ connexion, donc garde-le court et directif (plafonné à 8 000 caractères).
 
 ## Accès via MCP
 
-L'Atlas expose un serveur MCP : vingt-neuf outils pour lire, écrire, trier,
+L'Atlas expose un serveur MCP : trente outils pour lire, écrire, trier,
 cartographier, rembobiner et auditer ton mind. Branche ton assistant sur
 `https://<ton-atlas>/mcp` : il te connecte en OAuth et te demande ce qu'il peut faire
 (lecture, inbox, écriture). Ou crée toi-même un token (**Paramètres → Tokens**, ou

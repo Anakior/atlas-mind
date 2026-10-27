@@ -92,5 +92,10 @@
   "prompt_new_doc_description": "Write a document from one of the Atlas templates (decision, meeting, spec…).",
   "prompt_arg_template": "One of: {names}",
   "prompt_arg_subject": "What the document is about",
-  "prompt_new_doc_body": "Create the document \"{subject}\" from the \"{template}\" template below. Fill each section with what you know from our conversation, leave blank what you don't know and ask me for what is missing. Save it with create_doc, where AGENTS.md says.\n\n{skeleton}"
+  "prompt_new_doc_body": "Create the document \"{subject}\" from the \"{template}\" template below. Fill each section with what you know from our conversation, leave blank what you don't know and ask me for what is missing. Save it with create_doc, where AGENTS.md says.\n\n{skeleton}",
+  "prompt_resume_title": "Resume a work session",
+  "prompt_resume_description": "Pick up a saved session where it stopped: what moved since, what is still open, how to resume.",
+  "prompt_arg_topic": "What the session was about (leave empty to list the recent saves)",
+  "prompt_resume_body": "Pick up our saved work session about \"{topic}\": call resume_session with this topic, and if another save in its other_matches fits better or is more recent, say so. Then tell me, briefly: where we stopped (its summary and state), what changed in the mind since (the docs the save points to first, and whether an AI made the change), the open points still standing, the longest-carried first, with the docs they cite that moved, and the exact command to resume on the right machine.",
+  "prompt_resume_list_body": "List my saved work sessions with resume_session (no arguments) and ask me which one to pick up. Then resume it: where we stopped, what changed in the mind since, the open points still standing (the longest-carried first) and the exact command to resume."
 }

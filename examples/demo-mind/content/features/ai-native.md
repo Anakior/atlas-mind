@@ -17,7 +17,7 @@ sign in to your Atlas, see what it asks for (read, inbox, write), untick what yo
 don't want to grant, and allow it. You can also mint a token yourself (**Settings →
 Tokens**, or `atlas token create <mind>` locally) and use
 `https://<your-atlas>/mcp/<token>`. From then on the AI works your mind through
-**twenty-nine tools**, grouped into six superpowers.
+**thirty tools**, grouped into six superpowers.
 
 ### 1. Reads your whole mind
 
@@ -30,6 +30,7 @@ Tokens**, or `atlas token create <mind>` locally) and use
 | `list_tree`   | browse the folder structure                      |
 | `recent_docs` | see what changed lately                          |
 | `changes_since` | what changed since the AI last looked (a cursor it keeps) |
+| `resume_session` | pick up a saved work session: resume command, open points, what moved since |
 
 ### 2. Writes it back
 

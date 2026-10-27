@@ -1077,6 +1077,14 @@ def _tool_changes_since(args, ctx):
                         "truncated": len(docs) > limit})
 
 
+def _tool_resume_session(args, ctx):
+    from server.pure import sessions  # lazy: sessions reuses this module's helpers
+    try:
+        return json_result(sessions.resume(args, ctx))
+    except ValueError as e:
+        return text_result(str(e), is_error=True)
+
+
 _RUN_GAP_SECONDS = 30 * 60  # an agent silent this long has finished its run
 _RUN_WINDOW_DAYS = 30       # runs are computed over this window, so their ids stay stable
 
@@ -1199,6 +1207,7 @@ _TOOLS = {
     "doc_revert": _tool_doc_revert,
     "brief": _tool_brief,
     "changes_since": _tool_changes_since,
+    "resume_session": _tool_resume_session,
     "agent_runs": _tool_agent_runs,
     "undo_run": _tool_undo_run,
 }

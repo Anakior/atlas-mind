@@ -462,6 +462,330 @@
     }
   },
   {
+    "name": "resume_session",
+    "description": "Pick up a saved work session (a doc with a 'How to resume' section, e.g. one the save-session prompt wrote). Returns what a resumption needs in one call: the resume command and machine, the open points with the date each has been carried since (and the docs they cite that changed after the save), the points closed along the way, what changed in the mind since the save (the docs it links to first, each with a diff excerpt, and those left untouched; commits by humans and by AI; contradictions among them), and the other saves its links tie it to (`chain`). Use it when the user wants to resume, continue or 'thaw' a piece of work. Pass `path`, or a `topic` to find the save (other matches are listed); with neither, it lists the recent saves.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The save, e.g. ai-sessions/refonte-auth.md."
+        },
+        "topic": {
+          "type": "string",
+          "description": "Words to find the save by, when you don't know its path."
+        }
+      },
+      "required": []
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "saves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "session_date": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "machine": {
+                "type": "string"
+              },
+              "project": {
+                "type": "string"
+              },
+              "resume": {
+                "type": "string"
+              },
+              "last_commit": {
+                "type": "string"
+              },
+              "open_points": {
+                "type": "integer"
+              },
+              "paused_days": {
+                "type": "integer"
+              },
+              "untrusted": {
+                "type": "string"
+              },
+              "this": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "path",
+              "title"
+            ]
+          }
+        },
+        "hint": {
+          "type": "string"
+        },
+        "save": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "session_date": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "machine": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "resume": {
+              "type": "string"
+            },
+            "last_commit": {
+              "type": "string"
+            },
+            "open_points": {
+              "type": "integer"
+            },
+            "paused_days": {
+              "type": "integer"
+            },
+            "untrusted": {
+              "type": "string"
+            },
+            "this": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "title"
+          ]
+        },
+        "open_points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "since": {
+                "type": "string"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "refs_changed": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        },
+        "closed_points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "closed": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "since": {
+          "type": "object",
+          "properties": {
+            "commits": {
+              "type": "integer"
+            },
+            "by_ai": {
+              "type": "object"
+            },
+            "by_humans": {
+              "type": "integer"
+            },
+            "linked": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "change": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string"
+                  },
+                  "last_editor": {
+                    "type": "string"
+                  },
+                  "ai": {
+                    "type": "string"
+                  },
+                  "untrusted": {
+                    "type": "string"
+                  },
+                  "diff": {
+                    "type": "string",
+                    "description": "+added −removed lines since the save"
+                  },
+                  "excerpt": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "its first changed lines"
+                  }
+                }
+              }
+            },
+            "elsewhere": {
+              "type": "integer"
+            },
+            "contested": {
+              "type": "object"
+            },
+            "unchanged": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "linked docs untouched since the save"
+            }
+          }
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "session_date": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "machine": {
+                "type": "string"
+              },
+              "project": {
+                "type": "string"
+              },
+              "resume": {
+                "type": "string"
+              },
+              "last_commit": {
+                "type": "string"
+              },
+              "open_points": {
+                "type": "integer"
+              },
+              "paused_days": {
+                "type": "integer"
+              },
+              "untrusted": {
+                "type": "string"
+              },
+              "this": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "path",
+              "title"
+            ]
+          }
+        },
+        "other_matches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "session_date": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "create_doc",
     "description": "Create a new document. Two formats, pick by content:\n• .md — prose, notes, recaps, specs, markdown reports (rendered with marked in the viewer). Default.\n• .html — a SELF-CONTAINED styled document: slide deck, dashboard, richly laid-out page with its own CSS/JS. Rendered AS-IS in a viewer iframe sandbox.\nRULE: NEVER wrap a full HTML document (<!DOCTYPE html>…) inside a ```html code block of a .md — it would show as raw source. Create a .html instead.\nRefuses if the path already exists (create-only, no overwrite). The path must end in .md or .html and be in a valid folder (notes/, projects/, inbox/, etc.).",
     "inputSchema": {

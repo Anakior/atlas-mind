@@ -19,7 +19,7 @@ Own the data. Own the engine. Own the mind.
 **Atlas Mind** is a self-hostable wiki / knowledge base engine, and an external brain you share with your AI. It serves a single-page viewer from a folder of documents (a *mind*), keeping the **engine** (the code) cleanly decoupled from your **content** (your notes, in their own git repository). Built on three ideas:
 
 - **Multi-format, not just Markdown.** Markdown is first-class (rendered, linked, searched). Standalone **HTML** decks and dashboards, **PDFs**, **Word `.docx`**, **images** and **JSON** are previewed inline, rendered in your browser, nothing uploaded anywhere.
-- **AI-native.** It exposes an **MCP** endpoint (twenty-nine tools to read, write, triage, map, rewind and audit your mind), and `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how to use your mind.
+- **AI-native.** It exposes an **MCP** endpoint (thirty tools to read, write, triage, map, rewind and audit your mind), and `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how to use your mind.
 - **Lightweight & self-contained.** A single Python HTTP server on the **standard library**: **no database**, accounts and share links live as plain JSON on disk, frontend libraries and fonts are vendored. A running instance **never sends your content anywhere**: your mind never leaves your disk, and nothing you write trains anyone's model. Its only outbound request by default is reading an MCP client's public metadata when you connect that client over OAuth (switchable off).
 
 It is not a multi-tenant SaaS, a real-time collaborative editor, or a plugin marketplace. One focused mind per instance, fully yours.
@@ -66,18 +66,28 @@ atlas token create ~/my-mind --label claude
 # → prints the MCP URL: https://<your-atlas>/mcp/<token>
 ```
 
-The MCP endpoint exposes **twenty-nine tools** in six groups:
+The MCP endpoint exposes **thirty tools** in six groups:
 
-- **read**: `brief` (a context pack on a topic: the best sections, within a token budget), `search_docs` (ranked, each hit with its section and how far to trust it: last editor, AI or human, stale, contested), `grep_docs` (exact lines), `read_doc` (whole doc, a line range or one section), `list_tree`, `recent_docs`, `changes_since` (what changed since a cursor the agent keeps)
+- **read**: `brief` (a context pack on a topic: the best sections, within a token budget), `search_docs` (ranked, each hit with its section and how far to trust it: last editor, AI or human, stale, contested), `grep_docs` (exact lines), `read_doc` (whole doc, a line range or one section), `list_tree`, `recent_docs`, `changes_since` (what changed since a cursor the agent keeps), `resume_session` (pick up a saved work session: its resume command, the open points and how long each has been carried, what changed since)
 - **write**: `create_doc`, `edit_doc` (returns the diff; `dry_run`, and a `base_version` guard so a concurrent change is never overwritten), `move_doc` (fixes incoming `[[backlinks]]`), `delete_doc` (soft-delete to `.trash/`)
 - **graph**: `get_links`, `get_backlinks`, `list_by_tag`, `get_mind_topology`
 - **time-travel** (your mind is a git repo): `doc_history`, `doc_at`, `doc_diff`, `search_history`, `changelog`, `doc_blame`, `doc_revert`
 - **activity** (the attribution layer's read side): `activity` (who changed what, with AI-author detection), `agent_runs` + `undo_run` (an agent's work session, undone as one commit), `stale` (docs untouched for months: obsolescence), `contradictions` (same-topic doc pairs to review), `judge_contradiction` (record a verdict on a pair)
 - **inbox**: `create_inbox_item` (an agent stages a ready-to-file item in your inbox for triage)
 
-It also serves **prompts** you start by name (a `/` command in Claude Code): built-ins computed live — `weekly-review` (what moved, what is going stale, the contradictions to settle), `triage-contradictions`, `new-doc` (from one of your templates) — and your own, one Markdown file each under `content/agents/prompts/`, editable from the viewer, with `{{arguments}}` and `{{include path/doc.md}}`. And every document is a **resource**, `doc://<path>`, that you can attach to the conversation (`@atlas:doc://notes/x.md` in Claude Code); search hits link to theirs.
+It also serves **prompts** you start by name (a `/` command in Claude Code): built-ins computed live — `weekly-review` (what moved, what is going stale, the contradictions to settle), `triage-contradictions`, `new-doc` (from one of your templates), `resume` (pick up a saved work session where it stopped) — and your own, one Markdown file each under `content/agents/prompts/`, editable from the viewer, with `{{arguments}}` and `{{include path/doc.md}}`. And every document is a **resource**, `doc://<path>`, that you can attach to the conversation (`@atlas:doc://notes/x.md` in Claude Code); search hits link to theirs.
 
-In Claude Code, name the connection short — `claude mcp add --transport http atlas https://<your-atlas>/mcp` — and the prompts read `/atlas:weekly-review`, `/atlas:new-doc decision "Pricing"`.
+### In Claude Code
+
+Add your Atlas once, for every project, under a short name: the name becomes the prefix of its prompts and resources.
+
+```bash
+claude mcp add --transport http --scope user atlas https://<your-atlas>/mcp
+```
+
+Then run `/mcp` in Claude Code, pick `atlas` and authenticate: the OAuth sign-in opens in your browser. From then on the prompts read `/atlas:weekly-review`, `/atlas:new-doc decision "Pricing"`, `/atlas:resume auth`, and a document attaches as `@atlas:doc://notes/x.md`.
+
+If you also connected your Atlas on claude.ai, Claude Code picks that connector up too, under its long name: turn that one off in `/mcp`, so the tools are not listed twice.
 
 `atlas init` scaffolds `AGENTS.md` + `content/agents/` + `content/ai-sessions/`, and the endpoint hands your `AGENTS.md` to every client as its server instructions, so any assistant follows your conventions the moment it connects. Tools carry read-only / destructive hints (clients can run reads without asking), a token can be limited to `read`, `inbox` and/or `write` (an agent fed untrusted mail never needs to edit), text written outside the mind (remote mirrors, inbox drops) reaches an agent fenced as untrusted data, and the endpoint speaks both the stateless MCP `2026-07-28` revision and the earlier `initialize`-based ones. There is also a **REST API v1** (Bearer tokens, create-only writes) with a published **OpenAPI 3.1** spec.
 
