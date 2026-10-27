@@ -77,6 +77,8 @@ The MCP endpoint exposes **thirty tools** in six groups:
 
 It also serves **prompts** you start by name (a `/` command in Claude Code): built-ins computed live — `weekly-review` (what moved, what is going stale, the contradictions to settle), `triage-contradictions`, `new-doc` (from one of your templates), `resume` (pick up a saved work session where it stopped) — and your own, one Markdown file each under `content/agents/prompts/`, editable from the viewer, with `{{arguments}}` and `{{include path/doc.md}}`. And every document is a **resource**, `doc://<path>`, that you can attach to the conversation (`@atlas:doc://notes/x.md` in Claude Code); search hits link to theirs.
 
+In a host that renders **MCP Apps** (Claude on the web and desktop, ChatGPT, VS Code with Copilot…), `resume_session` also comes as an interactive view in the conversation: the open points to tick for the session, the docs that moved with their diffs, the other saves of the same work, the resume command to copy, and a button that resumes with the points you kept. Hosts without apps, Claude Code among them, get the same answer as text.
+
 ### In Claude Code
 
 Add your Atlas once, for every project, under a short name: the name becomes the prefix of its prompts and resources.

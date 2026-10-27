@@ -8,6 +8,22 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-27
+
+The first MCP App: in Claude on the web or desktop, picking up a session is a view you act on.
+
+### Added
+- **The first MCP App: a resume view.** In a host that renders MCP Apps (Claude on the web
+  and desktop, ChatGPT, VS Code with Copilot…), `resume_session` shows inline in the
+  conversation: the open points to tick for the session (the model is told which ones you
+  keep), the docs that moved since with their diffs to unfold, the chain of saves and a
+  banner when a newer one continues the work (one click opens it, in place), the resume
+  command to copy, and a button that resumes with the points you kept. A call without
+  arguments lists the recent saves to pick from. Hosts without apps, Claude Code among them,
+  keep the text answer. Served as `ui://atlas/resume`: one self-contained page with its
+  labels in the mind's language, loading nothing from anywhere; mind text is never parsed
+  as HTML in it.
+
 ## [1.6.1] - 2026-10-27
 
 ### Fixed

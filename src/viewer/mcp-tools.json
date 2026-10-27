@@ -786,6 +786,11 @@
     "annotations": {
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://atlas/resume"
+      }
     }
   },
   {

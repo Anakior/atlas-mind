@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Host variables first (MCP Apps theming), the Atlas palette as the fallback. */
+  :root {
+    --bg: var(--color-background-primary, #ffffff);
+    --bg-2: var(--color-background-secondary, #f5f5f7);
+    --text: var(--color-text-primary, #1c1b21);
+    --text-2: var(--color-text-secondary, #55545f);
+    --text-3: var(--color-text-tertiary, #8b8a96);
+    --border: var(--color-border-primary, #e4e3ea);
+    --accent: var(--color-text-info, #1d7fb0);
+    --added: var(--color-text-success, #2f8a4d);
+    --removed: var(--color-text-danger, #b3433b);
+    --warn: var(--color-text-warning, #a66a00);
+    --on-accent: #ffffff;
+    --sans: var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
+    --mono: var(--font-mono, ui-monospace, "SF Mono", Consolas, monospace);
+    --radius: var(--border-radius-md, 10px);
+    --tint: color-mix(in srgb, var(--accent) 11%, transparent);
+    --warn-tint: color-mix(in srgb, var(--warn) 13%, transparent);
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: var(--color-background-primary, #23222a);
+    --bg-2: var(--color-background-secondary, #2c2b34);
+    --text: var(--color-text-primary, #ecebf2);
+    --text-2: var(--color-text-secondary, #b4b3bf);
+    --text-3: var(--color-text-tertiary, #85848f);
+    --border: var(--color-border-primary, #3a3944);
+    --accent: var(--color-text-info, #4fb3e0);
+    --added: var(--color-text-success, #6fcf8e);
+    --removed: var(--color-text-danger, #ef8a80);
+    --warn: var(--color-text-warning, #e5b55c);
+    --on-accent: #0f1820;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  main { position: relative; padding: 18px 20px 20px; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  svg { width: 1em; height: 1em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  summary { list-style: none; cursor: pointer; }
+  summary::-webkit-details-marker { display: none; }
+  .chev { transition: transform .15s; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; background: var(--bg-2); color: var(--text-2); font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .pill.warn { background: var(--warn-tint); color: var(--warn); }
+  .pill.accent { background: var(--tint); color: var(--accent); }
+  h1 { margin: 0 0 6px; font-size: 19px; line-height: 1.3; font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
+  .summary { margin: 0; color: var(--text-2); }
+  .summary.clip { max-height: 4.5em; overflow: hidden; cursor: pointer; -webkit-mask-image: linear-gradient(#000 45%, transparent); mask-image: linear-gradient(#000 45%, transparent); }
+  .untrusted { margin-top: 10px; white-space: normal; }
+  .newer { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; padding: 10px 12px; border-radius: var(--radius); background: var(--tint); }
+  .newer > svg { color: var(--accent); font-size: 18px; }
+  .newer div { flex: 1; min-width: 0; }
+  .newer small { display: block; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .newer b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .small-btn { flex: none; padding: 5px 12px; border: 0; border-radius: 7px; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 600; }
+
+  /* The chain of saves, as a timeline: a dot per save, this one lit. */
+  .chain { position: relative; display: flex; overflow-x: auto; margin: 20px -20px 0; padding: 0 20px 2px; scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 56px), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 56px), transparent); }
+  .chain::-webkit-scrollbar { display: none; }
+  .step { position: relative; flex: none; width: 156px; padding: 0 12px 0 0; border: 0; background: none; text-align: left; }
+  .step::before { content: ""; position: absolute; top: 5px; left: 6px; right: -6px; height: 2px; background: var(--border); }
+  .step:last-child::before { display: none; }
+  .dot { position: relative; display: block; width: 12px; height: 12px; border: 2px solid var(--text-3); border-radius: 50%; background: var(--bg); }
+  .step.this { cursor: default; }
+  .step.this .dot { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px var(--tint); }
+  .when { display: block; margin: 9px 0 1px; color: var(--text-3); font-size: 11.5px; }
+  .name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--text-2); font-size: 12.5px; line-height: 1.35; }
+  .step.this .name { color: var(--text); font-weight: 600; }
+  .step:not(.this):hover .name { color: var(--accent); }
+
+  section { margin: 24px 0 0; }
+  main > section:first-child { margin: 0; }
+  h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--text-3); font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  h2 .count { padding: 0 7px; border-radius: 999px; background: var(--bg-2); color: var(--text-2); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+  h2 .end { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
+  .link { padding: 0; border: 0; background: none; color: var(--accent); font-size: 12px; font-weight: 600; }
+
+  .point { display: flex; gap: 10px; align-items: flex-start; margin: 0 -8px; padding: 7px 8px; border-radius: 8px; cursor: pointer; transition: background .12s; }
+  .point:hover { background: var(--bg-2); }
+  .point input { -webkit-appearance: none; appearance: none; flex: none; display: grid; place-content: center; width: 18px; height: 18px; margin: 1px 0 0; border: 1.5px solid color-mix(in srgb, var(--text-3) 75%, transparent); border-radius: 5px; background: var(--bg); cursor: pointer; transition: background .12s, border-color .12s; }
+  .point input::after { content: ""; width: 4px; height: 8px; margin-top: -2px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .12s; }
+  .point input:checked { border-color: var(--accent); background: var(--accent); }
+  .point input:checked::after { transform: rotate(45deg) scale(1); }
+  .text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .point.off .text > div:first-child { color: var(--text-3); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-3) 60%, transparent); }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--tint); color: var(--accent); font-size: 11.5px; font-weight: 500; }
+  .tag.carried { background: var(--warn-tint); color: var(--warn); }
+  .group { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px 28px; color: var(--text-2); font-size: 12px; font-weight: 600; }
+  .group::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .closed { margin: 8px 0 0; }
+  .closed summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--text-3); font-size: 12.5px; }
+  .closed-item { display: flex; gap: 8px; padding: 3px 0 3px 2px; color: var(--text-3); font-size: 13px; }
+  .closed-item svg { margin-top: 3px; color: var(--added); }
+  .note { margin: 4px 0 0; color: var(--text-3); font-size: 13px; }
+
+  /* Who changed the mind since the save: one bar, AIs in the accent, humans in grey. */
+  .who { margin: 0 0 12px; }
+  .bar { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; }
+  .bar span { min-width: 3px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 7px; color: var(--text-2); font-size: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 8px; height: 8px; border-radius: 2px; }
+  .docs { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .docs details + details { border-top: 1px solid var(--border); }
+  .docs summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 9px 12px; transition: background .12s; }
+  .docs summary:hover { background: var(--bg-2); }
+  .docs .label { display: flex; align-items: baseline; gap: 6px; flex: 1 1 180px; min-width: 0; }
+  .docs .label svg { align-self: center; color: var(--text-3); }
+  .doc { font-weight: 600; white-space: nowrap; }
+  .dir { overflow: hidden; color: var(--text-3); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .info { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 12px; }
+  .info .warn { color: var(--warn); }
+  .ai { padding: 0 6px; border-radius: 4px; background: var(--tint); color: var(--accent); font-size: 11px; font-weight: 600; }
+  .stat { display: inline-flex; align-items: center; gap: 6px; font: 12px var(--mono); }
+  .plus { color: var(--added); } .minus { color: var(--removed); }
+  .blocks { display: inline-flex; gap: 1px; }
+  .blocks i { width: 7px; height: 7px; border-radius: 1.5px; background: var(--border); }
+  .blocks i.a { background: var(--added); } .blocks i.r { background: var(--removed); }
+  pre { margin: 0; padding: 6px 0; border-top: 1px solid var(--border); background: var(--bg-2); font: 12px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre div { padding: 0 12px; }
+  pre .add { background: color-mix(in srgb, var(--added) 11%, transparent); }
+  pre .del { background: color-mix(in srgb, var(--removed) 11%, transparent); }
+  pre .add b { color: var(--added); } pre .del b { color: var(--removed); }
+  pre b { font-weight: 400; }
+  .notes { display: grid; gap: 3px; margin-top: 10px; color: var(--text-3); font-size: 12.5px; }
+  .notes .warn { display: flex; align-items: center; gap: 6px; color: var(--warn); }
+
+  .launch { margin: 24px 0 0; padding: 12px; border-radius: var(--radius); background: var(--bg-2); }
+  .where { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; overflow: hidden; color: var(--text-3); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+  .cmd { display: flex; align-items: center; gap: 8px; padding: 5px 5px 5px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+  .cmd code { flex: 1; min-width: 0; overflow-x: auto; padding-right: 16px; font: 12.5px var(--mono); white-space: nowrap; scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(270deg, transparent, #000 16px); mask-image: linear-gradient(270deg, transparent, #000 16px); }
+  .ghost { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-2); color: var(--text-2); font-size: 12px; font-weight: 600; }
+  .ghost:hover { color: var(--text); }
+  .ghost.done { color: var(--added); }
+  .actions { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; }
+  .kept { margin-right: auto; color: var(--text-3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .primary { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--on-accent); font-weight: 600; transition: filter .12s, transform .06s; }
+  .primary:hover { filter: brightness(1.08); }
+  .primary:active { transform: translateY(1px); }
+
+  .saves { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .save { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border: 0; background: none; text-align: left; transition: background .12s; }
+  .save + .save { border-top: 1px solid var(--border); }
+  .save:hover { background: var(--bg-2); }
+  .save > div { flex: 1; min-width: 0; }
+  .save b, .save small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .save b { font-weight: 600; }
+  .save small { color: var(--text-3); font-size: 12px; }
+  .save > svg { color: var(--text-3); }
+
+  .skel { display: grid; gap: 10px; }
+  .skel i { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--bg-2) 30%, color-mix(in srgb, var(--border) 70%, var(--bg-2)) 50%, var(--bg-2) 70%) 0 0 / 300% 100%; animation: shimmer 1.3s linear infinite; }
+  .skel + .note { margin-top: 14px; }
+  .error { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: color-mix(in srgb, var(--removed) 10%, transparent); color: var(--removed); }
+  main.busy { pointer-events: none; }
+  main.busy > * { opacity: .5; transition: opacity .15s; }
+  main.busy::before { content: ""; position: absolute; top: 0; left: 0; width: 30%; height: 2px; background: var(--accent); animation: slide 1s ease-in-out infinite; }
+  @keyframes shimmer { to { background-position: -150% 0; } }
+  @keyframes slide { from { left: -30%; } to { left: 100%; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+  @media (prefers-reduced-motion: no-preference) { main > * { animation: rise .2s ease-out both; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>__BRIDGE__</script>
+<script>
+(function () {
+  var T = __I18N__;
+  var app = document.getElementById('app');
+  var lang = document.documentElement.lang;
+  var state = { data: null, keep: [], rows: [] };
+  var ui = {};  // what follows the checkboxes: the count, the toggle, the resume button
+
+  // Stroke icons on a 24-unit grid.
+  var ICONS = {
+    alert: '<path d="M12 4 2.5 20h19z"/><path d="M12 10v4m0 3h.01"/>',
+    arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
+    check: '<path d="m5 12 5 5L20 7"/>',
+    chev: '<path d="m9 6 6 6-6 6"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+    pause: '<path d="M9 5v14m6-14v14"/>',
+    spark: '<path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
+    sync: '<path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4m-4 5a8 8 0 0 0 14.9 3M20 20v-4h-4"/>',
+    term: '<path d="m4 17 6-5-6-5m8 12h8"/>',
+    up: '<path d="M7 17 17 7M8 7h9v9"/>',
+  };
+
+  function t(key, vars) {
+    return (T[key] || key).replace(/\{(\w+)\}/g, function (_, k) { return vars && vars[k] != null ? vars[k] : ''; });
+  }
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function add(parent) {
+    for (var i = 1; i < arguments.length; i++) {
+      var child = arguments[i];
+      if (child) parent.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+    }
+    return parent;
+  }
+
+  function icon(name) {
+    var box = document.createElement('span');
+    box.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"' + (name === 'chev' ? ' class="chev"' : '') + '>' + ICONS[name] + '</svg>';
+    return box.firstChild;
+  }
+
+  function day(iso) {
+    return iso ? new Date(iso + 'T12:00:00').toLocaleDateString(lang, { day: 'numeric', month: 'short' }) : '';
+  }
+
+  function ago(iso) {
+    return iso ? Math.max(0, Math.round((Date.now() - new Date(iso + 'T12:00:00')) / 864e5)) : null;
+  }
+
+  function docName(path) {
+    return path.split('/').pop().replace(/\.(md|html)$/, '');
+  }
+
+  function status(text, cls) {
+    app.className = '';
+    app.replaceChildren(el('p', cls || 'note', text));
+  }
+
+  function loading(what) {
+    var skel = el('div', 'skel');
+    [['28%', 12], ['72%', 20], ['96%', 12], ['88%', 12], ['54%', 12]].forEach(function (bar) {
+      var line = el('i');
+      line.style.width = bar[0];
+      line.style.height = bar[1] + 'px';
+      skel.appendChild(line);
+    });
+    app.className = '';
+    app.replaceChildren(skel, el('p', 'note', t('loading', { what: what })));
+  }
+
+  // ── a save ────────────────────────────────────────────────────────────────
+
+  function head(d) {
+    var s = d.save;
+    var pills = el('div', 'pills');
+    if (s.paused_days != null) add(pills, add(el('span', s.paused_days > 30 ? 'pill warn' : 'pill'), icon('pause'), t('paused', { n: s.paused_days })));
+    if (s.session_date) add(pills, add(el('span', 'pill'), icon('clock'), t('session', { date: day(s.session_date) })));
+    if (s.model) add(pills, add(el('span', 'pill'), icon('spark'), s.model));
+    var summary = s.summary ? el('p', 'summary', s.summary) : null;
+    if (summary) summary.onclick = function () { summary.classList.remove('clip'); };
+    var box = add(el('header'), pills.childNodes.length ? pills : null, el('h1', null, s.title), summary,
+      s.untrusted ? add(el('span', 'pill warn untrusted'), icon('alert'), t('untrusted')) : null);
+    var newer = (d.other_matches || []).filter(function (m) { return m.newer; })[0];
+    if (newer) {
+      var go = el('button', 'small-btn', t('open'));
+      go.onclick = function () { load({ path: newer.path }); };
+      add(box, add(el('div', 'newer'), icon('up'),
+        add(el('div'), el('small', null, t('newer', { date: day(newer.last_commit) })), el('b', null, newer.title)), go));
+    }
+    return box;
+  }
+
+  function chain(d) {
+    if (!d.chain || d.chain.length < 2) return null;
+    var rail = el('nav', 'chain');
+    d.chain.forEach(function (c) {
+      var step = add(el('button', 'step' + (c.this ? ' this' : '')), el('span', 'dot'),
+        el('span', 'when', day(c.last_commit)), el('span', 'name', c.title));
+      step.title = c.state || c.title;
+      if (c.this) step.setAttribute('aria-current', 'step');
+      else step.onclick = function () { load({ path: c.path }); };
+      rail.appendChild(step);
+    });
+    return rail;
+  }
+
+  function points(d) {
+    var box = el('section');
+    var n = d.open_points.length;
+    ui.count = el('span', 'count');
+    ui.toggle = el('button', 'link');
+    ui.toggle.onclick = function () {
+      var all = state.keep.indexOf(false) !== -1;
+      state.keep = state.keep.map(function () { return all; });
+      refresh();
+      syncModel();
+    };
+    add(box, add(el('h2'), t('open_points'), n ? ui.count : null, n ? add(el('span', 'end'), ui.toggle) : null));
+    state.rows = [];
+    var group = null;
+    d.open_points.forEach(function (p, i) {
+      if (p.group && p.group !== group) box.appendChild(el('div', 'group', p.group));
+      group = p.group || null;
+      var check = el('input');
+      check.type = 'checkbox';
+      check.onchange = function () { state.keep[i] = check.checked; refresh(); syncModel(); };
+      var badges = el('div', 'badges');
+      // Its age only when an earlier version of the save already held it: that's debt.
+      if (p.since && d.save.last_commit && p.since < d.save.last_commit) {
+        add(badges, add(el('span', 'tag carried'), icon('clock'), t('carried', { n: ago(p.since) })));
+      }
+      (p.refs_changed || []).forEach(function (r) {
+        add(badges, add(el('span', 'tag moved'), icon('sync'), t('moved', { doc: docName(r.path), date: day(r.date) })));
+      });
+      var row = add(el('label', 'point'), check,
+        add(el('div', 'text'), el('div', null, p.text), badges.childNodes.length ? badges : null));
+      state.rows.push({ row: row, check: check });
+      box.appendChild(row);
+    });
+    if (!n) box.appendChild(el('p', 'note', t('no_points')));
+    if (d.closed_points && d.closed_points.length) {
+      var closed = add(el('details', 'closed'), add(el('summary'), icon('chev'), t('closed', { n: d.closed_points.length })));
+      d.closed_points.forEach(function (c) {
+        closed.appendChild(add(el('div', 'closed-item'), icon('check'), el('span', null, c.text + ' — ' + day(c.closed))));
+      });
+      box.appendChild(closed);
+    }
+    return box;
+  }
+
+  function changes(d) {
+    var since = d.since;
+    if (!since) return null;
+    var box = add(el('section'), add(el('h2'), t('changed'), el('span', 'end', t('commits', { n: since.commits }))));
+    var parts = Object.keys(since.by_ai || {}).map(function (ai, i) {
+      return { n: since.by_ai[ai], label: t('by_ai', { n: since.by_ai[ai], ai: ai }),
+        color: 'color-mix(in srgb, var(--accent) ' + [100, 62, 38, 22][Math.min(i, 3)] + '%, var(--bg))' };
+    });
+    parts.push({ n: since.by_humans || 0, label: t('by_humans', { n: since.by_humans || 0 }),
+      color: 'color-mix(in srgb, var(--text-3) 60%, var(--bg))' });
+    if (parts.some(function (p) { return p.n; })) {
+      var bar = el('div', 'bar'), legend = el('div', 'legend');
+      parts.forEach(function (p) {
+        if (!p.n) return;
+        var segment = el('span'), key = el('i');
+        segment.style.flex = p.n;
+        segment.style.background = key.style.background = p.color;
+        bar.appendChild(segment);
+        add(legend, add(el('span'), key, p.label));
+      });
+      add(box, add(el('div', 'who'), bar, legend));
+    }
+    var linked = since.linked || [];
+    if (linked.length) {
+      add(box, linked.reduce(function (docs, doc) { return add(docs, linkedDoc(doc, linked.length === 1)); }, el('div', 'docs')));
+    }
+    var notes = el('div', 'notes');
+    if (since.unchanged && since.unchanged.length) {
+      notes.appendChild(el('div', null, t('unchanged', { docs: since.unchanged.map(docName).join(', ') })));
+    }
+    if (since.elsewhere) notes.appendChild(el('div', null, t('elsewhere', { n: since.elsewhere })));
+    Object.keys(since.contested || {}).forEach(function (path) {
+      add(notes, add(el('div', 'warn'), icon('alert'), t('contested', { doc: docName(path), others: since.contested[path].map(docName).join(', ') })));
+    });
+    return add(box, notes.childNodes.length ? notes : null);
+  }
+
+  function linkedDoc(doc, open) {
+    var cut = doc.path.lastIndexOf('/');
+    var stat = null;
+    var m = /^\+(\d+) −(\d+)$/.exec(doc.diff || '');
+    if (m) {
+      var a = +m[1], r = +m[2], blocks = el('span', 'blocks');
+      var green = Math.round(5 * a / (a + r || 1));
+      if (a && r) green = Math.min(4, Math.max(1, green));  // both sides show
+      for (var i = 0; i < 5; i++) blocks.appendChild(el('i', a + r ? (i < green ? 'a' : 'r') : null));
+      stat = add(el('span', 'stat'), el('span', 'plus', '+' + a), el('span', 'minus', '−' + r), blocks);
+    }
+    var line = add(el('summary'),
+      add(el('span', 'label'), icon('chev'), el('span', 'doc', docName(doc.path)), cut > 0 ? el('span', 'dir', doc.path.slice(0, cut)) : null),
+      add(el('span', 'info'), t(doc.change === 'moved' ? 'moved_doc' : doc.change) + ' ' + day(doc.date) +
+        (doc.last_editor ? ' · ' + doc.last_editor : ''), doc.ai ? el('span', 'ai', doc.ai) : null,
+        doc.untrusted ? add(el('span', 'warn'), icon('alert')) : null),
+      stat);
+    var item = add(el('details'), line);
+    if (doc.excerpt && doc.excerpt.length) {
+      item.appendChild(doc.excerpt.reduce(function (pre, text) {
+        return add(pre, add(el('div', text[0] === '+' ? 'add' : 'del'), el('b', null, text[0]), text.slice(1)));
+      }, el('pre')));
+      item.open = open;
+    }
+    return item;
+  }
+
+  function launch(d) {
+    var s = d.save;
+    var box = el('div');
+    if (s.resume) {
+      var copy = el('button', 'ghost');
+      var label = function (done) {
+        copy.classList.toggle('done', done);
+        copy.replaceChildren(icon(done ? 'check' : 'copy'), t(done ? 'copied' : 'copy'));
+      };
+      label(false);
+      copy.onclick = function () {
+        copyText(s.resume).then(function () {
+          label(true);
+          setTimeout(function () { label(false); }, 1800);
+        });
+      };
+      var where = [s.machine, s.project].filter(Boolean).join(' · ');
+      add(box, add(el('div', 'launch'), where ? add(el('div', 'where'), icon('term'), t('on_machine', { where: where })) : null,
+        add(el('div', 'cmd'), el('code', null, s.resume), copy)));
+    }
+    ui.kept = el('span', 'kept');
+    ui.go = el('span');
+    var go = add(el('button', 'primary'), ui.go, icon('arrow'));
+    go.onclick = resumeHere;
+    return add(box, add(el('div', 'actions'), ui.kept, go));
+  }
+
+  // The checkboxes changed: everything that counts them follows.
+  function refresh() {
+    var n = state.keep.length;
+    var k = state.keep.filter(Boolean).length;
+    state.rows.forEach(function (r, i) {
+      r.check.checked = state.keep[i];
+      r.row.classList.toggle('off', !state.keep[i]);
+    });
+    ui.count.textContent = k === n ? n : k + '/' + n;
+    ui.toggle.textContent = t(k < n ? 'all' : 'none');
+    ui.kept.textContent = n ? t('kept', { k: k, n: n }) : '';
+    ui.go.textContent = t(k ? 'resume' : 'resume_bare');
+  }
+
+  // ── the list of saves (resume_session without arguments) ──────────────────
+
+  function list(d) {
+    var saves = el('div', 'saves');
+    d.saves.forEach(function (s) {
+      var item = add(el('button', 'save'),
+        add(el('div'), el('b', null, s.title), el('small', null, [day(s.last_commit), s.state].filter(Boolean).join(' · '))),
+        s.open_points ? el('span', 'pill accent', t('open_count', { n: s.open_points })) : null, icon('chev'));
+      item.onclick = function () { load({ path: s.path }); };
+      saves.appendChild(item);
+    });
+    return add(el('section'), add(el('h2'), t('recent'), el('span', 'count', d.saves.length)), saves);
+  }
+
+  // ── what the user does: tell the model, start the session, open another save ──
+
+  function chosen() {
+    var d = state.data;
+    var keep = [], drop = [];
+    d.open_points.forEach(function (p, i) { (state.keep[i] ? keep : drop).push(p.text); });
+    return { keep: keep, drop: drop };
+  }
+
+  // The model only sees the last update before the next user message: always send it all.
+  function syncModel() {
+    var d = state.data, c = chosen();
+    atlasApp.request('ui/update-model-context', {
+      content: [{ type: 'text', text: t('context', { title: d.save.title, path: d.save.path, k: c.keep.length, n: d.open_points.length }) +
+        (c.keep.length ? '\n- ' + c.keep.join('\n- ') : '') }],
+      structuredContent: { save: d.save.path, keep: c.keep, drop: c.drop },
+    }).catch(function () {});
+  }
+
+  function resumeHere() {
+    var d = state.data, c = chosen();
+    var text = t('message', { title: d.save.title, path: d.save.path });
+    if (c.keep.length) text += '\n' + t('message_points') + '\n- ' + c.keep.join('\n- ');
+    atlasApp.request('ui/message', { role: 'user', content: { type: 'text', text: text } }).catch(function () {});
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () { return legacyCopy(text); });
+    }
+    return legacyCopy(text);
+  }
+
+  function legacyCopy(text) {
+    var area = el('textarea');
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+    return Promise.resolve();
+  }
+
+  function load(args) {
+    app.classList.add('busy');
+    atlasApp.request('tools/call', { name: 'resume_session', arguments: args }).then(show, function (e) {
+      status(t('error', { message: e.message }), 'error');
+    });
+  }
+
+  function render() {
+    var d = state.data;
+    app.className = '';
+    if (d.saves) return app.replaceChildren(list(d));
+    var rail = chain(d);
+    app.replaceChildren();
+    add(app, head(d), rail, points(d), changes(d), launch(d));
+    refresh();
+    var summary = app.querySelector('.summary');
+    if (summary) {
+      summary.classList.add('clip');
+      if (summary.scrollHeight <= summary.clientHeight + 2) summary.classList.remove('clip');
+    }
+    var current = rail && rail.querySelector('.this');
+    if (current) rail.scrollLeft = (current.previousSibling || current).offsetLeft - 20;  // the save before it, whole
+  }
+
+  function show(result) {
+    if (!result || result.isError) {
+      var text = result && result.content && result.content[0] && result.content[0].text;
+      status(text || t('error', { message: '?' }), 'error');
+      return;
+    }
+    var d = result.structuredContent;
+    if (!d && result.content && result.content[0]) {
+      try { d = JSON.parse(result.content[0].text); } catch (e) { d = null; }
+    }
+    if (!d) return status(t('error', { message: '?' }), 'error');
+    state.data = d;
+    state.keep = (d.open_points || []).map(function () { return true; });
+    render();
+  }
+
+  atlasApp.on('ui/notifications/tool-input', function (params) {
+    var a = params.arguments || {};
+    loading(a.topic || (a.path ? docName(a.path) : ''));
+  });
+  atlasApp.on('ui/notifications/tool-result', show);
+  atlasApp.on('ui/notifications/tool-cancelled', function () { status(t('cancelled')); });
+  loading('');
+  atlasApp.start('atlas-resume');
+})();
+</script>
+</body>
+</html>

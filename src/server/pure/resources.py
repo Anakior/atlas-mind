@@ -1,14 +1,21 @@
 """MCP resources: the mind's documents, addressable as doc://<path>. A client lists them
 and attaches one to the conversation (`@atlas:doc://notes/x.md` in Claude Code); tool
-results link to them (search hits). ACL-scrubbed and provenance-fenced like every other read."""
+results link to them (search hits). ACL-scrubbed and provenance-fenced like every other read.
+
+Also the MCP Apps views (ui://atlas/<name>): a tool names one in its _meta.ui.resourceUri
+and a host that renders apps reads it. They hold no mind data (it comes in the tool result)
+and stay out of the listing, which is for documents."""
 from urllib.parse import quote, unquote
 
 import server as _s
 from server.pure import provenance
 from server.pure.queries import _visible
+from server.render.apps import render_app
 
 PAGE_SIZE = 200
 SCHEME = "doc://"
+APPS = {"ui://atlas/resume": "resume"}
+APP_MIME = "text/html;profile=mcp-app"
 TEMPLATE = {"uriTemplate": SCHEME + "{+path}", "name": "document",
             "title": "A document of the mind, by its path", "mimeType": "text/markdown"}
 
@@ -53,7 +60,12 @@ def list_resources(ctx, cursor: str = "") -> dict:
 
 
 def read_resource(uri: str, ctx) -> dict:
-    """The document behind a doc:// URI. Raises ResourceError."""
+    """The document behind a doc:// URI, or an app's view. Raises ResourceError."""
+    if uri in APPS:
+        # Everything is inline (no domain to declare); the view copies a resume command.
+        return {"contents": [{"uri": uri, "mimeType": APP_MIME, "text": render_app(APPS[uri]),
+                              "_meta": {"ui": {"prefersBorder": True,
+                                               "permissions": {"clipboardWrite": {}}}}}]}
     rel = unquote(uri[len(SCHEME):]) if (uri or "").startswith(SCHEME) else ""
     target = _s._validate_doc_path(rel)
     if not (target and target.exists() and _visible(rel, ctx)):

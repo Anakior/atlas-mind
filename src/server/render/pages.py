@@ -22,17 +22,20 @@ def _load_page(name: str) -> str:
     return _PAGE_CACHE[name]
 
 
-def render_page(name: str, **fields) -> str:
-    """Fill web/pages/<name>.html: each kwarg foo=val replaces the __FOO__ marker.
-
-    ONE pass (injected values are never re-scanned), so a field value that itself
-    contains a __MARKER__ is safe — same guarantee as the viewer build."""
-    template = _load_page(name)
+def fill(template: str, **fields) -> str:
+    """Each kwarg foo=val replaces the __FOO__ marker, in ONE pass (injected values are
+    never re-scanned), so a field value that itself contains a __MARKER__ is safe — same
+    guarantee as the viewer build."""
     if not fields:
         return template
     repl = {f"__{k.upper()}__": v for k, v in fields.items()}
     pattern = re.compile("|".join(re.escape(p) for p in sorted(repl, key=len, reverse=True)))
     return pattern.sub(lambda m: repl[m.group(0)], template)
+
+
+def render_page(name: str, **fields) -> str:
+    """Fill web/pages/<name>.html (see fill)."""
+    return fill(_load_page(name), **fields)
 
 
 def share_extension_assets():
