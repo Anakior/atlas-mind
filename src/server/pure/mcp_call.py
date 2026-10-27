@@ -16,7 +16,7 @@ from server.pure.queries import (
     _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
     _api_stale, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
 )
-from server.pure import contradictions, resources
+from server.pure import contradictions, provenance, resources
 from server.pure.git_history import (
     _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
     _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
@@ -133,7 +133,10 @@ def _last_commits(rels) -> dict:
     from a single git log."""
     if not rels:
         return {}
-    result = _s.git("--literal-pathspecs", "log", "--no-renames", "--name-only", "-z",
+    # One doc (read_doc): the first commit listed is the one, and walking on costs ~1 s on a
+    # mind with a few thousand commits.
+    limit = ["-n", "1"] if len(rels) == 1 else []
+    result = _s.git("--literal-pathspecs", "log", *limit, "--no-renames", "--name-only", "-z",
                     "--format=%x1e%ct%x1f%an%x1f%(trailers:key=X-Atlas-Author,valueonly)",
                     "--", *("content/" + r for r in rels))
     last = {}
@@ -177,8 +180,9 @@ def _contested(paths: set, ctx) -> dict:
 
 def _add_trust_signals(hits: list, ctx) -> None:
     """What an agent needs to weigh each hit: date and author of its last edit (and the AI
-    behind it, if any), staleness, and the docs it was judged to contradict. Replaces mtime,
-    which is the boot time on a cloud clone."""
+    behind it, if any), staleness, the docs it was judged to contradict, and where it came
+    from when written outside the mind. Replaces mtime, which is the boot time on a cloud
+    clone."""
     paths = [h["path"] for h in hits]
     last, contested = _last_commits(paths), _contested(set(paths), ctx)
     stale_before = time.time() - _STALE_MONTHS * _MONTH_SECONDS
@@ -194,6 +198,22 @@ def _add_trust_signals(hits: list, ctx) -> None:
             h["stale"] = True
         if h["path"] in contested:
             h["contested_with"] = contested[h["path"]]
+        h.update(provenance.mark(h["path"]))
+
+
+def _signal_notes(hit: dict) -> list:
+    """A hit's trust signals as short phrases, for a text result's footer."""
+    edited = f"last edited {hit['last_modified']}"
+    if "last_editor" in hit:
+        edited += f" by {hit['last_editor']}"
+    if "ai" in hit:
+        edited += f" (AI {hit['ai']})"
+    notes = [edited]
+    if hit.get("stale"):
+        notes.append(f"untouched for {_STALE_MONTHS}+ months")
+    if "contested_with" in hit:
+        notes.append("contested with " + ", ".join(hit["contested_with"]))
+    return notes
 
 
 def _section_span(lines: list, query: str):
@@ -262,7 +282,8 @@ def _tool_grep_docs(args, ctx):
             if rx.search(line[:_GREP_LINE_MAX]):
                 if len(matches) == limit:
                     return json_result({"pattern": pattern, "matches": matches, "truncated": True})
-                matches.append({"path": rel, "line": n, "text": line.strip()[:240]})
+                matches.append({"path": rel, **provenance.mark(rel), "line": n,
+                                "text": line.strip()[:240]})
     return json_result({"pattern": pattern, "matches": matches, "truncated": False})
 
 
@@ -291,9 +312,12 @@ def _tool_read_doc(args, ctx):
         body, scope = "\n".join(lines[start - 1:end]), f"lines {start}-{end} of {len(lines)}"
     else:
         body, scope = text, f"{len(lines)} lines"
+    hit = {"path": rel, "mtime": target.stat().st_mtime}
+    _add_trust_signals([hit], ctx)
+    footer = " · ".join([rel, scope, *_signal_notes(hit), f"version {_version(text)}"])
     # Its own block, so the version never gets copied into an edit along with the text.
-    return {"content": [{"type": "text", "text": body},
-                        {"type": "text", "text": f"[{rel} · {scope} · version {_version(text)}]"}]}
+    return {"content": [{"type": "text", "text": provenance.fence(body, rel)},
+                        {"type": "text", "text": f"[{footer}]"}]}
 
 
 def _tool_list_tree(args, ctx):
@@ -727,7 +751,7 @@ def _tool_doc_at(args, ctx):
     content, truncated = _capped(show.stdout)
     header = (f"[doc_at] {rel} @ {rev_sha[:8]} ({date})"
               + ("  [truncated — see /api/revision for the full blob]" if truncated else ""))
-    return text_result(header + "\n\n" + content)
+    return text_result(header + "\n\n" + provenance.fence(content, rel))
 
 
 def _tool_doc_diff(args, ctx):
@@ -767,7 +791,7 @@ def _tool_doc_diff(args, ctx):
               + ("  [truncated]" if truncated else ""))
     if not diff_text.strip():
         return text_result(header + "\n\n(no changes to this document between these revisions)")
-    return text_result(header + "\n\n" + body)
+    return text_result(header + "\n\n" + provenance.fence(body, rel))
 
 
 def _tool_search_history(args, ctx):
@@ -838,6 +862,10 @@ def _tool_stale(args, ctx):
 def _tool_contradictions(args, ctx):
     limit = clamp_int(args.get("limit"), 15, 1, 50)
     items = contradictions.find_contradictions(ctx, limit, bool(args.get("include_dismissed")))
+    for c in items:  # a pair quotes both docs (values, evidence lines)
+        for side in ("a", "b"):
+            if source := provenance.origin(c[side]):
+                c[side + "_untrusted"] = source
     return json_result({"candidates": items})
 
 
@@ -902,7 +930,7 @@ def _tool_doc_blame(args, ctx):
     if not pattern and start == 0 and len(lines) > _MAX_BLAME_LINES:
         lines = lines[:_MAX_BLAME_LINES]
         truncated = True
-    return json_result({"path": rel, "truncated": truncated, "lines": lines})
+    return json_result({"path": rel, **provenance.mark(rel), "truncated": truncated, "lines": lines})
 
 
 def _tool_doc_revert(args, ctx):
@@ -963,8 +991,8 @@ def _tool_brief(args, ctx):
         if room < _BRIEF_MIN_ROOM:
             omitted.append(h["path"])
             continue
-        source = {k: h[k] for k in ("path", "section", "last_modified", "last_editor", "ai",
-                                    "stale", "contested_with") if k in h}
+        source = {k: h[k] for k in ("path", "untrusted", "section", "last_modified",
+                                    "last_editor", "ai", "stale", "contested_with") if k in h}
         if "line" in h:
             try:
                 lines = (_s.CONFIG.content_root / h["path"]).read_text(encoding="utf-8").splitlines()
@@ -1222,14 +1250,16 @@ _DEFAULT_INSTRUCTIONS = (
 
 
 def _instructions() -> str:
-    """The mind's AGENTS.md (its owner's rules for AIs), else a built-in primer."""
+    """The mind's AGENTS.md (its owner's rules for AIs), else a built-in primer; then the
+    engine's rule on text from outside the mind, which an AGENTS.md cannot leave out."""
+    room = _INSTRUCTIONS_MAX - len(provenance.RULE) - 2
     try:
         text = (_s.CONFIG.root / "AGENTS.md").read_text(encoding="utf-8-sig").strip()
     except (OSError, UnicodeDecodeError):
-        return _DEFAULT_INSTRUCTIONS
-    if len(text) > _INSTRUCTIONS_MAX:
-        text = text[:_INSTRUCTIONS_MAX].rsplit("\n", 1)[0]
-    return text or _DEFAULT_INSTRUCTIONS
+        text = ""
+    if len(text) > room:
+        text = text[:room].rsplit("\n", 1)[0]
+    return (text or _DEFAULT_INSTRUCTIONS) + "\n\n" + provenance.RULE
 
 
 @functools.cache

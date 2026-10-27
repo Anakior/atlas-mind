@@ -1,9 +1,10 @@
 """MCP resources: the mind's documents, addressable as doc://<path>. A client lists them
 and attaches one to the conversation (`@atlas:doc://notes/x.md` in Claude Code); tool
-results link to them (search hits). ACL-scrubbed like every other read."""
+results link to them (search hits). ACL-scrubbed and provenance-fenced like every other read."""
 from urllib.parse import quote, unquote
 
 import server as _s
+from server.pure import provenance
 from server.pure.queries import _visible
 
 PAGE_SIZE = 200
@@ -58,4 +59,4 @@ def read_resource(uri: str, ctx) -> dict:
     if not (target and target.exists() and _visible(rel, ctx)):
         raise ResourceError(f"no readable document at {uri}")
     return {"contents": [{"uri": uri_for(rel), "mimeType": _mime(rel),
-                          "text": target.read_text(encoding="utf-8")}]}
+                          "text": provenance.fence(target.read_text(encoding="utf-8"), rel)}]}

@@ -14,7 +14,7 @@ import re
 
 import server as _s
 from store import slugify_token_label
-from server.pure import contradictions
+from server.pure import contradictions, provenance
 from server.pure.git_history import _attributed_log, _scrub_commits
 from server.pure.queries import _visible, _api_stale
 
@@ -77,7 +77,7 @@ def _fill(body: str, args: dict, ctx) -> str:
         target = _s._validate_doc_path(rel)
         if not (target and target.exists() and _visible(rel, ctx)):
             return f"({_s._t('prompt_include_missing')}: {rel})"
-        return target.read_text(encoding="utf-8-sig").strip()
+        return provenance.fence(target.read_text(encoding="utf-8-sig").strip(), rel)
 
     return _INCLUDE_RE.sub(include, body)
 

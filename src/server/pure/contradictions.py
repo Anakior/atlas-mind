@@ -13,6 +13,7 @@ is correct; dozens was the bug.
 import heapq
 import math
 import re
+import threading
 from collections import Counter, defaultdict
 
 import server as _s  # _html_to_text, _normalize_text, doc_hash, line_hashes, verdict_index, verdict_holds
@@ -94,6 +95,7 @@ def _phrase_re(phrases):
 
 
 _POLARITY_RE = [(_phrase_re(pos), _phrase_re(neg)) for pos, neg in _POLARITY]
+_ANY_POLARITY_RE = _phrase_re(set().union(*(pos | neg for pos, neg in _POLARITY)))
 
 # Evidence markers (supersession / staleness). Accent-folded before matching.
 _EVIDENCE_MARKERS = [
@@ -490,6 +492,8 @@ def _detect_polarity(corpus, df, cluster_pairs):
         hits = defaultdict(list)
         for i, line in enumerate(text.splitlines(), start=1):
             nl = _s._normalize_text(line)
+            if not _ANY_POLARITY_RE.search(nl):  # one pass rules out the many lines with none
+                continue
             for pi, (pos_re, neg_re) in enumerate(_POLARITY_RE):
                 if neg_re.search(nl):       # negative first
                     hits[pi].append((i, line, "neg"))
@@ -497,21 +501,29 @@ def _detect_polarity(corpus, df, cluster_pairs):
                     hits[pi].append((i, line, "pos"))
         return hits
 
-    cache = {}
+    rare = {}  # line -> its strictly rare tokens: a line is compared against many others
+
+    def rare_tokens(line):
+        if line not in rare:
+            rare[line] = {t for t in _line_tokens(line)
+                          if t.isalpha() and df.get(t, 0) <= _DETECTOR_RARE_DF}
+        return rare[line]
+
+    cache = {}  # a doc sits in many pairs: scan it once (setdefault would rescan every time)
     for ra, rb in sorted(cluster_pairs):
         if ra not in by_rel or rb not in by_rel:
             continue
-        ha = cache.setdefault(ra, sides(by_rel[ra]))
-        hb = cache.setdefault(rb, sides(by_rel[rb]))
+        for rel in (ra, rb):
+            if rel not in cache:
+                cache[rel] = sides(by_rel[rel])
+        ha, hb = cache[ra], cache[rb]
         emitted = False
         for pi in sorted(set(ha) & set(hb)):
             for la, la_line, sa in ha[pi]:
-                ta = {t for t in _line_tokens(la_line) if t.isalpha() and df.get(t, 0) <= _DETECTOR_RARE_DF}
                 for lb, lb_line, sb in hb[pi]:
                     if sa == sb:
                         continue
-                    tb = {t for t in _line_tokens(lb_line) if t.isalpha() and df.get(t, 0) <= _DETECTOR_RARE_DF}
-                    shared = sorted(ta & tb)
+                    shared = sorted(rare_tokens(la_line) & rare_tokens(lb_line))
                     if len(shared) < 2:
                         continue
                     rows.append({
@@ -541,15 +553,11 @@ def _detect_intra_status(corpus, df):
         for i, line in enumerate(lines, start=1):
             is_table = bool(re.match(r"^\s*\|", line))
             nl = _s._normalize_text(line)  # status markers accent-folded before matching
+            m = (_DONE_MARK if is_table else _OPEN_MARK).search(nl)
+            if not m:
+                continue  # tokenizing only marked lines: most of a corpus carries no status
             toks = {t for t in _line_tokens(line) if t.isalpha() and df.get(t, 0) <= _DETECTOR_RARE_DF}
-            if is_table:
-                m = _DONE_MARK.search(nl)
-                if m:
-                    done.append((i, toks, m.group(0)))
-            else:
-                m = _OPEN_MARK.search(nl)
-                if m:
-                    open_.append((i, toks, m.group(0)))
+            (done if is_table else open_).append((i, toks, m.group(0)))
         if not done or not open_:
             continue
         # Invert open-line tokens so each done row finds its first token-sharing open line in
@@ -648,6 +656,34 @@ def _apply_verdicts(cands, corpus, include_dismissed):
 _CONF_RANK = {"high": 0, "review": 1}                                       # asserted before leads
 _KIND_RANK = {"table-drift": 0, "polarity": 1, "intra-status": 2, "cluster": 3}
 
+# Merged candidates with their evidence, keyed on the raw corpus like _VEC_CACHE; verdicts change
+# without the corpus, so they are applied per call. Computed under a lock: callers arriving
+# together (an MCP client retrying a slow prompt) wait for one run instead of each building its
+# own vectors, which is how a 512 MB instance ran out of memory.
+_CANDS_CACHE = {}
+_CANDS_LOCK = threading.Lock()
+
+
+def _candidates(corpus):
+    """Every candidate row of `corpus` (sorted), before verdicts: fresh copies of the memo."""
+    fp = hash(tuple((rel, hash(text)) for rel, _name, text in corpus))
+    with _CANDS_LOCK:
+        cands = _CANDS_CACHE.get(fp)
+        if cands is None:
+            clean = [(rel, name, _strip_noise(rel, text)) for rel, name, text in corpus]  # cosine only
+            vectors, df, N = _corpus_vectors(clean)
+            cands = _cluster_candidates(vectors, df, N)
+            cluster_pairs = {(c["a"], c["b"]) for c in cands}  # detectors are gated on cluster membership
+            cands += _detect_table_drift(corpus, cluster_pairs)
+            cands += _detect_polarity(corpus, df, cluster_pairs)
+            cands += _detect_intra_status(corpus, df)
+            cands = _merge(cands)
+            _attach_evidence(cands, corpus)
+            if len(_CANDS_CACHE) >= _VEC_CACHE_CAP:
+                _CANDS_CACHE.pop(next(iter(_CANDS_CACHE)))
+            _CANDS_CACHE[fp] = cands
+    return [dict(c) for c in cands]  # callers annotate rows (verdict): the memo stays clean
+
 
 def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = False,
                         solid_only: bool = False) -> list:
@@ -662,17 +698,7 @@ def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = Fal
     not a permanent human feed."""
     from server.pure import queries  # lazy: avoids an import cycle at module load
     corpus = sorted(queries._doc_corpus(ctx))  # RAW; sorted so output is identical across machines
-    clean = [(rel, name, _strip_noise(rel, text)) for rel, name, text in corpus]  # cosine only
-    vectors, df, N = _corpus_vectors(clean)
-
-    cands = _cluster_candidates(vectors, df, N)
-    cluster_pairs = {(c["a"], c["b"]) for c in cands}  # detectors are gated on cluster membership
-    cands += _detect_table_drift(corpus, cluster_pairs)
-    cands += _detect_polarity(corpus, df, cluster_pairs)
-    cands += _detect_intra_status(corpus, df)
-    cands = _merge(cands)
-    _attach_evidence(cands, corpus)
-    cands = _apply_verdicts(cands, corpus, include_dismissed)
+    cands = _apply_verdicts(_candidates(corpus), corpus, include_dismissed)
     if solid_only:
         cands = [c for c in cands if c["confidence"] == "high" or c.get("verdict") == "real"]
 
