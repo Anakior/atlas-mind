@@ -171,21 +171,29 @@ def _cimd_client(url: str) -> dict:
         hit = _CIMD_CACHE.get(url)
     if hit and hit[0] > time.time():
         return hit[1]
-    doc = _fetch_metadata(url)
+    client = client_from_metadata(url, _fetch_metadata(url))
+    with _CIMD_LOCK:
+        _CIMD_CACHE[url] = (time.time() + _CIMD_TTL, client)
+    return client
+
+
+def client_from_metadata(url: str, doc) -> dict:
+    """The client a metadata document describes, checked. Atlas authenticates clients as
+    public only (PKCE binds the code): a client preferring another method is accepted
+    when it also lists none, as ChatGPT does next to its private_key_jwt."""
     if not isinstance(doc, dict) or doc.get("client_id") != url:
         raise ClientError("the metadata document does not name this client_id")
     uris = doc.get("redirect_uris")
     if not isinstance(uris, list) or not uris or not all(valid_redirect_uri(u) for u in uris):
         raise ClientError("the metadata document has no valid redirect_uris")
-    if doc.get("token_endpoint_auth_method", "none") != "none":
+    supported = doc.get("token_endpoint_auth_methods_supported")
+    if (doc.get("token_endpoint_auth_method", "none") != "none"
+            and not (isinstance(supported, list) and "none" in supported)):
         raise ClientError("only public clients are supported (token_endpoint_auth_method none)")
     host = urlsplit(url).hostname
     name = doc.get("client_name") if isinstance(doc.get("client_name"), str) else ""
-    client = {"client_id": url, "client_name": (name.strip() or host)[:100],
-              "redirect_uris": uris, "host": host}
-    with _CIMD_LOCK:
-        _CIMD_CACHE[url] = (time.time() + _CIMD_TTL, client)
-    return client
+    return {"client_id": url, "client_name": (name.strip() or host)[:100],
+            "redirect_uris": uris, "host": host}
 
 
 def _public_address(addr: str) -> bool:

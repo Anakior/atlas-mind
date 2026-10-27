@@ -8,6 +8,13 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-27
+
+### Fixed
+- ChatGPT can connect over OAuth. A client whose metadata document prefers another
+  authentication method but also lists `none` (ChatGPT prefers `private_key_jwt`) is
+  now accepted as a public client; PKCE still binds the authorization code to it.
+
 ## [1.2.0] - 2026-10-27
 
 Assistants connect over OAuth 2.1: point one at `https://<your-atlas>/mcp`, sign in, and
