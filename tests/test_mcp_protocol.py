@@ -80,7 +80,7 @@ class TestMcpLegacy(unittest.TestCase):
         self.assertEqual(resp.status, 405)
 
     def test_unknown_method_stays_http_200(self):
-        resp = _legacy(self.srv, self.token, "resources/list")
+        resp = _legacy(self.srv, self.token, "completion/complete")
         self.assertEqual(resp.status, 200)
         self.assertEqual(resp.json()["error"]["code"], -32601)
 

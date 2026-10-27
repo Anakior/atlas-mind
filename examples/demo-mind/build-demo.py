@@ -89,6 +89,7 @@ EVENTS = [
     (6, "bot", None, "w", "remotes/mira-garden/zettelkasten.md"),
     (6, "theo", None, "w", "features/collaboration.md"),
     (6, "sasha", None, "w", "guides/whats-inside.md"),  # newer "24 tools": contradicts the note
+    (4, "sasha", None, "w", "agents/prompts/onboard-me.md"),  # a prompt is just a note
     (2, "sasha", None, "w", "features/the-mind-graph.md"),
 ]
 

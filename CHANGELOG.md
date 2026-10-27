@@ -8,6 +8,26 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-27
+
+Your rituals and your documents travel with every assistant: prompts you start by name
+(built-in reviews, or your own written as Markdown in the mind), and each document
+attachable to the conversation as an MCP resource.
+
+### Added
+- **MCP prompts.** Requests you start by name (a `/` command in Claude Code), filled in
+  by the server at call time. Built in: `weekly-review` (the week's changes, stale docs
+  and open contradictions, for a recap), `triage-contradictions` (judge each candidate
+  pair), `new-doc` (draft from one of your templates). Your own: one Markdown file per
+  prompt under `content/agents/prompts/`, editable from the viewer, with a description
+  and arguments in its frontmatter, `{{argument}}` and `{{include path/doc.md}}` in its
+  text; one of yours overrides a built-in of the same name. `atlas init` scaffolds a
+  `save-session` prompt that pulls in the session template.
+- **MCP resources.** Every document the token can read is a resource, `doc://<path>`:
+  listed (paginated), readable, and addressable through the `doc://{+path}` template,
+  so a client can attach one to the conversation (`@atlas:doc://notes/x.md` in Claude
+  Code). Search hits carry a resource link to each document found.
+
 ## [1.2.1] - 2026-10-27
 
 ### Fixed

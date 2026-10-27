@@ -76,5 +76,21 @@
   "oauth_signed_in_as": "Connecté en tant que {email}",
   "oauth_error_title": "Autorisation impossible",
   "oauth_error_client": "Cette application n'a pas pu être vérifiée : {reason}.",
-  "oauth_error_session": "Ta session a expiré ou la demande n'est plus valide. Relance la connexion depuis l'application."
+  "oauth_error_session": "Ta session a expiré ou la demande n'est plus valide. Relance la connexion depuis l'application.",
+  "prompt_include_missing": "document introuvable",
+  "prompt_none": "aucun",
+  "prompt_months": "mois",
+  "prompt_lines": "lignes",
+  "prompt_weekly_title": "Revue de la semaine",
+  "prompt_weekly_description": "Ce qui a bougé dans l'Atlas, ce qui vieillit et les contradictions à trancher, en un récap.",
+  "prompt_arg_days": "Période en jours (7 par défaut)",
+  "prompt_weekly_body": "Fais la revue de cet Atlas sur les {days} derniers jours.\n\nDocuments modifiés :\n{changes}\n\nDocuments sans retouche depuis 6 mois ou plus :\n{stale}\n\nContradictions possibles :\n{contradictions}\n\nRédige un récap court : ce qui a avancé, ce qui mérite une mise à jour, les contradictions à trancher. Lis les documents concernés avant de conclure. Propose ensuite de l'enregistrer avec create_doc, là où AGENTS.md le prévoit.",
+  "prompt_triage_title": "Trier les contradictions",
+  "prompt_triage_description": "Passe en revue les paires de documents qui se contredisent peut-être, et enregistre un verdict pour chacune.",
+  "prompt_triage_body": "Examine ces contradictions possibles, une paire à la fois :\n{candidates}\n\nPour chaque paire, lis les deux documents (read_doc, aux lignes indiquées), décide s'ils se contredisent vraiment, puis enregistre ton verdict avec judge_contradiction (real ou none, avec a_line et b_line). Termine par la liste des vraies contradictions et ce qu'il faudrait corriger.",
+  "prompt_new_doc_title": "Nouveau document depuis un modèle",
+  "prompt_new_doc_description": "Rédige un document à partir d'un modèle de l'Atlas (décision, réunion, spec…).",
+  "prompt_arg_template": "Un modèle parmi : {names}",
+  "prompt_arg_subject": "Le sujet du document",
+  "prompt_new_doc_body": "Crée le document « {subject} » à partir du modèle « {template} » ci-dessous. Remplis chaque section avec ce que tu sais de notre conversation, laisse vide ce que tu ignores et demande-moi ce qui manque. Enregistre-le avec create_doc, là où AGENTS.md le prévoit.\n\n{skeleton}"
 }

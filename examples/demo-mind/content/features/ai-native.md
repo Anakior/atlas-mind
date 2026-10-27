@@ -91,6 +91,20 @@ mind carries an [[features/activity-and-attribution|activity layer]] the AI can 
 |---------------------|------------------------------------------------------------------|
 | `create_inbox_item` | drop an item (a mail worth keeping, an alert) into your inbox to triage |
 
+## Prompts you start yourself
+
+Besides the tools the AI picks, the mind offers **prompts** you start by name — a
+`/` command in Claude Code. Some come built in and gather live context for you: a
+weekly review of what moved, a pass over the contradictions to settle, a new document
+from one of your templates. The rest are yours: each Markdown file under
+`agents/prompts/` becomes one, with its own arguments, and can pull in another
+document — your session-save template, say — so every assistant follows the same
+ritual.
+
+Every document is also a **resource** the assistant's app can attach to the
+conversation by its address, `doc://features/ai-native.md`, and search results link
+to the documents they found.
+
 Read-only tools are flagged as such, so your assistant can run them without asking,
 and the destructive ones (`edit_doc`, `delete_doc`, `doc_revert`, `undo_run`) are
 flagged too. A token can also be narrowed to reading, the inbox, or both: an agent that

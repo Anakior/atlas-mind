@@ -76,5 +76,21 @@
   "oauth_signed_in_as": "Signed in as {email}",
   "oauth_error_title": "Authorization failed",
   "oauth_error_client": "This application could not be verified: {reason}.",
-  "oauth_error_session": "Your session expired or the request is no longer valid. Start the connection again from the application."
+  "oauth_error_session": "Your session expired or the request is no longer valid. Start the connection again from the application.",
+  "prompt_include_missing": "document not found",
+  "prompt_none": "none",
+  "prompt_months": "months",
+  "prompt_lines": "lines",
+  "prompt_weekly_title": "Weekly review",
+  "prompt_weekly_description": "What moved in the Atlas, what is going stale and the contradictions to settle, in one recap.",
+  "prompt_arg_days": "Window in days (7 by default)",
+  "prompt_weekly_body": "Review this Atlas over the last {days} days.\n\nDocuments changed:\n{changes}\n\nDocuments untouched for 6 months or more:\n{stale}\n\nPossible contradictions:\n{contradictions}\n\nWrite a short recap: what moved forward, what deserves an update, which contradictions to settle. Read the documents involved before concluding. Then offer to save it with create_doc, where AGENTS.md says.",
+  "prompt_triage_title": "Triage contradictions",
+  "prompt_triage_description": "Go through the document pairs that may contradict each other, and record a verdict for each.",
+  "prompt_triage_body": "Examine these possible contradictions, one pair at a time:\n{candidates}\n\nFor each pair, read both documents (read_doc, at the lines given), decide whether they really conflict, then record your verdict with judge_contradiction (real or none, with a_line and b_line). End with the list of real contradictions and what should be fixed.",
+  "prompt_new_doc_title": "New document from a template",
+  "prompt_new_doc_description": "Write a document from one of the Atlas templates (decision, meeting, spec…).",
+  "prompt_arg_template": "One of: {names}",
+  "prompt_arg_subject": "What the document is about",
+  "prompt_new_doc_body": "Create the document \"{subject}\" from the \"{template}\" template below. Fill each section with what you know from our conversation, leave blank what you don't know and ask me for what is missing. Save it with create_doc, where AGENTS.md says.\n\n{skeleton}"
 }

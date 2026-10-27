@@ -300,6 +300,29 @@ The agent's system instructions…
 Copying/symlinking them to the location your tool expects (`.claude/agents/` for
 Claude Code) makes them usable; keeping them here versions them and makes them
 browsable in your Atlas.
+
+## Prompts
+
+Each Markdown file in `prompts/` is a prompt every connected assistant offers you by
+name (a `/` command in Claude Code): its frontmatter gives a `description` and its
+`arguments` (`subject, folder?`, `?` = optional), its first heading the title, the
+rest the text sent. `{{subject}}` takes the value you give, `{{include path/doc.md}}`
+the text of that document. See `prompts/save-session.md`.
+"""
+
+PROMPT_SAVE_SESSION_MD_EN = """\
+---
+description: Save this work session into the Atlas, following the session template.
+arguments: subject
+---
+# Save this session
+
+Save our work session about "{{subject}}" into this Atlas, following the template
+below. Fill each section from our conversation and keep it factual. Create it with
+create_doc under ai-sessions/, with a kebab-case name that describes the subject
+(no date in it).
+
+{{include ai-sessions/TEMPLATE.md}}
 """
 
 AI_SESSION_TEMPLATE_MD_EN = """\
@@ -443,6 +466,29 @@ Instructions système de l'agent…
 Les copier/symlinker vers l'emplacement attendu par ton outil (`.claude/agents/`
 pour Claude Code) les rend utilisables ; les garder ici les versionne et les
 rend consultables dans ton Atlas.
+
+## Prompts
+
+Chaque fichier Markdown de `prompts/` est un prompt que tout assistant connecté te
+propose par son nom (une commande `/` dans Claude Code) : son frontmatter donne une
+`description` et ses `arguments` (`sujet, dossier?`, `?` = optionnel), son premier
+titre le titre, le reste le texte envoyé. `{{sujet}}` prend la valeur donnée,
+`{{include chemin/doc.md}}` le texte de ce document. Voir `prompts/save-session.md`.
+"""
+
+PROMPT_SAVE_SESSION_MD_FR = """\
+---
+description: Sauvegarde cette session de travail dans l'Atlas, selon le modèle de session.
+arguments: sujet
+---
+# Sauvegarder la session
+
+Sauvegarde notre session de travail sur « {{sujet}} » dans cet Atlas, selon le modèle
+ci-dessous. Remplis chaque section à partir de notre conversation, en restant
+factuel. Crée-la avec create_doc dans ai-sessions/, avec un nom en kebab-case qui
+décrit le sujet (sans date).
+
+{{include ai-sessions/TEMPLATE.md}}
 """
 
 AI_SESSION_TEMPLATE_MD_FR = """\
@@ -495,6 +541,7 @@ def _scaffold_docs(lang: str) -> list:
             ("AGENTS.md", AGENTS_MD_FR),
             ("content/agents/README.md", AGENTS_README_MD_FR),
             ("content/ai-sessions/TEMPLATE.md", AI_SESSION_TEMPLATE_MD_FR),
+            ("content/agents/prompts/save-session.md", PROMPT_SAVE_SESSION_MD_FR),
         ]
     return [
         ("content/welcome.md", WELCOME_MD_EN),
@@ -502,6 +549,7 @@ def _scaffold_docs(lang: str) -> list:
         ("AGENTS.md", AGENTS_MD_EN),
         ("content/agents/README.md", AGENTS_README_MD_EN),
         ("content/ai-sessions/TEMPLATE.md", AI_SESSION_TEMPLATE_MD_EN),
+        ("content/agents/prompts/save-session.md", PROMPT_SAVE_SESSION_MD_EN),
     ]
 
 

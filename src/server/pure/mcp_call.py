@@ -16,7 +16,7 @@ from server.pure.queries import (
     _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
     _api_stale, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
 )
-from server.pure import contradictions
+from server.pure import contradictions, resources
 from server.pure.git_history import (
     _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
     _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
@@ -233,7 +233,9 @@ def _tool_search_docs(args, ctx):
     payload = {"query": q, "hits": hits}
     if tag:
         payload["tag"] = tag
-    return json_result(payload)
+    result = json_result(payload)
+    result["content"] += [resources.link(h["path"]) for h in hits]  # attachable as resources
+    return result
 
 
 _GREP_LINE_MAX = 1000  # matched per line: bounds what a pathological regex can backtrack over
@@ -1204,8 +1206,9 @@ _META_VERSION = "io.modelcontextprotocol/protocolVersion"
 _META_SERVER_INFO = "io.modelcontextprotocol/serverInfo"
 _HEADER_MISMATCH = -32020
 _UNSUPPORTED_VERSION = -32022
-_CAPABILITIES = {"tools": {}}
+_CAPABILITIES = {"tools": {}, "prompts": {}, "resources": {}}
 _TTL_MS = 3_600_000
+_MIND_TTL_MS = 60_000  # documents and the mind's prompts are edited from the viewer
 # Clients inject the instructions into every conversation: keep them a primer, not a manual.
 _INSTRUCTIONS_MAX = 8000
 _DEFAULT_INSTRUCTIONS = (
@@ -1234,12 +1237,12 @@ def _server_info() -> dict:
     return {"name": _s.CONFIG.site_slug, "version": _s.current_version() or "unknown"}
 
 
-def _modern(result: dict, cache_scope: str | None = None) -> dict:
+def _modern(result: dict, cache_scope: str | None = None, ttl_ms: int = _TTL_MS) -> dict:
     """Stamp a result the 2026-07-28 way; list/discover results also carry caching hints."""
     result = {**result, "resultType": "complete",
               "_meta": {_META_SERVER_INFO: _server_info()}}
     if cache_scope:
-        result.update(ttlMs=_TTL_MS, cacheScope=cache_scope)
+        result.update(ttlMs=ttl_ms, cacheScope=cache_scope)
     return result
 
 
@@ -1264,8 +1267,11 @@ def _header_mismatch(req: dict, headers) -> str | None:
     """Why the mirrored HTTP headers disagree with the body, or None. Checked so a proxy
     routing on the headers can't be handed a different body."""
     expected = {"MCP-Protocol-Version": _request_version(req), "Mcp-Method": req.get("method")}
-    if req.get("method") == "tools/call":
-        expected["Mcp-Name"] = (req.get("params") or {}).get("name")
+    params = req.get("params") or {}
+    if req.get("method") in ("tools/call", "prompts/get"):
+        expected["Mcp-Name"] = params.get("name")
+    elif req.get("method") == "resources/read":
+        expected["Mcp-Name"] = params.get("uri")
     for name, want in expected.items():
         got = _header_value(headers.get(name))
         if got != want:
@@ -1335,6 +1341,36 @@ def _mcp_jsonrpc(req: dict, ctx=None, headers=None):
             sys.stderr.flush()
             result = _mcp_call_tool(tool_name, arguments, ctx)
             return ok(_modern(result) if version else result)
+        # Prompts and resources read the mind: a token without the read scope gets none.
+        readable = getattr(ctx, "scopes", None) is None or "read" in ctx.scopes
+        if method in ("prompts/list", "prompts/get"):
+            from server.pure import prompts  # lazy: prompts reuses this module's helpers
+            if method == "prompts/list":
+                result = {"prompts": prompts.list_prompts(ctx) if readable else []}
+                return ok(_modern(result, "private", _MIND_TTL_MS) if version else result)
+            if not readable:
+                return err(-32602, "this token has no read scope")
+            try:
+                result = prompts.get_prompt(params.get("name", ""), params.get("arguments"), ctx)
+            except prompts.PromptError as e:
+                return err(-32602, str(e))
+            return ok(_modern(result) if version else result)
+        if method == "resources/list":
+            result = (resources.list_resources(ctx, str(params.get("cursor") or ""))
+                      if readable else {"resources": []})
+            return ok(_modern(result, "private", _MIND_TTL_MS) if version else result)
+        if method == "resources/templates/list":
+            result = {"resourceTemplates": [resources.TEMPLATE] if readable else []}
+            return ok(_modern(result, "private", _MIND_TTL_MS) if version else result)
+        if method == "resources/read":
+            try:
+                if not readable:
+                    raise resources.ResourceError("this token has no read scope")
+                result = resources.read_resource(params.get("uri", ""), ctx)
+            except resources.ResourceError as e:
+                # 2026-07-28 moved "resource not found" from -32002 to Invalid Params.
+                return err(-32602 if version else -32002, str(e))
+            return ok(_modern(result, "private", _MIND_TTL_MS) if version else result)
         if version is None:  # 2026-07-28 dropped the handshake and ping
             if method == "initialize":
                 # Echo the client's revision when we serve it (claude.ai drops the session

@@ -1,0 +1,61 @@
+"""MCP resources: the mind's documents, addressable as doc://<path>. A client lists them
+and attaches one to the conversation (`@atlas:doc://notes/x.md` in Claude Code); tool
+results link to them (search hits). ACL-scrubbed like every other read."""
+from urllib.parse import quote, unquote
+
+import server as _s
+from server.pure.queries import _visible
+
+PAGE_SIZE = 200
+SCHEME = "doc://"
+TEMPLATE = {"uriTemplate": SCHEME + "{+path}", "name": "document",
+            "title": "A document of the mind, by its path", "mimeType": "text/markdown"}
+
+
+class ResourceError(ValueError):
+    """The URI names no document this caller can read."""
+
+
+def uri_for(rel: str) -> str:
+    return SCHEME + quote(rel)
+
+
+def _mime(rel: str) -> str:
+    return "text/html" if rel.lower().endswith(".html") else "text/markdown"
+
+
+def _title(rel: str, path) -> str:
+    """The first Markdown heading, else the file name."""
+    entry = _s._doc_entry(rel, path) if rel.lower().endswith(".md") else None
+    for line in (entry["content"].splitlines() if entry else []):
+        if line.startswith("# "):
+            return line[2:].strip()
+    return path.stem
+
+
+def link(rel: str) -> dict:
+    """A resource_link content block pointing at a document."""
+    return {"type": "resource_link", "uri": uri_for(rel), "name": rel, "mimeType": _mime(rel)}
+
+
+def list_resources(ctx, cursor: str = "") -> dict:
+    """One page of the documents ctx can read, by path; `nextCursor` while more remain."""
+    docs = sorted((rel, path) for rel, path in _s._iter_doc_files() if _visible(rel, ctx))
+    start = int(cursor) if cursor.isdigit() else 0
+    page = docs[start:start + PAGE_SIZE]
+    result = {"resources": [{"uri": uri_for(rel), "name": rel, "title": _title(rel, path),
+                             "mimeType": _mime(rel), "size": path.stat().st_size}
+                            for rel, path in page]}
+    if start + PAGE_SIZE < len(docs):
+        result["nextCursor"] = str(start + PAGE_SIZE)
+    return result
+
+
+def read_resource(uri: str, ctx) -> dict:
+    """The document behind a doc:// URI. Raises ResourceError."""
+    rel = unquote(uri[len(SCHEME):]) if (uri or "").startswith(SCHEME) else ""
+    target = _s._validate_doc_path(rel)
+    if not (target and target.exists() and _visible(rel, ctx)):
+        raise ResourceError(f"no readable document at {uri}")
+    return {"contents": [{"uri": uri_for(rel), "mimeType": _mime(rel),
+                          "text": target.read_text(encoding="utf-8")}]}
