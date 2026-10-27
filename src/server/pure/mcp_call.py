@@ -1250,7 +1250,9 @@ _META_VERSION = "io.modelcontextprotocol/protocolVersion"
 _META_SERVER_INFO = "io.modelcontextprotocol/serverInfo"
 _HEADER_MISMATCH = -32020
 _UNSUPPORTED_VERSION = -32022
-_CAPABILITIES = {"tools": {}, "prompts": {}, "resources": {}}
+# An extension is on only when both sides declare it: hosts that render apps check for this one.
+_CAPABILITIES = {"tools": {}, "prompts": {}, "resources": {},
+                 "extensions": {resources.APP_EXTENSION: {}}}
 _TTL_MS = 3_600_000
 _MIND_TTL_MS = 60_000  # documents and the mind's prompts are edited from the viewer
 # Clients inject the instructions into every conversation: keep them a primer, not a manual.

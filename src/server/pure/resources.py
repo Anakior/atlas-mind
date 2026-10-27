@@ -16,6 +16,7 @@ PAGE_SIZE = 200
 SCHEME = "doc://"
 APPS = {"ui://atlas/resume": "resume"}
 APP_MIME = "text/html;profile=mcp-app"
+APP_EXTENSION = "io.modelcontextprotocol/ui"
 TEMPLATE = {"uriTemplate": SCHEME + "{+path}", "name": "document",
             "title": "A document of the mind, by its path", "mimeType": "text/markdown"}
 

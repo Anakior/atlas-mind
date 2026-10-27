@@ -58,6 +58,8 @@ class TestResumeView(unittest.TestCase):
         return [m for m in report["log"] if m.get("method") == method]
 
     def test_the_tool_names_its_view(self):
+        capabilities = self.rpc("initialize", {"protocolVersion": "2025-06-18"})["capabilities"]
+        self.assertIn("io.modelcontextprotocol/ui", capabilities["extensions"])
         tools = {t["name"]: t for t in self.rpc("tools/list")["tools"]}
         self.assertEqual(tools["resume_session"]["_meta"]["ui"]["resourceUri"], VIEW)
         content = self.rpc("resources/read", {"uri": VIEW})["contents"][0]

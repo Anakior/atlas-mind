@@ -69,17 +69,21 @@
     request: request,
     notify: notify,
     on: function (method, handler) { handlers[method] = handler; },
+    // Field names as the SDK's schema has them (appInfo, not the spec prose's clientInfo):
+    // hosts validate the request with it and drop one that doesn't match.
     start: function (name) {
       return request('ui/initialize', {
         protocolVersion: '2026-01-26',
-        clientInfo: { name: name, version: '1' },
+        appInfo: { name: name, version: '1' },
         appCapabilities: { availableDisplayModes: ['inline'] },
-        capabilities: {},
       }).then(function (result) {
         applyContext(result && result.hostContext);
         notify('ui/notifications/initialized', {});
         reportSize();
         return result;
+      }, function (error) {
+        reportSize();  // a host keeps the frame closed until it knows its height: show the error
+        throw error;
       });
     },
   };

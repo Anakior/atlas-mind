@@ -545,7 +545,7 @@
   atlasApp.on('ui/notifications/tool-result', show);
   atlasApp.on('ui/notifications/tool-cancelled', function () { status(t('cancelled')); });
   loading('');
-  atlasApp.start('atlas-resume');
+  atlasApp.start('atlas-resume').catch(function (e) { status(t('error', { message: e.message }), 'error'); });
 })();
 </script>
 </body>

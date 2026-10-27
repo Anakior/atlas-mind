@@ -41,7 +41,9 @@ await page.evaluate(({ html, args, theme }) => {
     if (event.source !== frame.contentWindow) return;
     const m = event.data;
     window.__log.push(m);
-    if (m.method === 'ui/initialize') {
+    if (m.method === 'ui/initialize' && !(m.params.appInfo && m.params.appCapabilities)) {
+      toView({ id: m.id, error: { code: -32602, message: 'Invalid params' } });  // as the SDK's schema does
+    } else if (m.method === 'ui/initialize') {
       toView({ id: m.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'test-host', version: '0' },
         hostCapabilities: { serverTools: {} }, hostContext: { theme, locale: 'en' } } });
     } else if (m.method === 'ui/notifications/initialized') {

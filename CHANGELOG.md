@@ -8,6 +8,15 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-27
+
+### Fixed
+- The resume view stayed invisible in Claude: its handshake named itself `clientInfo`, as the
+  spec's prose has it, where the hosts validate `appInfo` against the SDK's schema, so the
+  host never answered and kept the frame closed. A failed handshake now shows its error
+  instead of nothing, and the server declares the MCP Apps extension
+  (`io.modelcontextprotocol/ui`) in its capabilities, as the extension negotiation expects.
+
 ## [1.7.0] - 2026-10-27
 
 The first MCP App: in Claude on the web or desktop, picking up a session is a view you act on.
