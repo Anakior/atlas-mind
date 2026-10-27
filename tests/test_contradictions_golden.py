@@ -373,5 +373,34 @@ class TestSolidOnlyViewerFeed(_Mind):
                       {_pair(x["a"], x["b"]) for x in solid})
 
 
+# Base64 images whose payloads happen to spell a polarity pair and share rare fragments: before
+# they were stripped, such payloads in .html decks surfaced as dozens of bogus leads.
+IMG_A = "\n![schema](data:image/png;base64,QUJD+existe+zzqxv+yyqwv/AAAA==)\n"
+IMG_B = "\n![schema](data:image/png;base64,QUJD+absent+zzqxv+yyqwv/AAAA==)\n"
+
+
+class TestInlinePayloadsAreNoProse(_Mind):
+    DOCS = {**CORPUS, "klayn-archi.md": KLAYN_A + IMG_A, "klayn-notes.md": KLAYN_B + IMG_B}
+
+    def test_no_lead_from_base64(self):
+        self.assertEqual(self._rows()[_pair("klayn-archi.md", "klayn-notes.md")]["kind"], "cluster")
+
+
+class TestWarmUp(_Mind):
+    def test_a_burst_of_changes_costs_one_scan_that_later_calls_read(self):
+        c._CANDS_CACHE.clear()
+        real, scans = c._cluster_candidates, []
+        c._cluster_candidates = lambda *a: scans.append(1) or real(*a)
+        try:
+            for _ in range(3):  # each change pushes the run back
+                c.schedule_warm(0.2)
+            c._warm_timer.join(30)
+            self.assertEqual(scans, [1])
+            self._detect()
+            self.assertEqual(scans, [1])  # served from the memo
+        finally:
+            c._cluster_candidates = real
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,22 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-27
+
+### Fixed
+- The contradiction scan no longer runs a 512 MB instance out of memory. Inline payloads
+  (base64 images in an .html deck, about half of a real mind's bytes) are left out of the
+  scan, which also drops the bogus polarity leads they produced between decks. Accent
+  folding no longer memoizes whole lines and documents (a scan walks more of them than
+  the memo holds, so they missed every time and pinned ~70 MB); each line is folded once
+  per scan instead. On a real mind: peak 152 → 126 MB, 81 → 27 MB kept after a scan,
+  and 11.6 → 9.5 s.
+
+### Changed
+- The scan runs in the background about 30 s after the mind's content settles (an edit,
+  a pull, a restart), so a weekly review or a `contradictions` call reads its result
+  instead of waiting for it.
+
 ## [1.4.0] - 2026-10-27
 
 What reaches your assistant from outside your mind arrives as data, not instructions; and

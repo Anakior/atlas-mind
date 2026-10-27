@@ -284,7 +284,7 @@ from server.pure.queries import (  # noqa: F401  read-side corpus/feed queries
     _api_stale, _api_inbox_list, _activity_events,
 )
 from server.pure.contradictions import (  # noqa: F401  13c same-subject pair generator
-    find_contradictions, find_doc_neighbors,
+    find_contradictions, find_doc_neighbors, schedule_warm,
 )
 from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
     _soft_delete, _mcp_call_tool, _mcp_jsonrpc, _mcp_http_status, _needed_scope, _span_hash,
@@ -491,6 +491,7 @@ def ensure_repo_cloned(root: Path) -> bool:
 def pull_and_rebuild():
     """Commit pending edits, pull --rebase, rebuild, push. Delegates to GitSync."""
     _CTX.git_sync.pull_and_rebuild()
+    schedule_warm()  # a pull may bring content: rescan once it settles
 
 
 def git_pull_loop():
@@ -500,10 +501,10 @@ def git_pull_loop():
     refreshed mirror triggers an index rebuild so it shows up."""
     while True:
         time.sleep(CONFIG.git_pull_interval)
-        _CTX.git_sync.pull_and_rebuild()
+        pull_and_rebuild()
         try:
             if _CTX.remote_sync.sync_all():
-                _CTX.git_sync.trigger_sync()
+                trigger_sync()
         except Exception as e:
             print(f"[git_pull_loop] remote sync error: {e}", file=sys.stderr, flush=True)
 
@@ -528,6 +529,7 @@ def trigger_sync():
     """Background commit + push of local edits (todos / file PUT). Delegates to
     GitSync."""
     _CTX.git_sync.trigger_sync()
+    schedule_warm()
 
 
 def commit_change(ctx, subject, *paths, ai=None):
@@ -538,6 +540,7 @@ def commit_change(ctx, subject, *paths, ai=None):
     attributed commit errors — the content is already on disk, so a git hiccup must
     never fail the caller's write."""
     from server.pure import acl
+    schedule_warm()  # the content changed: rescan once it settles
     author, trailers = acl.attribution_for(ctx, ai=ai)
     if author is None and not trailers:      # anonymous / local / system → backstop
         _CTX.git_sync.trigger_sync()
@@ -758,6 +761,7 @@ def run() -> None:
         threading.Thread(target=git_pull_loop, daemon=True).start()
         # Flush unpushed writes when Fly stops the machine (deploy/scale).
         signal.signal(signal.SIGTERM, _graceful_flush)
+    schedule_warm()  # a restart empties the memo: the first contradictions call shouldn't pay
 
     # Dev sandbox + local both bind loopback; only real cloud listens on 0.0.0.0.
     # ATLAS_BIND overrides this (docker dev sets it to 0.0.0.0 so the host port

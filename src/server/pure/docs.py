@@ -216,13 +216,20 @@ def _live_tasks_index():
     return build.build_tasks_index(md_files)
 
 
-# Accent-fold + lowercase. Memoized: the contradiction detectors re-normalize the same lines and
-# tokens hundreds of thousands of times over a scan, and NFD + per-char category is not free. The
-# inputs are tokens/lines/cells (and the occasional whole doc, evicted by LRU); bounded so a long
-# server never grows it without limit.
-@lru_cache(maxsize=131072)
-def _normalize_text(s: str) -> str:
+def _fold(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s.lower()) if unicodedata.category(c) != "Mn")
+
+
+# Words, cells and titles recur millions of times over a contradiction scan: memoized. Lines and
+# whole docs are not: a scan walks more of them than the cache holds, so they missed every time,
+# evicted the words, and pinned ~70 MB on a 512 MB instance.
+_fold_short = lru_cache(maxsize=131072)(_fold)
+_SHORT = 64
+
+
+def _normalize_text(s: str) -> str:
+    """Accent-fold + lowercase."""
+    return _fold_short(s) if len(s) <= _SHORT else _fold(s)
 
 
 _HTML_BLOCK_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.S | re.I)

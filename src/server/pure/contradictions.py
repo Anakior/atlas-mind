@@ -107,6 +107,11 @@ _EVIDENCE_MARKERS = [
     "a la place", "instead", "au lieu de", "finalement", "en realite",
 ]
 
+# An inline payload (a base64 image in an .html deck) is no prose: on a real mind about half its
+# bytes, which every detector would walk for nothing. It never spans lines, so lines keep their
+# numbers.
+_DATA_URI_RE = re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=]+")
+
 _DONE_MARK = re.compile(r"🚢|✅|✔|\b(livr[ée]e?s?|shipp?ed|done|fait|termin[ée]e?s?|merged|prod)\b", re.I)
 _OPEN_MARK = re.compile(r"\b(a\s+trancher|to\s+decide|todo|tbd|a\s+faire|en\s+discussion|"
                         r"en\s+cours|wip|a\s+definir|undecided|pas\s+tranche|open\s+question)\b", re.I)
@@ -478,7 +483,7 @@ def _line_tokens(line):
     return set(_tokenize(line))
 
 
-def _detect_polarity(corpus, df, cluster_pairs):
+def _detect_polarity(corpus, df, cluster_pairs, folded):
     """Cross-doc polarity/negation lead on the SAME subject, gated on cluster membership. A line
     in A matches a positive phrase, a line in B the matching negative phrase (or vice-versa),
     sharing >=2 STRICTLY rare tokens (df <= _DETECTOR_RARE_DF) so generic same-cluster prose
@@ -487,11 +492,10 @@ def _detect_polarity(corpus, df, cluster_pairs):
     by_rel = {rel: text for rel, _name, text in corpus}
     rows = []
 
-    def sides(text):
+    def sides(rel):
         """Per polarity entry index, the (line_no, raw_line, sense) hits in this doc."""
         hits = defaultdict(list)
-        for i, line in enumerate(text.splitlines(), start=1):
-            nl = _s._normalize_text(line)
+        for i, (line, nl) in enumerate(zip(by_rel[rel].splitlines(), folded[rel]), start=1):
             if not _ANY_POLARITY_RE.search(nl):  # one pass rules out the many lines with none
                 continue
             for pi, (pos_re, neg_re) in enumerate(_POLARITY_RE):
@@ -515,7 +519,7 @@ def _detect_polarity(corpus, df, cluster_pairs):
             continue
         for rel in (ra, rb):
             if rel not in cache:
-                cache[rel] = sides(by_rel[rel])
+                cache[rel] = sides(rel)
         ha, hb = cache[ra], cache[rb]
         emitted = False
         for pi in sorted(set(ha) & set(hb)):
@@ -541,18 +545,17 @@ def _detect_polarity(corpus, df, cluster_pairs):
     return rows
 
 
-def _detect_intra_status(corpus, df):
+def _detect_intra_status(corpus, df, folded):
     """Within one file: a _DONE_MARK inside a table row co-existing with an _OPEN_MARK on a
     non-table body line, sharing >=1 STRICTLY rare token (df <= _DETECTOR_RARE_DF) so a doc that
     merely mixes done and todo items on common words doesn't fire. A lead, confidence "review"."""
     rows = []
     for rel, _name, text in corpus:
-        lines = text.splitlines()
         done = []  # (line_no, tokens, marker)
         open_ = []
-        for i, line in enumerate(lines, start=1):
+        # Status markers match on the accent-folded line.
+        for i, (line, nl) in enumerate(zip(text.splitlines(), folded[rel]), start=1):
             is_table = bool(re.match(r"^\s*\|", line))
-            nl = _s._normalize_text(line)  # status markers accent-folded before matching
             m = (_DONE_MARK if is_table else _OPEN_MARK).search(nl)
             if not m:
                 continue  # tokenizing only marked lines: most of a corpus carries no status
@@ -607,12 +610,11 @@ def _merge(cands):
     return list(best.values())
 
 
-def _evidence_lines(text, path):
+def _evidence_lines(text, folded_lines, path):
     """Up to _EVIDENCE_PER_DOC "à vérifier" pointers: lines carrying an _EVIDENCE_MARKERS hit
     (deterministic by line number). Presentation-only: never ranks, filters or sets a verdict."""
     out = []
-    for i, line in enumerate(text.splitlines(), start=1):
-        nl = _s._normalize_text(line)
+    for i, (line, nl) in enumerate(zip(text.splitlines(), folded_lines), start=1):
         for marker in _EVIDENCE_MARKERS:
             if marker in nl:
                 out.append({"path": path, "line": i, "text": line.strip()[:200], "marker": marker})
@@ -622,14 +624,14 @@ def _evidence_lines(text, path):
     return out
 
 
-def _attach_evidence(cands, corpus):
+def _attach_evidence(cands, corpus, folded):
     """Attach each pair's per-doc evidence pointers (a, then b; a==b once)."""
     by_rel = {rel: text for rel, _name, text in corpus}
     for c in cands:
         a, b = c["a"], c["b"]
-        ev = _evidence_lines(by_rel.get(a, ""), a)
+        ev = _evidence_lines(by_rel.get(a, ""), folded.get(a, ()), a)
         if b != a:
-            ev = ev + _evidence_lines(by_rel.get(b, ""), b)
+            ev = ev + _evidence_lines(by_rel.get(b, ""), folded.get(b, ()), b)
         if ev:
             c["evidence"] = ev
 
@@ -670,19 +672,48 @@ def _candidates(corpus):
     with _CANDS_LOCK:
         cands = _CANDS_CACHE.get(fp)
         if cands is None:
+            corpus = [(rel, name, _DATA_URI_RE.sub("data:", text)) for rel, name, text in corpus]
             clean = [(rel, name, _strip_noise(rel, text)) for rel, name, text in corpus]  # cosine only
             vectors, df, N = _corpus_vectors(clean)
             cands = _cluster_candidates(vectors, df, N)
             cluster_pairs = {(c["a"], c["b"]) for c in cands}  # detectors are gated on cluster membership
+            # Every line accent-folded once for the three line detectors (lines are too many
+            # to memoize in _normalize_text, and each detector walks them again).
+            folded = {rel: [_s._normalize_text(line) for line in text.splitlines()]
+                      for rel, _name, text in corpus}
             cands += _detect_table_drift(corpus, cluster_pairs)
-            cands += _detect_polarity(corpus, df, cluster_pairs)
-            cands += _detect_intra_status(corpus, df)
+            cands += _detect_polarity(corpus, df, cluster_pairs, folded)
+            cands += _detect_intra_status(corpus, df, folded)
             cands = _merge(cands)
-            _attach_evidence(cands, corpus)
+            _attach_evidence(cands, corpus, folded)
             if len(_CANDS_CACHE) >= _VEC_CACHE_CAP:
                 _CANDS_CACHE.pop(next(iter(_CANDS_CACHE)))
             _CANDS_CACHE[fp] = cands
     return [dict(c) for c in cands]  # callers annotate rows (verdict): the memo stays clean
+
+
+_WARM_DELAY_S = 30
+_warm_timer = None
+_warm_lock = threading.Lock()
+
+
+def schedule_warm(delay: float = _WARM_DELAY_S) -> None:
+    """Memoize the whole mind's candidates in the background once its content has been still
+    for `delay` seconds (each call pushes the run back: an agent's burst of edits costs one
+    scan), so the next weekly review or contradictions call reads them instead of scanning.
+    The whole mind is an admin's view, which an admin's token shares."""
+    global _warm_timer
+    with _warm_lock:
+        if _warm_timer is not None:
+            _warm_timer.cancel()
+        _warm_timer = threading.Timer(delay, _warm)
+        _warm_timer.daemon = True
+        _warm_timer.start()
+
+
+def _warm():
+    from server.pure import queries  # lazy: avoids an import cycle at module load
+    _candidates(sorted(queries._doc_corpus(None)))
 
 
 def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = False,
