@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+__KIT_CSS__
+
+  /* The days the topic moved, in order and evenly spaced (they bunch up in time), with the date
+     compared marked among them and today at the end. */
+  .timeline { position: relative; display: flex; margin: 16px 0 4px; }
+  .timeline::before { content: ""; position: absolute; top: 5px; left: 6px; right: 6px; height: 2px; border-radius: 1px; background: var(--border); }
+  .tick { position: relative; display: flex; flex: 1; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text-3); font-size: 11px; white-space: nowrap; }
+  .tick:first-child { align-items: flex-start; } .tick:last-child { align-items: flex-end; }
+  .tick i { width: 12px; height: 12px; border: 2px solid var(--bg); border-radius: 50%; background: var(--text-3); }
+  button.tick:hover { color: var(--accent); } button.tick:hover i { background: var(--accent); }
+  .tick.then { color: var(--accent); font-weight: 700; }
+  .tick.then i { background: var(--accent); box-shadow: 0 0 0 4px var(--tint); }
+  .tick.today i { background: var(--bg); border-color: var(--text-3); }
+  .caption { margin: 0 0 18px; color: var(--text-3); font-size: 12px; }
+  @media (max-width: 480px) { button.tick span { visibility: hidden; } }
+
+  /* A claim then and now, side by side, with what happened to it. */
+  .shift { margin: 0 0 18px; }
+  .shift-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 7px; }
+  .badge { flex: none; padding: 1px 9px; border-radius: 999px; background: color-mix(in srgb, var(--tone) 13%, transparent); color: var(--tone); font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+  .badge.reversed { --tone: var(--removed); } .badge.dropped { --tone: var(--warn); } .badge.refined { --tone: var(--accent); }
+  .badge.held { --tone: var(--added); } .badge.new { --tone: var(--text-2); }
+  .shift-head .note { margin: 0; font-size: 12.5px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .side { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 11px 12px; border-radius: var(--radius); background: var(--bg-2); }
+  .side blockquote { margin: 0; padding: 0 0 0 10px; border-left: 2px solid var(--border); color: var(--text); font-size: 13px; overflow-wrap: anywhere; }
+  .side.now blockquote { border-left-color: var(--accent); }
+  .side small { margin-top: auto; overflow: hidden; color: var(--text-3); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+  .side small b { color: var(--text-2); font-weight: 600; }
+  .side.empty { justify-content: center; border: 1px dashed var(--border); background: none; color: var(--text-3); font-size: 12.5px; }
+  .side-label { color: var(--text-3); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+
+  .lines { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .line { margin-top: -1px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .line b { display: block; }
+  .line q { display: block; margin: 2px 0; color: var(--text-2); font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
+  .line small { color: var(--text-3); font-size: 12px; }
+  .actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 20px 0 0; }
+  .actions .note { margin: 0 auto 0 0; }
+  @media (max-width: 480px) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>__BRIDGE__</script>
+<script>__KIT__</script>
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var kit = atlasKit(__I18N__, app);
+  var t = kit.t, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
+  var state = { data: null };
+
+  function long(iso) {
+    return new Date(iso + 'T12:00:00').toLocaleDateString(kit.lang, { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  function message(text) {
+    return atlasApp.request('ui/message', { role: 'user', content: [{ type: 'text', text: text }] });
+  }
+  function send(button, text) {
+    button.disabled = true;
+    message(text).then(function (result) {
+      if (result && result.isError) throw new Error('?');
+      button.textContent = t('sent');
+    }).catch(function () { button.disabled = false; });
+  }
+  function cite(side) {
+    return '- « ' + side.quote + ' » (' + side.path + ', ' + side.date + ')';
+  }
+
+  function header() {
+    var d = state.data;
+    return add(el('header'), el('h1', null, t('title', { topic: d.topic })),
+      add(el('div', 'pills'), add(el('span', 'pill accent'), icon('clock'), t('then_pill', { date: long(d.at) })),
+        add(el('span', 'pill'), icon('calendar'), t('now_pill', { date: long(d.today) })),
+        el('span', 'pill', t('claims', { n: d.shifts.length }))));
+  }
+
+  // A click on a day the topic moved asks to compare with that day.
+  function timeline() {
+    var d = state.data, line = el('div', 'timeline'), placed = false;
+    function mark() {
+      placed = true;
+      return add(el('span', 'tick then'), el('i'), el('span', null, t('then') + ' · ' + kit.day(d.at)));
+    }
+    d.moments.forEach(function (m) {
+      if (!placed && m.date > d.at) line.appendChild(mark());
+      var tick = add(el('button', 'tick moment'), el('i'), el('span', null, kit.day(m.date)));
+      tick.title = t('compare', { date: long(m.date) }) + '\n' + m.docs.map(docName).join(', ');
+      tick.onclick = function () {
+        tick.disabled = true;
+        message(t('compare_message', { topic: d.topic, date: m.date })).catch(function () { tick.disabled = false; });
+      };
+      line.appendChild(tick);
+    });
+    if (!placed) line.appendChild(mark());
+    line.appendChild(add(el('span', 'tick today'), el('i'), el('span', null, t('today'))));
+    return add(el('section'), line, el('p', 'caption', t('moments')));
+  }
+
+  function side(claim, kind, empty) {
+    if (!claim) return el('div', 'side empty', empty);
+    return add(el('div', 'side ' + kind), el('span', 'side-label', t(kind)), el('blockquote', null, claim.quote),
+      add(el('small'), el('b', null, docName(claim.path)), ' · ' + kit.day(claim.date) + (claim.sha ? ' · ' + claim.sha : '')));
+  }
+
+  function shifts() {
+    var d = state.data;
+    if (!d.shifts.length) return el('p', 'note', t('empty'));
+    var box = el('section');
+    d.shifts.forEach(function (s) {
+      box.appendChild(add(el('div', 'shift'),
+        add(el('div', 'shift-head'), el('span', 'badge ' + s.badge, t('badge_' + s.badge)), s.note ? el('p', 'note', s.note) : null),
+        add(el('div', 'pair'), side(s.then, 'then', t('nothing_then', { date: kit.day(d.at) })),
+          side(s.now, 'now', t('nothing_now')))));
+    });
+    return box;
+  }
+
+  function lagging() {
+    var d = state.data, docs = d.lagging || [];
+    if (!docs.length) return null;
+    var lines = el('div', 'lines');
+    docs.forEach(function (doc) {
+      lines.appendChild(add(el('div', 'line'), el('b', null, docName(doc.path)), el('q', null, doc.quote),
+        el('small', null, doc.path + ' · ' + t('untouched', { date: kit.day(doc.last_modified) }))));
+    });
+    var update = el('button', 'ghost', t('update'));
+    update.onclick = function () {
+      send(update, t('update_message', { topic: d.topic }) + '\n' + docs.map(cite).join('\n'));
+    };
+    return add(el('section'), add(el('h2'), icon('alert'), t('lagging_title'), el('span', 'count', docs.length),
+      add(el('span', 'end'), update)), lines);
+  }
+
+  function why() {
+    var d = state.data, then = d.shifts.map(function (s) { return s.then; }).filter(Boolean);
+    var rejected = (d.rejected || []).length;
+    var note = rejected ? el('span', 'note', t('rejected', { n: rejected })) : null;
+    if (!then.length) return note && add(el('div', 'actions'), note);
+    var button = add(el('button', 'primary'), t('why', { date: kit.day(d.at) }), icon('arrow'));
+    button.onclick = function () {
+      send(button, t('why_message', { topic: d.topic, date: d.at }) + '\n' + then.map(cite).join('\n'));
+    };
+    return add(el('div', 'actions'), note, button);
+  }
+
+  function show(result) {
+    try {
+      state.data = kit.data(result);
+    } catch (e) {
+      return kit.status(t('error', { message: e.message }), 'error');
+    }
+    app.className = '';
+    app.replaceChildren();
+    add(app, header(), timeline(), shifts(), lagging(), why());
+  }
+
+  atlasApp.on('ui/notifications/tool-input', function () { kit.loading(''); });
+  atlasApp.on('ui/notifications/tool-result', show);
+  atlasApp.on('ui/notifications/tool-cancelled', function () { kit.status(t('cancelled')); });
+  kit.loading('');
+  atlasApp.start('atlas-shift').catch(function (e) { kit.status(t('error', { message: e.message }), 'error'); });
+})();
+</script>
+</body>
+</html>

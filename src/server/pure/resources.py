@@ -14,7 +14,7 @@ from server.render.apps import render_app
 
 PAGE_SIZE = 200
 SCHEME = "doc://"
-APPS = {"ui://atlas/resume": "resume", "ui://atlas/weather": "weather"}
+APPS = {"ui://atlas/resume": "resume", "ui://atlas/weather": "weather", "ui://atlas/shift": "shift"}
 APP_MIME = "text/html;profile=mcp-app"
 APP_EXTENSION = "io.modelcontextprotocol/ui"
 TEMPLATE = {"uriTemplate": SCHEME + "{+path}", "name": "document",

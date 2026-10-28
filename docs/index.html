@@ -38,7 +38,7 @@
       "@type": "SoftwareApplication",
       "@id": "https://atlas-mind.anakior.app/#app",
       "name": "Atlas Mind",
-      "description": "A self-hostable wiki / knowledge-base engine. Your notes stay plain files in your own private git repository, served by a single Python standard-library server with no database, sending your content nowhere. AI-native via MCP (Model Context Protocol): 32 tools give an AI a persistent, local read-and-write memory.",
+      "description": "A self-hostable wiki / knowledge-base engine. Your notes stay plain files in your own private git repository, served by a single Python standard-library server with no database, sending your content nowhere. AI-native via MCP (Model Context Protocol): 34 tools give an AI a persistent, local read-and-write memory.",
       "applicationCategory": "DeveloperApplication",
       "applicationSubCategory": "Knowledge base / Personal knowledge management",
       "operatingSystem": "Linux, macOS, Windows",
@@ -317,6 +317,7 @@
   .app-stack img{display:block;width:80%;height:auto;border:1px solid var(--glass-line);border-radius:14px}
   .app-stack .back{position:absolute;top:0;left:0;opacity:.6;-webkit-mask-image:linear-gradient(#000 45%,transparent 92%);mask-image:linear-gradient(#000 45%,transparent 92%)}
   .app-stack .front{position:relative;margin:var(--lift,16%) 0 0 auto;box-shadow:0 40px 90px -30px rgba(0,0,0,.95),0 0 0 1px rgba(0,0,0,.4)}
+  .app-stack.solo .front{width:100%;margin:0}
   .apps-note{margin:64px auto 0;color:var(--muted);font-size:15px;max-width:700px;text-align:center}
   .apps-note b{color:var(--ink)}
   @media(max-width:820px){
@@ -427,8 +428,8 @@
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
       <h3>AI-native by design</h3>
-      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with thirty-two tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects, and the rituals you write down become commands. Assistants sign in over <b>OAuth</b>: you choose what each may do, and revoke it in a click.</p>
-      <div class="tag"><a href="#superpowers">MCP · 32 tools · REST API →</a></div>
+      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with thirty-four tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects, and the rituals you write down become commands. Assistants sign in over <b>OAuth</b>: you choose what each may do, and revoke it in a click.</p>
+      <div class="tag"><a href="#superpowers">MCP · 34 tools · REST API →</a></div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M20 4c-7 0-13 4-13 11v3l11-11"/><path d="M7 18c-1.2 1.2-2 2.4-2.5 3.5"/><path d="M16 8.5 9.5 15"/></svg></div>
@@ -442,7 +443,7 @@
 <section id="superpowers" class="powers center"><div class="wrap">
   <div class="kicker">AI-native · Model Context Protocol</div>
   <h2>Give your mind <span class="grad">superpowers</span>.</h2>
-  <p class="sub" style="margin:14px auto 0">Connect Atlas to Claude (or any MCP client) and your knowledge base stops being a passive archive: it becomes a <b>persistent memory for Claude</b>, an MCP server for your notes it can <b>read, write, triage, map, rewind and audit</b>, on your own machine, with nothing shipped to anyone's cloud. <b>Thirty-two tools, six superpowers.</b></p>
+  <p class="sub" style="margin:14px auto 0">Connect Atlas to Claude (or any MCP client) and your knowledge base stops being a passive archive: it becomes a <b>persistent memory for Claude</b>, an MCP server for your notes it can <b>read, write, triage, map, rewind and audit</b>, on your own machine, with nothing shipped to anyone's cloud. <b>Thirty-four tools, six superpowers.</b></p>
   <div class="powers-grid">
 
     <div class="power">
@@ -469,8 +470,8 @@
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 3v3.5h3.5"/><path d="M12 7.5V12l3 1.8"/></svg></div>
       <h3>Travels through time</h3>
-      <p>“When did we decide this — and what was it before?” Your AI reads any <b>past version</b> of a note, diffs two points in time, finds a sentence you <b>deleted months ago</b>, traces a line back to the commit that wrote it, follows a moving changelog, and restores a version in one move — powered by the git history your mind already carries.</p>
-      <div class="tools"><code>doc_history</code><code>doc_at</code><code>doc_diff</code><code>search_history</code><code>changelog</code><code>doc_blame</code><code>doc_revert</code></div>
+      <p>“When did we decide this — and what was it before?” Your AI reads any <b>past version</b> of a note, diffs two points in time, finds a sentence you <b>deleted months ago</b>, traces a line back to the commit that wrote it, sets <b>what you thought then</b> beside what you think now, claim by claim, follows a moving changelog, and restores a version in one move — powered by the git history your mind already carries.</p>
+      <div class="tools"><code>doc_history</code><code>doc_at</code><code>doc_diff</code><code>search_history</code><code>then_and_now</code><code>show_shift</code><code>changelog</code><code>doc_blame</code><code>doc_revert</code></div>
     </div>
 
     <div class="power">
@@ -523,6 +524,19 @@
       <img class="back" src="assets/apps-weather.webp" width="1240" height="1498" loading="lazy" alt="">
       <img class="front" src="assets/apps-weather-deck.webp" width="1240" height="1084" loading="lazy"
            alt="The weather view's review deck: a document unread for seven months, its opening, and three verdicts: still true, needs an update, to the trash.">
+    </div>
+  </div>
+
+  <div class="app-row">
+    <div class="app-text">
+      <div class="app-ask"><span>You</span>What did I think of Pro pricing in August?</div>
+      <h3>What you thought then, beside what you think now</h3>
+      <p>Atlas reads your mind as it was that day and as it is now, your assistant pairs the claims, and <b>every quote is checked word for word</b> against the version it comes from before it is shown: <b>reversed</b>, <b>refined</b>, <b>held</b>, <b>dropped</b> or <b>new</b>, with the days the topic moved and the docs still saying the old. <b>Why did I think that then?</b> asks for your reasoning back then, from what the mind said on that date only.</p>
+      <div class="tools"><code>then_and_now</code><code>show_shift</code></div>
+    </div>
+    <div class="app-stack solo">
+      <img class="front" src="assets/apps-shift.webp" width="1240" height="1928" loading="lazy"
+           alt="The then-and-now view: a topic's claims as they were and as they are, side by side, badged reversed, new, dropped and held, with the docs still saying the old position.">
     </div>
   </div>
 

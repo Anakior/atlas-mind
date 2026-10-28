@@ -8,6 +8,31 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-28
+
+What you thought then, beside what you think now.
+
+### Added
+- **`then_and_now`** and **`show_shift`**, the 33rd and 34th MCP tools. Ask what you thought of
+  something in June: `then_and_now` reads the mind as it was on that date and as it is, and
+  returns each doc's passages on the topic on both sides (docs since deleted or moved included,
+  an unchanged passage said once) and the days the topic moved. The model pairs the claims,
+  then shows them with `show_shift`, which checks every quote word for word against the version
+  it cites (ellipses allowed, Markdown marks ignored) and dates it by the commit that wrote it:
+  a claim the mind never made is rejected, never shown. Docs that still state the old position
+  come back as `lagging`.
+- **The third MCP App: then and now.** Each claim as it was and as it is, side by side, badged
+  reversed, refined, held, dropped or new; the days the topic moved on a line, one click to
+  compare with another; the docs still saying the old, to update with Claude; and **Why did I
+  think that then?**, which asks Claude to rebuild your reasoning from what the mind said on
+  that date only.
+
+### Fixed
+- The weather view on a phone: the layer tabs stay on one line (scrolling if they must), the
+  late reports put their button under the text instead of squeezing it, and the closing button of
+  both views takes its own line. Folders and subfolders now share the ranking's columns, so every
+  bar starts and every number ends at the same place, whatever its width.
+
 ## [1.8.1] - 2026-10-28
 
 ### Changed

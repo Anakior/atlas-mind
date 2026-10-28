@@ -1330,6 +1330,210 @@
     }
   },
   {
+    "name": "then_and_now",
+    "description": "What the mind said about a topic at a past date, next to what it says now: for each doc, its passages on the topic then and now (docs since deleted or moved included), and the days the topic moved. For 'what did I think of X in June', 'when did we change our mind on Y'. Then pair the claims and show them with show_shift.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "The subject, in a few words."
+        },
+        "at": {
+          "type": "string",
+          "description": "The past date, YYYY-MM-DD (default: 90 days ago)."
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "rev": {
+          "type": "string"
+        },
+        "moments": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "docs": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "hint": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic",
+        "at",
+        "docs"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "show_shift",
+    "description": "Show the user how the mind's position on a topic moved since a date, after then_and_now: pairs of claims, then and now, each quoted word for word from its passages (… skips words) and badged reversed, refined, held, dropped (nothing now) or new (nothing then). Every quote is checked against the version it cites; one not found is rejected, not shown. `lagging`: docs that still say what the mind no longer holds.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "description": "The date then_and_now compared with, YYYY-MM-DD."
+        },
+        "shifts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "badge": {
+                "type": "string",
+                "enum": [
+                  "reversed",
+                  "refined",
+                  "held",
+                  "dropped",
+                  "new"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "quote"
+                ]
+              },
+              "now": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "quote"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "description": "What changed, in one short sentence."
+              }
+            },
+            "required": [
+              "badge"
+            ]
+          }
+        },
+        "lagging": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "quote": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "quote"
+            ]
+          }
+        }
+      },
+      "required": [
+        "topic",
+        "at",
+        "shifts"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "today": {
+          "type": "string"
+        },
+        "moments": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "shifts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "lagging": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "topic",
+        "at",
+        "shifts"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://atlas/shift"
+      }
+    }
+  },
+  {
     "name": "changelog",
     "description": "Commit-level activity across the mind over a window: the docs added, modified, deleted or renamed, and when; the mind-wide counterpart of doc_history. Scope to a folder, or filter by author (e.g. to skip sync commits).",
     "inputSchema": {

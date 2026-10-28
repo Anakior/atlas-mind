@@ -17,7 +17,7 @@ sign in to your Atlas, see what it asks for (read, inbox, write), untick what yo
 don't want to grant, and allow it. You can also mint a token yourself (**Settings →
 Tokens**, or `atlas token create <mind>` locally) and use
 `https://<your-atlas>/mcp/<token>`. From then on the AI works your mind through
-**thirty-two tools**, grouped into six superpowers.
+**thirty-four tools**, grouped into six superpowers.
 
 ### 1. Reads your whole mind
 
@@ -65,6 +65,8 @@ a present-state index can't do:
 | `doc_at`         | read a document as it was at a past revision *or date*     |
 | `doc_diff`       | what a commit changed in a document                        |
 | `search_history` | find when a string entered or left history (even if since deleted) |
+| `then_and_now`   | what the mind said on a topic at a past date, next to what it says now |
+| `show_shift`     | show how a position moved, claim by claim, every quote checked word for word |
 | `changelog`      | recent commit-level activity across the whole mind         |
 | `doc_blame`      | trace each line to the commit that wrote it                |
 | `doc_revert`     | restore a document to a past revision                      |

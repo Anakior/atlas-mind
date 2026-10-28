@@ -1129,6 +1129,22 @@ def _tool_mind_weather(args, ctx):
                                        clamp_int(args.get("months"), 3, 1, 24), ctx))
 
 
+def _tool_then_and_now(args, ctx):
+    from server.pure import shifts  # lazy: shifts reuses the search and the contradiction tokenizer
+    try:
+        return json_result(shifts.evidence(args.get("topic") or "", args.get("at") or "", ctx))
+    except ValueError as e:
+        return text_result(str(e), is_error=True)
+
+
+def _tool_show_shift(args, ctx):
+    from server.pure import shifts
+    try:
+        return json_result(shifts.verify(args, ctx))
+    except ValueError as e:
+        return text_result(str(e), is_error=True)
+
+
 _RUN_GAP_SECONDS = 30 * 60  # an agent silent this long has finished its run
 _RUN_WINDOW_DAYS = 30       # runs are computed over this window, so their ids stay stable
 
@@ -1254,6 +1270,8 @@ _TOOLS = {
     "changes_since": _tool_changes_since,
     "resume_session": _tool_resume_session,
     "mind_weather": _tool_mind_weather,
+    "then_and_now": _tool_then_and_now,
+    "show_shift": _tool_show_shift,
     "agent_runs": _tool_agent_runs,
     "undo_run": _tool_undo_run,
 }

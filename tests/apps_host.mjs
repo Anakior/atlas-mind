@@ -113,6 +113,21 @@ const scenarios = {
     await view.locator('.card h3, .done').first().waitFor();
     await page.waitForTimeout(200);
   },
+  async show_shift(report) {
+    await view.locator('h1').waitFor();
+    report.title = await view.locator('h1').textContent();
+    report.badges = await view.locator('.shift .badge').allTextContents();
+    report.quotes = await view.locator('.side blockquote').allTextContents();
+    report.empty = await view.locator('.side.empty').count();
+    report.moments = await view.locator('.moment').count();
+    report.lagging = await view.locator('.line q').allTextContents();
+    await shot();
+    // Ask why, have the lagging docs updated, compare with a day the topic moved.
+    await view.locator('.actions .primary').click();
+    await view.locator('h2 .ghost').click();
+    await view.locator('.moment').first().click();
+    await page.waitForTimeout(200);
+  },
 };
 
 const report = {};

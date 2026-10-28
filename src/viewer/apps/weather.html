@@ -6,14 +6,17 @@
 <style>
 __KIT_CSS__
 
-  .layers { display: inline-flex; gap: 2px; margin: 4px 0 10px; padding: 3px; border-radius: 9px; background: var(--bg-2); }
-  .layers button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 0; border-radius: 7px; background: none; color: var(--text-2); font-size: 12.5px; font-weight: 600; }
+  .layers { display: inline-flex; gap: 2px; max-width: 100%; margin: 4px 0 10px; padding: 3px; border-radius: 9px; background: var(--bg-2); overflow-x: auto; scrollbar-width: none; }
+  .layers::-webkit-scrollbar { display: none; }
+  .layers button { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 0; border-radius: 7px; background: none; color: var(--text-2); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
   .layers button.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 12%, transparent); }
   .legend { margin: 0 0 8px; color: var(--text-3); font-size: 12px; }
 
-  /* The ranking: a folder per row, its bar as long as its value on the layer, the number beside. */
-  .ranks { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .region { display: grid; grid-template-columns: minmax(96px, 1.1fr) 2fr minmax(76px, auto) 14px; align-items: center; gap: 12px;
+  /* The ranking: a folder per row, its bar as long as its value on the layer, the number beside.
+     Rows and subfolders share the list's columns, so the bars start and the numbers end together. */
+  .ranks { display: grid; grid-template-columns: minmax(96px, 1.1fr) 2fr max-content 14px; column-gap: 12px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .ranks > *, .open-body > * { grid-column: 1 / -1; }
+  .region { display: grid; grid-template-columns: subgrid; align-items: center;
     width: 100%; margin-top: -1px; padding: 9px 12px; border: 0; border-top: 1px solid var(--border); background: none; text-align: left; transition: background .12s; }
   .region:hover, .region.open { background: var(--bg-2); }
   .region .name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -24,9 +27,9 @@ __KIT_CSS__
   .value { color: var(--text-2); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .region > svg { color: var(--text-3); }
   .region.open > .chev { transform: rotate(90deg); }
-  .open-body { padding: 4px 12px 14px 24px; background: var(--bg-2); }
+  .open-body { display: grid; grid-template-columns: subgrid; padding: 4px 12px 14px 24px; background: var(--bg-2); }
   .open-body .stats { margin: 0 0 6px; color: var(--text-3); font-size: 12px; }
-  .sub { display: grid; grid-template-columns: minmax(84px, 1fr) 2fr minmax(76px, auto) 14px; align-items: center; gap: 12px;
+  .sub { display: grid; grid-template-columns: subgrid; align-items: center;
     width: 100%; padding: 5px 0; border: 0; background: none; text-align: left; }
   .sub .name { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
   .sub .track { height: 6px; background: var(--bg); }
@@ -37,18 +40,24 @@ __KIT_CSS__
   .row { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; flex-wrap: wrap; }
   .more { width: 100%; margin-top: -1px; padding: 8px 12px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--text-3); font-size: 12.5px; text-align: left; }
   .more:hover { color: var(--accent); }
-  @media (max-width: 480px) { .region, .sub { grid-template-columns: minmax(80px, 1fr) 1fr auto 14px; gap: 8px; } }
+  @media (max-width: 480px) {
+    .ranks { grid-template-columns: minmax(72px, 1fr) 1fr max-content 14px; column-gap: 8px; }
+    .layers button { padding: 5px 9px; }
+    .layers svg { display: none; }
+    .lines .line small { white-space: normal; }
+  }
   .pairs { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
   .pairs li { padding: 3px 0; overflow-wrap: anywhere; }
   .pairs b { font-weight: 600; }
 
   .lines { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .line { display: flex; align-items: center; gap: 12px; margin-top: -1px; padding: 10px 12px; border-top: 1px solid var(--border); }
-  .line > div { flex: 1; min-width: 0; }
+  /* The button goes under the text when both no longer fit side by side. */
+  .line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: -1px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .line > div { flex: 1 1 200px; min-width: 0; }
   .line b, .line small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .line small { color: var(--text-3); font-size: 12px; }
   .ghosts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-  .ghosts span { padding: 0 7px; border: 1px dashed var(--removed); border-radius: 999px; color: var(--removed); font-size: 11.5px; }
+  .ghosts span { white-space: nowrap; padding: 0 7px; border: 1px dashed var(--removed); border-radius: 999px; color: var(--removed); font-size: 11.5px; }
 
   /* The review deck: one doc at a time, its opening to read, then a verdict that says what it does. */
   .deck-top { display: flex; align-items: center; gap: 10px; margin: -4px 0 8px; }
