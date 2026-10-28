@@ -39,6 +39,7 @@
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
   main { position: relative; padding: 18px 20px 20px; }
   button { font: inherit; color: inherit; cursor: pointer; }
@@ -49,6 +50,8 @@
   .chev { transition: transform .15s; }
   details[open] > summary .chev { transform: rotate(90deg); }
 
+  .back { display: inline-flex; align-items: center; gap: 4px; margin: -4px 0 10px -4px; padding: 2px 6px 2px 2px; border: 0; border-radius: 6px; background: none; color: var(--text-3); font-size: 12.5px; font-weight: 600; }
+  .back:hover { color: var(--accent); }
   .pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; background: var(--bg-2); color: var(--text-2); font-size: 12px; font-weight: 500; white-space: nowrap; }
   .pill.warn { background: var(--warn-tint); color: var(--warn); }
@@ -152,9 +155,12 @@
   .primary:hover { filter: brightness(1.08); }
   .primary:active { transform: translateY(1px); }
 
+  .search { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-2); color: var(--text-3); }
+  .search:focus-within { border-color: var(--accent); }
+  .filter { flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: none; color: var(--text); font: inherit; }
   .saves { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .save { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border: 0; background: none; text-align: left; transition: background .12s; }
-  .save + .save { border-top: 1px solid var(--border); }
+  /* Each row draws the line above it; the first one's is clipped, whichever rows the filter hides. */
+  .save { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: -1px; padding: 11px 12px; border: 0; border-top: 1px solid var(--border); background: none; text-align: left; transition: background .12s; }
   .save:hover { background: var(--bg-2); }
   .save > div { flex: 1; min-width: 0; }
   .save b, .save small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -191,11 +197,13 @@
   var ICONS = {
     alert: '<path d="M12 4 2.5 20h19z"/><path d="M12 10v4m0 3h.01"/>',
     arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
+    back: '<path d="m15 6-6 6 6 6"/>',
     check: '<path d="m5 12 5 5L20 7"/>',
     chev: '<path d="m9 6 6 6-6 6"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
     pause: '<path d="M9 5v14m6-14v14"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     spark: '<path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
     sync: '<path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4m-4 5a8 8 0 0 0 14.9 3M20 20v-4h-4"/>',
     term: '<path d="m4 17 6-5-6-5m8 12h8"/>',
@@ -266,7 +274,9 @@
     if (s.model) add(pills, add(el('span', 'pill'), icon('spark'), s.model));
     var summary = s.summary ? el('p', 'summary', s.summary) : null;
     if (summary) summary.onclick = function () { summary.classList.remove('clip'); };
-    var box = add(el('header'), pills.childNodes.length ? pills : null, el('h1', null, s.title), summary,
+    var back = add(el('button', 'back'), icon('back'), t('back'));
+    back.onclick = function () { load({}); };
+    var box = add(el('header'), back, pills.childNodes.length ? pills : null, el('h1', null, s.title), summary,
       s.untrusted ? add(el('span', 'pill warn untrusted'), icon('alert'), t('untrusted')) : null);
     var newer = (d.other_matches || []).filter(function (m) { return m.newer; })[0];
     if (newer) {
@@ -422,9 +432,9 @@
     }
     ui.kept = el('span', 'kept');
     ui.go = el('span');
-    var go = add(el('button', 'primary'), ui.go, icon('arrow'));
-    go.onclick = resumeHere;
-    return add(box, add(el('div', 'actions'), ui.kept, go));
+    ui.button = add(el('button', 'primary'), ui.go, icon('arrow'));
+    ui.button.onclick = resumeHere;
+    return add(box, add(el('div', 'actions'), ui.kept, ui.button));
   }
 
   // The checkboxes changed: everything that counts them follows.
@@ -443,16 +453,42 @@
 
   // ── the list of saves (resume_session without arguments) ──────────────────
 
+  // One line per piece of work (its latest save), filtered in place once the list is long.
   function list(d) {
     var saves = el('div', 'saves');
-    d.saves.forEach(function (s) {
+    var rows = d.saves.map(function (s) {
+      var project = (s.project || '').split(/[\\/]/).filter(Boolean).pop();  // its folder's name
+      var meta = [day(s.last_commit), s.steps ? t('steps', { n: s.steps }) : null, project, s.machine, s.state];
       var item = add(el('button', 'save'),
-        add(el('div'), el('b', null, s.title), el('small', null, [day(s.last_commit), s.state].filter(Boolean).join(' · '))),
+        add(el('div'), el('b', null, s.title), el('small', null, meta.filter(Boolean).join(' · '))),
         s.open_points ? el('span', 'pill accent', t('open_count', { n: s.open_points })) : null, icon('chev'));
       item.onclick = function () { load({ path: s.path }); };
-      saves.appendChild(item);
+      item.dataset.find = fold([s.title, s.state, s.machine, s.project, s.path].join(' '));
+      return saves.appendChild(item);
     });
-    return add(el('section'), add(el('h2'), t('recent'), el('span', 'count', d.saves.length)), saves);
+    var none = el('p', 'note', t('no_match'));
+    none.hidden = true;
+    var box = add(el('section'), add(el('h2'), t('recent'), el('span', 'count', d.saves.length)));
+    if (rows.length > 5) {
+      var filter = el('input', 'filter');
+      filter.type = 'search';
+      filter.placeholder = t('filter');
+      filter.oninput = function () {
+        var q = fold(filter.value.trim());
+        var shown = rows.filter(function (row) {
+          row.hidden = q !== '' && row.dataset.find.indexOf(q) === -1;
+          return !row.hidden;
+        }).length;
+        saves.hidden = !shown;
+        none.hidden = !!shown;
+      };
+      add(box, add(el('label', 'search'), icon('search'), filter));
+    }
+    return add(box, saves, none);
+  }
+
+  function fold(text) {
+    return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   }
 
   // ── what the user does: tell the model, start the session, open another save ──
@@ -478,7 +514,14 @@
     var d = state.data, c = chosen();
     var text = t('message', { title: d.save.title, path: d.save.path });
     if (c.keep.length) text += '\n' + t('message_points') + '\n- ' + c.keep.join('\n- ');
-    atlasApp.request('ui/message', { role: 'user', content: { type: 'text', text: text } }).catch(function () {});
+    ui.button.disabled = true;
+    atlasApp.request('ui/message', { role: 'user', content: [{ type: 'text', text: text }] }).then(function (result) {
+      if (result && result.isError) throw new Error(t('refused'));
+      ui.go.textContent = t('sent');
+    }).catch(function (e) {
+      ui.button.disabled = false;
+      ui.kept.textContent = t('error', { message: e.message });
+    });
   }
 
   function copyText(text) {

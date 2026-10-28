@@ -27,7 +27,7 @@ _FIELDS = {"machine": re.compile(r"\*\*Machine[^*\n]*\*\*\s*:\s*`([^`\n]+)`"),
            "project": re.compile(r"\*\*(?:Projet|Project)\*\*\s*:\s*`([^`\n]+)`"),
            "resume": re.compile(r"`([^`\n]*--resume[^`\n]*)`")}
 _HISTORY_DEPTH = 30  # versions of a save read back to date its open points
-_LISTED = 10
+_LISTED = 20  # pieces of work listed, each one line however many saves it took
 _EXCERPT_LINES = 8  # changed lines shown per linked doc
 
 
@@ -239,7 +239,7 @@ def resume(args: dict, ctx) -> dict:
         """A save in full (the one resumed), or as a line in a list (the others)."""
         info = _parse(rel, saves[rel])
         if not full:
-            info = {k: info[k] for k in ("path", "title", "session_date", "state") if k in info}
+            info = {k: info[k] for k in ("path", "title", "session_date", "state", "machine", "project") if k in info}
             if "state" in info:
                 info["state"] = _clean(info["state"], 160)
         info["open_points"] = len(_points(saves[rel]))
@@ -273,9 +273,18 @@ def resume(args: dict, ctx) -> dict:
         newer = sorted((p for p in hits if recency(p) > recency(target)), key=recency, reverse=True)
         candidates = (newer + [p for p in hits[1:] if p not in newer])[:5]
     else:
-        recent = sorted(saves, key=recency, reverse=True)[:_LISTED]
-        return {"saves": [card(rel) for rel in recent],
-                "hint": "Pass one as path (or a topic) to get its resumption."}
+        # One line per piece of work: a chain of saves shows as its latest step.
+        works, seen = [], set()
+        for rel in sorted(saves, key=recency, reverse=True):
+            if len(works) == _LISTED:
+                break
+            if rel not in seen:
+                chain = _chain(rel, links)
+                seen |= chain
+                works.append({**card(rel), **({"steps": len(chain)} if len(chain) > 1 else {})})
+        return {"saves": works,
+                "hint": "One line per piece of work, its latest save first (`steps`: how many saves "
+                        "it took). Pass one as path (or a topic) to get its resumption."}
 
     text = saves[target]
     save = card(target, full=True)

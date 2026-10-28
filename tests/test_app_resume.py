@@ -88,15 +88,18 @@ class TestResumeView(unittest.TestCase):
         self.assertIn("Migrer les jetons existants", context["structuredContent"]["drop"][0])
         message = self.sent(report, "ui/message")[-1]["params"]
         self.assertEqual(message["role"], "user")
-        self.assertIn("Refonte de l'auth", message["content"]["text"])
-        self.assertNotIn("Migrer les jetons", message["content"]["text"])
+        self.assertIn("Refonte de l'auth", message["content"][0]["text"])
+        self.assertNotIn("Migrer les jetons", message["content"][0]["text"])
+        self.assertEqual(report["after_resume"], "Sent")  # the host took it
 
     def test_the_list_opens_a_save(self):
         report = self.host({}, theme="dark")
-        self.assertEqual(set(report["saves"]), {"Refonte de l'auth", "Refonte de l'auth, suite"})
+        self.assertEqual(len(report["saves"]), 2)  # the linked refonte saves are one line
+        self.assertIn("Hébergement", report["saves"])
         self.assertIn(report["opened"], report["saves"])
-        call = self.sent(report, "tools/call")[0]["params"]
-        self.assertEqual((call["name"], list(call["arguments"])), ("resume_session", ["path"]))
+        calls = [m["params"] for m in self.sent(report, "tools/call")]
+        self.assertEqual((calls[0]["name"], list(calls[0]["arguments"])), ("resume_session", ["path"]))
+        self.assertEqual((calls[1]["arguments"], report["back"]), ({}, 2))  # and back to the list
 
 
 if __name__ == "__main__":

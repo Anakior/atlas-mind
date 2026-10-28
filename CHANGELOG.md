@@ -8,6 +8,24 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-10-28
+
+The resume view becomes a way in: your recent work, one line each, then the save you pick.
+
+### Changed
+- `resume_session` without arguments lists the recent **pieces of work**, one line each: the
+  latest save of a chain, with how many saves it took (`steps`), its project and machine, 20 of
+  them instead of 10 saves of which most were steps of the same work. The tool description
+  tells the model to call it that way when you want to see or pick among your saves.
+- In the view, that list has a filter (title, state, project, machine), and a save opened from
+  it has a link back to the list.
+
+### Fixed
+- The resume view's button did nothing: it sent its message as one content block where the
+  hosts expect a list of them. It now says when the host took the message (or why not), and
+  reads "Continue here with these points": it resumes in this conversation, while the command
+  above it resumes on the machine.
+
 ## [1.7.1] - 2026-10-27
 
 ### Fixed

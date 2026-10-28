@@ -49,6 +49,8 @@ await page.evaluate(({ html, args, theme }) => {
     } else if (m.method === 'ui/notifications/initialized') {
       toView({ method: 'ui/notifications/tool-input', params: { arguments: args } });
       toView({ method: 'ui/notifications/tool-result', params: await window.callTool({ name: 'resume_session', arguments: args }) });
+    } else if (['ui/message', 'ui/update-model-context'].includes(m.method) && m.params.content && !Array.isArray(m.params.content)) {
+      toView({ id: m.id, error: { code: -32602, message: 'Invalid params' } });  // content is a list of blocks
     } else if (m.method === 'ui/notifications/size-changed') {
       frame.style.height = `${m.params.height}px`;
     } else if (m.method === 'tools/call') {
@@ -74,11 +76,16 @@ if (screenshot) {
 if (report.points) {
   await view.locator('.point input').first().uncheck();
   await view.locator('.primary').click();
+  await page.waitForTimeout(200);
+  report.after_resume = (await view.locator('.primary').textContent()).trim();
 }
 if (report.saves.length) {
   await view.locator('.save').first().click();
   await view.locator('h1').waitFor();
   report.opened = await view.locator('h1').textContent();
+  await view.locator('.back').click();
+  await view.locator('.save').first().waitFor();
+  report.back = await view.locator('.save').count();
 }
 await page.waitForTimeout(200);
 report.log = await page.evaluate(() => window.__log);

@@ -66,11 +66,20 @@ SUITE = """# Save — Refonte de l'auth, suite
 ## Next steps
 - Ship it.
 """
+HOSTING = """# Save — Hébergement
+
+## How to resume
+- Machine: laptop.
+
+## Next steps
+- Choisir l'hébergeur.
+"""
 MIND = {
     "accueil.md": "# Accueil\n",
     "notes/plan.md": "# Plan\n\nLe plan de l'auth.\n",
     "ai-sessions/refonte-auth.md": SAVE,
     "ai-sessions/refonte-auth-suite.md": SUITE,
+    "ai-sessions/hebergement.md": HOSTING,
     "ai-sessions/TEMPLATE.md": "# MODÈLE — Save\n\n## Comment reprendre\n- Machine / projet.\n",
     "agents/prompts/save-session.md": "# Sauvegarder\n\nAvec une section ## Comment reprendre\n\n## Comment reprendre\n",
 }
@@ -95,8 +104,11 @@ class TestResumeSession(unittest.TestCase):
         self.assertFalse(err, text)
 
     def test_lists_the_saves_only(self):
+        # One line per piece of work: the two linked refonte saves show as the latest of them.
+        self.edit("ai-sessions/refonte-auth-suite.md", "- Ship it.", "- Ship it now.")
         _, data = self.call()
-        self.assertEqual({s["path"] for s in data["saves"]}, {PATH, "ai-sessions/refonte-auth-suite.md"})
+        self.assertEqual({s["path"]: s.get("steps") for s in data["saves"]},
+                         {"ai-sessions/refonte-auth-suite.md": 2, "ai-sessions/hebergement.md": None})
 
     def test_reads_a_save(self):
         _, data = self.call(path=PATH)
