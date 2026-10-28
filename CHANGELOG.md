@@ -8,6 +8,15 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-10-28
+
+### Changed
+- The weather's review deck says what each verdict does: **Still true** (nothing to change: it
+  leaves the fog), **Needs an update** (set aside, to update with Claude), **To the trash**
+  (deleted, still recoverable), and **Later**, set apart. The doc reads as a document (headings,
+  paragraphs, lists, tables row by row) with a **Read it all**, its last edit is dated in the
+  reader's language, and the deck no longer nests a box in a box.
+
 ## [1.8.0] - 2026-10-28
 
 The weekly review becomes the mind's weather: where the mind is being forgotten, a deck to clear it, and the reports gone missing.

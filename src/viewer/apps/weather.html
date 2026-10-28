@@ -50,26 +50,45 @@ __KIT_CSS__
   .ghosts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
   .ghosts span { padding: 0 7px; border: 1px dashed var(--removed); border-radius: 999px; color: var(--removed); font-size: 11.5px; }
 
-  /* The review deck: one doc at a time. */
-  .progress { height: 4px; margin: 4px 0 14px; border-radius: 2px; background: var(--bg-2); overflow: hidden; }
+  /* The review deck: one doc at a time, its opening to read, then a verdict that says what it does. */
+  .deck-top { display: flex; align-items: center; gap: 10px; margin: -4px 0 8px; }
+  .deck-top .back { margin: 0 auto 0 -4px; }
+  .where { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .where b { color: var(--text-2); font-weight: 600; }
+  .progress { height: 3px; margin: 0 0 18px; border-radius: 2px; background: var(--bg-2); overflow: hidden; }
   .progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
-  .card { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
-  .card h3 { margin: 0 0 2px; font-size: 16px; }
-  .path { margin: 0 0 10px; color: var(--text-3); font: 12px var(--mono); overflow-wrap: anywhere; }
-  .excerpt { max-height: 13.5em; overflow: hidden; margin: 10px 0 0; color: var(--text-2); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere;
-    -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
-  .signals { color: var(--text-3); font-size: 12px; }
-  .verdicts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 0; }
-  .verdicts button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); font-size: 13px; font-weight: 600; }
-  .verdicts button:hover { border-color: var(--accent); }
-  .verdicts kbd { color: var(--text-3); font: 11px var(--mono); }
-  .verdicts .holds svg { color: var(--added); } .verdicts .outdated svg { color: var(--warn); } .verdicts .gone svg { color: var(--removed); }
+  .card h3 { margin: 0; font-size: 17px; line-height: 1.35; text-wrap: balance; }
+  .path { margin: 2px 0 8px; color: var(--text-3); font: 12px var(--mono); overflow-wrap: anywhere; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--text-3); font-size: 12px; }
+  .preview { margin: 14px 0 0; padding: 12px 14px; border-radius: var(--radius); background: var(--bg-2); color: var(--text-2); font-size: 13px; overflow-wrap: anywhere; }
+  .preview.clipped .text { max-height: 13em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+  .preview h4 { margin: 12px 0 3px; color: var(--text); font-size: 13px; font-weight: 650; }
+  .preview h4:first-child { margin-top: 0; }
+  .preview p, .preview ul, .preview pre { margin: 0 0 7px; }
+  .preview p { white-space: pre-line; }
+  .preview ul { padding-left: 18px; }
+  .preview pre { font: 12px var(--mono); white-space: pre-wrap; }
+  .preview .link { margin-top: 4px; }
+  .ask { margin: 20px 0 8px; font-size: 13px; font-weight: 600; }
+  .verdicts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .verdicts button { position: relative; display: grid; align-content: start; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: none; text-align: left; transition: border-color .12s, background .12s; }
+  .verdicts b { display: flex; align-items: center; gap: 7px; font-size: 13.5px; }
+  .verdicts b svg { color: var(--tone); }
+  .verdicts small { color: var(--text-3); font-size: 12px; line-height: 1.35; }
+  .verdicts button:hover { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 8%, transparent); }
+  .verdicts .holds { --tone: var(--added); } .verdicts .outdated { --tone: var(--warn); } .verdicts .gone { --tone: var(--removed); }
+  .verdicts kbd { position: absolute; top: 9px; right: 10px; }
+  kbd { padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-3); font: 10.5px/16px var(--mono); }
+  @media (hover: none) { kbd { display: none; } }
+  .later { display: flex; justify-content: flex-end; margin: 6px 0 0; }
+  .later button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px; border: 0; background: none; color: var(--text-3); font-size: 12.5px; font-weight: 600; }
+  .later button:hover { color: var(--accent); }
   .card.busy { opacity: .5; pointer-events: none; }
   .done { padding: 18px; border-radius: var(--radius); background: var(--bg-2); text-align: center; }
   .done h3 { margin: 0 0 4px; }
   .actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 16px 0 0; }
   .actions .note { margin: 0 auto 0 0; }
-  @media (max-width: 480px) { .verdicts { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 480px) { .verdicts { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -336,36 +355,68 @@ __KIT_CSS__
     }, function (e) { kit.status(t('error', { message: e.message }), 'error'); });
   }
 
-  function excerpt(text, path) {
-    if (/\.html$/.test(path)) return { title: docName(path), body: t('html_doc') };
+  // A doc read as prose: its title, then headings, paragraphs and lists without the Markdown marks.
+  function preview(text, path) {
+    if (/\.html$/.test(path)) return { title: docName(path), blocks: [el('p', null, t('html_doc'))] };
     var lines = text.replace(/^<untrusted[^>]*>\n?|<\/untrusted>\s*$/g, '').split('\n');
     if (lines[0] === '---') lines = lines.slice(lines.indexOf('---', 1) + 1);  // frontmatter
-    var title = docName(path), body = [];
+    var title = null, blocks = [], para = [], list = null, code = null;
+    function plain(s) {
+      return s.replace(/\*\*|__|`/g, '').replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, target, label) { return label || target; })
+        .replace(/!?\[([^\]]*)\]\([^)]+\)/g, '$1').trim();
+    }
+    function flush() {
+      if (para.length) blocks.push(el('p', null, para.join('').trim()));
+      para = [];
+      list = null;
+    }
     lines.forEach(function (line) {
-      var h1 = /^#\s+(.+)/.exec(line);
-      if (h1 && title === docName(path) && !body.length) title = h1[1];
-      else if (line.trim() || body.length) body.push(line);
+      if (/^\s*(```|~~~)/.test(line)) {
+        if (code) { blocks.push(el('pre', null, code.join('\n'))); code = null; } else { flush(); code = []; }
+        return;
+      }
+      if (code) return code.push(line);
+      var heading = /^(#{1,6})\s+(.+)/.exec(line), item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)/.exec(line);
+      if (heading && !title && !blocks.length && !para.length) return (title = plain(heading[2]));
+      if (heading) { flush(); return blocks.push(el('h4', null, plain(heading[2]))); }
+      if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) return;  // a table's header rule
+      if (!line.trim() || /^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) return flush();
+      if (item) {
+        if (!list) { flush(); list = el('ul'); blocks.push(list); }
+        return list.appendChild(el('li', null, plain(item[1].replace(/^\[ \]\s*/, '☐ ').replace(/^\[x\]\s*/i, '☑ '))));
+      }
+      var row = /^\s*\|(.*)\|\s*$/.exec(line);
+      if (list && !row && /^\s+\S/.test(line)) return (list.lastChild.textContent += ' ' + plain(line));
+      list = null;
+      // A table row, or a line ending in a hard break, keeps its line.
+      para.push(row ? row[1].split('|').map(plain).filter(Boolean).join(' · ') + '\n'
+                    : plain(line.replace(/^\s*>\s?/, '').replace(/\\$/, '')) +(/( {2,}|\\)$/.test(line) ? '\n' : ' '));
     });
-    // Read as prose: no emphasis marks, quote bars, heading hashes, code ticks or link brackets.
-    var prose = body.join('\n').replace(/\*\*|__|`/g, '').replace(/^\s*(?:>\s?|#{1,6}\s+)/gm, '')
-      .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, target, label) { return label || target; })
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\n{3,}/g, '\n\n');
-    return { title: title.replace(/\*\*|`/g, ''), body: prose.trim() };
+    flush();
+    return { title: title || docName(path), blocks: blocks };
+  }
+
+  // Who last touched the doc, from read_doc's footer: "last edited <date> by <who> (AI <name>)".
+  function editedLine(doc, footer) {
+    var by = /^last edited \S+(?: by (.+?))?(?: \(AI ([^)]+)\))?$/.exec(footer.split(' · ')[2] || '') || [];
+    var date = new Date(doc.last_modified * 1000).toLocaleDateString(kit.lang, { day: 'numeric', month: 'long', year: 'numeric' });
+    if (by[2]) return t('edited_ai', { date: date, ai: by[2] });
+    return by[1] ? t('edited_by', { date: date, who: by[1] }) : t('edited', { date: date });
   }
 
   function showCard(review) {
     app.className = '';
-    var back = add(el('button', 'back'), icon('back'), t('back_map'));
+    var back = add(el('button', 'back'), icon('back'), t('back'));
     back.onclick = function () { document.onkeydown = null; render(); };
     var docs = review.docs, n = docs.length;
     if (review.at >= n) return finish(review);
     var doc = docs[review.at];
     var bar = el('i');
-    bar.style.width = (100 * review.at / n) + '%';
+    bar.style.width = (100 * (review.at + 1) / n) + '%';
     var card = add(el('div', 'card'), el('p', 'note', t('loading_doc')));
-    app.replaceChildren(back, add(el('div', 'pills'), add(el('span', 'pill'), icon('fog'), review.prefix || t('root')),
-      el('span', 'pill', t('progress', { i: review.at + 1, n: n }))), add(el('div', 'progress'), bar), card);
-    var choices = [['holds', 'check', '1'], ['outdated', 'clock', '2'], ['gone', 'trash', '3'], ['skip', 'arrow', '→']];
+    var where = add(el('span', 'where'), el('b', null, review.prefix || t('root')), ' · ', t('progress', { i: review.at + 1, n: n }));
+    app.replaceChildren(add(el('div', 'deck-top'), back, where), add(el('div', 'progress'), bar), card);
+    var choices = [['holds', 'check', '1'], ['outdated', 'clock', '2'], ['gone', 'trash', '3']];
     function decide(verdict) {
       document.onkeydown = null;
       var next = function () { review.at++; showCard(review); };
@@ -381,21 +432,29 @@ __KIT_CSS__
         card.replaceChildren(el('p', 'error', t('error', { message: e.message })));
       });
     }
-    atlasApp.request('tools/call', { name: 'read_doc', arguments: { path: doc.path, start_line: 1, end_line: 40 } }).then(function (result) {
+    // An HTML page is not previewed: its first line is enough for the footer.
+    var range = /\.html$/.test(doc.path) ? { start_line: 1, end_line: 1 } : {};
+    atlasApp.request('tools/call', { name: 'read_doc', arguments: Object.assign({ path: doc.path }, range) }).then(function (result) {
       var blocks = (result && result.content) || [];
-      var shown = excerpt((blocks[0] && blocks[0].text) || '', doc.path);
-      var footer = ((blocks[1] && blocks[1].text) || '').replace(/^\[|\]$/g, '').split(' · ');
-      var signals = footer.slice(2, -1).join(' · ');  // past the path and the line count, before the version
+      var shown = preview((blocks[0] && blocks[0].text) || '', doc.path);
+      var footer = ((blocks[1] && blocks[1].text) || '').replace(/^\[|\]$/g, '');
       var verdicts = el('div', 'verdicts');
       choices.forEach(function (c) {
-        var button = add(el('button', c[0]), icon(c[1]), t(c[0]), el('kbd', null, c[2]));
+        var button = add(el('button', c[0]), add(el('b'), icon(c[1]), t(c[0])), el('small', null, t(c[0] + '_hint')), el('kbd', null, c[2]));
         button.onclick = function () { decide(c[0]); };
         verdicts.appendChild(button);
       });
+      var later = add(el('button'), t('later'), icon('arrow'));
+      later.onclick = function () { decide('skip'); };
+      var text = add.apply(null, [el('div', 'text')].concat(shown.blocks));
+      var more = el('button', 'link', t('read_all'));
+      var box = add(el('div', 'preview clipped'), text, more);
+      more.onclick = function () { box.classList.remove('clipped'); more.remove(); };
       card.replaceChildren(el('h3', null, shown.title), el('p', 'path', doc.path),
-        add(el('div', 'pills'), el('span', 'pill warn', t('unread', { n: Math.round(doc.months_ago) })),
-          doc.confirmed ? el('span', 'pill', t('confirmed_on', { date: new Date(doc.confirmed * 1000).toLocaleDateString(kit.lang) })) : null),
-        signals ? el('div', 'signals', signals) : null, shown.body ? el('div', 'excerpt', shown.body) : null, verdicts);
+        add(el('div', 'meta'), el('span', 'pill warn', t('unread', { n: Math.round(doc.months_ago) })), el('span', null, editedLine(doc, footer)),
+          doc.confirmed ? el('span', null, t('confirmed_on', { date: new Date(doc.confirmed * 1000).toLocaleDateString(kit.lang) })) : null),
+        box, el('p', 'ask', t('ask')), verdicts, add(el('div', 'later'), later));
+      if (text.scrollHeight <= text.clientHeight + 2) more.click();  // short enough to read whole
       document.onkeydown = function (e) {
         var key = { '1': 'holds', '2': 'outdated', '3': 'gone', ArrowRight: 'skip', ' ': 'skip' }[e.key];
         if (key) { e.preventDefault(); decide(key); }
@@ -416,7 +475,7 @@ __KIT_CSS__
       });
       state.data.totals.fog = Math.max(0, state.data.totals.fog - 1);
     });
-    var again = add(el('button', 'ghost'), icon('back'), t('back_map'));
+    var again = add(el('button', 'ghost'), icon('back'), t('back'));
     again.onclick = function () { render(); };
     app.replaceChildren(add(el('div', 'done'), el('h3', null, t('done_title')), el('p', 'note', tally())),
       add(el('div', 'actions'), again, bulletinButton()));
