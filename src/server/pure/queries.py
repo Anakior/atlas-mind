@@ -3,9 +3,11 @@ import datetime
 import math
 import posixpath
 import re
+import subprocess
 import time
 
 import server as _s
+from server.pure import attestations
 
 
 def _visible(rel, ctx):
@@ -211,15 +213,38 @@ def _api_recent(days: int, limit: int, ctx=None) -> list:
 _MONTH_SECONDS = 2629800  # 30.4375 days
 
 
-def _api_stale(months: int, limit: int, ctx=None) -> list:
-    """Docs untouched for `months`+ months (13c obsolescence), oldest first. Dates come
-    from the last git commit per doc (survives clone/pull, unlike mtime); mtime is a
-    fallback when git is unavailable. Deterministic, ACL-scrubbed per ctx."""
-    cutoff = time.time() - months * _MONTH_SECONDS
-    dates = _s._import_build()._git_commit_dates(_s.CONFIG.root)
+_DATES = {}  # one entry: each doc's last commit date, for the (mind, HEAD) they were read at
+
+
+def _commit_dates() -> dict:
+    """The build's per-doc commit dates, read again only once HEAD moves: a review asks folder
+    by folder, and the full git log is the slow part."""
+    root = _s.CONFIG.root
+    try:
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(root), capture_output=True,
+                              text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        head = ""
+    if not head:
+        return _s._import_build()._git_commit_dates(root)
+    if (root, head) not in _DATES:
+        _DATES.clear()
+        _DATES[(root, head)] = _s._import_build()._git_commit_dates(root)
+    return _DATES[(root, head)]
+
+
+def _api_stale(months: int, limit: int, ctx=None, prefix: str = "") -> list:
+    """Docs nobody has looked at for `months`+ months (13c obsolescence), the longest overdue
+    first. A look is an edit (dated by the doc's last git commit, which survives clone/pull
+    unlike mtime, the fallback without git) or a confirmation that the doc still holds, each
+    one in a row doubling the wait. A doc flagged outdated waits for an edit, not a review:
+    _api_outdated lists it instead. `prefix` keeps one folder. Deterministic, ACL-scrubbed per ctx."""
+    threshold, now = months * _MONTH_SECONDS, time.time()
+    dates = _commit_dates()
+    confirmed = attestations.load()
     items = []
     for rel, path in _s._iter_doc_files():
-        if not _visible(rel, ctx):
+        if not rel.startswith(prefix) or not _visible(rel, ctx):
             continue
         ts = dates.get(rel)
         if ts is None:
@@ -227,14 +252,42 @@ def _api_stale(months: int, limit: int, ctx=None) -> list:
                 ts = int(path.stat().st_mtime)
             except OSError:
                 continue
-        if ts >= cutoff:
+        due = ts + threshold
+        entry = confirmed.get(rel)
+        if entry:
+            try:
+                entry = attestations.current(entry, path.read_text(encoding="utf-8-sig"))
+            except OSError:
+                entry = None
+        if entry and entry["verdict"] == "outdated":
             continue
-        items.append({
-            "path": rel, "name": path.name, "last_modified": int(ts),
-            "months_ago": round((time.time() - ts) / _MONTH_SECONDS, 1),
-        })
-    items.sort(key=lambda h: h["last_modified"])
-    return items[:limit]
+        if entry:
+            due = max(due, attestations.fresh_until(entry, threshold))
+        if due >= now:
+            continue
+        item = {"path": rel, "name": path.name, "last_modified": int(ts),
+                "months_ago": round((now - ts) / _MONTH_SECONDS, 1)}
+        if entry:
+            item["confirmed"] = entry["at"]
+        items.append((due, item))
+    items.sort(key=lambda pair: pair[0])
+    return [item for _, item in items[:limit]]
+
+
+def _api_outdated(ctx=None) -> list:
+    """Docs a reader flagged as outdated and nobody has edited since, the oldest flag first."""
+    out = []
+    for rel, entry in attestations.load().items():
+        if entry.get("verdict") != "outdated" or not _visible(rel, ctx):
+            continue
+        try:
+            text = (_s.CONFIG.content_root / rel).read_text(encoding="utf-8-sig")
+        except OSError:
+            continue
+        if attestations.current(entry, text):
+            out.append({"path": rel, "flagged": entry["at"], "by": entry.get("by"),
+                        **({"note": entry["note"]} if entry.get("note") else {})})
+    return sorted(out, key=lambda e: e["flagged"])
 
 
 def _api_inbox_list(limit: int = 50, ctx=None) -> list:

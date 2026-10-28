@@ -14,9 +14,9 @@ import server as _s
 from store import slugify_token_label, slugify_title
 from server.pure.queries import (
     _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
-    _api_stale, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
+    _api_stale, _api_outdated, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
 )
-from server.pure import contradictions, provenance, resources
+from server.pure import attestations, contradictions, provenance, resources
 from server.pure.git_history import (
     _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
     _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
@@ -863,7 +863,45 @@ def _tool_activity(args, ctx):
 def _tool_stale(args, ctx):
     months = clamp_int(args.get("months"), _STALE_MONTHS, 1, 24)
     limit = clamp_int(args.get("limit"), 30, 1, 100)
-    return json_result({"months": months, "stale": _api_stale(months, limit, ctx)})
+    prefix = _safe_path_prefix(args.get("prefix"))
+    if prefix is None:
+        return text_result("Invalid prefix", is_error=True)
+    if prefix and not prefix.endswith((".md", ".html")):
+        prefix += "/"  # the folder, not its namesakes (specs/ but not specs-old/)
+    return json_result({"months": months, "stale": _api_stale(months, limit, ctx, prefix),
+                        "outdated": [o for o in _api_outdated(ctx) if o["path"].startswith(prefix)]})
+
+
+def _tool_confirm_doc(args, ctx):
+    """A reader's verdict on a doc they reviewed: it still holds, or it is outdated. Without
+    `ai`, the user's own click relayed by an app view: attributed to them."""
+    rel = (args.get("path") or "").strip()
+    verdict = (args.get("verdict") or "").strip()
+    if verdict not in attestations.VERDICTS:
+        return text_result(f"verdict must be one of {list(attestations.VERDICTS)}", is_error=True)
+    target = _s._validate_doc_path(rel)
+    if target is None:
+        return text_result(f"Invalid path: {rel}", is_error=True)
+    if _s._is_readonly_path(rel):
+        return text_result("Read-only location (remote node mirror): confirm it on its own node.", is_error=True)
+    if not target.exists() or not _visible(rel, ctx):
+        return _not_found(rel, ctx)
+    if ctx is not None and not _s.can_write(rel, ctx):
+        return text_result("Insufficient permission to confirm this document.", is_error=True)
+    try:
+        text = target.read_text(encoding="utf-8-sig")
+    except OSError:
+        return text_result("doc unreadable", is_error=True)
+    ai = (args.get("ai") or "").strip() or None
+    stored = attestations.record(rel, text, verdict, ai or "human", args.get("note") or "")
+    _s.commit_change(ctx, f"{'confirmed' if verdict == 'holds' else 'flagged outdated'}: {target.stem}",
+                     stored, ai=ai)
+    entry = attestations.load()[rel]
+    if verdict == "outdated":
+        return json_result({"path": rel, "verdict": verdict})
+    due = attestations.fresh_until(entry, _STALE_MONTHS * _MONTH_SECONDS)
+    return json_result({"path": rel, "verdict": verdict, "in_a_row": entry["streak"],
+                        "next_review": datetime.datetime.fromtimestamp(due, datetime.timezone.utc).strftime("%Y-%m-%d")})
 
 
 def _tool_contradictions(args, ctx):
@@ -1085,6 +1123,12 @@ def _tool_resume_session(args, ctx):
         return text_result(str(e), is_error=True)
 
 
+def _tool_mind_weather(args, ctx):
+    from server.pure import weather  # lazy: weather reuses the contradiction scan and the queries
+    return json_result(weather.weather(clamp_int(args.get("weeks"), 4, 1, 26),
+                                       clamp_int(args.get("months"), 3, 1, 24), ctx))
+
+
 _RUN_GAP_SECONDS = 30 * 60  # an agent silent this long has finished its run
 _RUN_WINDOW_DAYS = 30       # runs are computed over this window, so their ids stay stable
 
@@ -1203,11 +1247,13 @@ _TOOLS = {
     "stale": _tool_stale,
     "contradictions": _tool_contradictions,
     "judge_contradiction": _tool_judge_contradiction,
+    "confirm_doc": _tool_confirm_doc,
     "doc_blame": _tool_doc_blame,
     "doc_revert": _tool_doc_revert,
     "brief": _tool_brief,
     "changes_since": _tool_changes_since,
     "resume_session": _tool_resume_session,
+    "mind_weather": _tool_mind_weather,
     "agent_runs": _tool_agent_runs,
     "undo_run": _tool_undo_run,
 }

@@ -17,7 +17,7 @@ sign in to your Atlas, see what it asks for (read, inbox, write), untick what yo
 don't want to grant, and allow it. You can also mint a token yourself (**Settings →
 Tokens**, or `atlas token create <mind>` locally) and use
 `https://<your-atlas>/mcp/<token>`. From then on the AI works your mind through
-**thirty tools**, grouped into six superpowers.
+**thirty-two tools**, grouped into six superpowers.
 
 ### 1. Reads your whole mind
 
@@ -82,7 +82,9 @@ mind carries an [[features/activity-and-attribution|activity layer]] the AI can 
 | `activity`       | the attributed feed: who changed what, when, AI or human       |
 | `agent_runs`     | an agent's work sessions, with the documents each one changed  |
 | `undo_run`       | undo a whole session in one commit, all or nothing             |
-| `stale`          | documents untouched for months — obsolescence to revisit       |
+| `mind_weather`   | the mind region by region: activity, what is being forgotten, contradictions, the AI's share, the reports gone missing |
+| `stale`          | documents nobody has looked at for months — obsolescence to revisit |
+| `confirm_doc`    | record that a document still holds (or is outdated) once reviewed |
 | `contradictions` | same-topic document pairs that may now disagree, to review     |
 | `judge_contradiction` | record a verdict on a pair, so a false positive stops resurfacing |
 

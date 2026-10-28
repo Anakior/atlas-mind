@@ -5,9 +5,11 @@ linked docs), the chain of saves tied by wikilinks, the topic search and the err
 
 MCP requires an 'api'-role Bearer token → cloud-mode harness, like test_mcp_tools.
 """
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _TESTS_DIR = str(Path(__file__).resolve().parent)
 if _TESTS_DIR not in sys.path:
@@ -162,6 +164,22 @@ class TestResumeSession(unittest.TestCase):
         self.assertEqual(data["other_matches"][0], {
             "path": "ai-sessions/refonte-auth-suite.md", "title": "Refonte de l'auth, suite",
             "last_commit": data["other_matches"][0]["last_commit"], "newer": True})
+
+    def test_saves_written_in_the_same_second(self):
+        # Commit times are whole seconds, and a fast machine writes a save and the next one in
+        # the same: the later must still come first. Every commit here gets that one second.
+        self.srv.stop()
+        second = {"GIT_COMMITTER_DATE": "2026-10-01T12:00:00", "GIT_AUTHOR_DATE": "2026-10-01T12:00:00"}
+        with mock.patch.dict(os.environ, second):
+            self.srv = AtlasServer(extra_env={**cloud_env(), **second}, mind=MIND)
+            self.srv.start()
+            self.token = _token(self.srv, "claude@api.local", ADMIN_EMAIL)
+            self.edit("ai-sessions/refonte-auth-suite.md", "- Ship it.", "- Ship it now.")
+            _, listed = self.call()
+            _, found = self.call(topic="refonte auth sessions maison")
+        self.assertEqual(listed["saves"][0]["path"], "ai-sessions/refonte-auth-suite.md")
+        self.assertEqual(found["save"]["path"], PATH)
+        self.assertTrue(found["other_matches"][0].get("newer"))
 
     def test_the_resume_prompt(self):
         def text(**arguments):

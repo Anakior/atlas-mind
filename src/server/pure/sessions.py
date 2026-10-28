@@ -247,8 +247,11 @@ def resume(args: dict, ctx) -> dict:
             info["last_commit"] = dt.datetime.fromtimestamp(last[rel][0], dt.timezone.utc).strftime("%Y-%m-%d")
         return {**info, **provenance.mark(rel)}
 
+    order = {rel: i for i, rel in enumerate(last)}  # git log's order, newest first
+
     def recency(rel):  # when the save was last written: every save has it, not every footer
-        return last.get(rel, (0,))[0]
+        # Commit times are whole seconds: git log's order settles two saves written in the same one.
+        return last.get(rel, (0,))[0], -order.get(rel, len(order))
 
     path, topic = (args.get("path") or "").strip(), (args.get("topic") or "").strip()
     if not saves:

@@ -8,6 +8,47 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-28
+
+The weekly review becomes the mind's weather: where the mind is being forgotten, a deck to clear it, and the reports gone missing.
+
+### Added
+- **Confirmations: `confirm_doc`**, a 31st MCP tool. A reader who reviewed a doc records that it
+  still holds, or that it is outdated. Bound to the text reviewed (an edit clears it), kept in a
+  git-tracked `.attestations.json` like the contradiction verdicts, attributed to the AI that
+  calls it or, called from an app view, to the user.
+- **`mind_weather`**, a 32nd MCP tool, which the `weekly-review` prompt now starts with: the
+  mind folder by folder (a top folder and its subfolders), with its activity over the last weeks,
+  its fog (the docs nobody has looked at for three months), its contradictions worth settling
+  and the AI's share of its commits; plus the docs flagged outdated and the **periodic reports
+  gone missing**. Those are read from the period in their names (`bilan-juin-2026`, `q3-2025`,
+  `2026-04-notes`), since a mind imported or reorganised in batches has no telling git dates:
+  a monthly series that stopped in June shows July, August and September as missed, and a
+  series silent for half a year (a year for quarters) counts as over, not late.
+- **The second MCP App: the weather.** In a host that renders apps, `mind_weather` ranks the
+  folders by fog, activity, storms or the AI's share, a bar and a number each, the quiet ones
+  folded away. Open a folder to see its subfolders ranked the same way, and clear their fog one
+  doc at a time, keys 1 2 3: still true,
+  outdated (recorded through `confirm_doc`, in your name), or let it go (to the trash); the
+  model is told every verdict. The missed reports each have a button that hands them to Claude
+  to prepare, as do the outdated docs and a folder's contradictions, and Claude writes the
+  week's bulletin from what you settled.
+
+### Changed
+- **`stale` counts a confirmation as a look**: a doc confirmed to hold leaves the audit like an
+  edited one, for twice as long each time it is confirmed again (6 months, then 1, 2, at most 4
+  years at the default threshold). Docs flagged outdated come apart, in a new `outdated` list:
+  they wait for an edit, not a review. `stale` also takes a `prefix`, to review one folder.
+- The MCP tool descriptions are 28% shorter (about 2k tokens fewer on every request of a client
+  that loads all the tools), the same facts without the repetitions. The evals hold: Sonnet
+  25/25 with 8% fewer prompt tokens per question, Haiku 24/25 with 13% fewer (its one miss is a
+  question it already misses one run in three).
+
+### Fixed
+- Two saves committed within the same second (a quick follow-up, or a fast machine) could be
+  listed in the wrong order, and the later one not flagged `newer`: git's own order now breaks
+  the tie.
+
 ## [1.7.3] - 2026-10-28
 
 ### Fixed

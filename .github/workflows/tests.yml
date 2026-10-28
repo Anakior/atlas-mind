@@ -44,5 +44,9 @@ jobs:
         run: npm ci
         working-directory: src/viewer/build
 
+      - name: Install Chromium (the MCP Apps view tests)
+        run: npx playwright install --with-deps chromium
+        working-directory: src/viewer/build
+
       - name: Run test suite
         run: python -m unittest discover -s tests -v

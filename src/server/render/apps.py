@@ -1,8 +1,8 @@
 """MCP Apps views (web/apps/<name>.html): one self-contained page per view, served as a ui://
 resource and rendered by the host inline in the conversation. At serve time the page gets the
-shared bridge (web/apps/bridge.js) and its labels in the instance's language (the i18n keys
-app_<name>_*), so it loads nothing from anywhere. Cache is module-level (the files ship with
-the package)."""
+shared bridge (web/apps/bridge.js), the kit every view builds on (kit.css, kit.js) and its labels
+in the instance's language (the i18n keys app_<name>_*), so it loads nothing from anywhere.
+Cache is module-level (the files ship with the package)."""
 import json
 
 import server as _s
@@ -22,5 +22,7 @@ def render_app(name: str) -> str:
             (apps / f"{name}.html").read_text(encoding="utf-8"),
             lang=lang,
             bridge=(apps / "bridge.js").read_text(encoding="utf-8"),
+            kit=(apps / "kit.js").read_text(encoding="utf-8"),
+            kit_css=(apps / "kit.css").read_text(encoding="utf-8"),
             i18n=json.dumps(labels, ensure_ascii=False).replace("</", "<\\/"))
     return _APPS_CACHE[(name, lang)]

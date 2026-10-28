@@ -186,6 +186,8 @@ class AtlasServer:
                     written before build/boot — for files outside content/
                     (extensions .atlas/extensions/*, a test atlas.toml…).
       boot_timeout: max delay (s) for /healthz to respond.
+      seed_date   : date the mind's first commit (e.g. '2025-01-15T12:00:00'), so its docs
+                    read as old; the commits the server makes keep today's date.
       installed_layout: copy the engine as the `atlas_mind` PACKAGE and launch
                     `python -m atlas_mind.server` with only the package's PARENT
                     on PYTHONPATH — the pip-installed prod layout, where the flat
@@ -200,7 +202,8 @@ class AtlasServer:
     def __init__(self, *, mind: dict | None = None, extra_env: dict | None = None,
                  cookies: bool = False, run_build: bool = True,
                  git_init: bool = True, boot_timeout: float = 15.0,
-                 extra_files: dict | None = None, installed_layout: bool = False):
+                 extra_files: dict | None = None, installed_layout: bool = False,
+                 seed_date: str | None = None):
         self.mind = dict(DEFAULT_MIND) if mind is None else dict(mind)
         self.extra_env = dict(extra_env or {})
         self.extra_files = dict(extra_files or {})
@@ -209,6 +212,7 @@ class AtlasServer:
         self.git_init = git_init
         self.boot_timeout = boot_timeout
         self.installed_layout = installed_layout
+        self.seed_date = seed_date
 
         self.root: Path | None = None
         self.content_root: Path | None = None
@@ -330,10 +334,10 @@ class AtlasServer:
         env.pop("ATLAS_MIND", None)
         return env
 
-    def git(self, *args: str, check: bool = False) -> subprocess.CompletedProcess:
-        """git in the test mind (machine config neutralized)."""
+    def git(self, *args: str, check: bool = False, env: dict | None = None) -> subprocess.CompletedProcess:
+        """git in the test mind (machine config neutralized; `env` adds variables)."""
         return subprocess.run(
-            ["git", *args], cwd=str(self.root), env=self._git_env(),
+            ["git", *args], cwd=str(self.root), env={**self._git_env(), **(env or {})},
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=30, check=check,
         )
@@ -343,7 +347,8 @@ class AtlasServer:
         self.git("config", "user.email", "tests@atlas.local", check=True)
         self.git("config", "user.name", "Atlas Tests", check=True)
         self.git("add", "-A", check=True)
-        self.git("commit", "-q", "-m", "test: initial mind", check=True)
+        dated = {"GIT_AUTHOR_DATE": self.seed_date, "GIT_COMMITTER_DATE": self.seed_date} if self.seed_date else None
+        self.git("commit", "-q", "-m", "test: initial mind", check=True, env=dated)
         # No remote: trigger_sync's pushes fail best-effort, which is the
         # characterized behavior.
 

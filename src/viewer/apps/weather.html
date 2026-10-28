@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+__KIT_CSS__
+
+  .layers { display: inline-flex; gap: 2px; margin: 4px 0 10px; padding: 3px; border-radius: 9px; background: var(--bg-2); }
+  .layers button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 0; border-radius: 7px; background: none; color: var(--text-2); font-size: 12.5px; font-weight: 600; }
+  .layers button.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 12%, transparent); }
+  .legend { margin: 0 0 8px; color: var(--text-3); font-size: 12px; }
+
+  /* The ranking: a folder per row, its bar as long as its value on the layer, the number beside. */
+  .ranks { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .region { display: grid; grid-template-columns: minmax(96px, 1.1fr) 2fr minmax(76px, auto) 14px; align-items: center; gap: 12px;
+    width: 100%; margin-top: -1px; padding: 9px 12px; border: 0; border-top: 1px solid var(--border); background: none; text-align: left; transition: background .12s; }
+  .region:hover, .region.open { background: var(--bg-2); }
+  .region .name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .region.quiet .name, .region.quiet .value { color: var(--text-3); font-weight: 500; }
+  .track { height: 8px; border-radius: 4px; background: var(--bg-2); overflow: hidden; }
+  .region:hover .track, .region.open .track { background: var(--bg); }
+  .track i { display: block; height: 100%; min-width: 4px; border-radius: 4px; background: var(--accent); transition: width .25s; }
+  .value { color: var(--text-2); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .region > svg { color: var(--text-3); }
+  .region.open > .chev { transform: rotate(90deg); }
+  .open-body { padding: 4px 12px 14px 24px; background: var(--bg-2); }
+  .open-body .stats { margin: 0 0 6px; color: var(--text-3); font-size: 12px; }
+  .sub { display: grid; grid-template-columns: minmax(84px, 1fr) 2fr minmax(76px, auto) 14px; align-items: center; gap: 12px;
+    width: 100%; padding: 5px 0; border: 0; background: none; text-align: left; }
+  .sub .name { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+  .sub .track { height: 6px; background: var(--bg); }
+  .sub > svg { color: var(--text-3); }
+  .sub:not(:disabled):hover .name, .sub:not(:disabled):hover > svg { color: var(--accent); }
+  .sub:disabled { cursor: default; }
+  .sub:disabled .name { color: var(--text-3); }
+  .row { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; flex-wrap: wrap; }
+  .more { width: 100%; margin-top: -1px; padding: 8px 12px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--text-3); font-size: 12.5px; text-align: left; }
+  .more:hover { color: var(--accent); }
+  @media (max-width: 480px) { .region, .sub { grid-template-columns: minmax(80px, 1fr) 1fr auto 14px; gap: 8px; } }
+  .pairs { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
+  .pairs li { padding: 3px 0; overflow-wrap: anywhere; }
+  .pairs b { font-weight: 600; }
+
+  .lines { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .line { display: flex; align-items: center; gap: 12px; margin-top: -1px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .line > div { flex: 1; min-width: 0; }
+  .line b, .line small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line small { color: var(--text-3); font-size: 12px; }
+  .ghosts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .ghosts span { padding: 0 7px; border: 1px dashed var(--removed); border-radius: 999px; color: var(--removed); font-size: 11.5px; }
+
+  /* The review deck: one doc at a time. */
+  .progress { height: 4px; margin: 4px 0 14px; border-radius: 2px; background: var(--bg-2); overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+  .card { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
+  .card h3 { margin: 0 0 2px; font-size: 16px; }
+  .path { margin: 0 0 10px; color: var(--text-3); font: 12px var(--mono); overflow-wrap: anywhere; }
+  .excerpt { max-height: 13.5em; overflow: hidden; margin: 10px 0 0; color: var(--text-2); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere;
+    -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+  .signals { color: var(--text-3); font-size: 12px; }
+  .verdicts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 0; }
+  .verdicts button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); font-size: 13px; font-weight: 600; }
+  .verdicts button:hover { border-color: var(--accent); }
+  .verdicts kbd { color: var(--text-3); font: 11px var(--mono); }
+  .verdicts .holds svg { color: var(--added); } .verdicts .outdated svg { color: var(--warn); } .verdicts .gone svg { color: var(--removed); }
+  .card.busy { opacity: .5; pointer-events: none; }
+  .done { padding: 18px; border-radius: var(--radius); background: var(--bg-2); text-align: center; }
+  .done h3 { margin: 0 0 4px; }
+  .actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 16px 0 0; }
+  .actions .note { margin: 0 auto 0 0; }
+  @media (max-width: 480px) { .verdicts { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>__BRIDGE__</script>
+<script>__KIT__</script>
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var kit = atlasKit(__I18N__, app);
+  var t = kit.t, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
+  var state = { data: null, layer: 'fog', picked: null, showQuiet: false, decisions: [] };
+
+  // What a folder weighs on each layer, and how its number reads. Counts bar against the longest
+  // of their list; the AI's share on its own scale, 0 to 100 %.
+  var LAYERS = {
+    fog: { icon: 'fog', value: function (r) { return r.fog; },
+           label: function (r) { return t('of', { n: r.fog, total: r.docs }); } },
+    sun: { icon: 'sun', value: function (r) { return r.commits; },
+           label: function (r) { return t('n_commits', { n: r.commits }); } },
+    storms: { icon: 'bolt', value: function (r) { return r.storms; },
+              label: function (r) { return t('n_storms', { n: r.storms }); } },
+    wind: { icon: 'wind', share: true, value: function (r) { return r.commits ? r.ai_share : 0; },
+            label: function (r) { return r.commits ? Math.round(r.ai_share * 100) + ' %' : '—'; } },
+  };
+
+  function regionName(path) {
+    return path ? path.split('/').pop() : t('root');
+  }
+
+  function period(label) {  // '2026-07' or '2026-Q3', in the reader's words
+    var q = /^(\d{4})-Q(\d)$/.exec(label);
+    if (q) return t('quarter', { q: q[2], y: q[1] });
+    return new Date(label + '-15T12:00:00').toLocaleDateString(kit.lang, { month: 'long', year: 'numeric' });
+  }
+
+  function message(text) {
+    return atlasApp.request('ui/message', { role: 'user', content: [{ type: 'text', text: text }] });
+  }
+
+  function send(button, text) {
+    button.disabled = true;
+    message(text).then(function (result) {
+      if (result && result.isError) throw new Error('?');
+      button.textContent = t('sent');
+    }).catch(function () { button.disabled = false; });
+  }
+
+  // ── the ranking ───────────────────────────────────────────────────────────
+
+  function ranked(regions) {
+    var layer = LAYERS[state.layer];
+    return regions.slice().sort(function (x, y) { return layer.value(y) - layer.value(x) || y.docs - x.docs; });
+  }
+
+  function scale(regions) {
+    var layer = LAYERS[state.layer];
+    return layer.share ? 1 : Math.max.apply(null, [0].concat(regions.map(layer.value)));
+  }
+
+  function bar(value, max) {
+    var fill = el('i');
+    fill.style.width = (max ? 100 * value / max : 0) + '%';
+    fill.hidden = !value;
+    return add(el('span', 'track'), fill);
+  }
+
+  function stats(region) {
+    return t('region_stats', { docs: region.docs, changed: region.changed, commits: region.commits,
+                               ai: Math.round(region.ai_share * 100), fog: region.fog });
+  }
+
+  // The folders, the heaviest on the layer first; those with nothing on it fold into one line.
+  function ranking() {
+    var layer = LAYERS[state.layer], rows = ranked(state.data.regions), max = scale(rows);
+    var box = el('div', 'ranks');
+    var quiet = rows.filter(function (r) { return !layer.value(r); });
+    rows.forEach(function (region) {
+      if (!layer.value(region) && !state.showQuiet) return;
+      var open = state.picked === region.path;
+      var row = add(el('button', 'region' + (open ? ' open' : '') + (layer.value(region) ? '' : ' quiet')),
+        el('span', 'name', regionName(region.path)), bar(layer.value(region), max),
+        el('span', 'value', layer.label(region)), icon('chev'));
+      row.dataset.path = region.path;
+      row.title = stats(region);
+      row.onclick = function () { state.picked = open ? null : region.path; render(); };
+      add(box, row, open ? details(region) : null);
+    });
+    if (quiet.length && !state.showQuiet) {
+      var more = el('button', 'more', t('quiet_' + state.layer, { n: quiet.length }));
+      more.onclick = function () { state.showQuiet = true; render(); };
+      box.appendChild(more);
+    }
+    return box;
+  }
+
+  // An open folder: its subfolders ranked the same way, each one's fog to review, and its storms.
+  function details(region) {
+    var layer = LAYERS[state.layer], subs = ranked(region.children), max = scale(subs);
+    var body = add(el('div', 'open-body'), el('div', 'stats', stats(region)));
+    subs.forEach(function (sub) {
+      var row = add(el('button', 'sub'), el('span', 'name', regionName(sub.path)), bar(layer.value(sub), max),
+        el('span', 'value', layer.label(sub)), sub.fog ? icon('chev') : el('span'));
+      if (sub.fog) {
+        row.title = t('review_sub', { n: sub.fog });
+        row.onclick = function () { deck(sub.path); };
+      } else {
+        row.disabled = true;
+      }
+      body.appendChild(row);
+    });
+    var actions = el('div', 'row');
+    if (region.fog) {
+      var all = add(el('button', 'primary'), icon('fog'), t('review_all', { n: region.fog }));
+      all.onclick = function () { deck(region.path); };
+      actions.appendChild(all);
+    } else {
+      actions.appendChild(el('span', 'note', t('clear')));
+    }
+    var storms = state.data.storms.filter(function (s) { return within(s.a, region.path) || within(s.b, region.path); });
+    if (storms.length) {
+      var settle = add(el('button', 'ghost'), icon('bolt'), t('settle', { n: storms.length }));
+      settle.onclick = function () {
+        send(settle, t('settle_message') + '\n' + storms.map(function (s) {
+          return '- ' + s.a + ' ⇄ ' + s.b + (s.subject ? ' (' + s.subject + ')' : '');
+        }).join('\n'));
+      };
+      actions.appendChild(settle);
+    }
+    body.appendChild(actions);
+    if (storms.length) {
+      var list = el('ul', 'pairs');
+      storms.forEach(function (s) {
+        list.appendChild(add(el('li'), el('b', null, docName(s.a)), ' ⇄ ', el('b', null, docName(s.b)),
+          s.subject ? ' · ' + s.subject : ''));
+      });
+      body.appendChild(list);
+    }
+    return body;
+  }
+
+  function layers() {
+    var bar = el('div', 'layers');
+    Object.keys(LAYERS).forEach(function (name) {
+      var button = add(el('button', name === state.layer ? 'on' : ''), icon(LAYERS[name].icon), t('layer_' + name));
+      button.onclick = function () { state.layer = name; state.showQuiet = false; render(); };
+      bar.appendChild(button);
+    });
+    return bar;
+  }
+
+  function find(path) {
+    var found = null;
+    state.data.regions.forEach(function (r) {
+      if (r.path === path) found = r;
+      r.children.forEach(function (c) { if (c.path === path) found = c; });
+    });
+    return found;
+  }
+
+  function regionsOf(path) {  // as the server counts them: the top folder and the one below it
+    var parts = path.split('/').slice(0, -1);
+    return parts.length ? [parts[0]].concat(parts.length > 1 ? [parts.slice(0, 2).join('/')] : []) : [''];
+  }
+
+  function within(path, region) {
+    return region === '' ? path.indexOf('/') === -1 : path.indexOf(region + '/') === 0;
+  }
+
+  function missed() {
+    var series = state.data.missed || [];
+    if (!series.length) return null;
+    var lines = el('div', 'lines');
+    series.forEach(function (s) {
+      var ghosts = el('div', 'ghosts');
+      s.missed.forEach(function (p) { ghosts.appendChild(el('span', null, period(p))); });
+      var prepare = el('button', 'ghost', t('prepare', { period: period(s.missed[0]) }));
+      prepare.onclick = function () {
+        send(prepare, t('prepare_message', { series: s.series, period: period(s.missed[0]), last: s.last.path }));
+      };
+      lines.appendChild(add(el('div', 'line'), add(el('div'), el('b', null, docName(s.series)),
+        el('small', null, s.series.split('/').slice(0, -1).join('/') + ' · ' + t('every_' + s.every) + ' · ' +
+          t('last', { period: period(s.last.period) })), ghosts), prepare));
+    });
+    return add(el('section'), add(el('h2'), icon('calendar'), t('missed_title'), el('span', 'count', series.length)), lines);
+  }
+
+  function outdated() {
+    var docs = state.data.outdated || [];
+    if (!docs.length) return null;
+    var lines = el('div', 'lines');
+    docs.forEach(function (d) {
+      lines.appendChild(add(el('div', 'line'), add(el('div'), el('b', null, docName(d.path)),
+        el('small', null, d.path + (d.note ? ' · ' + d.note : '')))));
+    });
+    var update = el('button', 'ghost', t('update'));
+    update.onclick = function () {
+      send(update, t('update_message') + '\n' + docs.map(function (d) {
+        return '- ' + d.path + (d.note ? ' (' + d.note + ')' : '');
+      }).join('\n'));
+    };
+    return add(el('section'), add(el('h2'), icon('alert'), t('outdated_title'), el('span', 'count', docs.length),
+      add(el('span', 'end'), update)), lines);
+  }
+
+  function header() {
+    var d = state.data, tot = d.totals;
+    var pills = add(el('div', 'pills'),
+      add(el('span', 'pill'), icon('sun'), t('commits', { n: tot.commits, weeks: d.weeks })),
+      add(el('span', 'pill accent'), icon('wind'), t('ai', { n: Math.round(tot.ai_share * 100) })),
+      add(el('span', 'pill'), icon('fog'), t('fog', { n: tot.fog })),
+      add(el('span', tot.storms ? 'pill warn' : 'pill'), icon('bolt'), tot.storms ? t('storms', { n: tot.storms }) : t('no_storm')));
+    return add(el('header'), el('h1', null, t('title')), pills);
+  }
+
+  // Claude writes the bulletin, with what the review settled.
+  function bulletinButton() {
+    var write = add(el('button', 'primary'), t('bulletin'), icon('arrow'));
+    write.onclick = function () {
+      var text = t('bulletin_message', { weeks: state.data.weeks });
+      if (state.decisions.length) text += '\n' + t('decisions') + '\n' + decisionLines();
+      send(write, text);
+    };
+    return write;
+  }
+
+  function render() {
+    app.className = '';
+    app.replaceChildren();
+    add(app, header(), layers(), el('p', 'legend', t('legend_' + state.layer, { months: state.data.months, weeks: state.data.weeks })));
+    add(app, ranking(), missed(), outdated(),
+      add(el('div', 'actions'), state.decisions.length ? el('span', 'note', tally()) : null, bulletinButton()));
+  }
+
+  // ── the review deck ───────────────────────────────────────────────────────
+
+  function tally() {
+    var n = { holds: 0, outdated: 0, gone: 0 };
+    state.decisions.forEach(function (d) { n[d.verdict]++; });
+    return t('tally', n);
+  }
+
+  function decisionLines() {
+    return state.decisions.map(function (d) { return '- ' + d.path + ' : ' + t('v_' + d.verdict); }).join('\n');
+  }
+
+  // The model sees only the last update before the next message: send the whole review so far.
+  function syncModel() {
+    atlasApp.request('ui/update-model-context', {
+      content: [{ type: 'text', text: t('context', { tally: tally() }) + '\n' + decisionLines() }],
+      structuredContent: { decisions: state.decisions },
+    }).catch(function () {});
+  }
+
+  function call(name, args) {
+    return atlasApp.request('tools/call', { name: name, arguments: args }).then(kit.data);
+  }
+
+  function deck(prefix) {
+    app.classList.add('busy');
+    call('stale', { months: state.data.months, prefix: prefix, limit: 30 }).then(function (d) {
+      var review = { prefix: prefix, docs: d.stale, at: 0, done: {} };
+      showCard(review);
+    }, function (e) { kit.status(t('error', { message: e.message }), 'error'); });
+  }
+
+  function excerpt(text, path) {
+    if (/\.html$/.test(path)) return { title: docName(path), body: t('html_doc') };
+    var lines = text.replace(/^<untrusted[^>]*>\n?|<\/untrusted>\s*$/g, '').split('\n');
+    if (lines[0] === '---') lines = lines.slice(lines.indexOf('---', 1) + 1);  // frontmatter
+    var title = docName(path), body = [];
+    lines.forEach(function (line) {
+      var h1 = /^#\s+(.+)/.exec(line);
+      if (h1 && title === docName(path) && !body.length) title = h1[1];
+      else if (line.trim() || body.length) body.push(line);
+    });
+    // Read as prose: no emphasis marks, quote bars, heading hashes, code ticks or link brackets.
+    var prose = body.join('\n').replace(/\*\*|__|`/g, '').replace(/^\s*(?:>\s?|#{1,6}\s+)/gm, '')
+      .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, target, label) { return label || target; })
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\n{3,}/g, '\n\n');
+    return { title: title.replace(/\*\*|`/g, ''), body: prose.trim() };
+  }
+
+  function showCard(review) {
+    app.className = '';
+    var back = add(el('button', 'back'), icon('back'), t('back_map'));
+    back.onclick = function () { document.onkeydown = null; render(); };
+    var docs = review.docs, n = docs.length;
+    if (review.at >= n) return finish(review);
+    var doc = docs[review.at];
+    var bar = el('i');
+    bar.style.width = (100 * review.at / n) + '%';
+    var card = add(el('div', 'card'), el('p', 'note', t('loading_doc')));
+    app.replaceChildren(back, add(el('div', 'pills'), add(el('span', 'pill'), icon('fog'), review.prefix || t('root')),
+      el('span', 'pill', t('progress', { i: review.at + 1, n: n }))), add(el('div', 'progress'), bar), card);
+    var choices = [['holds', 'check', '1'], ['outdated', 'clock', '2'], ['gone', 'trash', '3'], ['skip', 'arrow', '→']];
+    function decide(verdict) {
+      document.onkeydown = null;
+      var next = function () { review.at++; showCard(review); };
+      if (verdict === 'skip') return next();
+      var act = verdict === 'gone' ? call('delete_doc', { path: doc.path })
+                                   : call('confirm_doc', { path: doc.path, verdict: verdict });
+      card.classList.add('busy');
+      act.then(function () {
+        state.decisions.push({ path: doc.path, verdict: verdict });
+        syncModel();
+        next();
+      }, function (e) {
+        card.replaceChildren(el('p', 'error', t('error', { message: e.message })));
+      });
+    }
+    atlasApp.request('tools/call', { name: 'read_doc', arguments: { path: doc.path, start_line: 1, end_line: 40 } }).then(function (result) {
+      var blocks = (result && result.content) || [];
+      var shown = excerpt((blocks[0] && blocks[0].text) || '', doc.path);
+      var footer = ((blocks[1] && blocks[1].text) || '').replace(/^\[|\]$/g, '').split(' · ');
+      var signals = footer.slice(2, -1).join(' · ');  // past the path and the line count, before the version
+      var verdicts = el('div', 'verdicts');
+      choices.forEach(function (c) {
+        var button = add(el('button', c[0]), icon(c[1]), t(c[0]), el('kbd', null, c[2]));
+        button.onclick = function () { decide(c[0]); };
+        verdicts.appendChild(button);
+      });
+      card.replaceChildren(el('h3', null, shown.title), el('p', 'path', doc.path),
+        add(el('div', 'pills'), el('span', 'pill warn', t('unread', { n: Math.round(doc.months_ago) })),
+          doc.confirmed ? el('span', 'pill', t('confirmed_on', { date: new Date(doc.confirmed * 1000).toLocaleDateString(kit.lang) })) : null),
+        signals ? el('div', 'signals', signals) : null, shown.body ? el('div', 'excerpt', shown.body) : null, verdicts);
+      document.onkeydown = function (e) {
+        var key = { '1': 'holds', '2': 'outdated', '3': 'gone', ArrowRight: 'skip', ' ': 'skip' }[e.key];
+        if (key) { e.preventDefault(); decide(key); }
+      };
+    }, function (e) {
+      card.replaceChildren(el('p', 'error', t('error', { message: e.message })));
+    });
+  }
+
+  function finish(review) {
+    // The map's numbers move with the review: one less in the fog per doc settled.
+    var settled = state.decisions.filter(function (d) { return !review.done[d.path] && within(d.path, review.prefix); });
+    settled.forEach(function (d) {
+      review.done[d.path] = true;
+      regionsOf(d.path).forEach(function (path) {
+        var r = find(path);
+        if (r && r.fog) r.fog--;
+      });
+      state.data.totals.fog = Math.max(0, state.data.totals.fog - 1);
+    });
+    var again = add(el('button', 'ghost'), icon('back'), t('back_map'));
+    again.onclick = function () { render(); };
+    app.replaceChildren(add(el('div', 'done'), el('h3', null, t('done_title')), el('p', 'note', tally())),
+      add(el('div', 'actions'), again, bulletinButton()));
+  }
+
+  // ── start ─────────────────────────────────────────────────────────────────
+
+  function show(result) {
+    try {
+      state.data = kit.data(result);
+    } catch (e) {
+      return kit.status(e.message === '?' ? t('error', { message: '?' }) : e.message, 'error');
+    }
+    render();
+  }
+
+  atlasApp.on('ui/notifications/tool-input', function () { kit.loading(''); });
+  atlasApp.on('ui/notifications/tool-result', show);
+  atlasApp.on('ui/notifications/tool-cancelled', function () { kit.status(t('cancelled')); });
+  kit.loading('');
+  atlasApp.start('atlas-weather').catch(function (e) { kit.status(t('error', { message: e.message }), 'error'); });
+})();
+</script>
+</body>
+</html>
