@@ -230,6 +230,8 @@
   "app_shift_empty": "Aucune affirmation à comparer.",
   "app_shift_lagging_title": "Disent encore l'ancien",
   "app_shift_untouched": "pas retouché depuis le {date}",
+  "app_shift_as_then": "comme alors : « {quote} »",
+  "app_shift_now_holds": "aujourd'hui : « {quote} »",
   "app_shift_update": "Mettre à jour avec Claude",
   "app_shift_update_message": "Mettons à jour ces docs, qui disent encore ce que la mind ne pense plus sur « {topic} » :",
   "app_shift_why": "Pourquoi je pensais ça le {date} ?",

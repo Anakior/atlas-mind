@@ -230,6 +230,8 @@
   "app_shift_empty": "No claim to compare.",
   "app_shift_lagging_title": "Still saying the old",
   "app_shift_untouched": "untouched since {date}",
+  "app_shift_as_then": "as then: “{quote}”",
+  "app_shift_now_holds": "now: “{quote}”",
   "app_shift_update": "Update with Claude",
   "app_shift_update_message": "Let's update these docs, which still say what the mind no longer holds on “{topic}”:",
   "app_shift_why": "Why did I think that on {date}?",

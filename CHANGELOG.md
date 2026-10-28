@@ -8,6 +8,21 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-10-28
+
+### Fixed
+- Asked what you thought of something without a date, `then_and_now` compared with 90 days ago,
+  which misses a change of mind made last week as surely as one made last year. Without `at` it now
+  returns the days the topic moved, for Claude to pick the one the question means and compare
+  with it; its description covers these undated questions (Sonnet goes through to the view 2 runs
+  in 2 on a new eval question; Haiku, 1 in 3).
+- A doc flagged as still saying the old position must now name the claim it repeats (`echoes`: a
+  reversed, refined or dropped one), and the view shows that claim under it, "as then: …". An old
+  doc that happens to agree with today is no longer flagged for its age.
+- `then_and_now` walks the history once instead of three times, and keeps its passages within a
+  budget, the docs past it named rather than quoted: on a 3,500-commit mind, from 8 s and 20,000
+  characters down to 6 s and 11,000. Paths with accents are read as they are (git escaped them).
+
 ## [1.9.1] - 2026-10-28
 
 ### Fixed

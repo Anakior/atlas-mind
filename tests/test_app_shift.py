@@ -39,6 +39,7 @@ class TestShiftView(ViewTestCase):
         self.assertIn("The embeddings come as an opt-in extension", why)
         self.assertNotIn("never embeddings", why)  # what the mind says now stays out of it
         self.assertIn("notes/roadmap.md", update)
+        self.assertIn("as then: “The embeddings come as an opt-in extension”", update)  # what it still says
         self.assertIn("2025-01-15", compare)
 
 

@@ -52,7 +52,7 @@ SHIFTS = [
     {"badge": "held", "then": {"path": "notes/old-name.md", "quote": "Embeddings rank the hits."},
      "now": {"path": "notes/ranking.md", "quote": "Embeddings rank the hits."}},
 ]
-LAGGING = [{"path": "notes/roadmap.md", "quote": "Embeddings: an opt-in extension."}]
+LAGGING = [{"path": "notes/roadmap.md", "quote": "Embeddings: an opt-in extension.", "echoes": 0}]
 
 
 class TestThenAndNow(unittest.TestCase):
@@ -91,6 +91,12 @@ class TestThenAndNow(unittest.TestCase):
         self.assertTrue(docs["notes/roadmap.md"]["now"]["same_as_then"])
         self.assertNotIn("welcome.md", docs)
 
+    def test_without_a_date(self):
+        data = self.call("then_and_now", topic="embeddings")
+        self.assertEqual([m["date"] for m in data["moments"]], ["2025-01-15", "2025-03-10"])
+        self.assertNotIn("docs", data)  # nothing compared until a date is picked
+        self.assertIn("again", data["hint"])
+
     def test_a_date_before_the_mind(self):
         err, data = _call(self.srv, self.token, "then_and_now", {"topic": "embeddings", "at": "2024-06-01"})
         self.assertTrue(err)
@@ -106,7 +112,12 @@ class TestThenAndNow(unittest.TestCase):
              "now": {"path": "notes/search.md", "quote": "No embeddings in the engine"}},  # not yet said then
             {"badge": "flipped"},
         ]
-        data = self.call("show_shift", topic="embeddings", at="2025-02-01", shifts=SHIFTS + made_up, lagging=LAGGING)
+        not_behind = [  # old, but saying what the mind holds now; or naming no claim that moved
+            {"path": "notes/ranking.md", "quote": "Embeddings rank the hits.", "echoes": 3},
+            {"path": "notes/roadmap.md", "quote": "Embeddings: an opt-in extension."},
+        ]
+        data = self.call("show_shift", topic="embeddings", at="2025-02-01", shifts=SHIFTS + made_up,
+                         lagging=LAGGING + not_behind)
         self.assertEqual([s["badge"] for s in data["shifts"]], ["reversed", "dropped", "new", "held"])
         reversed_, dropped, new, held = data["shifts"]
         self.assertEqual((reversed_["then"]["date"], reversed_["now"]["date"]), ("2025-01-15", "2025-03-10"))
@@ -116,11 +127,13 @@ class TestThenAndNow(unittest.TestCase):
         self.assertIsNone(dropped["now"])
         self.assertIsNone(new["then"])
         self.assertEqual(held["then"]["path"], "notes/old-name.md")
-        self.assertEqual([(r["side"], r["quote"]) for r in data["rejected"] if r["side"] != "pair"],
-                         [("now", "Embeddings are mandatory"), ("then", "No embeddings in the engine")])
-        self.assertEqual(len(data["rejected"]), 3)
+        self.assertEqual([(r["side"], r.get("quote")) for r in data["rejected"]],
+                         [("now", "Embeddings are mandatory"), ("then", "No embeddings in the engine"),
+                          ("pair", None), ("lagging", "Embeddings rank the hits."),
+                          ("lagging", "Embeddings: an opt-in extension.")])
         lagging, = data["lagging"]
-        self.assertEqual((lagging["path"], lagging["last_modified"]), ("notes/roadmap.md", "2025-01-15"))
+        self.assertEqual((lagging["path"], lagging["last_modified"], lagging["echoes"]),
+                         ("notes/roadmap.md", "2025-01-15", 0))
         self.assertEqual([m["date"] for m in data["moments"]], ["2025-01-15", "2025-03-10"])
 
 

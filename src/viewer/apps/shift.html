@@ -40,7 +40,8 @@ __KIT_CSS__
   .line { margin-top: -1px; padding: 10px 12px; border-top: 1px solid var(--border); }
   .line b { display: block; }
   .line q { display: block; margin: 2px 0; color: var(--text-2); font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
-  .line small { color: var(--text-3); font-size: 12px; }
+  .line small { display: block; color: var(--text-3); font-size: 12px; }
+  .line .echo { color: var(--text-2); }
   .actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 20px 0 0; }
   .actions .note { margin: 0 auto 0 0; }
   @media (max-width: 480px) { .pair { grid-template-columns: 1fr; } }
@@ -129,11 +130,16 @@ __KIT_CSS__
     var lines = el('div', 'lines');
     docs.forEach(function (doc) {
       lines.appendChild(add(el('div', 'line'), el('b', null, docName(doc.path)), el('q', null, doc.quote),
+        el('small', 'echo', t('as_then', { quote: d.shifts[doc.echoes].then.quote })),
         el('small', null, doc.path + ' · ' + t('untouched', { date: kit.day(doc.last_modified) }))));
     });
     var update = el('button', 'ghost', t('update'));
     update.onclick = function () {
-      send(update, t('update_message', { topic: d.topic }) + '\n' + docs.map(cite).join('\n'));
+      send(update, t('update_message', { topic: d.topic }) + '\n' + docs.map(function (doc) {
+        var claim = d.shifts[doc.echoes];
+        return cite(doc) + ' : ' + t('as_then', { quote: claim.then.quote })
+          + (claim.now ? ' ; ' + t('now_holds', { quote: claim.now.quote }) : '');
+      }).join('\n'));
     };
     return add(el('section'), add(el('h2'), icon('alert'), t('lagging_title'), el('span', 'count', docs.length),
       add(el('span', 'end'), update)), lines);

@@ -1331,7 +1331,7 @@
   },
   {
     "name": "then_and_now",
-    "description": "What the mind said about a topic at a past date, next to what it says now. For 'what did I think of X in June / on <date>', 'when did we change our mind on Y': call this, then show_shift with the claims paired. show_shift is how the user sees the answer, so call it rather than writing the comparison out. Returns each doc's passages on the topic then and now (docs since deleted or moved included) and the days the topic moved.",
+    "description": "What the mind said about a topic at a past date, next to what it says now. For 'what did I think of X (in June, before)', 'did I change my mind on Y', 'when did we decide Z': call this with the date; without one, call it with the topic alone first, to get the days the topic moved and pick the date. Then call show_shift with the claims paired: it is how the user sees the answer, so call it rather than writing the comparison out. Returns each doc's passages on the topic then and now (docs since deleted or moved included) and the days the topic moved.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1341,7 +1341,7 @@
         },
         "at": {
           "type": "string",
-          "description": "The past date, YYYY-MM-DD (default: 90 days ago)."
+          "description": "The past date, YYYY-MM-DD. Without it, only the days the topic moved come back, to pick one."
         }
       },
       "required": [
@@ -1377,9 +1377,7 @@
         }
       },
       "required": [
-        "topic",
-        "at",
-        "docs"
+        "topic"
       ]
     },
     "annotations": {
@@ -1389,7 +1387,7 @@
   },
   {
     "name": "show_shift",
-    "description": "Show the user, as a view, how the mind's position on a topic moved since a date: the answer to 'what did I think of X then', right after then_and_now. Pairs of claims, then and now, each quoted word for word from its passages (… skips words) and badged reversed, refined, held, dropped (nothing now) or new (nothing then). Every quote is checked against the version it cites; one not found is rejected, not shown. `lagging`: docs that still say what the mind no longer holds. Then reply in a line or two: the view says the rest.",
+    "description": "Show the user, as a view, how the mind's position on a topic moved since a date: the answer to 'what did I think of X then', right after then_and_now. Pairs of claims, then and now, each quoted word for word from its passages (… skips words) and badged reversed, refined, held, dropped (nothing now) or new (nothing then). Every quote is checked against the version it cites; one not found is rejected, not shown. `lagging`: docs that still state the old side of a reversed, refined or dropped claim, each naming that claim's index in `shifts` (`echoes`); a doc that agrees with now is not lagging, however old. Then reply in a line or two: the view says the rest.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1465,11 +1463,16 @@
               },
               "quote": {
                 "type": "string"
+              },
+              "echoes": {
+                "type": "integer",
+                "description": "Index in `shifts` of the claim whose old side this doc still states."
               }
             },
             "required": [
               "path",
-              "quote"
+              "quote",
+              "echoes"
             ]
           }
         }

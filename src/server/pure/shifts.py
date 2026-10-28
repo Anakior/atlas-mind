@@ -5,18 +5,19 @@ before the view shows a pair, every quote is checked word for word against the v
 cites, so a claim the mind never made cannot be put in its mouth."""
 import datetime as dt
 import re
+from itertools import zip_longest
 
 import server as _s
 from server.pure import contradictions, provenance
 from server.pure.queries import _api_search, _visible
 
 _DOCS = 8              # docs read on each side
-_DOC_CHARS = 1400      # passages kept per doc and side
+_DOC_CHARS = 900       # passages kept per doc and side
+_TOTAL_CHARS = 7000    # and in all: the docs past it are named, not quoted
 _PASSAGE_CHARS = 420
 _MOMENTS = 12          # dates the topic moved, the latest kept
-_MOMENT_COMMITS = 300  # commits scanned for them
-_DEFAULT_DAYS = 90     # `at` when none is given
 _BADGES = ("reversed", "refined", "held", "dropped", "new")
+_ECHOED = ("reversed", "refined", "dropped")  # the claims a lagging doc can still repeat
 _DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)")
@@ -41,10 +42,8 @@ def _terms(topic: str) -> list:
 
 def _day(at: str) -> str:
     at = (at or "").strip()[:10]
-    if not at:
-        return (dt.date.today() - dt.timedelta(days=_DEFAULT_DAYS)).isoformat()
     if not _DAY_RE.match(at):
-        raise ValueError(f"'at' must be a date, YYYY-MM-DD: {at}")
+        raise ValueError(f"'at' must be a date, YYYY-MM-DD: {at or '(none)'}")
     return at
 
 
@@ -57,8 +56,13 @@ def _rev_at(day: str) -> str:
     return sha
 
 
+def _git(*args):
+    """git with paths as they are: by default it escapes non-ASCII ones in its output."""
+    return _s.git("-c", "core.quotepath=false", *args)
+
+
 def _show(rev: str, repo_rel: str):
-    out = _s.git("show", f"{rev}:{repo_rel}")
+    out = _git("show", f"{rev}:{repo_rel}")
     return out.stdout if out.returncode == 0 else None
 
 
@@ -117,23 +121,36 @@ def _passages(text: str, terms: list) -> list:
             break
         kept.append((line, section, block))
         room -= len(block)
-    return [{"line": line, "section": section, "text": block} if section else {"line": line, "text": block}
-            for line, section, block in sorted(kept)]
+    out, current = [], ""
+    for line, section, block in sorted(kept):
+        out.append({"line": line, "text": block} if section == current else
+                   {"line": line, "section": section, "text": block})  # said once for its passages
+        current = section
+    return out
 
 
-def _last_change(rev: str, repo_rel: str) -> str:
-    return _last_changes(rev, [repo_rel]).get(repo_rel, "")
-
-
-def _last_changes(rev: str, repo_paths: list) -> dict:
-    """{path: day of its last commit up to `rev`}, in one walk of the history."""
-    out = _s.git("log", "--format=%x1e%cs", "--name-only", rev, "--", *repo_paths)
-    days = {}
+def _history(paths, terms: list, day: str = "") -> tuple:
+    """One walk of the paths' history, diffs included: the day each was last changed (today, and
+    on `day` when given) and the days the topic's lines changed in them. On a big mind a walk
+    costs about a second whatever it reads, so this one does the work of three."""
+    out = _git("log", "-p", "--unified=0", "--no-renames", "--format=%x1e%cs", "HEAD", "--",
+               *sorted({"content/" + rel for rel in paths}))
+    words = {_s._normalize_text(t) for t in terms}
+    now_days, then_days, moved = {}, {}, {}
     for record in out.stdout.split("\x1e")[1:]:
-        day, *paths = [row.strip() for row in record.split("\n") if row.strip()] or [""]
-        for path in paths:
-            days.setdefault(path, day)
-    return days
+        lines = record.split("\n")
+        when, path = lines[0].strip(), None
+        for line in lines[1:]:
+            if line.startswith(("--- a/content/", "+++ b/content/")):
+                path = line[len("--- a/content/"):].rstrip("\t")
+                now_days.setdefault(path, when)
+                if day and when <= day:
+                    then_days.setdefault(path, when)
+            elif path and line[:1] in ("+", "-") and not line.startswith(("+++", "---")):
+                if any(w in _s._normalize_text(line) for w in words) and path not in moved.setdefault(when, []):
+                    moved[when].append(path)
+    moments = [{"date": when, "docs": docs} for when, docs in sorted(moved.items())]
+    return now_days, then_days, moments[-_MOMENTS:]
 
 
 def _then_paths(terms: list, rev: str) -> list:
@@ -141,7 +158,7 @@ def _then_paths(terms: list, rev: str) -> list:
     args = ["grep", "-I", "-i", "-c", "-F"]
     for t in terms:
         args += ["-e", t]
-    out = _s.git(*args, rev, "--", "content")
+    out = _git(*args, rev, "--", "content")
     counts = []
     for row in out.stdout.splitlines():
         path, _, n = row.partition(f"{rev}:")[2].rpartition(":")
@@ -152,7 +169,7 @@ def _then_paths(terms: list, rev: str) -> list:
 
 def _renames(rev: str) -> dict:
     """{path at `rev`: its path now} for the docs moved since."""
-    out = _s.git("diff", "-M", "--name-status", rev, "HEAD", "--", "content")
+    out = _git("diff", "-M", "--name-status", rev, "HEAD", "--", "content")
     moves = {}
     for row in out.stdout.splitlines():
         status, *paths = row.split("\t")
@@ -161,42 +178,28 @@ def _renames(rev: str) -> dict:
     return moves
 
 
-def _moments(terms: list, paths, ctx) -> list:
-    """The days the topic's lines changed in `paths`, with the docs they changed in: the docs
-    found, not the whole mind, whose every diff -G would read."""
-    pattern = "|".join(t for t in terms if re.fullmatch(r"\w+", t))
-    paths = sorted({"content/" + rel for rel in paths})
-    if not pattern or not paths:
-        return []
-    out = _s.git("log", "-i", "-G" + pattern, "-n", str(_MOMENT_COMMITS), "--format=%x1e%cs",
-                 "--name-only", "--", *paths)
-    days = {}
-    for record in out.stdout.split("\x1e")[1:]:
-        rows = [p.strip() for p in record.split("\n") if p.strip()]
-        if not rows:
-            continue
-        day, paths = rows[0], rows[1:]
-        docs = [p[len("content/"):] for p in paths if p.startswith("content/")]
-        docs = [rel for rel in docs if not _hidden(rel, ctx)]
-        if docs:
-            seen = days.setdefault(day, [])
-            seen += [rel for rel in docs if rel not in seen]
-    return [{"date": day, "docs": docs} for day, docs in sorted(days.items())][-_MOMENTS:]
-
-
 def evidence(topic: str, at: str, ctx=None) -> dict:
-    terms, day = _terms(topic), _day(at)
+    terms = _terms(topic)
+    if not (at or "").strip():
+        # No date to compare with: a fixed default would miss a change of mind made last week or
+        # last year alike. The days the topic moved let the model pick the one the question means.
+        found = [h["path"] for h in _api_search(topic, _DOCS, ctx) if not _hidden(h["path"], ctx)]
+        return {"hint": ("No date given: pick the day to compare with from `moments`, usually the day "
+                         "before the change the question is about (often the latest), and call "
+                         "then_and_now again with it as `at`."),
+                "topic": topic, "moments": _history(found, terms)[2]}
+    day = _day(at)
     rev = _rev_at(day)
     head = _s.git("rev-parse", "HEAD").stdout.strip()
     moves = _renames(rev)
     back = {now: then for then, now in moves.items()}
-    pairs = [(rel, moves.get(rel, rel)) for rel in _then_paths(terms, rev) if not _hidden(rel, ctx)][:_DOCS]
-    now_paths = [h["path"] for h in _api_search(topic, _DOCS * 2, ctx) if not _hidden(h["path"], ctx)]
-    pairs += [(back.get(rel, rel), rel) for rel in now_paths[:_DOCS]]
-    pairs = list(dict.fromkeys(pairs))
-    then_days = _last_changes(rev, sorted({"content/" + then for then, _ in pairs}))
-    now_days = _last_changes(head, sorted({"content/" + now for _, now in pairs}))
-    docs = []
+    then_docs = [(rel, moves.get(rel, rel)) for rel in _then_paths(terms, rev) if not _hidden(rel, ctx)][:_DOCS]
+    found_now = [h["path"] for h in _api_search(topic, _DOCS * 2, ctx) if not _hidden(h["path"], ctx)]
+    now_docs = [(back.get(rel, rel), rel) for rel in found_now[:_DOCS]]
+    # Then and now taken in turn, so the budget can't spend itself on one side before the other.
+    pairs = list(dict.fromkeys(pair for both in zip_longest(then_docs, now_docs) for pair in both if pair))
+    now_days, then_days, moments = _history({rel for pair in pairs for rel in pair}, terms, day)
+    docs, more, room = [], [], _TOTAL_CHARS
     for then_rel, now_rel in pairs:
         then_text = _show(rev, "content/" + then_rel)
         now_text = _show(head, "content/" + now_rel)
@@ -204,25 +207,36 @@ def evidence(topic: str, at: str, ctx=None) -> dict:
         now = _passages(now_text, terms) if now_text else []
         if not then and not now:
             continue
-        doc = {"path": now_rel if now_text is not None else then_rel, **provenance.mark(now_rel)}
+        path = now_rel if now_text is not None else then_rel
+        size = sum(len(p["text"]) for p in then + ([] if now == then else now))
+        if size > room:  # named, so the model knows it is there, but not quoted
+            more.append(path)
+            continue
+        room -= size
+        doc = {"path": path, **provenance.mark(now_rel)}
         if then:
-            doc["then"] = {"date": then_days.get("content/" + then_rel, ""), "passages": then}
-            if then_rel != doc["path"]:
+            doc["then"] = {"date": then_days.get(then_rel, ""), "passages": then}
+            if then_rel != path:
                 doc["then"]["path"] = then_rel
         if now:
-            doc["now"] = {"date": now_days.get("content/" + now_rel, "")}
+            doc["now"] = {"date": now_days.get(now_rel, "")}
             # Unchanged on the topic: said once, the model reads it as held.
             doc["now"].update({"same_as_then": True} if now == then else {"passages": now})
         if now_text is None:
             doc["gone"] = True
         docs.append(doc)
-    found = [d["path"] for d in docs] + [d["then"]["path"] for d in docs if "path" in d.get("then", {})]
+    found = {d["path"] for d in docs} | {d["then"]["path"] for d in docs if "path" in d.get("then", {})}
+    moments = [{"date": m["date"], "docs": kept} for m in moments
+               if (kept := [rel for rel in m["docs"] if rel in found])]
     # The next step first: with the passages in hand, a model is tempted to write the answer out.
-    return {"hint": ("Now call show_shift with the claims paired, one then and one now, each quoted word "
-                     "for word from a passage below (… to skip words): it is how the user sees the answer. "
-                     "A doc still saying what the mind no longer holds goes in `lagging`. Then reply in a "
-                     "line or two."),
-            "topic": topic, "at": day, "rev": rev[:12], "moments": _moments(terms, found, ctx), "docs": docs}
+    out = {"hint": ("Now call show_shift with the claims paired, one then and one now, each quoted word "
+                    "for word from a passage below (… to skip words): it is how the user sees the answer. "
+                    "A doc still stating the old side of a reversed, refined or dropped claim goes in "
+                    "`lagging`, naming that claim in `echoes`. Then reply in a line or two."),
+           "topic": topic, "at": day, "rev": rev[:12], "moments": moments, "docs": docs}
+    if more:
+        out["more"] = more
+    return out
 
 
 # ── show_shift: the pairs, each quote checked against the version it cites ──
@@ -273,7 +287,8 @@ def _blame(rev: str, repo_rel: str, line: int) -> dict:
 
 
 def _check(side: dict, rev: str, ctx, rejected: list, kind: str):
-    """A quoted claim as shown: verified against `rev`, dated by the commit that wrote it."""
+    """A quoted claim as shown: verified against `rev`, dated by the commit that wrote it (verify
+    dates it by its doc's last change when blame can't tell)."""
     if not isinstance(side, dict):
         return None
     rel, quote = (side.get("path") or "").strip(), (side.get("quote") or "").strip()
@@ -288,16 +303,15 @@ def _check(side: dict, rev: str, ctx, rejected: list, kind: str):
         return None
     line = _line_of(start, text)
     written = _blame(rev, "content/" + rel, line) if line else {}
-    return {"path": rel, "quote": quote, "line": line, **written,
-            "date": written.get("date") or _last_change(rev, "content/" + rel)}
+    return {"path": rel, "quote": quote, "line": line, "date": "", **written}
 
 
 def verify(args: dict, ctx=None) -> dict:
     topic = (args.get("topic") or "").strip()
     terms, day = _terms(topic), _day(args.get("at") or "")
     rev, head = _rev_at(day), _s.git("rev-parse", "HEAD").stdout.strip()
-    shifts, rejected = [], []
-    for pair in args.get("shifts") or []:
+    shifts, rejected, shown_as = [], [], {}
+    for i, pair in enumerate(args.get("shifts") or []):
         badge = pair.get("badge") if isinstance(pair, dict) else None
         if badge not in _BADGES:
             rejected.append({"side": "pair", "reason": f"badge must be one of {', '.join(_BADGES)}"})
@@ -309,15 +323,28 @@ def verify(args: dict, ctx=None) -> dict:
         shown = {"badge": badge, "then": then, "now": now}
         if (pair.get("note") or "").strip():
             shown["note"] = pair["note"].strip()
+        shown_as[i] = len(shifts)
         shifts.append(shown)
     lagging = []
     for doc in args.get("lagging") or []:
+        # A doc is behind only if it still states the old side of a claim that moved: naming that
+        # claim keeps an old doc that happens to agree with today from being flagged for its age.
+        doc = doc if isinstance(doc, dict) else {}
+        echoes = shown_as.get(doc.get("echoes"))
+        if echoes is None or shifts[echoes]["badge"] not in _ECHOED:
+            rejected.append({"side": "lagging", "path": doc.get("path", ""), "quote": doc.get("quote", ""),
+                             "reason": "`echoes` must name the reversed, refined or dropped claim it repeats"})
+            continue
         checked = _check(doc, head, ctx, rejected, "lagging")
         if checked:
-            checked["last_modified"] = _last_change(head, "content/" + checked["path"])
+            checked["echoes"] = echoes
             lagging.append(checked)
-    cited = [side["path"] for pair in shifts for side in (pair["then"], pair["now"]) if side]
-    cited += [doc["path"] for doc in lagging]
-    return {"topic": topic, "at": day, "today": dt.date.today().isoformat(),
-            "moments": _moments(terms, cited, ctx), "shifts": shifts, "lagging": lagging,
-            "rejected": rejected}
+    sides = [(pair[kind], kind) for pair in shifts for kind in ("then", "now") if pair[kind]]
+    sides += [(doc, "now") for doc in lagging]
+    now_days, then_days, moments = _history({side["path"] for side, _ in sides}, terms, day)
+    for side, kind in sides:
+        side["date"] = side["date"] or (then_days if kind == "then" else now_days).get(side["path"], "")
+    for doc in lagging:
+        doc["last_modified"] = now_days.get(doc["path"], "")
+    return {"topic": topic, "at": day, "today": dt.date.today().isoformat(), "moments": moments,
+            "shifts": shifts, "lagging": lagging, "rejected": rejected}

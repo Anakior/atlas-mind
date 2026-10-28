@@ -92,5 +92,9 @@
   {"id": "then-now", "kind": "history",
    "q": "What did this mind say about the Hive two months ago, compared with what it says now?",
    "answer": ["hive"],
+   "tools": ["show_shift"]},
+  {"id": "then-now-undated", "kind": "history",
+   "q": "What did I think of the Hive before? Has my view of it changed?",
+   "answer": ["hive"],
    "tools": ["show_shift"]}
 ]
