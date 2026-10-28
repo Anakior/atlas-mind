@@ -8,6 +8,13 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-10-28
+
+### Fixed
+- In the resume view's timeline, a step whose title fits on one line sank below the line.
+- Asked to show their saves, models answered from a search instead of the list:
+  `resume_session` now says first that it lists the saves, then how it resumes one.
+
 ## [1.7.2] - 2026-10-28
 
 The resume view becomes a way in: your recent work, one line each, then the save you pick.
