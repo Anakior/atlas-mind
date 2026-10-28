@@ -133,6 +133,8 @@ def _history(paths, terms: list, day: str = "") -> tuple:
     """One walk of the paths' history, diffs included: the day each was last changed (today, and
     on `day` when given) and the days the topic's lines changed in them. On a big mind a walk
     costs about a second whatever it reads, so this one does the work of three."""
+    if not paths:  # with no pathspec, git would walk and diff the whole mind
+        return {}, {}, []
     out = _git("log", "-p", "--unified=0", "--no-renames", "--format=%x1e%cs", "HEAD", "--",
                *sorted({"content/" + rel for rel in paths}))
     words = {_s._normalize_text(t) for t in terms}

@@ -8,6 +8,19 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-10-28
+
+### Fixed
+- `then_and_now` on a topic no doc mentions walked and diffed the whole mind's history: 20 to 30 s
+  on a 3,500-commit mind, long enough for the client to give up and for the calls behind it to
+  wait. It now answers at once with nothing to compare.
+- Asked whether they had changed their mind, Claude on the web rebuilt the answer from searches
+  instead of opening the view: with many connectors, a host looks tools up by keyword, and those
+  words find `search_docs` first. The server instructions now name the tools that answer with a
+  view (`resume_session`, `mind_weather`, `then_and_now` then `show_shift`) and the questions
+  they answer. A French "did I change my mind" eval question went from no view in 2 runs to the
+  view in 2.
+
 ## [1.9.2] - 2026-10-28
 
 ### Fixed

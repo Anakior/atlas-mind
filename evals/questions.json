@@ -96,5 +96,9 @@
   {"id": "then-now-undated", "kind": "history",
    "q": "What did I think of the Hive before? Has my view of it changed?",
    "answer": ["hive"],
+   "tools": ["show_shift"]},
+  {"id": "changed-mind", "kind": "history",
+   "q": "Est-ce que j'ai changé d'avis sur le partage ?",
+   "answer": ["partag|shar"],
    "tools": ["show_shift"]}
 ]

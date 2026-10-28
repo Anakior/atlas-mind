@@ -97,6 +97,11 @@ class TestThenAndNow(unittest.TestCase):
         self.assertNotIn("docs", data)  # nothing compared until a date is picked
         self.assertIn("again", data["hint"])
 
+    def test_a_topic_the_mind_never_had(self):
+        self.assertEqual(self.call("then_and_now", topic="xyzzy")["moments"], [])
+        data = self.call("then_and_now", topic="xyzzy", at="2025-02-01")
+        self.assertEqual((data["docs"], data["moments"]), ([], []))
+
     def test_a_date_before_the_mind(self):
         err, data = _call(self.srv, self.token, "then_and_now", {"topic": "embeddings", "at": "2024-06-01"})
         self.assertTrue(err)

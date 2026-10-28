@@ -125,6 +125,7 @@ class TestProvenance(unittest.TestCase):
         result = self.rpc("initialize", {})["result"]
         self.assertTrue(result["instructions"].endswith("\n\n" + provenance.RULE))
         self.assertIn("source of truth", result["instructions"])
+        self.assertIn("then_and_now then show_shift", result["instructions"])  # the tools with a view
 
 
 class TestContradictionSides(_Mind):

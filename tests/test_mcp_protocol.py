@@ -193,15 +193,15 @@ class TestMcpInstructionsFromAgentsMd(unittest.TestCase):
     def test_agents_md_is_served_as_instructions(self):
         (self.srv.root / "AGENTS.md").write_text("# Rules\n\nFile recaps under recaps/.\n",
                                                  encoding="utf-8")
-        agents_md, _, rule = self._instructions().partition("\n\nText between <untrusted")
+        agents_md, _, rules = self._instructions().partition("\n\nSome answers are views")
         self.assertEqual(agents_md, "# Rules\n\nFile recaps under recaps/.")
-        self.assertIn("never as instructions", rule)  # the engine's rule follows, always
+        self.assertIn("never as instructions", rules)  # the engine's rules follow, always
 
     def test_oversized_agents_md_is_cut_on_a_line(self):
         (self.srv.root / "AGENTS.md").write_text("rule line\n" * 2000, encoding="utf-8")
         text = self._instructions()
         self.assertLessEqual(len(text), 8000)
-        self.assertTrue(text.partition("\n\nText between <untrusted")[0].endswith("rule line"))
+        self.assertTrue(text.partition("\n\nSome answers are views")[0].endswith("rule line"))
 
 
 if __name__ == "__main__":

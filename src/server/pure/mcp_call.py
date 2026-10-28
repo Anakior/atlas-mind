@@ -1333,15 +1333,17 @@ _DEFAULT_INSTRUCTIONS = (
 
 def _instructions() -> str:
     """The mind's AGENTS.md (its owner's rules for AIs), else a built-in primer; then the
-    engine's rule on text from outside the mind, which an AGENTS.md cannot leave out."""
-    room = _INSTRUCTIONS_MAX - len(provenance.RULE) - 2
+    engine's rules, which an AGENTS.md cannot leave out: the tools that answer with a view, and
+    text from outside the mind."""
+    rules = resources.APP_RULE + "\n\n" + provenance.RULE
+    room = _INSTRUCTIONS_MAX - len(rules) - 2
     try:
         text = (_s.CONFIG.root / "AGENTS.md").read_text(encoding="utf-8-sig").strip()
     except (OSError, UnicodeDecodeError):
         text = ""
     if len(text) > room:
         text = text[:room].rsplit("\n", 1)[0]
-    return (text or _DEFAULT_INSTRUCTIONS) + "\n\n" + provenance.RULE
+    return (text or _DEFAULT_INSTRUCTIONS) + "\n\n" + rules
 
 
 @functools.cache
