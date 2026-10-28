@@ -88,5 +88,9 @@
    "tools": ["move_doc"],
    "after": [{"path": "guides/markdown-tour.md", "exists": true},
              {"path": "guides/markdown-showcase.md", "exists": false},
-             {"path": "multi-formats.md", "contains": ["markdown-tour"]}]}
+             {"path": "multi-formats.md", "contains": ["markdown-tour"]}]},
+  {"id": "then-now", "kind": "history",
+   "q": "What did this mind say about the Hive two months ago, compared with what it says now?",
+   "answer": ["hive"],
+   "tools": ["show_shift"]}
 ]

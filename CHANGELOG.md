@@ -8,6 +8,14 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-10-28
+
+### Fixed
+- Asked what you thought of something on a past date, Claude could stop after `then_and_now` and
+  write the comparison out instead of showing the view. `then_and_now` now leads its result with
+  the next step, and both descriptions say that `show_shift` is the answer the user sees. On a new
+  eval question, the call through to `show_shift` went from 1 run in 3 to 3 in 3 (Sonnet, Haiku).
+
 ## [1.9.0] - 2026-10-28
 
 What you thought then, beside what you think now.

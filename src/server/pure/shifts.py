@@ -217,11 +217,12 @@ def evidence(topic: str, at: str, ctx=None) -> dict:
             doc["gone"] = True
         docs.append(doc)
     found = [d["path"] for d in docs] + [d["then"]["path"] for d in docs if "path" in d.get("then", {})]
-    return {"topic": topic, "at": day, "rev": rev[:12], "moments": _moments(terms, found, ctx),
-            "docs": docs,
-            "hint": ("Pair the claims, one then and one now, each quoted word for word from a passage "
-                     "above (… to skip words), and show them with show_shift; a doc still saying what "
-                     "the mind no longer holds goes in `lagging`.")}
+    # The next step first: with the passages in hand, a model is tempted to write the answer out.
+    return {"hint": ("Now call show_shift with the claims paired, one then and one now, each quoted word "
+                     "for word from a passage below (… to skip words): it is how the user sees the answer. "
+                     "A doc still saying what the mind no longer holds goes in `lagging`. Then reply in a "
+                     "line or two."),
+            "topic": topic, "at": day, "rev": rev[:12], "moments": _moments(terms, found, ctx), "docs": docs}
 
 
 # ── show_shift: the pairs, each quote checked against the version it cites ──

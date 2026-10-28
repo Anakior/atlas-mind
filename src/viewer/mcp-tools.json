@@ -1331,7 +1331,7 @@
   },
   {
     "name": "then_and_now",
-    "description": "What the mind said about a topic at a past date, next to what it says now: for each doc, its passages on the topic then and now (docs since deleted or moved included), and the days the topic moved. For 'what did I think of X in June', 'when did we change our mind on Y'. Then pair the claims and show them with show_shift.",
+    "description": "What the mind said about a topic at a past date, next to what it says now. For 'what did I think of X in June / on <date>', 'when did we change our mind on Y': call this, then show_shift with the claims paired. show_shift is how the user sees the answer, so call it rather than writing the comparison out. Returns each doc's passages on the topic then and now (docs since deleted or moved included) and the days the topic moved.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1389,7 +1389,7 @@
   },
   {
     "name": "show_shift",
-    "description": "Show the user how the mind's position on a topic moved since a date, after then_and_now: pairs of claims, then and now, each quoted word for word from its passages (… skips words) and badged reversed, refined, held, dropped (nothing now) or new (nothing then). Every quote is checked against the version it cites; one not found is rejected, not shown. `lagging`: docs that still say what the mind no longer holds.",
+    "description": "Show the user, as a view, how the mind's position on a topic moved since a date: the answer to 'what did I think of X then', right after then_and_now. Pairs of claims, then and now, each quoted word for word from its passages (… skips words) and badged reversed, refined, held, dropped (nothing now) or new (nothing then). Every quote is checked against the version it cites; one not found is rejected, not shown. `lagging`: docs that still say what the mind no longer holds. Then reply in a line or two: the view says the rest.",
     "inputSchema": {
       "type": "object",
       "properties": {
