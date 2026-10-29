@@ -128,9 +128,11 @@ class GitSync:
             args += ["--author", f"{author[0]} <{author[1]}>"]
         self.run(*args, "--", *paths)
 
-    def revert(self, shas, subject, *, author=None, trailers=()):
+    def revert(self, shas, subject, *, author=None, trailers=(), only=None):
         """Revert `shas` (newest first) as ONE attributed commit, under the repo lock.
-        All or nothing: on a conflict `revert --abort` puts the tree back as it was.
+        `only`: the repo paths to undo, the revert's other changes dropped (a move stays
+        whole when either of its paths is listed). All or nothing: on a conflict
+        `revert --abort` puts the tree back as it was.
         Returns (new commit sha, None) or (None, why it could not apply)."""
         if self._config.dev_mode:
             return None, "dev mode keeps no git history"
@@ -143,6 +145,13 @@ class GitSync:
                 # The CONFLICT lines name the files at fault; else git's own error line.
                 why = [ln for ln in r.stdout.splitlines() if ln.startswith("CONFLICT")]
                 return None, "; ".join(why or r.stderr.strip().splitlines()[:1] or ["revert failed"])
+            if only is not None:
+                drop = [p for change in self._staged_changes() if not only & set(change) for p in change]
+                if drop:
+                    self.run("restore", "--source=HEAD", "--staged", "--worktree", "--", *drop)
+                if self.run("diff", "--cached", "--quiet").returncode == 0:
+                    self.run("revert", "--abort")
+                    return None, "nothing left to undo on those docs"
             msg = " ".join(subject.split()) + ("\n\n" + "\n".join(trailers) if trailers else "")
             args = ["commit", "-m", msg, "--quiet"]
             if author:
@@ -154,6 +163,17 @@ class GitSync:
             sha = self.run("rev-parse", "HEAD").stdout.strip()
         self._request_push()
         return sha, None
+
+    def _staged_changes(self) -> list:
+        """The paths of each staged change: one, or a move's two."""
+        out = self.run("diff", "--cached", "--name-status", "-M", "-z").stdout
+        tokens = [t for t in out.split("\x00") if t]
+        changes, i = [], 0
+        while i < len(tokens):
+            n = 2 if tokens[i][:1] in ("R", "C") else 1
+            changes.append(tokens[i + 1:i + 1 + n])
+            i += 1 + n
+        return changes
 
     def _request_push(self) -> None:
         """Wake a single background worker to pull/rebuild/push; coalesces a burst."""

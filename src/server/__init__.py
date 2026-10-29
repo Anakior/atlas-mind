@@ -553,12 +553,13 @@ def commit_change(ctx, subject, *paths, ai=None):
         _CTX.git_sync.trigger_sync()         # content is on disk; let the backstop catch it
 
 
-def revert_commits(ctx, subject, shas, ai=None):
-    """Undo `shas` (newest first) as one commit attributed to `ctx` (+ its AI). Returns
-    (new commit sha, None), or (None, why) with the tree left untouched."""
+def revert_commits(ctx, subject, shas, ai=None, only=None):
+    """Undo `shas` (newest first) as one commit attributed to `ctx` (+ its AI), limited to
+    the repo paths `only` when given. Returns (new commit sha, None), or (None, why) with
+    the tree left untouched."""
     from server.pure import acl
     author, trailers = acl.attribution_for(ctx, ai=ai)
-    return _CTX.git_sync.revert(shas, subject, author=author, trailers=trailers)
+    return _CTX.git_sync.revert(shas, subject, author=author, trailers=trailers, only=only)
 
 
 def _clean_subject(text, limit=100):

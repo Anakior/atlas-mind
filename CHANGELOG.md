@@ -8,6 +8,25 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-29
+
+### Added
+- **Undo part of a run.** `undo_run` takes `from`, one of the run's commits: what came before it
+  stays, and that commit and everything after it are undone. It also takes `paths`, to undo only
+  those docs (a moved doc counts under either of its paths). The undo is still one commit, all or
+  nothing. `agent_runs` with `run` lists that run's commits and the docs each one changed, to choose
+  where to cut.
+
+### Changed
+- **Everyone's runs.** `agent_runs` now groups anyone's commits, not only those marked as an AI's.
+  An agent that commits from a clone without the `X-Atlas-Author` trailer now shows up, and can be
+  undone, as a run of the person it works for. A run written by an AI still names it in `ai`; a
+  human's run has none.
+- **Who may undo a run.** Besides the person it was for, anyone with the rights each of its changes
+  would take by hand: edit for an edited doc, owner to remove, bring back or move one. An admin who
+  can only read a doc in someone's private space can no longer undo changes to it, and a token that
+  writes the commons can now undo a run there.
+
 ## [1.9.3] - 2026-10-28
 
 ### Fixed

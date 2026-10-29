@@ -102,8 +102,9 @@ class TestAgentRuns(_Server):
         self.call("move_doc", **{"from": "projets/beta.md", "to": "projets/gamma.md"}, ai="claude")
         self.call("delete_doc", path="notes/old.md", ai="claude")
         _, data = self.call("agent_runs")
-        self.assertEqual(len(data["runs"]), 1)
-        return data["runs"][0]
+        runs = [r for r in data["runs"] if r["ai"]]
+        self.assertEqual(len(runs), 1)
+        return runs[0]
 
     def test_run_groups_the_session_and_undoes_it_whole(self):
         file_store_of(self.srv).set_owner("projets/beta.md", "user:" + ADMIN_EMAIL)
@@ -137,12 +138,90 @@ class TestAgentRuns(_Server):
         self.assertTrue(self.srv.path("projets/gamma.md").exists())
         self.assertEqual(self.srv.git("status", "--porcelain", "--", "content").stdout, "")
 
-    def test_only_the_person_acted_for_may_undo(self):
+    def test_run_lists_its_commits(self):
+        run = self._agent_session()
+        _, data = self.call("agent_runs", run=run["id"])
+        self.assertEqual([c["documents"] for c in data["runs"][0]["log"]],
+                         [["notes/old.md"], ["projets/beta.md", "projets/gamma.md"],
+                          ["notes/new.md"], ["projets/alpha.md"]])
+        err, text = self.call("agent_runs", run="0" * 25)
+        self.assertTrue(err)
+        self.assertIn("No run", text)
+
+    def test_a_human_run_is_listed_and_undone(self):
+        # Written with no AI named: what an agent committing from a clone without the
+        # trailer looks like.
+        self.call("edit_doc", path="projets/alpha.md", old_string="49", new_string="40")
+        _, data = self.call("agent_runs")
+        run = next(r for r in data["runs"] if any(d["path"] == "projets/alpha.md" for d in r["documents"]))
+        self.assertIsNone(run["ai"])
+        err, text = self.call("undo_run", run=run["id"], paths=["projets/alpha.md"], ai="claude")
+        self.assertFalse(err, text)
+        self.assertEqual(self.text("projets/alpha.md"), ALPHA)
+
+    def test_undo_from_a_commit_keeps_what_came_before(self):
+        run = self._agent_session()
+        _, data = self.call("agent_runs", run=run["id"])
+        create = data["runs"][0]["log"][2]["sha"]
+        err, text = self.call("undo_run", run=run["id"], ai="claude", **{"from": create})
+        self.assertFalse(err, text)
+        self.assertIn("45 euros", self.text("projets/alpha.md"))
+        self.assertFalse(self.srv.path("notes/new.md").exists())
+        self.assertTrue(self.srv.path("projets/beta.md").exists())
+        self.assertIn("A keeper.", self.text("notes/old.md"))
+
+    def test_undo_only_some_docs(self):
+        file_store_of(self.srv).set_owner("projets/beta.md", "user:" + ADMIN_EMAIL)
+        run = self._agent_session()
+        err, text = self.call("undo_run", run=run["id"], paths=["projets/gamma.md", "notes/old.md"],
+                              dry_run=True, ai="claude")
+        reverted = set(text.partition("would be reverted for: ")[2].rstrip(".").split(", "))
+        self.assertEqual(reverted, {"notes/old.md (deleted)", "projets/gamma.md (moved)"})
+        err, text = self.call("undo_run", run=run["id"], paths=["projets/gamma.md", "notes/old.md"],
+                              ai="claude")
+        self.assertFalse(err, text)
+        self.assertTrue(self.srv.path("projets/beta.md").exists())
+        self.assertFalse(self.srv.path("projets/gamma.md").exists())
+        self.assertIn("A keeper.", self.text("notes/old.md"))
+        self.assertFalse(self.srv.path(".trash/notes/old.md").exists())  # out of the trash, not copied
+        self.assertIn("45 euros", self.text("projets/alpha.md"))
+        self.assertTrue(self.srv.path("notes/new.md").exists())
+        self.assertEqual(file_store_of(self.srv).get_acl("projets/beta.md")["owner"], "user:" + ADMIN_EMAIL)
+
+    def test_partial_undo_names_what_it_cannot_find(self):
+        run = self._agent_session()
+        err, text = self.call("undo_run", run=run["id"], paths=["accueil.md"], ai="claude")
+        self.assertTrue(err)
+        self.assertIn("does not change accueil.md", text)
+        err, text = self.call("undo_run", run=run["id"], ai="claude", **{"from": "abcdef0"})
+        self.assertTrue(err)
+        self.assertIn("is not a commit of run", text)
+
+    def test_a_commons_writer_may_undo_edits_there(self):
+        self.call("edit_doc", path="projets/alpha.md", old_string="49", new_string="40")
+        _, data = self.call("agent_runs")
+        run = next(r for r in data["runs"] if any(d["path"] == "projets/alpha.md" for d in r["documents"]))
+        unbound = secrets.token_hex(32)
+        file_store_of(self.srv).upsert_user("bot@api.local", {
+            "role": "api", "api_token_hash": hashlib.sha256(unbound.encode()).hexdigest(),
+            "password_hash": "$2b$12$" + "x" * 53})
+        err, text = self.call("undo_run", token=unbound, run=run["id"], paths=["projets/alpha.md"],
+                              ai="claude")
+        self.assertFalse(err, text)
+        self.assertEqual(self.text("projets/alpha.md"), ALPHA)
+
+    def test_others_may_undo_only_what_they_could_change_by_hand(self):
+        file_store_of(self.srv).set_owner("projets/beta.md", "user:" + ADMIN_EMAIL)
         run = self._agent_session()
         other = _token(self.srv, "bot@api.local", VIEWER_EMAIL, role="viewer")
         err, text = self.call("undo_run", token=other, run=run["id"], ai="claude")
         self.assertTrue(err)
         self.assertIn("Only the person", text)
+        self.assertTrue(self.srv.path("projets/gamma.md").exists())
+        err, text = self.call("undo_run", token=other, run=run["id"], paths=["projets/alpha.md"],
+                              ai="claude")
+        self.assertFalse(err, text)
+        self.assertEqual(self.text("projets/alpha.md"), ALPHA)
 
 
 class TestScopes(_Server):

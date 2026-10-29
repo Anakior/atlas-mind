@@ -82,8 +82,8 @@ mind carries an [[features/activity-and-attribution|activity layer]] the AI can 
 | Tool             | What the AI does with it                                       |
 |------------------|----------------------------------------------------------------|
 | `activity`       | the attributed feed: who changed what, when, AI or human       |
-| `agent_runs`     | an agent's work sessions, with the documents each one changed  |
-| `undo_run`       | undo a whole session in one commit, all or nothing             |
+| `agent_runs`     | work sessions, an agent's or a person's, with the documents each one changed |
+| `undo_run`       | undo a session in one commit: all of it, from a given commit on, or some documents only |
 | `mind_weather`   | the mind region by region: activity, what is being forgotten, contradictions, the AI's share, the reports gone missing |
 | `stale`          | documents nobody has looked at for months — obsolescence to revisit |
 | `confirm_doc`    | record that a document still holds (or is outdated) once reviewed |

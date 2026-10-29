@@ -1145,18 +1145,18 @@ def _tool_show_shift(args, ctx):
         return text_result(str(e), is_error=True)
 
 
-_RUN_GAP_SECONDS = 30 * 60  # an agent silent this long has finished its run
+_RUN_GAP_SECONDS = 30 * 60  # a writer silent this long has finished its run
 _RUN_WINDOW_DAYS = 30       # runs are computed over this window, so their ids stay stable
 
 
 def _agent_runs() -> list:
-    """AI commits grouped into runs: consecutive commits by one agent (AI family + token +
-    the person it acts for) with no silence over _RUN_GAP_SECONDS. Newest first, each with
-    its commits newest first. Not ACL-scrubbed: callers filter for their ctx."""
+    """Commits grouped into runs: consecutive commits by one writer (the person, plus the AI
+    family and token when an agent wrote them) with no silence over _RUN_GAP_SECONDS.
+    Human runs count too: an agent committing from a clone without the trailer reads as
+    its human, and must stay undoable. Newest first, each with its commits newest first.
+    Not ACL-scrubbed: callers filter for their ctx."""
     runs, open_runs = [], {}
     for c in reversed(_attributed_log(f"--since={_RUN_WINDOW_DAYS}.days.ago") or []):
-        if not c.get("ai"):
-            continue
         key = (c["email"], c["ai"], c["token"])
         ts = datetime.datetime.fromisoformat(c["date"]).timestamp()
         run = open_runs.get(key)
@@ -1173,62 +1173,96 @@ def _agent_runs() -> list:
     return runs[::-1]
 
 
+def _unknown_run(run_id):
+    return text_result(f"No run '{run_id}' in the last {_RUN_WINDOW_DAYS} days: list them with "
+                       "agent_runs (a run's id changes while its writer keeps going).", is_error=True)
+
+
+def _paths_of(commit) -> set:
+    return {p for f in commit["files"] for p in (f["path"], f.get("old_path")) if p}
+
+
 def _tool_agent_runs(args, ctx):
     days = clamp_int(args.get("days"), 7, 1, _RUN_WINDOW_DAYS)
     limit = clamp_int(args.get("limit"), 20, 1, 100)
+    run_id = (args.get("run") or "").strip()
     cutoff = time.time() - days * 86400
+    runs = [r for r in _agent_runs() if (r["id"] == run_id if run_id else r["end_ts"] >= cutoff)]
+    if run_id and not runs:
+        return _unknown_run(run_id)
     out = []
-    for run in _agent_runs():
-        docs = _doc_changes(_scrub_commits(run["commits"], ctx))
-        if run["end_ts"] >= cutoff and docs:
-            out.append({k: run[k] for k in ("id", "ai", "token", "author", "start", "end")}
-                       | {"commits": len(run["commits"]), "documents": docs})
+    for run in runs:
+        commits = _scrub_commits(run["commits"], ctx)
+        docs = _doc_changes(commits)
+        if not docs:
+            continue
+        entry = ({k: run[k] for k in ("id", "ai", "token", "author", "start", "end")}
+                 | {"commits": len(run["commits"]), "documents": docs})
+        if run_id:
+            entry["log"] = [{"sha": c["sha"][:12], "date": c["date"], "subject": c["subject"],
+                             "documents": sorted(_paths_of(c))} for c in commits]
+        out.append(entry)
     return json_result({"days": days, "runs": out[:limit]})
 
 
-def _may_undo(run: dict, ctx) -> bool:
-    """The person the agent acted for may undo its run; an admin too, but only when they
-    can see every doc it touched (never blind changes inside someone's private space)."""
+def _may_undo(run: dict, docs: list, ctx) -> bool:
+    """The person the run was for may undo it. Anyone else needs, on each doc the undo
+    changes, the right that doing it by hand takes: edit to restore an edited doc, owner
+    to remove, bring back or move one (so never blind changes in someone's private space)."""
     if ctx is None or ctx.superuser or ctx.primary == "user:" + run["email"]:
         return True
-    if not ctx.is_admin:
-        return False
-    visible = _scrub_commits(run["commits"], ctx)
-    return sum(len(c["files"]) for c in visible) == sum(len(c["files"]) for c in run["commits"])
+    return all(_s.can_write(p, ctx, "edit" if d["change"] == "modified" else "owner")
+               for d in docs for p in (d["path"], d.get("from")) if p)
 
 
 def _tool_undo_run(args, ctx):
     run_id = (args.get("run") or "").strip()
     run = next((r for r in _agent_runs() if r["id"] == run_id), None)
     if run is None:
-        return text_result(f"No agent run '{run_id}' in the last {_RUN_WINDOW_DAYS} days: list them "
-                           "with agent_runs (a run's id changes while the agent keeps going).",
-                           is_error=True)
-    if not _may_undo(run, ctx):
-        return text_result("Only the person this agent acted for, or an admin who can see every "
-                           "doc it touched, can undo its run.", is_error=True)
-    docs = _doc_changes(run["commits"])
+        return _unknown_run(run_id)
+    commits = run["commits"]
+    cut = (args.get("from") or "").strip()
+    if cut:
+        at = next((i for i, c in enumerate(commits) if len(cut) >= 7 and c["sha"].startswith(cut)), None)
+        if at is None:
+            return text_result(f"'{cut}' is not a commit of run {run_id}: agent_runs with "
+                               f"run={run_id} lists them.", is_error=True)
+        commits = commits[:at + 1]
+    only = args.get("paths") or []
+    only = {p.strip() for p in ([only] if isinstance(only, str) else only) if isinstance(p, str)}
+    if only:
+        commits = [c for c in commits if only & _paths_of(c)]
+        if not commits:
+            return text_result(f"Run {run_id} does not change {', '.join(sorted(only))}"
+                               f"{' from ' + cut if cut else ''}: agent_runs with run={run_id} "
+                               "lists the docs each commit changes.", is_error=True)
+    docs = [d for d in _doc_changes(commits) if not only or {d["path"], d.get("from")} & only]
+    if not _may_undo(run, docs, ctx):
+        return text_result("Only the person this run was for, or someone allowed to make each of "
+                           "these changes by hand, can undo it.", is_error=True)
     summary = ", ".join(f"{d['path']} ({d['change']})" for d in docs[:20])
-    shas = [c["sha"] for c in run["commits"]]
+    shas = [c["sha"] for c in commits]
+    who = run["ai"] or run["author"]
     if args.get("dry_run"):
         return text_result(f"Dry run, nothing undone. Run {run_id} ({len(shas)} commit(s) by "
-                           f"{run['ai']}) would be reverted for: {summary}.")
+                           f"{who}) would be reverted for: {summary}.")
     # Docs the revert moves back (incl. out of .trash/) take their ACL along BEFORE git
     # writes them, so none is ever readable as commons at its restored path. Only the run's
     # own docs: the range also spans other people's commits made in between.
-    touched = {p for c in run["commits"] for f in c["files"] for p in (f["path"], f.get("old_path"))}
+    touched = only or set().union(*map(_paths_of, commits))
     moves = [(old, new) for status, old, new in _name_status(shas[0], shas[-1] + "^")
              if status == "R" and (old in touched or new in touched)]
     for frm, to in moves:
         _s._repoint_doc(frm, to)
-    sha, why = _s.revert_commits(ctx, f"undid: {run['ai']} run of {len(shas)} change(s)", shas,
-                                 ai=args.get("ai"))
+    subject = f"undid: {who} run of {len(shas)} change(s){', in part' if cut or only else ''}"
+    sha, why = _s.revert_commits(ctx, subject, shas, ai=args.get("ai"),
+                                 only={"content/" + p for p in only} or None)
     if sha is None:
         for frm, to in reversed(moves):
             _s._repoint_doc(to, frm)
-        return text_result(f"Could not undo run {run_id} cleanly ({why}): a later change touches "
-                           "the same lines. Nothing was changed; restore docs one by one with "
-                           "doc_revert instead.", is_error=True)
+        return text_result(f"Could not undo run {run_id} ({why}). Nothing was changed. A conflict "
+                           "means a later change touches the same lines: restore docs one by one "
+                           "with doc_revert instead.", is_error=True)
     store = _s.get_store()
     for status, path, _ in _name_status(sha + "^", sha):
         if status == "D":  # a doc the run created: drop its ACL and share links with it

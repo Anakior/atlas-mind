@@ -28,7 +28,7 @@
    "answer": ["dashboard"]},
   {"id": "tool-count", "kind": "synthesis",
    "q": "How many MCP tools does Atlas Mind expose? Check whether the mind is consistent about it.",
-   "answer": ["30", "22"]},
+   "answer": ["34", "22"]},
   {"id": "notion", "kind": "synthesis",
    "q": "Why would someone pick Atlas Mind over Notion, according to this mind? Name the documents you used.",
    "answer": ["why-not-notion|own-your-data|why not just use notion|own your data"]},
@@ -45,7 +45,7 @@
    "tools": ["changes_since", "changelog", "activity", "recent_docs", "agent_runs"]},
   {"id": "ai-edits", "kind": "history",
    "q": "Which document was most recently edited by an AI, and by which AI?",
-   "answer": ["claude", "own.?your.?data"],
+   "answer": ["claude", "wikilinks"],
    "tools": ["changes_since", "changelog", "activity", "agent_runs", "search_history", "doc_history"]},
   {"id": "hive-author", "kind": "history",
    "q": "Who wrote the Hive Mind guide?",
@@ -82,7 +82,7 @@
   {"id": "fix-number", "kind": "write",
    "q": "The note 'Atlas Mind by the numbers' has an outdated MCP tools count. Fix it to match the up-to-date figure found elsewhere in the mind.",
    "tools": ["edit_doc"],
-   "after": [{"path": "notes/atlas-by-the-numbers.md", "contains": ["mcp tools exposed \\| 30"]}]},
+   "after": [{"path": "notes/atlas-by-the-numbers.md", "contains": ["mcp tools exposed \\| 34"]}]},
   {"id": "rename", "kind": "write",
    "q": "Rename guides/markdown-showcase.md to guides/markdown-tour.md, keeping the links to it working.",
    "tools": ["move_doc"],
@@ -100,5 +100,10 @@
   {"id": "changed-mind", "kind": "history",
    "q": "Est-ce que j'ai changé d'avis sur le partage ?",
    "answer": ["partag|shar"],
-   "tools": ["show_shift"]}
+   "tools": ["show_shift"]},
+  {"id": "undo-part", "kind": "write",
+   "q": "Yesterday Claude wrote a note on link conventions and also edited the wikilinks guide. Keep the note, but undo what it did to the guide.",
+   "tools": ["undo_run", "doc_revert"],
+   "after": [{"path": "notes/link-conventions.md", "exists": true},
+             {"path": "guides/wikilinks-and-backlinks.md", "contains": ["backlinks"], "lacks": ["every friday"]}]}
 ]

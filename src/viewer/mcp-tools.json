@@ -1642,7 +1642,7 @@
   },
   {
     "name": "agent_runs",
-    "description": "AI agents' work sessions: one agent's consecutive commits (same AI, token and person, no pause over 30 minutes) with the docs they changed. To review what an agent did, or get the `id` undo_run takes.",
+    "description": "Work sessions (runs): one writer's consecutive commits (same person, AI and token, no pause over 30 minutes) with the docs they changed. `ai` names the AI that wrote it; a run without one is a human's, or an agent's that committed from a clone without saying so. To review what an agent did, or get the `id` undo_run takes; with `run`, that run's commits (`log`), for undo_run's `from`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1652,6 +1652,10 @@
           "minimum": 1,
           "maximum": 30,
           "description": "Runs that ended within this many days."
+        },
+        "run": {
+          "type": "string",
+          "description": "A run id: that run alone, with its commits."
         },
         "limit": {
           "type": "integer",
@@ -1677,7 +1681,10 @@
                 "type": "string"
               },
               "ai": {
-                "type": "string"
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "token": {
                 "type": [
@@ -1698,6 +1705,12 @@
                 "type": "integer"
               },
               "documents": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "log": {
                 "type": "array",
                 "items": {
                   "type": "object"
@@ -2144,13 +2157,24 @@
   },
   {
     "name": "undo_run",
-    "description": "Undo an agent run (an id from agent_runs) in one commit, all or nothing: its edits reverted, the docs it created removed, those it moved or deleted put back. Refused, with nothing changed, if a later change touches the same lines. Only the person the agent acted for, or an admin, may. dry_run=true lists what it would revert.",
+    "description": "Undo a run (an id from agent_runs) in one commit, all or nothing: its edits reverted, the docs it created removed, those it moved or deleted put back. `from` keeps the run up to that commit and undoes the rest; `paths` undoes only those docs. Refused, with nothing changed, if a later change touches the same lines. Only the person the run was for may, or someone with the rights each change takes by hand. dry_run=true lists what it would revert.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "run": {
           "type": "string",
           "description": "The run id, from agent_runs."
+        },
+        "from": {
+          "type": "string",
+          "description": "A commit sha from the run's `log`: undo it and every later commit of the run, keep the earlier ones."
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Undo only these docs."
         },
         "dry_run": {
           "type": "boolean",
