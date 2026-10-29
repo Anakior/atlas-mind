@@ -140,6 +140,10 @@ class TestAgentRuns(_Server):
 
     def test_run_lists_its_commits(self):
         run = self._agent_session()
+        # The list already says what each commit was, so one call answers (each call is a view).
+        self.assertEqual([c["subject"].split(":")[0] for c in run["log"]], ["deleted", "moved", "created", "edited"])
+        self.assertNotIn("documents", run["log"][0])
+        self.assertNotIn("log_more", run)
         _, data = self.call("agent_runs", run=run["id"])
         self.assertEqual([c["documents"] for c in data["runs"][0]["log"]],
                          [["notes/old.md"], ["projets/beta.md", "projets/gamma.md"],

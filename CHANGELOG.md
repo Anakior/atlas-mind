@@ -8,6 +8,16 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-10-29
+
+### Fixed
+- Asked what Claude did yesterday, Claude on the web opened the editing room three times: it listed
+  the runs, then asked for each of Claude's runs again to read its commits, and a host that shows
+  views opens one per call. `agent_runs` now lists each run with its newest commits (sha, date,
+  subject, up to ten, `log_more` counting the rest), so one call answers and gives the `from` sha
+  undo_run takes; `run` is left for a run's full log with each commit's docs. Its description says
+  one call is enough. A new eval check counts the calls: one, for Sonnet, Haiku and Opus.
+
 ## [1.11.0] - 2026-10-29
 
 ### Added

@@ -1647,7 +1647,7 @@
   },
   {
     "name": "agent_runs",
-    "description": "Runs: what one writer did in one go, its consecutive commits (same person, AI and token, no pause over 30 minutes) with the docs they changed. Not saved work (resume_session). `ai` names the AI that wrote a run; one without is a human's, or an agent's that committed from a clone without saying so. To review what an agent did yesterday or this morning, or get the `id` undo_run takes; with `run`, that run's commits (`log`), for undo_run's `from`.",
+    "description": "Runs: what one writer did in one go, its consecutive commits (same person, AI and token, no pause over 30 minutes) with the docs they changed and its newest commits (`log`: sha, date, subject). Not saved work (resume_session). `ai` names the AI that wrote a run; one without is a human's, or an agent's that committed from a clone without saying so. To review what an agent did yesterday or this morning, or get the `id` and the `from` sha undo_run takes. One call is enough: a host that shows views opens one per call. `run` gives one run's full log with each commit's docs, for when `log_more` says commits are missing.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1720,6 +1720,9 @@
                 "items": {
                   "type": "object"
                 }
+              },
+              "log_more": {
+                "type": "integer"
               }
             },
             "required": [

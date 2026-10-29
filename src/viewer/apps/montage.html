@@ -367,7 +367,9 @@ __KIT_CSS__
   function show(result) {
     var d;
     try { d = kit.data(result); } catch (e) { return kit.status(t('error', { message: e.message }), 'error'); }
-    if (d.runs.length === 1 && d.runs[0].log) return showScene(d.runs[0]);
+    // Called with `run`: one run, its commits with their docs. Otherwise the list.
+    var only = d.runs.length === 1 && d.runs[0].log[0];
+    if (only && only.documents) return showScene(d.runs[0]);
     state.list = d;
     showList();
   }

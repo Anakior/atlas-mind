@@ -1147,6 +1147,9 @@ def _tool_show_shift(args, ctx):
 
 _RUN_GAP_SECONDS = 30 * 60  # a writer silent this long has finished its run
 _RUN_WINDOW_DAYS = 30       # runs are computed over this window, so their ids stay stable
+# A run's newest commits listed with it: enough to say what it did and where to cut without asking
+# for each run again, which a host that shows views answers with one more view per call.
+_LIST_LOG = 10
 
 
 def _agent_runs() -> list:
@@ -1198,9 +1201,11 @@ def _tool_agent_runs(args, ctx):
             continue
         entry = ({k: run[k] for k in ("id", "ai", "token", "author", "start", "end")}
                  | {"commits": len(run["commits"]), "documents": docs})
-        if run_id:
-            entry["log"] = [{"sha": c["sha"][:12], "date": c["date"], "subject": c["subject"],
-                             "documents": sorted(_paths_of(c))} for c in commits]
+        log = commits if run_id else commits[:_LIST_LOG]
+        entry["log"] = [{"sha": c["sha"][:12], "date": c["date"], "subject": c["subject"]}
+                        | ({"documents": sorted(_paths_of(c))} if run_id else {}) for c in log]
+        if len(log) < len(commits):
+            entry["log_more"] = len(commits) - len(log)
         out.append(entry)
     return json_result({"days": days, "runs": out[:limit]})
 

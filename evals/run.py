@@ -147,6 +147,7 @@ def grade(item: dict, run: dict, root: Path, base_files: set) -> list:
         checks.append(("used " + "|".join(item["tools"]),
                        any(c in item["tools"] for c in run["calls"])))
     checks += [(f"did not use {t}", t not in run["calls"]) for t in item.get("forbid", [])]
+    checks += [(f"called {t} at most once", run["calls"].count(t) <= 1) for t in item.get("once", [])]
     content = root / "content"
     for cond in item.get("after", []):
         if "created_in" in cond:
