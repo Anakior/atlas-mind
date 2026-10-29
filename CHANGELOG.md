@@ -8,6 +8,39 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-29
+
+### Added
+- **The editing room**, a view for `agent_runs` in hosts that render MCP Apps. It lays out what
+  was written lately as runs, grouped by day: who wrote each one (an AI's name as a badge, a
+  person's name otherwise), when, the docs it touched and a tick per commit. Open a run and play it back commit by
+  commit, each commit's diffs one click away. **Discard from here** undoes that commit and the
+  ones after it and keeps the ones before; **Remove** undoes a single doc; **Discard it all** undoes
+  the whole run. Each cut is first run dry and shown, then made in one commit in the user's name,
+  and Claude is told what was undone. **Write the save for this work** asks Claude for the save of
+  what the run leaves, the undone part named as such. The server instructions now name
+  `agent_runs` among the tools that answer with a view, for what was written lately.
+
+### Changed
+- The landing page's MCP Apps section gets a fourth row for the editing room. Its captures were
+  blurry: they were shot at the view's own width, then shrunk by the browser to about half that.
+  Each one is now rendered at the size it is shown, in 1x, 1.5x and 2x, losslessly, and shown a
+  little larger. The menu's "How it works" link now goes to that section, not back up the page.
+
+### Fixed
+- Asked for "my sessions from yesterday", Claude listed saves: `agent_runs` called runs "work
+  sessions", the words `resume_session` uses for saved work. It now calls them runs, what one writer
+  did in one go, and points saved work to `resume_session`. A French "what did Claude do yesterday"
+  eval question reaches `agent_runs` 3 runs in 3 (Sonnet twice, Haiku once), and the resume question
+  still reaches `resume_session`.
+- An item an agent dropped in the inbox counted as written by its human: `create_inbox_item` had no
+  `ai` field, so the commit got no `X-Atlas-Author` trailer. It now asks for it like the other write
+  tools, and the drop counts as the AI's in the activity, the runs and the weather.
+- In the viewer's sidebar, a folder holding the open document could not be folded: it reopened at
+  once. The folders holding a document now open when it is shown, then are yours to fold. A
+  top-level folder you folded also stays folded when the mind is rebuilt (every push used to open
+  them all again); only a new one opens.
+
 ## [1.10.0] - 2026-10-29
 
 ### Added

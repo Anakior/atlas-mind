@@ -105,7 +105,7 @@ export class DocRenderer {
     document.getElementById('btn-history')?.classList.toggle('hidden', !historyPanel.available(file));
     pins.updateButton(file);
     // Active highlight + ancestor-open are derived from currentFile by content-tree.ts (active when
-    // path matches; ancestors open via its startsWith clause), so a rerender off the new currentFile
+    // path matches; its folders opened once for it), so a rerender off the new currentFile
     // replaces the old imperative .active / .hidden / .caret poke and can't drift from the tree.
     contentTree.rerender();
     document.querySelector('main')!.scrollTop = 0;

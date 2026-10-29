@@ -7,6 +7,7 @@ window.atlasKit = function (T, app) {
   // Stroke icons on a 24-unit grid.
   var ICONS = {
     alert: '<path d="M12 4 2.5 20h19z"/><path d="M12 10v4m0 3h.01"/>',
+    archive: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9m-9 4h4"/>',
     arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
     back: '<path d="m15 6-6 6 6 6"/>',
     bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
@@ -17,12 +18,14 @@ window.atlasKit = function (T, app) {
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
     fog: '<path d="M4 9h12M7 13h13M4 17h10"/>',
     pause: '<path d="M9 5v14m6-14v14"/>',
+    scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9m6.4-1.4L20 20M8.1 8.1 12 12"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     spark: '<path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/>',
     sync: '<path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4m-4 5a8 8 0 0 0 14.9 3M20 20v-4h-4"/>',
     term: '<path d="m4 17 6-5-6-5m8 12h8"/>',
     trash: '<path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
     up: '<path d="M7 17 17 7M8 7h9v9"/>',
     wind: '<path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3"/>',
   };

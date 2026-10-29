@@ -128,6 +128,35 @@ const scenarios = {
     await view.locator('.moment').first().click();
     await page.waitForTimeout(200);
   },
+  async agent_runs(report) {
+    await view.locator('h1').waitFor();
+    report.title = await view.locator('h1').textContent();
+    report.scenes = await view.locator('.scene .who').allTextContents();
+    report.lead = await view.locator('.lead').allTextContents();
+    await shot();
+    // The AI's run opened, its second commit picked and its diff read, then cut from there.
+    await view.locator('.scene.ai').first().click();
+    await view.locator('.track').waitFor();
+    report.scene = await view.locator('h1').textContent();
+    report.ticks = await view.locator('.tick').count();
+    report.docs = await view.locator('.line b').allTextContents();
+    await view.locator('.tick').nth(1).click();
+    await view.locator('.frame details summary').first().click();
+    await view.locator('.diff .add, .diff .del').first().waitFor();
+    report.diff = await view.locator('.diff div').allTextContents();
+    await shot('-scene');
+    await view.locator('.frame .cut').click();
+    await view.locator('.confirm').waitFor();
+    report.confirm = await view.locator('.confirm li b').allTextContents();
+    await shot('-confirm');
+    await view.locator('.confirm .primary').click();
+    await view.locator('.notice').waitFor();
+    report.notice = await view.locator('.notice').textContent();
+    report.undone = await view.locator('.line.undone b').allTextContents();
+    await shot('-cut');
+    await view.locator('.actions .primary').click();
+    await page.waitForTimeout(200);
+  },
 };
 
 const report = {};

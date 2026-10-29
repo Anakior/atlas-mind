@@ -862,11 +862,16 @@
         "dedupe_key": {
           "type": "string",
           "description": "A stable id (e.g. an email's message-id) so a rerun does not duplicate it."
+        },
+        "ai": {
+          "type": "string",
+          "description": "Your AI family in lowercase (claude, chatgpt, gemini), not the model name. Attributes the change."
         }
       },
       "required": [
         "title",
-        "content"
+        "content",
+        "ai"
       ]
     },
     "annotations": {
@@ -1642,7 +1647,7 @@
   },
   {
     "name": "agent_runs",
-    "description": "Work sessions (runs): one writer's consecutive commits (same person, AI and token, no pause over 30 minutes) with the docs they changed. `ai` names the AI that wrote it; a run without one is a human's, or an agent's that committed from a clone without saying so. To review what an agent did, or get the `id` undo_run takes; with `run`, that run's commits (`log`), for undo_run's `from`.",
+    "description": "Runs: what one writer did in one go, its consecutive commits (same person, AI and token, no pause over 30 minutes) with the docs they changed. Not saved work (resume_session). `ai` names the AI that wrote a run; one without is a human's, or an agent's that committed from a clone without saying so. To review what an agent did yesterday or this morning, or get the `id` undo_run takes; with `run`, that run's commits (`log`), for undo_run's `from`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1734,6 +1739,11 @@
     "annotations": {
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://atlas/montage"
+      }
     }
   },
   {

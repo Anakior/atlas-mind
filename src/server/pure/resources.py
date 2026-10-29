@@ -14,14 +14,16 @@ from server.render.apps import render_app
 
 PAGE_SIZE = 200
 SCHEME = "doc://"
-APPS = {"ui://atlas/resume": "resume", "ui://atlas/weather": "weather", "ui://atlas/shift": "shift"}
+APPS = {"ui://atlas/resume": "resume", "ui://atlas/weather": "weather", "ui://atlas/shift": "shift",
+        "ui://atlas/montage": "montage"}
 APP_MIME = "text/html;profile=mcp-app"
 APP_EXTENSION = "io.modelcontextprotocol/ui"
 # Sent with the server instructions: a host with many connectors may look tools up by keyword,
 # and "did I change my mind" finds search_docs before then_and_now.
 APP_RULE = ("Some answers are views the user works in: resume_session to pick up saved work, "
-            "mind_weather for how the mind is doing, and then_and_now then show_shift for what the "
-            "user thought before or whether they changed their mind on something. For those "
+            "mind_weather for how the mind is doing, then_and_now then show_shift for what the "
+            "user thought before or whether they changed their mind on something, and agent_runs for "
+            "what was written lately (by an AI or not), to review it or undo part of it. For those "
             "questions, call these tools by name and let the view answer, rather than rebuilding "
             "the answer from searches.")
 TEMPLATE = {"uriTemplate": SCHEME + "{+path}", "name": "document",

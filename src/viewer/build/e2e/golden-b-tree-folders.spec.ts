@@ -58,3 +58,28 @@ test('B — expanded folders preserved on SSE reload, homonyms stay independent'
   await expect(page.locator(caret('alpha'))).toHaveClass(/open/);
   await expect(page.locator(caret('beta'))).toHaveClass(/open/);
 });
+
+test('B — the folders holding the open doc fold, and stay folded through a reload', async ({ page }) => {
+  await page.route('**/api/tree', (route) => route.fulfill({ json: tree }));
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#tree');
+  await page.evaluate(() => window.softReload());
+
+  await page.locator('#tree button[data-dir-path="alpha/notes"]').click();
+  await page.locator('#tree a[data-path="alpha/notes/x.md"]').click();
+  await expect(page.locator('#tree a[data-path="alpha/notes/x.md"]')).toHaveClass(/active/);
+
+  // The folder holding the open doc folds (it used to reopen at once), and a reload keeps it so.
+  await page.locator('#tree button[data-dir-path="alpha/notes"]').click();
+  await expect(page.locator(caret('alpha/notes'))).not.toHaveClass(/open/);
+  await page.evaluate(() => window.softReload());
+  await expect(page.locator(caret('alpha/notes'))).not.toHaveClass(/open/);
+
+  // So does a top-level one: an SSE rebuild no longer forces it open again.
+  await page.locator('#tree button[data-dir-path="alpha"]').click();
+  await expect(page.locator(caret('alpha'))).not.toHaveClass(/open/);
+  await page.evaluate(() => window.softReload());
+  await expect(page.locator(caret('alpha'))).not.toHaveClass(/open/);
+  await expect(page.locator(caret('beta'))).toHaveClass(/open/);
+});

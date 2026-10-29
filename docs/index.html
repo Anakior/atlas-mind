@@ -302,7 +302,8 @@
   .apps{border-bottom:1px solid var(--line)}
   .apps .kicker{color:var(--teal)}
   .apps h2 .grad{background:linear-gradient(120deg,#fff,var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
-  .app-row{display:grid;grid-template-columns:1fr 1.2fr;gap:56px;align-items:center;margin-top:76px}
+  .app-row{display:grid;grid-template-columns:1fr 1.4fr;gap:56px;align-items:center;margin-top:76px}
+  .app-row.flip{grid-template-columns:1.4fr 1fr}
   .app-row.flip .app-text{order:2}
   .app-ask{display:inline-flex;align-items:baseline;gap:10px;padding:9px 16px;border:1px solid var(--glass-line);
     border-radius:16px 16px 16px 4px;background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);font-size:15px}
@@ -321,7 +322,7 @@
   .apps-note{margin:64px auto 0;color:var(--muted);font-size:15px;max-width:700px;text-align:center}
   .apps-note b{color:var(--ink)}
   @media(max-width:820px){
-    .app-row{grid-template-columns:1fr;gap:30px;margin-top:60px}
+    .app-row,.app-row.flip{grid-template-columns:1fr;gap:30px;margin-top:60px}
     .app-row.flip .app-text{order:0}
     .app-stack img{width:88%}
   }
@@ -361,7 +362,7 @@
     <a class="hide-sm" href="#superpowers">Superpowers</a>
     <a class="hide-sm" href="#apps">Apps</a>
     <a class="hide-sm" href="#activity">Activity</a>
-    <a class="hide-sm" href="#pillars">How it works</a>
+    <a class="hide-sm" href="#how">How it works</a>
     <a class="hide-sm" href="#hive">Hive Mind</a>
     <a class="hide-sm" href="#start">Install</a>
     <a class="nav-cta" href="https://github.com/Anakior/atlas-mind">GitHub ↗</a>
@@ -507,8 +508,8 @@
       <div class="tools"><code>resume_session</code></div>
     </div>
     <div class="app-stack">
-      <img class="back" src="assets/apps-resume-list.webp" width="1240" height="498" loading="lazy" alt="">
-      <img class="front" src="assets/apps-resume.webp" width="1240" height="1898" loading="lazy"
+      <img class="back" src="assets/apps-resume-list.webp" srcset="assets/apps-resume-list-1x.webp 1x, assets/apps-resume-list-1.5x.webp 1.5x, assets/apps-resume-list.webp 2x" width="910" height="365" loading="lazy" alt="">
+      <img class="front" src="assets/apps-resume.webp" srcset="assets/apps-resume-1x.webp 1x, assets/apps-resume-1.5x.webp 1.5x, assets/apps-resume.webp 2x" width="910" height="1393" loading="lazy"
            alt="The resume view: a saved session's open points as checkboxes, each with how long it has been carried, the diff of a linked document changed since, and the command to resume it.">
     </div>
   </div>
@@ -521,8 +522,8 @@
       <div class="tools"><code>mind_weather</code><code>stale</code><code>confirm_doc</code></div>
     </div>
     <div class="app-stack" style="--lift:22%">
-      <img class="back" src="assets/apps-weather.webp" width="1240" height="1498" loading="lazy" alt="">
-      <img class="front" src="assets/apps-weather-deck.webp" width="1240" height="1084" loading="lazy"
+      <img class="back" src="assets/apps-weather.webp" srcset="assets/apps-weather-1x.webp 1x, assets/apps-weather-1.5x.webp 1.5x, assets/apps-weather.webp 2x" width="910" height="1099" loading="lazy" alt="">
+      <img class="front" src="assets/apps-weather-deck.webp" srcset="assets/apps-weather-deck-1x.webp 1x, assets/apps-weather-deck-1.5x.webp 1.5x, assets/apps-weather-deck.webp 2x" width="910" height="795" loading="lazy"
            alt="The weather view's review deck: a document unread for seven months, its opening, and three verdicts: still true, needs an update, to the trash.">
     </div>
   </div>
@@ -535,8 +536,22 @@
       <div class="tools"><code>then_and_now</code><code>show_shift</code></div>
     </div>
     <div class="app-stack solo">
-      <img class="front" src="assets/apps-shift.webp" width="1240" height="1928" loading="lazy"
+      <img class="front" src="assets/apps-shift.webp" srcset="assets/apps-shift-1x.webp 1x, assets/apps-shift-1.5x.webp 1.5x, assets/apps-shift.webp 2x" width="1138" height="1797" loading="lazy"
            alt="The then-and-now view: a topic's claims as they were and as they are, side by side, badged reversed, new, dropped and held, with the docs still saying the old position.">
+    </div>
+  </div>
+
+  <div class="app-row flip">
+    <div class="app-text">
+      <div class="app-ask"><span>You</span>What did Claude do this morning?</div>
+      <h3>Keep the good part of a run, cut the rest</h3>
+      <p>Everything written lately, in runs: what one writer did in one go, an AI or a person, even an agent that never said it was one. Open a run and play it back <b>commit by commit</b>, each with its diff. <b>Discard from here</b> keeps what came before and undoes the rest; <b>Remove</b> undoes a single doc. Each cut is shown before it is made, then made in one commit in your name, and nothing is lost: the history keeps it all.</p>
+      <div class="tools"><code>agent_runs</code><code>undo_run</code></div>
+    </div>
+    <div class="app-stack">
+      <img class="back" src="assets/apps-montage-list.webp" srcset="assets/apps-montage-list-1x.webp 1x, assets/apps-montage-list-1.5x.webp 1.5x, assets/apps-montage-list.webp 2x" width="910" height="825" loading="lazy" alt="">
+      <img class="front" src="assets/apps-montage-cut.webp" srcset="assets/apps-montage-cut-1x.webp 1x, assets/apps-montage-cut-1.5x.webp 1.5x, assets/apps-montage-cut.webp 2x" width="910" height="1681" loading="lazy"
+           alt="The editing room view: a Claude run of five commits, the fourth picked with its diff rewriting the pricing, and the cut from there awaiting confirmation: two docs to undo, the three before kept.">
     </div>
   </div>
 
@@ -575,7 +590,7 @@
   <p class="cap">It's just a folder of files in your own private git repository. You are never holding someone else's format hostage.</p>
 </div></section>
 
-<section class="center"><div class="wrap">
+<section id="how" class="center"><div class="wrap">
   <div class="kicker">How it works</div>
   <h2>The engine and your mind,<br>kept deliberately apart.</h2>
   <p class="sub">Point the engine at a mind and it serves a fast single-page app. Upgrading the engine never touches your content; syncing content never touches the engine.</p>

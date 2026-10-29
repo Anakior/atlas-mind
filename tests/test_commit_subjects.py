@@ -130,6 +130,8 @@ class TestCommitSubjects(unittest.TestCase):
         # verb (not `created:`) so the activity feed reads "a reçu", and the slug carries no date.
         self._mcp("create_inbox_item", {"title": "Idée à trier", "content": "x", "ai": "claude"})
         self.assertEqual(self._subject(), "received: idee-a-trier")
+        trailer = self.srv.git("log", "-1", "--format=%(trailers:key=X-Atlas-Author,valueonly)")
+        self.assertEqual(trailer.stdout.strip(), "ai/claude")  # an agent's drop counts as the AI's
 
     def test_revert_subject(self):
         self._mcp("create_doc", {"path": "log/r1.md", "content": "# R1\n", "ai": "claude"})

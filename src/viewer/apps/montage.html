@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+__KIT_CSS__
+
+  /* The rushes: one line per run, grouped by day, a tick per commit. */
+  .scenes { display: grid; gap: 6px; }
+  .scene { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto auto; grid-template-areas: "time body count chev"; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: none; text-align: left; transition: border-color .12s, background .12s; }
+  .scene:hover { border-color: var(--accent); background: var(--tint); }
+  .scene .time { grid-area: time; display: grid; color: var(--text-2); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scene .time small { color: var(--text-3); font-size: 12px; }
+  .scene .body { grid-area: body; display: grid; gap: 3px; min-width: 0; }
+  .who { display: flex; align-items: center; min-width: 0; font-weight: 600; }
+  .who .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who .pill { padding: 0 7px; font-size: 11px; }
+  .scene .docs { overflow: hidden; color: var(--text-3); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+  .scene .count { grid-area: count; display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: 12px; white-space: nowrap; }
+  .scene > svg { grid-area: chev; color: var(--text-3); }
+  .lead { margin: 0 0 4px; color: var(--text-3); font-size: 12.5px; }
+  .strip { display: flex; gap: 2px; }
+  .strip i { width: 3px; height: 14px; border-radius: 1px; background: color-mix(in srgb, var(--text-3) 45%, transparent); }
+  .scene.ai .strip i { background: var(--accent); }
+  .more { display: block; margin: 12px auto 0; }
+
+  /* A run opened: its commits in order, the one picked shown below with its diffs. */
+  .track { position: relative; display: flex; margin: 14px 0 4px; }
+  .track::before { content: ""; position: absolute; top: 6px; left: 7px; right: 7px; height: 2px; border-radius: 1px; background: var(--border); }
+  .tick { position: relative; display: flex; flex: 1; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tick:first-child { align-items: flex-start; } .tick:last-child { align-items: flex-end; }
+  .tick i { width: 14px; height: 14px; border: 2px solid var(--bg); border-radius: 50%; background: var(--text-3); }
+  .tick:hover { color: var(--accent); } .tick:hover i { background: var(--accent); }
+  .tick.sel { color: var(--accent); font-weight: 700; } .tick.sel i { background: var(--accent); box-shadow: 0 0 0 4px var(--tint); }
+  .tick.undone i { background: var(--bg); border-color: var(--removed); }
+  .track.dense .tick:not(.sel) span { visibility: hidden; }
+  .caption { margin: 0 0 14px; color: var(--text-3); font-size: 12px; }
+  .frame { padding: 12px 14px; border-radius: var(--radius); background: var(--bg-2); }
+  .frame h3 { margin: 0; font-size: 14.5px; overflow-wrap: anywhere; }
+  .frame > small { display: block; margin: 2px 0 10px; color: var(--text-3); font-size: 12px; }
+  .frame details { border-top: 1px solid var(--border); }
+  .frame summary { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 13px; }
+  .frame summary b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .change { flex: none; color: var(--text-3); font-size: 11.5px; }
+  .diff { max-height: 320px; margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; background: var(--bg); font: 12px/1.45 var(--mono); overflow: auto; }
+  .diff div { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .diff .add { color: var(--added); } .diff .del { color: var(--removed); } .diff .hunk { color: var(--text-3); }
+  .frame .row { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; }
+  .frame .row .note { margin: 0; font-size: 12px; }
+  .frame.undone h3 { color: var(--text-3); text-decoration: line-through; }
+
+  .lines { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .line { display: flex; align-items: center; gap: 10px; margin-top: -1px; padding: 8px 12px; border-top: 1px solid var(--border); }
+  .line .what { display: grid; min-width: 0; flex: 1; }
+  .line b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line small { color: var(--text-3); font-size: 12px; overflow-wrap: anywhere; }
+  .line.undone b { color: var(--text-3); text-decoration: line-through; }
+  .done-tag { flex: none; color: var(--removed); font-size: 12px; font-weight: 600; }
+  .ghost.cut:hover { border-color: var(--removed); color: var(--removed); }
+
+  /* What a cut will undo, before it does. */
+  .confirm { margin: 16px 0 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--removed) 45%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--removed) 6%, transparent); }
+  .confirm h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 14.5px; }
+  .confirm h3 svg { color: var(--removed); }
+  .confirm ul { margin: 4px 0 8px; padding-left: 20px; }
+  .confirm li { overflow-wrap: anywhere; }
+  .confirm .row { display: flex; justify-content: flex-end; gap: 8px; margin: 10px 0 0; }
+  .confirm .primary { background: var(--removed); }
+  .confirm .ghost { padding: 9px 14px; border-radius: var(--radius); }
+  .notice { margin: 16px 0 0; padding: 9px 12px; border-radius: var(--radius); background: color-mix(in srgb, var(--added) 11%, transparent); color: var(--added); font-size: 13px; }
+  .actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 20px 0 0; }
+  /* On a phone, three steady lines: who, the docs, then when and how many commits. */
+  @media (max-width: 480px) {
+    .scene { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "body body chev" "time count chev"; gap: 4px 0; }
+    .scene .time { display: flex; gap: 4px; color: var(--text-3); font-size: 12px; }
+    .scene .time small { font-size: inherit; }
+    .scene .count { gap: 0; }
+    .scene .count::before { content: "·"; margin: 0 6px; }
+    .strip { display: none; }
+    .tick:not(.sel) span { visibility: hidden; }
+    .confirm .row > * { flex: 1 1 auto; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>__BRIDGE__</script>
+<script>__KIT__</script>
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var kit = atlasKit(__I18N__, app);
+  var t = kit.t, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
+  // list: the runs as the tool gave them; scene: the run opened, its commits oldest first, the
+  // one picked, what was undone from here, the cut awaiting confirmation and the last outcome.
+  var state = { list: null, scene: null };
+  var LIST = 8;  // runs shown before "show more": a busy week holds twenty
+
+  function call(name, args) {
+    return atlasApp.request('tools/call', { name: name, arguments: args });
+  }
+  function text(result) {
+    var body = result && result.content && result.content[0] && result.content[0].text;
+    if (!result || result.isError) throw new Error(body || '?');
+    return body || '';
+  }
+  function time(iso) {
+    return new Date(iso).toLocaleTimeString(kit.lang, { hour: '2-digit', minute: '2-digit' });
+  }
+  function dayOf(iso) {
+    return new Date(iso).toLocaleDateString(kit.lang, { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+  function span(run) {
+    var start = time(run.start), end = time(run.end);
+    return start === end ? start : start + ' → ' + end;
+  }
+  function who(run) {
+    return run.ai ? run.ai.charAt(0).toUpperCase() + run.ai.slice(1) : run.author;
+  }
+  // An AI's run wears its name as a badge; any other run bears a person's name, plainly.
+  function whoLine(run) {
+    var line = el('span', 'who');
+    if (run.ai) return add(line, add(el('span', 'pill accent'), icon('spark'), who(run)));
+    return add(line, el('span', 'name', who(run)));
+  }
+  function count(key, n) { return t(n === 1 ? key + '_one' : key, { n: n }); }
+  function busy(on) { app.classList.toggle('busy', on); }
+  function fail(e) { busy(false); kit.status(t('error', { message: e.message }), 'error'); }
+
+  // ── the rushes ──────────────────────────────────────────────────────────────
+  function showList(all) {
+    var d = state.list, runs = d.runs, byAi = runs.filter(function (r) { return r.ai; }).length;
+    state.scene = null;
+    app.className = '';
+    app.replaceChildren(add(el('header'), el('h1', null, t('title')),
+      add(el('div', 'pills'), add(el('span', 'pill'), icon('calendar'), t('window', { n: d.days })),
+        el('span', 'pill', count('runs', runs.length)),
+        byAi ? add(el('span', 'pill accent'), icon('spark'), t('by_ai', { n: byAi })) : null),
+      byAi < runs.length ? el('p', 'lead', t('unmarked_note')) : null));
+    if (!runs.length) return app.appendChild(el('p', 'note', t('empty')));
+    var section, day, shown = all ? runs : runs.slice(0, LIST);
+    shown.forEach(function (run) {
+      if (dayOf(run.start) !== day) {
+        day = dayOf(run.start);
+        section = add(el('section'), el('h2', null, day), el('div', 'scenes'));
+        app.appendChild(section);
+      }
+      var names = run.documents.map(function (doc) { return docName(doc.path); });
+      var strip = el('span', 'strip');
+      for (var i = 0; i < Math.min(run.commits, 16); i++) strip.appendChild(el('i'));
+      var end = time(run.end) !== time(run.start) ? el('small', null, '→ ' + time(run.end)) : null;
+      var row = add(el('button', 'scene' + (run.ai ? ' ai' : '')), add(el('span', 'time'), time(run.start), end),
+        add(el('span', 'body'), whoLine(run),
+          el('span', 'docs', names.slice(0, 3).join(', ') + (names.length > 3 ? ' ' + t('more', { n: names.length - 3 }) : ''))),
+        add(el('span', 'count'), strip, count('commits', run.commits)), icon('chev'));
+      row.onclick = function () { open(run.id); };
+      section.lastChild.appendChild(row);
+    });
+    if (shown.length < runs.length) {
+      var more = el('button', 'link more', t('show_more', { n: runs.length - shown.length }));
+      more.onclick = function () { showList(true); };
+      app.appendChild(more);
+    }
+  }
+
+  function open(id) {
+    busy(true);
+    call('agent_runs', { run: id }).then(kit.data).then(function (d) {
+      busy(false);
+      showScene(d.runs[0]);
+    }, fail);
+  }
+
+  // ── a run opened ────────────────────────────────────────────────────────────
+  function showScene(run) {
+    var frames = run.log.slice().reverse();
+    state.scene = { run: run, frames: frames, at: frames.length - 1, undone: {}, removed: {}, ask: null, notice: null,
+                    diffs: {}, opened: {} };
+    render();
+  }
+
+  function render() {
+    var s = state.scene, run = s.run;
+    var back = add(el('button', 'back'), icon('back'), t('back'));
+    back.onclick = function () {
+      if (state.list) return showList();
+      busy(true);
+      call('agent_runs', {}).then(kit.data).then(function (d) { busy(false); state.list = d; showList(); }, fail);
+    };
+    var pills = add(el('div', 'pills'), add(el('span', 'pill'), icon('calendar'), dayOf(run.start)),
+      el('span', 'pill', count('commits', s.frames.length)), el('span', 'pill', count('docs', run.documents.length)));
+    app.className = '';
+    app.replaceChildren();
+    add(app, back, add(el('header'), el('h1', null, t('scene_title', { who: who(run), span: span(run) })), pills),
+      track(), frame(), s.ask ? confirmBox() : null, s.notice ? el('p', 'notice', s.notice) : null, docs(), actions());
+  }
+
+  function track() {
+    var s = state.scene, line = el('div', 'track' + (s.frames.length > 8 ? ' dense' : ''));
+    s.frames.forEach(function (f, i) {
+      var tick = add(el('button', 'tick' + (i === s.at ? ' sel' : '') + (s.undone[f.sha] ? ' undone' : '')), el('i'), el('span', null, time(f.date)));
+      tick.title = f.subject;
+      tick.onclick = function () { s.at = i; s.ask = null; render(); };
+      line.appendChild(tick);
+    });
+    return add(el('section'), add(el('h2'), icon('clock'), t('frames')), line, el('p', 'caption', t('frames_hint')));
+  }
+
+  function change(path) {
+    var doc = state.scene.run.documents.filter(function (d) { return d.path === path || d.from === path; })[0];
+    return doc ? t('change_' + doc.change) : '';
+  }
+
+  function frame() {
+    var s = state.scene, f = s.frames[s.at], gone = s.undone[f.sha];
+    var box = add(el('div', 'frame' + (gone ? ' undone' : '')), el('h3', null, f.subject),
+      el('small', null, time(f.date) + ' · ' + f.sha.slice(0, 8)));
+    f.documents.forEach(function (path) {
+      var details = add(el('details'), add(el('summary'), icon('chev'), el('b', null, docName(path)), el('span', 'change', change(path))));
+      var pre = el('div', 'diff'), key = f.sha + ' ' + path;
+      details.appendChild(pre);
+      // A diff opened stays open when the view redraws (a cut asked, then confirmed).
+      details.open = !!s.opened[key];  // fires toggle, which fills it from the cache
+      details.ontoggle = function () {
+        s.opened[key] = details.open;
+        if (details.open) diff(f.sha, path, pre);
+      };
+      box.appendChild(details);
+    });
+    if (!gone) {
+      var cut = add(el('button', 'ghost cut'), icon('scissors'), t('cut'));
+      cut.onclick = function () {
+        var after = s.frames.slice(s.at), touched = {};
+        after.forEach(function (g) { g.documents.forEach(function (p) { touched[p] = 1; }); });
+        // Named as the docs list names them: a moved doc once, by where it is now.
+        var paths = s.run.documents.filter(function (d) { return touched[d.path] || touched[d.from]; })
+          .map(function (d) { return d.path; });
+        ask({ run: s.run.id, from: f.sha }, t('ask_cut', { time: time(f.date) }), paths,
+            { frames: after.map(function (g) { return g.sha; }) });
+      };
+      box.appendChild(add(el('div', 'row'), cut, el('span', 'note', t('cut_hint'))));
+    }
+    return add(el('section'), box);
+  }
+
+  // The commit's change to one doc, read once, without git's headers.
+  function diff(sha, path, pre) {
+    var key = sha + ' ' + path, s = state.scene;
+    if (s.diffs[key]) return pre.replaceChildren.apply(pre, s.diffs[key]());
+    pre.replaceChildren(el('div', 'hunk', t('reading')));
+    call('doc_diff', { path: path, rev: sha }).then(text).then(function (body) {
+      var lines = body.split('\n\n').slice(1).join('\n\n').split('\n').filter(function (line) {
+        return !/^(diff --git|index |--- |\+\+\+ |new file|deleted file|similarity|rename |\\ |<\/?untrusted)/.test(line);
+      });
+      while (lines.length && !lines[lines.length - 1]) lines.pop();
+      s.diffs[key] = function () {
+        var out = lines.slice(0, 80).map(function (line) {
+          var c = line[0];
+          return el('div', c === '+' ? 'add' : c === '-' ? 'del' : c === '@' ? 'hunk' : null, line);
+        });
+        if (lines.length > 80) out.push(el('div', 'hunk', t('more_lines', { n: lines.length - 80 })));
+        return out.length ? out : [el('div', 'hunk', t('no_diff'))];
+      };
+      pre.replaceChildren.apply(pre, s.diffs[key]());
+    }, function () { pre.replaceChildren(el('div', 'hunk', t('no_diff'))); });
+  }
+
+  function docs() {
+    var s = state.scene, lines = el('div', 'lines');
+    s.run.documents.forEach(function (doc) {
+      var gone = isUndone(doc.path);
+      var what = add(el('span', 'what'), el('b', null, docName(doc.path)),
+        el('small', null, doc.path + ' · ' + t('change_' + doc.change) + (doc.from ? ' · ' + t('moved_from', { path: doc.from }) : '')));
+      var line = add(el('div', 'line' + (gone ? ' undone' : '')), what);
+      if (gone) line.appendChild(el('span', 'done-tag', t('undone')));
+      else {
+        var remove = add(el('button', 'ghost cut'), icon('undo'), t('remove'));
+        remove.title = t('remove_hint');
+        remove.onclick = function () {
+          ask({ run: s.run.id, paths: [doc.path] }, t('ask_doc', { doc: docName(doc.path) }), [doc.path], { paths: [doc.path] });
+        };
+        line.appendChild(remove);
+      }
+      lines.appendChild(line);
+    });
+    return add(el('section'), add(el('h2'), t('docs_title'), el('span', 'count', s.run.documents.length)), lines);
+  }
+
+  // A doc is undone once removed, or once every commit of the run touching it is.
+  function isUndone(path) {
+    var s = state.scene;
+    if (s.removed[path]) return true;
+    var touching = s.frames.filter(function (f) { return f.documents.indexOf(path) >= 0; });
+    return touching.length > 0 && touching.every(function (f) { return s.undone[f.sha]; });
+  }
+
+  function actions() {
+    var s = state.scene, all = s.frames.every(function (f) { return s.undone[f.sha]; });
+    var discard = all ? null : add(el('button', 'ghost cut'), icon('trash'), t('all'));
+    if (discard) discard.onclick = function () {
+      ask({ run: s.run.id }, t('ask_all'), s.run.documents.map(function (d) { return d.path; }),
+          { frames: s.frames.map(function (f) { return f.sha; }) });
+    };
+    var box = add(el('button', 'primary'), icon('archive'), t('box'));
+    box.onclick = function () { save(box); };
+    return add(el('div', 'actions'), discard, box);
+  }
+
+  // ── cutting: a dry run first, then the undo itself, in the user's name ────────
+  function ask(args, title, paths, marks) {
+    var s = state.scene;
+    busy(true);
+    call('undo_run', Object.assign({ dry_run: true }, args)).then(text).then(function () {
+      busy(false);
+      s.ask = { args: args, title: title, paths: paths, marks: marks };
+      s.notice = null;
+      render();
+      var box = app.querySelector('.confirm');
+      if (box && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
+    }, function (e) { busy(false); s.ask = null; s.notice = null; render(); app.appendChild(el('p', 'error', e.message)); });
+  }
+
+  function confirmBox() {
+    var s = state.scene, a = s.ask;
+    var keep = el('button', 'ghost', t('keep'));
+    keep.onclick = function () { s.ask = null; render(); };
+    var go = add(el('button', 'primary'), icon('undo'), t('confirm'));
+    go.onclick = function () { undo(a); };
+    var list = el('ul');
+    a.paths.forEach(function (p) { list.appendChild(add(el('li'), el('b', null, docName(p)), ' · ' + p)); });
+    return add(el('div', 'confirm'), add(el('h3'), icon('scissors'), a.title), el('p', 'note', t('confirm_body')), list,
+      el('p', 'note', t('confirm_keep')), add(el('div', 'row'), keep, go));
+  }
+
+  function undo(a) {
+    var s = state.scene;
+    busy(true);
+    call('undo_run', a.args).then(text).then(function (body) {
+      busy(false);
+      (a.marks.frames || []).forEach(function (sha) { s.undone[sha] = true; });
+      (a.marks.paths || []).forEach(function (p) { s.removed[p] = true; });
+      var sha = (body.match(/\(([0-9a-f]{7,})\)/) || [])[1] || '';
+      s.ask = null;
+      s.notice = t('done', { sha: sha });
+      atlasApp.request('ui/update-model-context', { content: [{ type: 'text', text: t('context_undone', {
+        run: s.run.id, what: a.title, docs: a.paths.join(', '), sha: sha }) }] }).catch(function () {});
+      render();
+    }, function (e) { busy(false); s.ask = null; render(); app.appendChild(el('p', 'error', e.message)); });
+  }
+
+  // "Mise en boîte": Claude writes the save of what the run leaves, once the cuts are made.
+  function save(button) {
+    var s = state.scene, run = s.run;
+    var kept = run.documents.filter(function (d) { return !isUndone(d.path); }).map(function (d) { return '- ' + d.path; });
+    var undone = run.documents.filter(function (d) { return isUndone(d.path); }).map(function (d) { return '- ' + d.path; });
+    var body = t('box_message', { who: who(run), day: dayOf(run.start), span: span(run) })
+      + (kept.length ? '\n' + t('box_kept') + '\n' + kept.join('\n') : '')
+      + (undone.length ? '\n' + t('box_undone') + '\n' + undone.join('\n') : '');
+    button.disabled = true;
+    atlasApp.request('ui/message', { role: 'user', content: [{ type: 'text', text: body }] }).then(function (result) {
+      if (result && result.isError) throw new Error('?');
+      button.replaceChildren(icon('check'), t('sent'));
+    }).catch(function () { button.disabled = false; });
+  }
+
+  function show(result) {
+    var d;
+    try { d = kit.data(result); } catch (e) { return kit.status(t('error', { message: e.message }), 'error'); }
+    if (d.runs.length === 1 && d.runs[0].log) return showScene(d.runs[0]);
+    state.list = d;
+    showList();
+  }
+
+  atlasApp.on('ui/notifications/tool-input', function () { kit.loading(''); });
+  atlasApp.on('ui/notifications/tool-result', show);
+  atlasApp.on('ui/notifications/tool-cancelled', function () { kit.status(t('cancelled')); });
+  kit.loading('');
+  atlasApp.start('atlas-montage').catch(function (e) { kit.status(t('error', { message: e.message }), 'error'); });
+})();
+</script>
+</body>
+</html>

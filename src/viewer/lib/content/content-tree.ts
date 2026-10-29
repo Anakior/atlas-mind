@@ -125,9 +125,13 @@ export function wlMaps(): { byPath: Record<string, string>; byStem: Record<strin
 
 // ─── The tree ─────────────────────────────────────────────────────────────────────────────────
 export class ContentTree {
-  // Open folders, keyed on the FULL dir path (homonym independence). Top-level dirs are seeded
-  // open on every reload (force-open after an SSE rebuild); a plain rerender keeps a user's closes.
+  // Open folders, keyed on the FULL dir path (homonym independence). A top-level dir opens the
+  // first time it appears; after that, reloads (SSE rebuilds included) keep the user's folds.
   private openDirs = new Set<string>();
+  private seenTopDirs = new Set<string>();
+  // The doc whose folders were last opened for it. They open once, when it is shown, and stay
+  // the user's to fold: opening them on every render kept a folder holding the active doc stuck open.
+  private revealed: string | null = null;
 
   private static readonly ICONS: Record<string, string> = {
     '.md': '<svg class="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
@@ -149,16 +153,26 @@ export class ContentTree {
     return ContentTree.ICONS[ext] || (IMAGE_EXTS.includes(ext) ? ContentTree.IMAGE_ICON : ContentTree.FILE_ICON);
   }
 
-  // Reload (boot / SSE rebuild): force the top-level dirs open, then render — a user's nested
-  // toggles in openDirs are preserved.
+  // Reload (boot / SSE rebuild): open the top-level dirs new to this page, then render.
   reload(): void {
     const children = TREE.type === 'dir' ? TREE.children : [];
 
-    for (const c of children) if (c.type === 'dir') this.openDirs.add(c.name);
+    for (const c of children) {
+      if (c.type === 'dir' && !this.seenTopDirs.has(c.name)) {
+        this.seenTopDirs.add(c.name);
+        this.openDirs.add(c.name);
+      }
+    }
     this.rerender();
   }
 
   rerender(): void {
+    if (currentFile && currentFile.path !== this.revealed) {
+      this.revealed = currentFile.path;
+      const parts = currentFile.path.split('/');
+
+      for (let i = 1; i < parts.length; i++) this.openDirs.add(parts.slice(0, i).join('/'));
+    }
     // serverBoot fills treeEl with skeleton rows via innerHTML — foreign nodes the keyed runtime does
     // not own, so they'd linger below the real tree. Drop them once before the first real render; once
     // gone, later reloads reconcile in place (scroll + open folders survive).
@@ -186,8 +200,7 @@ export class ContentTree {
     const childPath = prefix ? prefix + '/' + child.name : child.name;
     const isRemoteRoot = childPath === 'remotes';
     const isRemote = isRemoteRoot || childPath.startsWith('remotes/');
-    // Open if toggled open, or if it holds the active doc (so a reload never hides what's open).
-    const open = this.openDirs.has(childPath) || !!(currentFile && currentFile.path.startsWith(childPath + '/'));
+    const open = this.openDirs.has(childPath);
     const dirLabel = isRemoteRoot ? t('remotesLabel') : child.name;
 
     const btnChildren: Child[] = [
