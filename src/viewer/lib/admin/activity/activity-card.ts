@@ -20,6 +20,7 @@ import { ActivityModel } from './activity-model';
 import { ActivityJournal } from './activity-journal';
 import { ActivityOrrery } from './activity-orrery';
 import { ActivityHealth } from './activity-health';
+import { ActivityUndo } from './activity-undo';
 
 export class ActivityCard {
   // ---- state ----
@@ -32,6 +33,8 @@ export class ActivityCard {
   private readonly journalView: ActivityJournal;
   private readonly orreryView: ActivityOrrery;
   private readonly healthView: ActivityHealth;
+  // After an undo the tree and the feed both moved: the soft reload patches the tree, then the feed.
+  private readonly undo = new ActivityUndo(() => (window.softReload ? window.softReload() : this.refreshData()));
 
   constructor() {
     // `self` (not `this`): the context's getters are plain object-literal getters whose own `this` is
@@ -334,6 +337,15 @@ export class ActivityCard {
 
         return;
       }
+
+      const undoBtn = (ev.target as HTMLElement).closest<HTMLElement>('.act-undo');
+
+      if (undoBtn) {
+        this.undo.toggle(undoBtn.closest<HTMLElement>('.act-row')!, undoBtn.dataset.sha!);
+
+        return;
+      }
+      if ((ev.target as HTMLElement).closest('.act-undo-panel')) return;
 
       const rowEl = (ev.target as HTMLElement).closest<HTMLElement>('[data-path]');
 

@@ -236,6 +236,41 @@ def activity(handler):
     handler._send_json(200, {"events": events})
 
 
+def run(handler):
+    """GET /api/run?sha= — the run (one writer's burst of commits) a feed event belongs to,
+    for the Activity undo button: its docs, and whether the viewer may undo it."""
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser and not ctx.primary:
+        handler._send_json(403, {"error": "forbidden"})
+        return
+    sha = (handler._query().get("sha", [""])[0] or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{7,40}", sha):
+        handler._send_json(400, {"error": "invalid sha"})
+        return
+    found = _s.run_of(sha, ctx)
+    if found is None:
+        handler._send_json(404, {"error": "no recent run holds this change"})
+        return
+    handler._send_json(200, found)
+
+
+def run_undo(handler):
+    """POST /api/run/undo — undo a run, whole or for some of its docs (`paths`), in one
+    commit in the viewer's name, as the undo_run tool does."""
+    data = handler._read_json()
+    try:
+        message = _s.undo_run({"run": data.get("run"), "paths": data.get("paths")},
+                              handler._viewer_ctx())
+    except LookupError as e:  # the run moved on (its writer kept going) or the docs left it
+        handler._send_json(404, {"error": str(e)})
+    except PermissionError as e:
+        handler._send_json(403, {"error": str(e)})
+    except ValueError as e:  # a later change touches the same lines: nothing was changed
+        handler._send_json(409, {"error": str(e)})
+    else:
+        handler._send_json(200, {"ok": True, "message": message})
+
+
 def stale(handler):
     """GET /api/stale?months=&limit= — docs untouched for N months (13c obsolescence).
     Deterministic, AUTH only (never anonymous), ACL-scrubbed per viewer."""

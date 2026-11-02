@@ -8,6 +8,43 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-02
+
+### Added
+- **Undo a run from the Activity journal.** Each entry has an undo button, which opens, under the
+  entry, the run that change belongs to: what one writer (an AI or a person) did in one go. It says
+  what undoing does to each doc. A doc the run created is removed, an edited one goes back to
+  before the run, a deleted one comes back and a moved one returns to its place. Untick what you
+  keep, and the rest is undone in one commit in your name. A doc you could not change by hand is
+  shown locked. Until now a run could only be undone through MCP (`undo_run`). New routes:
+  `GET /api/run?sha=` and `POST /api/run/undo`.
+- **`atlas hook`: commits made from Claude Code are marked as Claude's.** Claude Code may edit a
+  clone of a mind and commit itself. Nothing then told Atlas an AI wrote it, so the commit counted
+  as the person's in the activity, the weather and `agent_runs`. The hook adds the
+  `X-Atlas-Author: ai/claude` and `X-Atlas-Token: claude-code-<host>` trailers to a commit made
+  with `CLAUDECODE=1`. It leaves alone a message that names its author already, and merges.
+  `atlas init` installs it; in an existing clone, run `atlas hook` once. A hook that is not
+  Atlas's is never overwritten. The server drops `CLAUDECODE` from its own git commands, so a
+  server started from Claude Code does not mark a person's clicks as Claude's.
+
+### Fixed
+- The weather view's test failed now and then under the parallel suite. After a verdict, the
+  stand-in host waited for a review card, but the card it found was the one still on screen while
+  `confirm_doc` ran, so a slow commit was cut short. It now waits for the next card.
+
+### Evals
+- Seven harder questions, 37 in all:
+  - a false premise;
+  - one person's work, reaching past the last week;
+  - a page compared with what it said three weeks ago;
+  - a French question with a budget of calls (the new `max_calls` check);
+  - an injection dropped in the inbox;
+  - a doc confirmed as still true;
+  - a deletion that must leave no link behind.
+
+  Sonnet passes 37/37 and Haiku 36/37. Haiku's miss is `changed-mind`, a French question with no
+  date, where it still stops before `show_shift`.
+
 ## [1.11.1] - 2026-10-29
 
 ### Fixed

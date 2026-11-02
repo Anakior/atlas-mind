@@ -32,7 +32,9 @@ class GitSync:
 
     def run(self, *args, cwd=None, check=False, timeout=60):
         """Run a git command in the mind repo. GIT_TERMINAL_PROMPT=0 so a bad/unset
-        token fails fast instead of hanging on a credential prompt."""
+        token fails fast instead of hanging on a credential prompt. CLAUDECODE is
+        dropped: on a server started from Claude Code, the commit hook would mark a
+        person's edit as Claude's."""
         return subprocess.run(
             ["git", *args],
             cwd=str(cwd or self._config.root),
@@ -47,7 +49,8 @@ class GitSync:
             errors="replace",
             timeout=timeout,
             check=check,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            env={**{k: v for k, v in os.environ.items() if k != "CLAUDECODE"},
+                 "GIT_TERMINAL_PROMPT": "0"},
         )
 
     def _build_command(self) -> list:

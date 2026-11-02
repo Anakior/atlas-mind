@@ -583,6 +583,39 @@ def _git_init_main(mind: Path) -> str:
     return "git repo initialized (branch main)."
 
 
+# Claude Code runs its shell with CLAUDECODE=1, so a commit made there is Claude's even
+# when its message lacks the trailers Atlas reads. A message that names its author
+# already, and a merge (it brings in others' work), are left alone.
+_HOOK_MARK = "# atlas: prepare-commit-msg"
+_COMMIT_HOOK = f"""#!/bin/sh
+{_HOOK_MARK}, marks a commit made from Claude Code as written by Claude.
+[ "$CLAUDECODE" = 1 ] || exit 0
+[ "$2" = merge ] && exit 0
+grep -qi '^X-Atlas-Author:' "$1" && exit 0
+host=$(hostname | tr -d '\\r' | tr '[:upper:]' '[:lower:]')
+exec git interpret-trailers --in-place --trailer "X-Atlas-Author: ai/claude" \\
+  --trailer "X-Atlas-Token: claude-code-$host" "$1"
+"""
+
+
+def _install_commit_hook(mind: Path) -> tuple:
+    """Write the prepare-commit-msg hook into the mind's repo (wherever core.hooksPath
+    puts it); a hook that is not Atlas's is left as is. Returns (installed, message)."""
+    if shutil.which("git") is None:
+        return False, "git not found: commit hook not installed."
+    r = subprocess.run(["git", "rev-parse", "--git-path", "hooks"],
+                       cwd=str(mind), capture_output=True, text=True)
+    if r.returncode != 0:
+        return False, f"{mind} is not a git repository: commit hook not installed."
+    hook = mind / r.stdout.strip() / "prepare-commit-msg"
+    if hook.exists() and _HOOK_MARK not in hook.read_text(encoding="utf-8", errors="replace"):
+        return False, f"{hook} already exists and is not Atlas's: left as is."
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text(_COMMIT_HOOK, encoding="utf-8", newline="\n")
+    hook.chmod(0o755)
+    return True, "commit hook installed: commits made from Claude Code are marked as Claude's."
+
+
 def _invocation() -> str:
     """How the CLI was invoked, for copy-pasteable next-steps: "atlas" when run
     as the installed console script, else "python3 <path>" for a source run."""
@@ -653,6 +686,7 @@ def cmd_init(args) -> int:
         _scaffold_file(mind / rel, content, created, kept)
 
     git_message = _git_init_main(mind)
+    hook_message = _install_commit_hook(mind)[1]
 
     print(f"Mind initialized: {mind}")
     for path in created:
@@ -660,6 +694,7 @@ def cmd_init(args) -> int:
     for path in kept:
         print(f"  kept    : {path.relative_to(mind)} (existing, untouched)")
     print(f"  git     : {git_message}")
+    print(f"  hook    : {hook_message}")
     print()
     # Absolute paths so every command is copy-pasteable from ANY working directory.
     print("Next steps:")
@@ -1828,6 +1863,17 @@ def cmd_share_revoke(args) -> int:
     return 0
 
 
+# ─── hook ──────────────────────────────────────────────────────────────────────
+
+
+def cmd_hook(args) -> int:
+    installed, message = _install_commit_hook(_require_mind(args.dir))
+    if not installed:
+        raise CliError(message)
+    print(message)
+    return 0
+
+
 # ─── doctor ────────────────────────────────────────────────────────────────────
 
 
@@ -2092,6 +2138,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_inbox_claim.add_argument("--email", required=True, metavar="EMAIL",
                                help="The person who owns the inbox and triages it.")
     p_inbox_claim.set_defaults(func=cmd_inbox_claim)
+
+    p_hook = subparsers.add_parser(
+        "hook", help="Install the git hook that marks commits made from Claude Code "
+                     "as Claude's (run once per clone; `init` does it).")
+    p_hook.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
+    p_hook.set_defaults(func=cmd_hook)
 
     p_doctor = subparsers.add_parser(
         "doctor",

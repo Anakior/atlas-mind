@@ -59,6 +59,7 @@ GET_ROUTES = [
     router.Route(_RK.EXACT_NOQUERY, "/api/revision", docs.revision, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/diff", docs.diff, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/activity", docs.activity, _G.AUTH),
+    router.Route(_RK.EXACT_NOQUERY, "/api/run", docs.run, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/stale", docs.stale, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/inbox", docs.inbox_list, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/contradictions", docs.contradictions, _G.AUTH),
@@ -105,6 +106,7 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/todos", todos.create, _G.CSRF_BASE),       # per-member: own list
     router.Route(_RK.EXACT, "/api/notes", notes.create, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/revert", docs.revert, _G.CSRF_BASE),       # per-doc: needs edit
+    router.Route(_RK.EXACT, "/api/run/undo", docs.run_undo, _G.CSRF_BASE),   # the run's person, or edit/owner per doc
     router.Route(_RK.EXACT, "/api/contradiction", docs.contradiction_verdict, _G.CSRF_BASE),  # 13c verdict: needs read both
     router.Route(_RK.EXACT, "/api/file/move", docs.move, _G.CSRF_BASE),      # per-doc: needs owner
     router.Route(_RK.EXACT, "/api/inbox/action", docs.inbox_action, _G.CSRF_BASE),  # inbox triage: owner-gated

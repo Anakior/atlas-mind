@@ -15,6 +15,11 @@ it** — Atlas records the AI family in a git trailer when your assistant writes
 through MCP. So you can always tell a human note from an AI-written one: "who
 decided this, and was it me or Claude?" stops being a guess.
 
+An assistant can also commit without MCP: Claude Code editing a clone of your
+mind, then pushing. `atlas init` installs a git hook for that case, which gives
+any commit made from Claude Code the same trailer. In a clone made before, run
+`atlas hook` once.
+
 ## The activity card
 
 The home page opens on an **Activity** card with three views:
@@ -22,6 +27,10 @@ The home page opens on an **Activity** card with three views:
 - **Journal** — a chronological feed of who changed what, grouped by day, with a
   badge on AI-authored edits. Click any entry to peek that document's history
   without leaving the page; a "this week" digest sums up the recent pulse.
+  Each entry also has an **undo** button: it opens the run that change belongs
+  to (what one writer, an AI or a person, did in one go), says what undoing it
+  does to each doc, and undoes the docs you leave ticked in one commit in your
+  name.
 - **Constellation** — the contributors as a small constellation, a glanceable
   picture of who's been active.
 - **Health** — two maintenance lenses:

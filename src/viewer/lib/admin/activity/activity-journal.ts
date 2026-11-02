@@ -5,7 +5,12 @@
 
 import { t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
+import { IS_OFFLINE_BUILD } from '../../core/data-csrf';
 import { ActivityIcons } from './activity-icons';
+import { ActivityUndo } from './activity-undo';
+
+// Runs are kept this long server-side: an older change has none left to undo.
+const RUN_WINDOW_MIN = 30 * 24 * 60;
 
 export class ActivityJournal {
   constructor(private readonly ctx: ActivityRenderCtx) {}
@@ -13,6 +18,9 @@ export class ActivityJournal {
   private row(e: ActivityItem): string {
     const ty = this.ctx.TY(e.type);
     const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${escapeHtml(e.ai)}</span>` : '';
+    const undo = !IS_OFFLINE_BUILD && e.sha && e.agoMin < RUN_WINDOW_MIN
+      ? `<button type="button" class="act-undo" data-sha="${escapeHtml(e.sha)}" title="${escapeHtml(t('actUndo'))}" aria-label="${escapeHtml(t('actUndo'))}">${ActivityUndo.ICON}</button>`
+      : '';
 
     return (
       `<div class="act-row flex items-center gap-3" data-path="${escapeHtml(e.path)}" data-tip="${escapeHtml(t('actSeeChanges'))}">
@@ -26,6 +34,7 @@ export class ActivityJournal {
             ${e.count && e.count > 1 ? `<span class="text-ink-500 text-xs shrink-0">×${e.count}</span>` : ''}
           </div>
         </div>
+        ${undo}
         <div class="shrink-0 text-xs text-ink-500 font-mono" title="${escapeHtml(e.sha)}">${this.ctx.rel(e.agoMin)}</div>
       </div>`
     );

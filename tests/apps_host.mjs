@@ -110,7 +110,8 @@ const scenarios = {
     report.card = await view.locator('.card h3').textContent();
     await shot('-deck');
     await view.locator('.verdicts .holds').click();
-    await view.locator('.card h3, .done').first().waitFor();
+    // The verdict's card stays up, busy, until confirm_doc answers: wait for the next one.
+    await view.locator('.card:not(.busy) h3, .done').first().waitFor();
     await page.waitForTimeout(200);
   },
   async show_shift(report) {

@@ -15,10 +15,13 @@ if _TESTS_DIR not in sys.path:
     sys.path.insert(0, _TESTS_DIR)
 
 from harness import AtlasServer  # noqa: E402
-from test_cloud_filestore import cloud_env, file_store_of, ADMIN_EMAIL, VIEWER_EMAIL  # noqa: E402
+from test_cloud_filestore import (  # noqa: E402
+    cloud_env, file_store_of, session_cookie, auth_headers, ADMIN_EMAIL, VIEWER_EMAIL,
+)
 from test_mcp_tools import _call  # noqa: E402
 import store  # noqa: E402  (importable once test_cloud_filestore put src/ on sys.path)
 
+PASSWORD = "secret-password-123"
 ALPHA = "# Projet Alpha\n\n## Pricing\n\nLe tarif mensuel est de 49 euros.\n\n## Suite\n\nRien.\n"
 MIND = {
     "accueil.md": "# Accueil\n\nVoir [[projets/alpha]].\n",
@@ -53,6 +56,16 @@ class _Server(unittest.TestCase):
 
     def text(self, rel):
         return self.srv.path(rel).read_text(encoding="utf-8")
+
+    def _agent_session(self):
+        self.call("edit_doc", path="projets/alpha.md", old_string="49", new_string="45", ai="claude")
+        self.call("create_doc", path="notes/new.md", content="# New", ai="claude")
+        self.call("move_doc", **{"from": "projets/beta.md", "to": "projets/gamma.md"}, ai="claude")
+        self.call("delete_doc", path="notes/old.md", ai="claude")
+        _, data = self.call("agent_runs")
+        runs = [r for r in data["runs"] if r["ai"]]
+        self.assertEqual(len(runs), 1)
+        return runs[0]
 
 
 class TestBriefAndChanges(_Server):
@@ -96,16 +109,6 @@ class TestBriefAndChanges(_Server):
 
 
 class TestAgentRuns(_Server):
-    def _agent_session(self):
-        self.call("edit_doc", path="projets/alpha.md", old_string="49", new_string="45", ai="claude")
-        self.call("create_doc", path="notes/new.md", content="# New", ai="claude")
-        self.call("move_doc", **{"from": "projets/beta.md", "to": "projets/gamma.md"}, ai="claude")
-        self.call("delete_doc", path="notes/old.md", ai="claude")
-        _, data = self.call("agent_runs")
-        runs = [r for r in data["runs"] if r["ai"]]
-        self.assertEqual(len(runs), 1)
-        return runs[0]
-
     def test_run_groups_the_session_and_undoes_it_whole(self):
         file_store_of(self.srv).set_owner("projets/beta.md", "user:" + ADMIN_EMAIL)
         run = self._agent_session()
@@ -225,6 +228,57 @@ class TestAgentRuns(_Server):
         err, text = self.call("undo_run", token=other, run=run["id"], paths=["projets/alpha.md"],
                               ai="claude")
         self.assertFalse(err, text)
+        self.assertEqual(self.text("projets/alpha.md"), ALPHA)
+
+
+class TestUndoFromActivity(_Server):
+    """The viewer's Activity: a change in the feed opens its run, undone there in part."""
+
+    def session(self, email, role):
+        file_store_of(self.srv).upsert_user(email, {"password_hash": store.hash_password(PASSWORD),
+                                                    "role": role})
+        return auth_headers(self.srv, session_cookie(self.srv, email, PASSWORD))
+
+    def run_of(self, path, headers):
+        events = self.srv.get("/api/activity?since=7", headers=headers).json()["events"]
+        sha = next(e["short_sha"] for e in events if path in e["paths"])
+        return self.srv.get("/api/run?sha=" + sha, headers=headers)
+
+    def test_a_change_opens_its_run_undone_for_some_docs(self):
+        run = self._agent_session()
+        headers = self.session(ADMIN_EMAIL, "admin")
+        shown = self.run_of("notes/new.md", headers).json()
+        self.assertEqual((shown["id"], shown["ai"], shown["commits"]), (run["id"], "claude", 4))
+        self.assertEqual({d["path"]: (d["change"], d["may_undo"]) for d in shown["documents"]},
+                         {"projets/alpha.md": ("modified", True), "notes/new.md": ("added", True),
+                          "projets/gamma.md": ("moved", True), "notes/old.md": ("deleted", True)})
+        resp = self.srv.post("/api/run/undo", headers=headers,
+                             json_body={"run": run["id"], "paths": ["notes/new.md"]})
+        self.assertEqual(resp.status, 200, resp.text)
+        self.assertFalse(self.srv.path("notes/new.md").exists())
+        self.assertIn("45 euros", self.text("projets/alpha.md"))
+        # The undo is the person's own click: their name, no AI.
+        self.assertEqual(self.srv.git("log", "-1", "--format=%ae|%(trailers:key=X-Atlas-Author,valueonly)")
+                         .stdout.strip(), ADMIN_EMAIL + "|")
+        gone = self.srv.post("/api/run/undo", headers=headers, json_body={"run": "0" * 25})
+        self.assertEqual(gone.status, 404)
+        self.assertEqual(self.srv.get("/api/run?sha=nothex", headers=headers).status, 400)
+
+    def test_someone_else_undoes_only_what_they_could_change_by_hand(self):
+        fs = file_store_of(self.srv)
+        fs.set_owner("projets/beta.md", "user:" + ADMIN_EMAIL)
+        fs.grant("projets/alpha.md", "user:" + VIEWER_EMAIL, "edit")
+        run = self._agent_session()
+        headers = self.session(VIEWER_EMAIL, "viewer")
+        may = {d["path"]: d["may_undo"] for d in self.run_of("notes/new.md", headers).json()["documents"]}
+        self.assertTrue(may["projets/alpha.md"])
+        self.assertNotIn("projets/gamma.md", may)  # its owner's alone
+        resp = self.srv.post("/api/run/undo", headers=headers, json_body={"run": run["id"]})
+        self.assertEqual(resp.status, 403)
+        self.assertTrue(self.srv.path("projets/gamma.md").exists())
+        resp = self.srv.post("/api/run/undo", headers=headers,
+                             json_body={"run": run["id"], "paths": ["projets/alpha.md"]})
+        self.assertEqual(resp.status, 200, resp.text)
         self.assertEqual(self.text("projets/alpha.md"), ALPHA)
 
 

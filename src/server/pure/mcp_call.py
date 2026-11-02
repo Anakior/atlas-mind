@@ -1176,9 +1176,9 @@ def _agent_runs() -> list:
     return runs[::-1]
 
 
-def _unknown_run(run_id):
-    return text_result(f"No run '{run_id}' in the last {_RUN_WINDOW_DAYS} days: list them with "
-                       "agent_runs (a run's id changes while its writer keeps going).", is_error=True)
+def _unknown_run(run_id) -> str:
+    return (f"No run '{run_id}' in the last {_RUN_WINDOW_DAYS} days: list them with agent_runs "
+            "(a run's id changes while its writer keeps going).")
 
 
 def _paths_of(commit) -> set:
@@ -1192,7 +1192,7 @@ def _tool_agent_runs(args, ctx):
     cutoff = time.time() - days * 86400
     runs = [r for r in _agent_runs() if (r["id"] == run_id if run_id else r["end_ts"] >= cutoff)]
     if run_id and not runs:
-        return _unknown_run(run_id)
+        return text_result(_unknown_run(run_id), is_error=True)
     out = []
     for run in runs:
         commits = _scrub_commits(run["commits"], ctx)
@@ -1220,37 +1220,54 @@ def _may_undo(run: dict, docs: list, ctx) -> bool:
                for d in docs for p in (d["path"], d.get("from")) if p)
 
 
-def _tool_undo_run(args, ctx):
+def run_of(sha: str, ctx):
+    """The run holding commit `sha`, as the viewer's Activity shows it before an undo: its
+    writer and span, and the docs ctx may read, each saying whether ctx may undo it. None
+    when no run of the window holds it."""
+    run = next((r for r in _agent_runs() if any(c["sha"].startswith(sha) for c in r["commits"])), None)
+    if run is None:
+        return None
+    docs = _doc_changes(_scrub_commits(run["commits"], ctx))
+    for d in docs:
+        d["may_undo"] = _may_undo(run, [d], ctx)
+    return ({k: run[k] for k in ("id", "ai", "author", "start", "end")}
+            | {"commits": len(run["commits"]), "documents": docs})
+
+
+def undo_run(args, ctx) -> str:
+    """undo_run's work, for the tool and the viewer's Activity alike; returns what was done.
+    Raises LookupError for a run, commit or doc it does not know, PermissionError when ctx
+    may not undo it, ValueError when git could not apply it (nothing changed then)."""
     run_id = (args.get("run") or "").strip()
     run = next((r for r in _agent_runs() if r["id"] == run_id), None)
     if run is None:
-        return _unknown_run(run_id)
+        raise LookupError(_unknown_run(run_id))
     commits = run["commits"]
     cut = (args.get("from") or "").strip()
     if cut:
         at = next((i for i, c in enumerate(commits) if len(cut) >= 7 and c["sha"].startswith(cut)), None)
         if at is None:
-            return text_result(f"'{cut}' is not a commit of run {run_id}: agent_runs with "
-                               f"run={run_id} lists them.", is_error=True)
+            raise LookupError(f"'{cut}' is not a commit of run {run_id}: agent_runs with "
+                              f"run={run_id} lists them.")
         commits = commits[:at + 1]
     only = args.get("paths") or []
     only = {p.strip() for p in ([only] if isinstance(only, str) else only) if isinstance(p, str)}
     if only:
         commits = [c for c in commits if only & _paths_of(c)]
         if not commits:
-            return text_result(f"Run {run_id} does not change {', '.join(sorted(only))}"
-                               f"{' from ' + cut if cut else ''}: agent_runs with run={run_id} "
-                               "lists the docs each commit changes.", is_error=True)
+            raise LookupError(f"Run {run_id} does not change {', '.join(sorted(only))}"
+                              f"{' from ' + cut if cut else ''}: agent_runs with run={run_id} "
+                              "lists the docs each commit changes.")
     docs = [d for d in _doc_changes(commits) if not only or {d["path"], d.get("from")} & only]
     if not _may_undo(run, docs, ctx):
-        return text_result("Only the person this run was for, or someone allowed to make each of "
-                           "these changes by hand, can undo it.", is_error=True)
+        raise PermissionError("Only the person this run was for, or someone allowed to make each "
+                              "of these changes by hand, can undo it.")
     summary = ", ".join(f"{d['path']} ({d['change']})" for d in docs[:20])
     shas = [c["sha"] for c in commits]
     who = run["ai"] or run["author"]
     if args.get("dry_run"):
-        return text_result(f"Dry run, nothing undone. Run {run_id} ({len(shas)} commit(s) by "
-                           f"{who}) would be reverted for: {summary}.")
+        return (f"Dry run, nothing undone. Run {run_id} ({len(shas)} commit(s) by "
+                f"{who}) would be reverted for: {summary}.")
     # Docs the revert moves back (incl. out of .trash/) take their ACL along BEFORE git
     # writes them, so none is ever readable as commons at its restored path. Only the run's
     # own docs: the range also spans other people's commits made in between.
@@ -1265,16 +1282,23 @@ def _tool_undo_run(args, ctx):
     if sha is None:
         for frm, to in reversed(moves):
             _s._repoint_doc(to, frm)
-        return text_result(f"Could not undo run {run_id} ({why}). Nothing was changed. A conflict "
-                           "means a later change touches the same lines: restore docs one by one "
-                           "with doc_revert instead.", is_error=True)
+        raise ValueError(f"Could not undo run {run_id} ({why}). Nothing was changed. A conflict "
+                         "means a later change touches the same lines: restore docs one by one "
+                         "with doc_revert instead.")
     store = _s.get_store()
     for status, path, _ in _name_status(sha + "^", sha):
         if status == "D":  # a doc the run created: drop its ACL and share links with it
             store.delete_acl(path)
             store.delete_shares_for_path(path)
-    return text_result(f"Undid run {run_id} in one commit ({sha[:8]}): {summary}. Nothing is lost: "
-                       "doc_history / doc_revert bring any of it back.")
+    return (f"Undid run {run_id} in one commit ({sha[:8]}): {summary}. Nothing is lost: "
+            "doc_history / doc_revert bring any of it back.")
+
+
+def _tool_undo_run(args, ctx):
+    try:
+        return text_result(undo_run(args, ctx))
+    except (LookupError, PermissionError, ValueError) as e:
+        return text_result(str(e), is_error=True)
 
 
 # name → handler. _mcp_call_tool looks the tool up here; an unknown name 404s below.

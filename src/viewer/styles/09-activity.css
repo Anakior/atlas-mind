@@ -4,6 +4,35 @@
 .act-row { padding: 7px 8px; margin: 0 -8px; border-radius: 8px; cursor: pointer; transition: background .12s; }
 .act-row:hover { background: rgba(255, 255, 255, .035); }
 
+/* "Undo this run": a quiet button on the row (shown on hover, always on touch screens), and the
+   run it opens under the row. */
+.act-undo { flex-shrink: 0; display: inline-flex; padding: 4px; border-radius: 6px; color: #8b8d92; opacity: 0; transition: opacity .12s, color .12s, background .12s; }
+.act-row:hover .act-undo, .act-undo:focus-visible { opacity: 1; }
+.act-undo:hover { color: #e8eaed; background: rgba(255, 255, 255, .06); }
+@media (hover: none) { .act-undo { opacity: .7; } }
+.act-undo-panel { margin: 4px 0 10px; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; background: rgba(255, 255, 255, .025); font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
+.act-undo-panel p { margin: 0; font: inherit; }  /* the card's type, not a doc's prose */
+.act-undo-panel .act-undo-note { font-size: 12px; color: #8b8d92; }
+.act-undo-panel.is-busy { opacity: .6; pointer-events: none; }
+.act-undo-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.act-undo-head b { color: #e8eaed; font-weight: 600; }
+.act-undo-head > span { color: #8b8d92; font-size: 12px; }
+.act-undo-docs { display: flex; flex-direction: column; gap: 2px; }
+.act-undo-doc { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: baseline; padding: 4px 6px; margin: 0 -6px; border-radius: 6px; cursor: pointer; }
+.act-undo-doc:hover { background: rgba(255, 255, 255, .03); }
+.act-undo-doc input { accent-color: #1d9bd1; align-self: center; }
+.act-undo-doc .name { color: #d1d2d3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-undo-doc .what { grid-column: 2; color: #8b8d92; font-size: 12px; }
+.act-undo-doc.is-locked { cursor: default; opacity: .55; }
+.act-undo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.act-undo-actions button { padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+.act-undo-go { background: rgba(244, 63, 94, .8); color: #fff; }
+.act-undo-go:hover:not(:disabled) { background: rgb(244, 63, 94); }
+.act-undo-go:disabled { opacity: .45; cursor: default; }
+.act-undo-close { color: #b0b1b5; border: 1px solid rgba(255, 255, 255, .1); }
+.act-undo-close:hover { color: #e8eaed; }
+.act-undo-error { color: #fb7185; }
+
 /* the Inbox tab's count badge (rendered in the activity header's segmented control) */
 .act-ibadge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #fff; color: #1d9bd1; margin-left: 5px; vertical-align: middle; }
 /* `.act-ibadge`'s display would otherwise beat tailwind's `.hidden` (equal specificity, this block

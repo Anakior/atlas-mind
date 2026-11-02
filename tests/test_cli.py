@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -53,10 +54,11 @@ def clean_env(**extra) -> dict:
     env["GIT_CONFIG_SYSTEM"] = os.devnull
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["PYTHONUNBUFFERED"] = "1"
+    # CLAUDECODE: run from Claude Code, the mind's commit hook would mark every commit.
     for var in ("ATLAS_MIND", "ATLAS_STORE", "ATLAS_STORE_DIR",
                 "KB_AUTH_ENABLED", "GITHUB_REPO_URL",
                 "KB_REPO_PATH", "SESSION_SECRET", "GITHUB_WEBHOOK_SECRET",
-                "GIT_PULL_INTERVAL", "PORT"):
+                "GIT_PULL_INTERVAL", "PORT", "CLAUDECODE"):
         env.pop(var, None)
     env.update(extra)
     return env
@@ -207,6 +209,44 @@ class TestCliInit(CliMindTest):
         # French scaffold variant: the welcome doc is in French.
         welcome = (self.mind / "content" / "welcome.md").read_text(encoding="utf-8")
         self.assertIn("# Bienvenue", welcome)
+
+
+# ─── hook ────────────────────────────────────────────────────────────────────
+
+
+class TestCliHook(CliMindTest):
+
+    def git(self, *args, **env):
+        return subprocess.run(["git", "-C", str(self.mind), "-c", "user.name=T",
+                               "-c", "user.email=t@t", *args],
+                              capture_output=True, text=True, env=clean_env(**env))
+
+    def commit(self, text, *args, **env):
+        (self.mind / "content" / "notes" / "example.md").write_text(text, encoding="utf-8")
+        self.git("add", "-A")
+        result = self.git("commit", "-q", *args, **env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return self.git("log", "-1", "--format=%(trailers:key=X-Atlas-Author,valueonly)"
+                        "|%(trailers:key=X-Atlas-Token,valueonly)").stdout.replace("\n", "")
+
+    def test_init_installs_the_hook_that_marks_commits_from_claude_code(self):
+        self.init_mind()
+        self.assertEqual(self.commit("by hand", "-m", "by hand"), "|")
+        self.assertEqual(self.commit("by Claude", "-m", "by Claude", CLAUDECODE="1"),
+                         "ai/claude|claude-code-" + socket.gethostname().lower())
+        # A message that names its author already is left as it is.
+        self.assertEqual(self.commit("by Codex", "-m", "by Codex", "--trailer",
+                                     "X-Atlas-Author: ai/codex", CLAUDECODE="1"), "ai/codex|")
+
+    def test_hook_keeps_a_hook_that_is_not_atlas_s(self):
+        self.init_mind()
+        self.assertEqual(run_cli("hook", self.mind).returncode, 0)  # its own: rewritten
+        hook = self.mind / ".git" / "hooks" / "prepare-commit-msg"
+        hook.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        result = run_cli("hook", self.mind)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("not Atlas's", result.stderr)
+        self.assertEqual(hook.read_text(encoding="utf-8"), "#!/bin/sh\nexit 0\n")
 
 
 # ─── deploy ──────────────────────────────────────────────────────────────────

@@ -51,7 +51,7 @@ atlas serve ~/my-mind    # build once if needed, then serve on http://127.0.0.1:
 
 `init` is never destructive (it refuses a non-empty directory without `--force` and keeps any file already present). `serve` listens on `127.0.0.1:8765` with authentication off by default. To produce the static viewer without serving: `atlas build ~/my-mind [--offline]`.
 
-See `atlas --help` for all commands (`user`, `token`, `share`, `deploy`).
+See `atlas --help` for all commands (`user`, `token`, `share`, `deploy`, `hook`).
 
 ## Use it with your AI (MCP)
 
@@ -91,6 +91,8 @@ Then run `/mcp` in Claude Code, pick `atlas` and authenticate: the OAuth sign-in
 
 If you also connected your Atlas on claude.ai, Claude Code picks that connector up too, under its long name: turn that one off in `/mcp`, so the tools are not listed twice.
 
+Claude Code may also edit a clone of your mind and commit itself, with no MCP call to say an AI wrote it. `atlas init` installs a git hook for that: a commit made from Claude Code gets the `X-Atlas-Author: ai/claude` trailer the activity, the weather and `agent_runs` read. In a clone made before, run `atlas hook ~/my-mind` once.
+
 `atlas init` scaffolds `AGENTS.md` + `content/agents/` + `content/ai-sessions/`, and the endpoint hands your `AGENTS.md` to every client as its server instructions, so any assistant follows your conventions the moment it connects. Tools carry read-only / destructive hints (clients can run reads without asking), a token can be limited to `read`, `inbox` and/or `write` (an agent fed untrusted mail never needs to edit), text written outside the mind (remote mirrors, inbox drops) reaches an agent fenced as untrusted data, and the endpoint speaks both the stateless MCP `2026-07-28` revision and the earlier `initialize`-based ones. There is also a **REST API v1** (Bearer tokens, create-only writes) with a published **OpenAPI 3.1** spec.
 
 ## Features
@@ -100,7 +102,7 @@ If you also connected your Atlas on claude.ai, Claude Code picks that connector 
 - **The Mind**: a force-directed mind palace where every document and tag is a navigable node, colour-grouped by folder, recent nodes glowing, orphans dimmed.
 - **Editing**: create / edit / rename / move / delete from the viewer (moving rewrites the wikilinks pointing at a doc), document templates, interactive task checkboxes, a categorised todos widget.
 - **History**: every document git-versioned, with a revision list, clean diffs, view/restore of past versions (restore is a new commit), renames and moves followed.
-- **Activity**: a home card over the attributed git history — a journal of who-changed-what (with AI-author detection and a per-doc history peek), a constellation of contributors, and a Health view that surfaces stale documents (obsolescence) and same-topic contradiction candidates for your AI to review.
+- **Activity**: a home card over the attributed git history — a journal of who-changed-what (with AI-author detection, a per-doc history peek, and an undo for the run each change belongs to: what one writer did in one go, undone whole or for the docs you pick, in one commit in your name), a constellation of contributors, and a Health view that surfaces stale documents (obsolescence) and same-topic contradiction candidates for your AI to review.
 - **Inbox**: a per-person triage lane on the home for the items your agents staged via MCP. One focused card at a time; keep (filed to a suggested folder and tags), trash or snooze, by click or keyboard (K / X / S / J).
 - **Annotations**: notes anchored to a text selection, re-anchored on later visits, with one-click copy-all-notes as Markdown.
 - **Sharing**: per-document access in cloud mode (private / shared with people or groups / common to the team), plus HMAC-signed public share links with optional expiry.
