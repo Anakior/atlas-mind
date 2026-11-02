@@ -95,9 +95,9 @@ body:has(#demo-banner:not(.hidden)) .home { margin-top: 52px; }
 .home-bar-n { text-align: right; color: rgb(var(--ink-500)); font: 12px 'JetBrains Mono', monospace; }
 .home-bars-gap { height: 6px; }
 
-/* The orrery's legend has a set width on the home, so the sky beside it (and the card) is the same
-   size before and after the feed lands. */
-#home-card-orrery .act-legend { width: 6.75rem; }
+/* The orrery's legend has a set width on the home when it stands beside the sky, so the sky (and the
+   card) is the same size before and after the feed lands. On a phone it wraps under the sky. */
+@media (min-width: 768px) { #home-card-orrery .act-legend { width: 6.75rem; } }
 
 /* The Journal shows what fits its card, the height the Constellation and the recent docs give the
    row (contain: size keeps the list from stretching it), "See all" pinned at its foot over a fade.

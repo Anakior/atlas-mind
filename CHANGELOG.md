@@ -6,6 +6,14 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
+## [2.0.1] - 2026-11-02
+
+### Fixed
+- **The Constellation's legend on a phone.** Under the sky, its labels sat in a narrow column, one
+  per line and off to the left, instead of wrapping across the card. The set width that keeps the
+  card still while the activity loads now applies only when the legend stands beside the sky. The
+  MCP tools are unchanged.
+
 ## [2.0.0] - 2026-11-02
 
 A new face for the viewer: a new home and a new menu, a light theme beside the dark one, and an
