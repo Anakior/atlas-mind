@@ -23,6 +23,8 @@
 /* No breadcrumb bar on the home (it would only say "/"); on a phone it stays, it holds the menu's
    button. */
 @media (min-width: 768px) { body:has(#content > .home) #breadcrumb { display: none; } }
+/* The demo's read-only banner floats where that bar was: the home starts below it while it shows. */
+body:has(#demo-banner:not(.hidden)) .home { margin-top: 52px; }
 
 /* The week's highlights (filled by admin/activity/activity-card.ts), a liquid-glass strip (.glass,
    12-shell.css) over the hero's glow: the busiest folder in its head line, then a bar per day (the

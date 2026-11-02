@@ -98,16 +98,17 @@ Claude Code may also edit a clone of your mind and commit itself, with no MCP ca
 ## Features
 
 - **Reading**: GitHub-flavoured Markdown (TOC, syntax highlighting, reading time, tag bar), inline preview of standalone HTML decks/dashboards, PDF, `.docx` (converted in-browser, read-only), images (fitted to the pane, click for full size) and `.json` (pretty-printed and highlighted). Download any file as its original.
-- **Navigation**: collapsible tree, full-text search (server-side online, fuzzy MiniSearch offline), `[[wikilinks]]` + backlinks + "same subject", folder/frontmatter tags, mind-wide task rollup, command palette (Ctrl-K), pinned and recent docs.
+- **Navigation**: a menu with Home, Inbox, Journal, The Mind, Tasks and Recent (Inbox, Journal and Recent open as panels over any page) that folds to a column of icons (Ctrl-B), a collapsible tree, full-text search (server-side online, fuzzy MiniSearch offline), `[[wikilinks]]` + backlinks + "same subject", folder/frontmatter tags, mind-wide task rollup, command palette (Ctrl-K), pinned docs.
 - **The Mind**: a force-directed mind palace where every document and tag is a navigable node, colour-grouped by folder, recent nodes glowing, orphans dimmed.
 - **Editing**: create / edit / rename / move / delete from the viewer (moving rewrites the wikilinks pointing at a doc), document templates, interactive task checkboxes, a categorised todos widget.
 - **History**: every document git-versioned, with a revision list, clean diffs, view/restore of past versions (restore is a new commit), renames and moves followed.
-- **Activity**: a home card over the attributed git history — a journal of who-changed-what (with AI-author detection, a per-doc history peek, and an undo for the run each change belongs to: what one writer did in one go, undone whole or for the docs you pick, in one commit in your name), a constellation of contributors, and a Health view that surfaces stale documents (obsolescence) and same-topic contradiction candidates for your AI to review.
-- **Inbox**: a per-person triage lane on the home for the items your agents staged via MCP. One focused card at a time; keep (filed to a suggested folder and tags), trash or snooze, by click or keyboard (K / X / S / J).
+- **Activity**: the home page over the attributed git history — the week at a glance (changes per day, the AI's share, the busiest folder), a journal of who-changed-what (with AI-author detection, a per-doc history peek, and an undo for the run each change belongs to: what one writer did in one go, undone whole or for the docs you pick, in one commit in your name; also a panel from the menu, on any page), a constellation of contributors, and a Health view that surfaces stale documents (obsolescence) and same-topic contradiction candidates for your AI to review.
+- **Inbox**: a per-person triage lane, on the home and as a panel from the menu, for the items your agents staged via MCP. One focused card at a time; keep (filed to a suggested folder and tags), trash or snooze, by click or keyboard (K / X / S / J).
 - **Annotations**: notes anchored to a text selection, re-anchored on later visits, with one-click copy-all-notes as Markdown.
 - **Sharing**: per-document access in cloud mode (private / shared with people or groups / common to the team), plus HMAC-signed public share links with optional expiry.
 - **Offline & PWA**: a self-contained `index-offline.html` that works from `file://`, an installable PWA via service worker, live reload over SSE.
-- **i18n**: French and English, a single carefully-built dark theme, re-skinnable via a CSS extension.
+- **Look**: light and dark themes (or the system's), an accent colour per instance and whether the site prefix and tagline show, set by an admin in Settings › Appearance; re-skinnable via a CSS extension.
+- **i18n**: French and English.
 
 ## Self-hosting
 

@@ -6,7 +6,12 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
-## [Unreleased]
+## [2.0.0] - 2026-11-02
+
+A new face for the viewer: a new home and a new menu, a light theme beside the dark one, and an
+accent colour of its own for each instance. The Mind now settles instead of shaking, and the tree,
+the inbox and the stale list no longer read the whole git history again on every request. The MCP
+tools are unchanged: their definitions are the same, no connector needs refreshing.
 
 ### Added
 - **A new home.** At the top, the logo, the tagline, three figures and the week at a glance: a bar
