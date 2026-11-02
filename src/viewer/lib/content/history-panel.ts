@@ -145,7 +145,7 @@ export class HistoryPanel {
 
       row.type = 'button';
       row.className =
-        'history-rev block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 mb-0.5 transition';
+        'history-rev block w-full text-left px-3 py-2 rounded-lg hover:bg-ink-100/5 mb-0.5 transition';
       row.innerHTML =
         '<div class="text-ink-200 truncate">' +
         escapeHtml(rev.subject || '(' + rev.sha.slice(0, 7) + ')') +
@@ -204,7 +204,7 @@ export class HistoryPanel {
 
     view.type = 'button';
     view.className =
-      'px-3 py-1.5 text-sm font-medium bg-white/5 hover:bg-white/10 text-ink-200 rounded-lg transition';
+      'px-3 py-1.5 text-sm font-medium bg-ink-100/5 hover:bg-ink-100/10 text-ink-200 rounded-lg transition';
     view.textContent = t(toggle.label);
     view.addEventListener('click', toggle.handler);
     actions.appendChild(view);

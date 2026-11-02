@@ -1,16 +1,16 @@
 /* Home Activity card. Journal / Constellation / Santé views over the attributed git history.
    Owned by src/viewer/lib/21-activity.js (the Inbox tab's CSS lives in 10-inbox.css). */
-.activity-badge { position: absolute; right: -3px; bottom: -3px; display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 999px; background: #1a181e; border: 1px solid rgba(232, 148, 28, .6); }
+.activity-badge { position: absolute; right: -3px; bottom: -3px; display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 999px; background: rgb(var(--navy-800)); border: 1px solid rgba(232, 148, 28, .6); }
 .act-row { padding: 7px 8px; margin: 0 -8px; border-radius: 8px; cursor: pointer; transition: background .12s; }
-.act-row:hover { background: rgba(255, 255, 255, .035); }
+.act-row:hover { background: rgb(var(--ink-100) / .035); }
 
 /* "Undo this run": a quiet button on the row (shown on hover, always on touch screens), and the
    run it opens under the row. */
 .act-undo { flex-shrink: 0; display: inline-flex; padding: 4px; border-radius: 6px; color: #8b8d92; opacity: 0; transition: opacity .12s, color .12s, background .12s; }
 .act-row:hover .act-undo, .act-undo:focus-visible { opacity: 1; }
-.act-undo:hover { color: #e8eaed; background: rgba(255, 255, 255, .06); }
+.act-undo:hover { color: #e8eaed; background: rgb(var(--ink-100) / .06); }
 @media (hover: none) { .act-undo { opacity: .7; } }
-.act-undo-panel { margin: 4px 0 10px; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; background: rgba(255, 255, 255, .025); font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
+.act-undo-panel { margin: 4px 0 10px; padding: 12px 14px; border: 1px solid rgb(var(--ink-100) / .08); border-radius: 10px; background: rgb(var(--ink-100) / .025); font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
 .act-undo-panel p { margin: 0; font: inherit; }  /* the card's type, not a doc's prose */
 .act-undo-panel .act-undo-note { font-size: 12px; color: #8b8d92; }
 .act-undo-panel.is-busy { opacity: .6; pointer-events: none; }
@@ -19,9 +19,9 @@
 .act-undo-head > span { color: #8b8d92; font-size: 12px; }
 .act-undo-docs { display: flex; flex-direction: column; gap: 2px; }
 .act-undo-doc { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: baseline; padding: 4px 6px; margin: 0 -6px; border-radius: 6px; cursor: pointer; }
-.act-undo-doc:hover { background: rgba(255, 255, 255, .03); }
-.act-undo-doc input { accent-color: #1d9bd1; align-self: center; }
-.act-undo-doc .name { color: #d1d2d3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-undo-doc:hover { background: rgb(var(--ink-100) / .03); }
+.act-undo-doc input { accent-color: rgb(var(--accent)); align-self: center; }
+.act-undo-doc .name { color: rgb(var(--ink-200)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .act-undo-doc .what { grid-column: 2; color: #8b8d92; font-size: 12px; }
 .act-undo-doc.is-locked { cursor: default; opacity: .55; }
 .act-undo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -29,19 +29,19 @@
 .act-undo-go { background: rgba(244, 63, 94, .8); color: #fff; }
 .act-undo-go:hover:not(:disabled) { background: rgb(244, 63, 94); }
 .act-undo-go:disabled { opacity: .45; cursor: default; }
-.act-undo-close { color: #b0b1b5; border: 1px solid rgba(255, 255, 255, .1); }
+.act-undo-close { color: rgb(var(--ink-300)); border: 1px solid rgb(var(--ink-100) / .1); }
 .act-undo-close:hover { color: #e8eaed; }
 .act-undo-error { color: #fb7185; }
 
 /* the Inbox tab's count badge (rendered in the activity header's segmented control) */
-.act-ibadge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #fff; color: #1d9bd1; margin-left: 5px; vertical-align: middle; }
+.act-ibadge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #fff; color: rgb(var(--accent)); margin-left: 5px; vertical-align: middle; }
 /* `.act-ibadge`'s display would otherwise beat tailwind's `.hidden` (equal specificity, this block
    loads after vendor css), leaving an empty white pill when the count is 0. Same guard as .act-pop. */
 .act-ibadge.hidden { display: none; }
 
-.act-skel { background: rgba(255, 255, 255, .06); border-radius: 5px; }
+.act-skel { background: rgb(var(--ink-100) / .06); border-radius: 5px; }
 .activity-seg { cursor: pointer; transition: color .12s, background .12s; }
-.activity-seg:not(.is-active):hover { color: #d1d2d3; }
+.activity-seg:not(.is-active):hover { color: rgb(var(--ink-200)); }
 
 /* Constellation (orrery) */
 .act-node { cursor: pointer; }
@@ -51,11 +51,11 @@
 /* Keyboard-only focus ring (mouse focus stays clean). `.act-node` is an SVG <g>, where
    box-shadow doesn't paint — `outline` is the indicator SVG actually honours. Placed after
    the :focus reset so it wins on equal specificity when keyboard-focused. */
-.act-node:focus-visible { outline: 2px solid #1d9bd1; outline-offset: 3px; }
+.act-node:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 3px; }
 .act-pop { position: absolute; transform: translate(-50%, -100%); width: 280px; padding: 11px 13px; border-radius: 14px; pointer-events: none; z-index: 20; }
 .act-pop.hidden { display: none; }
 .act-legend { display: flex; flex-direction: column; gap: 7px; flex-shrink: 0; align-self: center; }
-.act-legend-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 999px; background: rgba(255, 255, 255, .03); font-size: 11px; color: #b0b1b5; }
+.act-legend-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid rgb(var(--ink-100) / .08); border-radius: 999px; background: rgb(var(--ink-100) / .03); font-size: 11px; color: rgb(var(--ink-300)); }
 .act-sun { transform-box: view-box; transform-origin: 360px 265px; }
 .act-sun-pulse { transform-box: view-box; transform-origin: 360px 265px; }
 .act-spin { transform-box: view-box; transform-origin: 360px 265px; }

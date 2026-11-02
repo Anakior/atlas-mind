@@ -21,7 +21,7 @@
   body:not(.cloud-authed) .settings-tab[data-tab="security"],
   body:not(.cloud-authed) .settings-tab[data-tab="tokens"] { display: none; }
   /* Active Settings tab */
-  .settings-tab.is-active { color: #fff; border-bottom-color: #1d9bd1; }
+  .settings-tab.is-active { color: rgb(var(--ink-100)); border-bottom-color: rgb(var(--accent)); }
   /* 2FA recovery codes: readable and copyable monospace grid. */
   #totp-recovery-list { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   /* TOTP secret in plain text: clean line wrapping on mobile. */

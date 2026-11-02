@@ -25,6 +25,10 @@ const safelist = fs
   .map((line) => line.trim())
   .filter(Boolean);
 
+// The palette reads the tokens of styles/00-tokens.css, so a skin or an extension restyles every
+// class at once; <alpha-value> keeps the opacity variants (bg-navy-800/90, ring-accent/40).
+const token = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+
 module.exports = {
   content: [
     path.join(__dirname, '..', 'viewer.html'),
@@ -41,20 +45,20 @@ module.exports = {
     extend: {
       colors: {
         navy: {
-          900: '#0e0d12',
-          800: '#1a181e',
-          700: '#23222a',
-          600: '#2f2d36',
-          500: '#3e3c47',
+          900: token('navy-900'),
+          800: token('navy-800'),
+          700: token('navy-700'),
+          600: token('navy-600'),
+          500: token('navy-500'),
         },
         ink: {
-          100: '#ffffff',
-          200: '#d1d2d3',
-          300: '#b0b1b5',
-          400: '#868a90',
-          500: '#868a90', // bumped from #5e6066 (~2.5:1 on cards, below AA) for muted-text contrast
+          100: token('ink-100'),
+          200: token('ink-200'),
+          300: token('ink-300'),
+          400: token('ink-400'),
+          500: token('ink-500'),
         },
-        accent: '#1d9bd1',
+        accent: token('accent'),
       },
       fontFamily: {
         sans: ['Manrope', 'system-ui', 'sans-serif'],

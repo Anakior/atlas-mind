@@ -1,8 +1,8 @@
-  body { color-scheme: dark; background: #23222a; font-feature-settings: "ss01","cv11"; }
-  ::selection { background: #1d9bd1; color: #ffffff; text-shadow: none; }
-  /* Echoes the login/home theme (base #0e0d12 + accent-blue glow top, warm gold glow
+  body { color-scheme: dark; background: rgb(var(--navy-700)); font-feature-settings: "ss01","cv11"; }
+  ::selection { background: rgb(var(--accent)); color: #ffffff; text-shadow: none; }
+  /* Echoes the login/home theme (base navy-900 + accent-blue glow top, warm gold glow
      bottom) so the sidebar reads as the same space rather than a separate panel. */
-  .sidebar-gradient { background: radial-gradient(ellipse 80% 60% at 70% 30%, rgba(29,155,209,.12), transparent), radial-gradient(ellipse 55% 34% at 12% 93%, rgba(251,198,120,.05), transparent), #0e0d12; }
+  .sidebar-gradient { background: radial-gradient(ellipse 80% 60% at 70% 30%, rgb(var(--accent) / .12), transparent), radial-gradient(ellipse 55% 34% at 12% 93%, rgba(251,198,120,.05), transparent), rgb(var(--navy-900)); }
   /* "Mind" wordmark pill — drifting nebula (cosmic palette). The cloud layer lives
      in ::before, oversized + clipped to the pill, slowly rotating/scaling so the
      clouds drift behind the text. Honors prefers-reduced-motion. */
@@ -14,7 +14,7 @@
     color: #eaf6fb; text-shadow: 0 0 6px rgba(255,255,255,0.4);
     padding: .28em .62em; border-radius: 999px;
     border: 1px solid rgba(124,200,235,0.38);
-    box-shadow: inset 0 0 10px rgba(99,102,241,0.5), 0 0 12px rgba(29,155,209,0.4);
+    box-shadow: inset 0 0 10px rgba(99,102,241,0.5), 0 0 12px rgb(var(--accent) / 0.4);
     background: #080a14;
   }
   /* Two cloud layers drifting in opposite directions at different speeds, plus an
@@ -67,38 +67,38 @@
   .prose table { display: block; overflow-x: auto; max-width: 100%; }
   .prose code, .prose pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
   .prose h1, .prose h2, .prose h3, .prose h4 { font-family: 'Manrope', system-ui, sans-serif; letter-spacing: -0.015em; font-weight: 700; }
-  .prose h1 { color: #ffffff; }
+  .prose h1 { color: rgb(var(--ink-100)); }
   .prose h2 { color: #4fb3e0; }
   .prose h3 { color: #87cdee; }
   .prose h4 { color: #b6dcef; }
-  .prose strong { color: #ffffff; font-weight: 600; }
+  .prose strong { color: rgb(var(--ink-100)); font-weight: 600; }
   .prose a { color: #36c5f0; }
   .prose a:hover { color: #6dd5f6; }
-  .prose blockquote { border-left-color: #1d9bd1; background: rgba(29, 155, 209, 0.06); padding: 0.5rem 1.25rem; border-radius: 0 6px 6px 0; }
+  .prose blockquote { border-left-color: rgb(var(--accent)); background: rgb(var(--accent) / 0.06); padding: 0.5rem 1.25rem; border-radius: 0 6px 6px 0; }
   .prose hr { border-color: #2a2a32; }
   .prose .search-hit { background: rgba(251,191,36,0.32); color: #fde68a; border-radius: 3px; padding: 0 0.1em; box-shadow: 0 0 0 2px rgba(251,191,36,0.22); animation: searchHitPulse 1.5s ease-out 1; }
   @keyframes searchHitPulse { 0% { background: rgba(251,191,36,0.7); } 100% { background: rgba(251,191,36,0.32); } }
   .doc-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 1.5rem; align-items: center; }
-  .doc-tag { display: inline-flex; align-items: center; font-family: 'Manrope', system-ui, sans-serif; font-size: 0.72rem; font-weight: 600; color: #87cdee; background: rgba(29,155,209,0.12); border: 1px solid rgba(29,155,209,0.28); border-radius: 999px; padding: 0.15rem 0.65rem; cursor: pointer; transition: background 0.12s, color 0.12s; }
-  .doc-tag:hover { background: rgba(29,155,209,0.26); color: #cdeafb; }
+  .doc-tag { display: inline-flex; align-items: center; font-family: 'Manrope', system-ui, sans-serif; font-size: 0.72rem; font-weight: 600; color: #87cdee; background: rgb(var(--accent) / 0.12); border: 1px solid rgb(var(--accent) / 0.28); border-radius: 999px; padding: 0.15rem 0.65rem; cursor: pointer; transition: background 0.12s, color 0.12s; }
+  .doc-tag:hover { background: rgb(var(--accent) / 0.26); color: #cdeafb; }
   .doc-tag-count { margin-left: 0.4em; padding-left: 0.4em; border-left: 1px solid currentColor; font-size: 0.82em; font-weight: 700; opacity: 0.5; }
-  .doc-tag-folder { color: #9aa6b2; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.14); }
-  .doc-tag-folder:hover { background: rgba(255,255,255,0.1); color: #cdd3da; }
+  .doc-tag-folder { color: #9aa6b2; background: rgb(var(--ink-100) / 0.05); border-color: rgb(var(--ink-100) / 0.14); }
+  .doc-tag-folder:hover { background: rgb(var(--ink-100) / 0.1); color: #cdd3da; }
   .doc-tag-x { margin-left: 0.3rem; padding: 0 0.1rem; color: inherit; opacity: 0.5; font-weight: 700; line-height: 1; background: none; border: 0; cursor: pointer; }
   .doc-tag-x:hover { opacity: 1; color: #fca5a5; }
-  .doc-tag-add { font-family: 'Manrope', system-ui, sans-serif; font-size: 0.95rem; font-weight: 700; line-height: 1; color: #87cdee; background: rgba(29,155,209,0.1); border: 1px dashed rgba(29,155,209,0.45); border-radius: 999px; width: 1.5rem; height: 1.5rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
-  .doc-tag-add:hover { background: rgba(29,155,209,0.24); color: #cdeafb; }
+  .doc-tag-add { font-family: 'Manrope', system-ui, sans-serif; font-size: 0.95rem; font-weight: 700; line-height: 1; color: #87cdee; background: rgb(var(--accent) / 0.1); border: 1px dashed rgb(var(--accent) / 0.45); border-radius: 999px; width: 1.5rem; height: 1.5rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+  .doc-tag-add:hover { background: rgb(var(--accent) / 0.24); color: #cdeafb; }
   .prose a.wikilink { color: #36c5f0; font-style: normal; font-weight: 500; text-decoration: none; cursor: pointer; background: rgba(54,197,240,0.12); border: 1px solid rgba(54,197,240,0.3); border-radius: 0.3rem; padding: 0.03em 0.4em; transition: background 0.12s, border-color 0.12s, color 0.12s; }
   .prose a.wikilink::before { content: '🔗'; font-size: 0.72em; margin-right: 0.3em; opacity: 0.7; }
   .prose a.wikilink:hover { color: #6dd5f6; background: rgba(54,197,240,0.22); border-color: rgba(54,197,240,0.62); }
   .prose a.wikilink.broken { color: #f0a0a0; background: rgba(240,160,160,0.10); border-color: rgba(240,160,160,0.38); border-style: dashed; cursor: help; }
   .prose a.wikilink.broken::before { content: '⚠️'; }
-  .prose table th { color: #ffffff; }
+  .prose table th { color: rgb(var(--ink-100)); }
   .prose table tr { border-color: #2a2a32; }
 
   /* An image doc: fitted to the pane over a checkerboard so transparency reads; a click on an
      image the pane shrinks shows it at its natural size, scrollable. */
-  .image-doc { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 150px); padding: 1.5rem; background: repeating-conic-gradient(#1b1a21 0% 25%, #23222a 0% 50%) 50% / 24px 24px; }
+  .image-doc { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 150px); padding: 1.5rem; background: repeating-conic-gradient(#1b1a21 0% 25%, rgb(var(--navy-700)) 0% 50%) 50% / 24px 24px; }
   .image-doc img { max-width: 100%; max-height: calc(100vh - 200px); object-fit: contain; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
   .image-doc--zoomable img { cursor: zoom-in; }
   .image-doc--actual { display: block; overflow: auto; height: calc(100vh - 150px); }

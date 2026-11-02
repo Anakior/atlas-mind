@@ -1,10 +1,10 @@
   .tree-item.active {
-    background: linear-gradient(90deg, rgba(29, 155, 209, 0.28) 0%, rgba(29, 155, 209, 0.08) 70%, transparent 100%);
-    color: #ffffff;
+    background: linear-gradient(90deg, rgb(var(--accent) / 0.28) 0%, rgb(var(--accent) / 0.08) 70%, transparent 100%);
+    color: rgb(var(--ink-100));
     font-weight: 600;
-    box-shadow: inset 2px 0 0 #1d9bd1;
+    box-shadow: inset 2px 0 0 rgb(var(--accent));
   }
-  .tree-item:hover:not(.active) { background: rgba(255, 255, 255, 0.06); color: #ffffff; }
+  .tree-item:hover:not(.active) { background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-100)); }
   .tree-item { transition: background 0.08s ease, color 0.08s ease, box-shadow 0.08s ease; }
   /* remotes/ : mirrors of remote nodes (read-only) — slightly indented
      to distinguish them from own content, folder renaming hidden. */
@@ -39,5 +39,5 @@
     margin-right: -0.5rem;
     padding-left: 0.5rem;
     padding-right: 0.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    border-top: 1px solid rgb(var(--ink-100) / 0.07);
   }

@@ -228,8 +228,8 @@ export class MindGraph {
     const strBtn = document.getElementById('graph-mode-structured')!;
     const tagBtn = document.getElementById('graph-tags-toggle');
     const setActive = (btn: HTMLElement, on: boolean) => {
-      btn.classList.toggle('bg-white/15', on);
-      btn.classList.toggle('text-white', on);
+      btn.classList.toggle('bg-ink-100/15', on);
+      btn.classList.toggle('text-ink-100', on);
       btn.classList.toggle('text-ink-400', !on);
     };
 

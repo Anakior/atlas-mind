@@ -6,36 +6,23 @@
  *   2. Rebuild the viewer  (atlas build <your-mind>)  or restart the server.
  * Any .css file in the .atlas/extensions/ directory is INLINED into the viewer
  * at build time (online AND offline), in alphabetical order, AFTER the engine's
- * CSS — hence the !important to override the compiled Tailwind classes.
+ * CSS.
  *
- * Here: we replace Atlas's accent color (blue #1d9bd1) with a purple. The
- * accent drives the buttons, the focus states, the action links and the panel
- * titles ("On this doc", "To-do"…).
+ * The viewer reads every colour of its palette from the tokens on :root (the
+ * full list is in src/viewer/styles/00-tokens.css). Redefine one and every
+ * class that uses it follows, opacity variants included. A value is "R G B".
  * ==========================================================================*/
 
-:root { --my-accent: #8b5cf6; }   /* just change this value to re-tint */
-
-/* Accent-colored text (panel titles, icons, action links) */
-.text-accent { color: var(--my-accent) !important; }
-
-/* Accent-colored fills (solid buttons: new doc, save, "+") */
-.bg-accent { background-color: var(--my-accent) !important; }
-
-/* Accent-colored borders (fields on focus) */
-.border-accent { border-color: var(--my-accent) !important; }
-
-/* Tip — the opacity variants are separate classes; for a full re-tint, target
- * them too (the "/" is escaped with a backslash): */
-/* .bg-accent\/20  { background-color: rgb(139 92 246 / 0.20) !important; } */
-/* .bg-accent\/40  { background-color: rgb(139 92 246 / 0.40) !important; } */
-/* .ring-accent\/40 { --tw-ring-color: rgb(139 92 246 / 0.40) !important; } */
+/* Atlas's blue accent (29 155 209) becomes a purple: buttons, focus rings,
+ * action links, panel titles. */
+:root { --accent: 139 92 246; }
 
 /* ---------------------------------------------------------------------------
  * Other options (uncomment / adapt):
  * -------------------------------------------------------------------------*/
 
-/* Slightly different global background */
-/* body { background: #0c0b10 !important; } */
+/* A slightly deeper page and sidebar */
+/* :root { --navy-700: 28 27 34; --navy-800: 20 19 24; } */
 
 /* Custom font (import it first, then apply it) */
 /* @import url('https://fonts.bunny.net/css?family=inter:400,600,700'); */

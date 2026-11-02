@@ -96,7 +96,7 @@ export async function renderBacklinksFor(file: FileNode): Promise<void> {
   }
 
   const card = (f: FileNode): string =>
-    '<a class="block px-2 py-1 rounded hover:bg-white/5 text-ink-300 hover:text-accent cursor-pointer truncate" ' +
+    '<a class="block px-2 py-1 rounded hover:bg-ink-100/5 text-ink-300 hover:text-accent cursor-pointer truncate" ' +
     'data-conn="' +
     escapeHtml(f.path) +
     '" title="' +

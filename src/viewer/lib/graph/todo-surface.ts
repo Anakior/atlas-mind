@@ -123,7 +123,7 @@ if (!todoFilter || !TODO_CATS.includes(todoFilter)) todoFilter = TODO_CATS[0];
   if (!wrap) return;
   wrap.innerHTML = TODO_CATEGORIES.map(
     (c) =>
-      `<button type="button" data-cat="${escapeHtml(c.cat)}" class="todo-filter-btn flex-1 px-3 py-2 transition hover:bg-white/5 text-ink-500">${escapeHtml(c.label)}</button>`,
+      `<button type="button" data-cat="${escapeHtml(c.cat)}" class="todo-filter-btn flex-1 px-3 py-2 transition hover:bg-ink-100/5 text-ink-500">${escapeHtml(c.label)}</button>`,
   ).join('');
 })();
 

@@ -204,7 +204,7 @@ export class TasksOverlay {
 
         row.type = 'button';
         row.className =
-          'flex items-start gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-base font-sans';
+          'flex items-start gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-ink-100/5 text-base font-sans';
         const box = document.createElement('span');
 
         box.className = 'flex-shrink-0';

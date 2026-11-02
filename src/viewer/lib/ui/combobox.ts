@@ -94,8 +94,8 @@ export class Combobox implements ComboboxController {
     let html = res
       .map(
         (v, i) =>
-          '<div class="atlas-cb-opt px-3 py-1.5 cursor-pointer hover:bg-white/5 ' +
-          (i === this.active ? 'bg-white/10' : '') +
+          '<div class="atlas-cb-opt px-3 py-1.5 cursor-pointer hover:bg-ink-100/5 ' +
+          (i === this.active ? 'bg-ink-100/10' : '') +
           '" data-i="' + i + '">' + this.fmt(v) + '</div>',
       )
       .join('');
@@ -104,8 +104,8 @@ export class Combobox implements ComboboxController {
       const ci = res.length;
 
       html +=
-        '<div class="atlas-cb-create px-3 py-1.5 cursor-pointer hover:bg-white/5 text-accent ' +
-        'flex items-center gap-2 ' + (this.active === ci ? 'bg-white/10' : '') +
+        '<div class="atlas-cb-create px-3 py-1.5 cursor-pointer hover:bg-ink-100/5 text-accent ' +
+        'flex items-center gap-2 ' + (this.active === ci ? 'bg-ink-100/10' : '') +
         '" data-create="1"><span class="text-base leading-none">+</span>' +
         escapeHtml(t('comboCreate', create)) + '</div>';
       this.items.push({ __create: create });

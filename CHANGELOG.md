@@ -8,6 +8,14 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+### Changed
+- **The viewer's palette is a set of CSS variables.** The surfaces (`--navy-900` to `--navy-500`),
+  the text (`--ink-100` to `--ink-500`) and the accent live in `styles/00-tokens.css`, and both the
+  Tailwind palette classes and the engine's stylesheets read them. Nothing changes on screen. An
+  extension now re-tints the viewer by redefining a variable instead of overriding classes with
+  `!important` (see `examples/extensions/custom-theme`). It is the first step towards a second,
+  more mainstream design, offered next to this one.
+
 ## [1.12.1] - 2026-11-02
 
 ### Fixed

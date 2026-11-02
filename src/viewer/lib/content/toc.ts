@@ -47,7 +47,7 @@ export class Toc {
       a.href = '#' + id;
       a.textContent = heading.textContent;
       a.className =
-        'block px-2 py-1 rounded hover:bg-white/5 text-ink-300 hover:text-accent truncate ' +
+        'block px-2 py-1 rounded hover:bg-ink-100/5 text-ink-300 hover:text-accent truncate ' +
         (heading.tagName === 'H3' ? 'pl-5 text-[11px] text-ink-400' : 'font-medium');
       a.addEventListener('click', (e) => {
         e.preventDefault();

@@ -169,7 +169,7 @@ export class WikilinkAutocomplete {
       .map(
         (c, i) =>
           '<div class="wl-opt px-3 py-1.5 cursor-pointer ' +
-          (i === this.active ? 'bg-white/10' : '') +
+          (i === this.active ? 'bg-ink-100/10' : '') +
           '" data-i="' +
           i +
           '">' +

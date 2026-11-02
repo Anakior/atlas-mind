@@ -8,9 +8,9 @@
     background-size: 50% 100%;
     animation: skeleton-shimmer 1.5s ease-in-out infinite;
   }
-  .skeleton { background-color: rgba(255,255,255,0.045); border-radius: 4px; }
-  .skeleton-title { background-color: rgba(255,255,255,0.09); border-radius: 6px; }
-  .skeleton-h2 { background-color: rgba(255,255,255,0.065); border-radius: 5px; }
+  .skeleton { background-color: rgb(var(--ink-100) / 0.045); border-radius: 4px; }
+  .skeleton-title { background-color: rgb(var(--ink-100) / 0.09); border-radius: 6px; }
+  .skeleton-h2 { background-color: rgb(var(--ink-100) / 0.065); border-radius: 5px; }
   .skeleton-code {
     background-color: #13141a;
     border: 1px solid #2a2c36;
@@ -25,4 +25,4 @@
     .skeleton, .skeleton-title, .skeleton-h2, .skeleton-code { animation: none; }
   }
   #md-editor { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.65; tab-size: 2; -moz-tab-size: 2; }
-  #md-editor::selection { background: rgba(29,155,209,0.35); }
+  #md-editor::selection { background: rgb(var(--accent) / 0.35); }

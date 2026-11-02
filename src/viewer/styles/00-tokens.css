@@ -1,0 +1,19 @@
+/* The palette, as tokens. The Tailwind palette classes (bg-navy-800, text-ink-300, ring-accent/40…)
+   and the stylesheets read their colour here, so a skin restyles the viewer by redefining these, and
+   an extension can re-tint it the same way. Each value is "R G B", so an opacity can be added:
+   rgb(var(--accent) / .4).
+   navy: the surfaces, from the deepest (900: wells, list rows) to the most raised (500: a hovered
+   chip); 700 is the page. ink: the text, from the strongest (100) to the most muted (500). */
+:root {
+  --navy-900: 14 13 18;
+  --navy-800: 26 24 30;
+  --navy-700: 35 34 42;
+  --navy-600: 47 45 54;
+  --navy-500: 62 60 71;
+  --ink-100: 255 255 255;
+  --ink-200: 209 210 211;
+  --ink-300: 176 177 181;
+  --ink-400: 134 138 144;
+  --ink-500: 134 138 144; /* same as 400: the former #5e6066 read at 2.5:1 on cards */
+  --accent: 29 155 209;
+}

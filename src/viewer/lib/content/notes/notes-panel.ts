@@ -101,7 +101,7 @@ export class NotesPanel {
       '<span class="text-[10px] uppercase tracking-[0.12em] text-amber-300 font-bold">' +
       t('notesTitle', noteContext.notesForDoc.length) +
       '</span>' +
-      '<button id="toc-notes-copy" class="p-0.5 -mr-0.5 text-ink-500 hover:text-amber-300 rounded hover:bg-white/5 flex-shrink-0" title="' +
+      '<button id="toc-notes-copy" class="p-0.5 -mr-0.5 text-ink-500 hover:text-amber-300 rounded hover:bg-ink-100/5 flex-shrink-0" title="' +
       escapeHtml(t('copyAllNotes')) +
       '">' +
       NotesPanel.NOTES_COPY_ICON +

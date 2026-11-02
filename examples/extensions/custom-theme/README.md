@@ -19,15 +19,18 @@ cp /path/to/atlas/examples/extensions/custom-theme/custom-theme.css .atlas/exten
 atlas build .          # or restart the server: atlas serve .
 ```
 
-Reload the viewer: Atlas's blue accent becomes purple. Edit the `--my-accent`
+Reload the viewer: Atlas's blue accent becomes purple. Edit the `--accent`
 value in `custom-theme.css` to pick your shade, or uncomment the other options
 (background, font, rounded corners).
 
 ## Going further
 
-- The engine uses **compiled Tailwind classes** (`text-accent`, `bg-navy-800`,
-  `text-ink-200`, `subtle-border`…): inspect the viewer with the devtools to
-  find the class to override.
+- Every colour of the palette is a token on `:root` (`--navy-900`…`--navy-500`
+  for the surfaces, `--ink-100`…`--ink-500` for the text, `--accent`), read by
+  the compiled Tailwind classes (`bg-navy-800`, `text-ink-200`, `ring-accent/40`…)
+  and the engine's stylesheets alike: redefine a token rather than override the
+  classes. For anything else, inspect the viewer with the devtools to find the
+  class to override.
 - For logic (not just style), add a `.js` (inlined the same way) or a `.py`
   (loaded at server boot, can expose routes). See the `pob/` example and the
   *Extensions* section of the scaffolded `atlas.toml`.

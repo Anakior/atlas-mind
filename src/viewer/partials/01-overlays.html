@@ -21,13 +21,13 @@
     <div class="text-[11px] text-ink-500 font-sans" id="graph-stats"></div>
   </div>
   <div id="graph-controls" class="absolute top-4 right-4 flex items-center gap-3">
-    <div class="flex items-center rounded-lg overflow-hidden border subtle-border text-[11px] font-sans bg-white/5">
-      <button id="graph-mode-organic" class="px-2.5 py-1 text-white bg-white/15 transition" data-i18n="graphModeOrganic">Cerveau</button>
-      <button id="graph-mode-structured" class="px-2.5 py-1 text-ink-400 hover:text-white transition" data-i18n="graphModeStructured">Carte</button>
+    <div class="flex items-center rounded-lg overflow-hidden border subtle-border text-[11px] font-sans bg-ink-100/5">
+      <button id="graph-mode-organic" class="px-2.5 py-1 text-ink-100 bg-ink-100/15 transition" data-i18n="graphModeOrganic">Cerveau</button>
+      <button id="graph-mode-structured" class="px-2.5 py-1 text-ink-400 hover:text-ink-100 transition" data-i18n="graphModeStructured">Carte</button>
     </div>
-    <button id="graph-tags-toggle" class="px-2 py-1 rounded-lg border subtle-border text-[11px] font-sans text-ink-400 hover:text-white transition" title="Afficher / masquer les tags" data-i18n-title="graphTagsToggle">#tags</button>
+    <button id="graph-tags-toggle" class="px-2 py-1 rounded-lg border subtle-border text-[11px] font-sans text-ink-400 hover:text-ink-100 transition" title="Afficher / masquer les tags" data-i18n-title="graphTagsToggle">#tags</button>
     <span class="text-[10px] text-ink-500 font-sans hidden sm:inline" data-i18n="graphHint">molette : zoom · glisser : déplacer · clic : ouvrir</span>
-    <button id="graph-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
+    <button id="graph-close" class="p-1.5 text-ink-400 hover:text-ink-100 rounded hover:bg-ink-100/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
   </div>
@@ -44,7 +44,7 @@
         <label class="text-[11px] text-ink-400 font-sans flex items-center gap-2" style="cursor:pointer;user-select:none">
           <input id="tasks-show-done" type="checkbox"> <span data-i18n="tasksShowDone">Afficher les faites</span>
         </label>
-        <button id="tasks-close" class="p-1.5 text-ink-400 hover:text-white rounded hover:bg-white/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
+        <button id="tasks-close" class="p-1.5 text-ink-400 hover:text-ink-100 rounded hover:bg-ink-100/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
@@ -53,14 +53,14 @@
   </div>
 </div>
 
-<button id="toc-show" class="hidden fixed top-14 right-3 z-20 p-2 bg-navy-800/90 backdrop-blur border subtle-border rounded-lg text-ink-300 hover:text-white hover:bg-navy-700 shadow-lg" title="Afficher le sommaire (Ctrl+J)" data-i18n-title="showToc">
+<button id="toc-show" class="hidden fixed top-14 right-3 z-20 p-2 bg-navy-800/90 backdrop-blur border subtle-border rounded-lg text-ink-300 hover:text-ink-100 hover:bg-navy-700 shadow-lg" title="Afficher le sommaire (Ctrl+J)" data-i18n-title="showToc">
   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
 </button>
 
 <aside id="toc-panel" class="panel-card fixed top-16 right-6 z-20 w-64 max-h-[65vh] rounded-xl hidden overflow-hidden flex-col">
   <div class="px-4 py-2 border-b panel-divider flex items-center justify-between">
     <span class="text-[10px] uppercase tracking-[0.12em] text-accent font-bold" data-i18n="tocHeader">Sur ce doc</span>
-    <button id="toc-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-white/5" title="Masquer (Ctrl+J)" data-i18n-title="hideToc">
+    <button id="toc-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-ink-100/5" title="Masquer (Ctrl+J)" data-i18n-title="hideToc">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
   </div>
@@ -75,7 +75,7 @@
         <div class="text-lg font-semibold text-ink-100 font-sans" data-i18n="historyHeader">Historique</div>
         <div id="history-path" class="text-xs font-mono text-ink-400 truncate mt-0.5"></div>
       </div>
-      <button id="history-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-white/5" title="Fermer (Esc)" data-i18n-title="historyClose">
+      <button id="history-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-ink-100/5" title="Fermer (Esc)" data-i18n-title="historyClose">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
