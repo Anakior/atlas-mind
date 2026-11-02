@@ -1,0 +1,139 @@
+/* The home (home/home-view.ts): the hero (mark, stats, the week's highlights), then the activity as
+   cards — Journal, Constellation, Inbox, Santé, all live at once — and the recent docs, folders and
+   tags. Colours come from 00-tokens.css, so it follows the theme and the instance accent. */
+.home { display: flex; flex-direction: column; gap: 18px; }
+
+.home-hero { position: relative; display: flex; align-items: stretch; overflow: hidden; border-radius: 18px; border: 1px solid rgb(var(--line) / var(--line-a));
+  background:
+    radial-gradient(ellipse 55% 110% at 80% 30%, rgb(var(--ai) / var(--glow-a)), transparent 70%),
+    radial-gradient(ellipse 45% 80% at 4% 110%, rgb(var(--brand) / .1), transparent 70%),
+    rgb(var(--surface)); }
+.home-hero-l { position: relative; z-index: 1; box-sizing: border-box; flex: 1; min-width: 0; padding: 26px 24px 24px 34px; display: flex; flex-direction: column; }
+.home-mark { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .3em; font-size: 50px; line-height: 1; }
+.home-mark .wm-prefix { font-size: 1.55em; margin-right: -.08em; }
+.home-mark .nebula-pill { font-size: 21px; }
+:root[data-tagline="off"] .home-tag { display: none; }
+.home-tag { margin: 10px 0 0; font-family: Lora, Georgia, serif; font-size: 16px; color: rgb(var(--ink-300)); }
+.home-stats { display: flex; margin-top: auto; padding-top: 18px; }
+.home-stat { padding: 0 22px; border-left: 1px solid rgb(var(--line) / .12); }
+.home-stat:first-child { padding-left: 0; border-left: 0; }
+.home-stat b { display: block; font-size: 24px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; color: rgb(var(--ink-100)); }
+.home-stat span { font-size: 12px; color: rgb(var(--ink-500)); white-space: nowrap; }
+
+/* No breadcrumb bar on the home (it would only say "/"); on a phone it stays, it holds the menu's
+   button. */
+@media (min-width: 768px) { body:has(#content > .home) #breadcrumb { display: none; } }
+
+/* The week's highlights (filled by admin/activity/activity-card.ts), a liquid-glass strip (.glass,
+   12-shell.css) over the hero's glow: the busiest folder in its head line, then a bar per day (the
+   AI's share on top in its blue, today lit) beside the figures. Hidden when the week was quiet. */
+.home-hero-r { flex-shrink: 0; align-self: center; width: 33rem; margin: 16px 18px 16px 0; padding: 12px 16px 12px; display: flex; flex-direction: column; gap: 10px; }
+.home-hero-r:empty { display: none; }
+.hl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.hl-label { font-size: 12px; font-weight: 650; color: rgb(var(--ink-300)); }
+.hl-top { overflow: hidden; font-size: 12px; color: rgb(var(--ink-400)); white-space: nowrap; text-overflow: ellipsis; }
+.hl-top b { font-weight: 650; color: rgb(var(--ink-100)); }
+.hl-body { display: grid; grid-template-columns: 12rem minmax(0, 1fr); align-items: end; gap: 18px; }
+.hl-bars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.hl-day { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hl-bar { display: flex; align-items: flex-end; width: 100%; height: 40px; border-radius: 5px; background: rgb(var(--line) / .06); }
+.hl-bar em { display: flex; flex-direction: column; width: 100%; overflow: hidden; border-radius: 5px; }
+.hl-bar b { min-height: 0; background: linear-gradient(rgb(var(--brand)), rgb(var(--brand) / .7)); }
+.hl-bar b.hl-ai { background: rgb(var(--ai)); }
+.hl-day.is-today .hl-bar em { box-shadow: 0 0 12px rgb(var(--brand) / .45); }
+.hl-day span { font-size: 10px; font-weight: 600; color: rgb(var(--ink-500)); text-transform: uppercase; }
+.hl-day.is-today span { color: rgb(var(--ink-100)); }
+.hl-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding-left: 18px; border-left: 1px solid rgb(var(--line) / .1); }
+.hl-stat b { display: block; font-size: 20px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; color: rgb(var(--ink-100)); }
+.hl-stat.is-ai b { color: rgb(var(--ai)); }
+.hl-stat span { font-size: 11.5px; color: rgb(var(--ink-500)); white-space: nowrap; }
+
+.home-sec { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin: 6px 0 14px; }
+.home-sec h2 { margin: 0; font: 700 18px Manrope, system-ui, sans-serif; letter-spacing: -.015em; color: rgb(var(--ink-100)); }
+.home-sec-end { margin-left: auto; }
+.home-switch { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: rgb(var(--ink-300)); font: 500 12.5px Manrope, system-ui, sans-serif; cursor: pointer; }
+.home-switch-knob { position: relative; width: 30px; height: 18px; border-radius: 9px; border: 1px solid rgb(var(--line) / .14); background: rgb(var(--line) / .1); transition: background .15s; }
+.home-switch-knob::after { content: ""; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: rgb(var(--ink-400)); transition: transform .15s, background .15s; }
+.home-switch[aria-checked="true"] .home-switch-knob { border-color: rgb(var(--ai) / .5); background: rgb(var(--ai) / .3); }
+.home-switch[aria-checked="true"] .home-switch-knob::after { transform: translateX(12px); background: rgb(var(--ai)); }
+
+.home-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: stretch; gap: 18px; }
+.home-card { grid-column: span 12; min-width: 0; display: flex; flex-direction: column; border-radius: 14px; border: 1px solid rgb(var(--line) / var(--line-a)); background: rgb(var(--surface)); }
+.home-card.c7 { grid-column: span 7; }
+.home-card.c6 { grid-column: span 6; }
+.home-card.c5 { grid-column: span 5; }
+.home-card.c4 { grid-column: span 4; }
+.home-card.r2 { grid-row: span 2; }
+.home-card-h { display: flex; align-items: center; gap: 8px; padding: 14px 18px 6px; }
+.home-card-h h3 { margin: 0; display: flex; align-items: center; gap: 8px; color: rgb(var(--ink-100)); font: 700 13px Manrope, system-ui, sans-serif; }
+.home-card-h h3 .side-i { color: rgb(var(--ink-500)); }
+.home-card-h .side-badge { margin-left: 2px; }
+.home-card-b { min-width: 0; padding: 4px 18px 16px; }
+.home-empty { margin: 4px 0; color: rgb(var(--ink-500)); font-size: 13px; }
+
+.home-rows { display: flex; flex-direction: column; padding-top: 0; }
+.home-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid rgb(var(--line) / var(--line-a)); text-decoration: none; cursor: pointer; }
+.home-row:first-child { border-top: 0; }
+.home-row-t { display: flex; flex-direction: column; min-width: 0; }
+.home-row-t b { overflow: hidden; color: rgb(var(--ink-100)); font-size: 13.5px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+.home-row-t em { color: rgb(var(--ink-500)); font-size: 12px; font-style: normal; }
+.home-row-w { color: rgb(var(--ink-500)); font-size: 12px; white-space: nowrap; }
+/* A doc name reads the same across the home (Journal, recent, longest, health): underlined when
+   pointed at. */
+.act-journal .act-title:hover, .home-row:hover b, .home-bar-doc:hover .home-bar-k, .home .act-doclink:hover {
+  color: rgb(var(--ink-100)); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: rgb(var(--ink-400)); }
+
+.home-bars { display: flex; flex-direction: column; gap: 9px; }
+.home-bar { display: grid; grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr) 3rem; align-items: center; gap: 10px; color: rgb(var(--ink-200)); font-size: 13px; text-decoration: none; }
+.home-bar-k { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.home-bar-t { height: 6px; overflow: hidden; border-radius: 3px; background: rgb(var(--line) / .08); }
+.home-bar-t i { display: block; height: 6px; border-radius: 3px; background: rgb(var(--ink-500) / .6); }
+.home-bar-doc { cursor: pointer; }
+.home-bar-doc .home-bar-t i { background: rgb(var(--brand) / .8); }
+.home-bar-n { text-align: right; color: rgb(var(--ink-500)); font: 12px 'JetBrains Mono', monospace; }
+.home-bars-gap { height: 6px; }
+
+/* The orrery's legend has a set width on the home, so the sky beside it (and the card) is the same
+   size before and after the feed lands. */
+#home-card-orrery .act-legend { width: 6.75rem; }
+
+/* The Journal shows what fits its card, the height the Constellation and the recent docs give the
+   row (contain: size keeps the list from stretching it), "See all" pinned at its foot over a fade.
+   Opened, it grows past the card. */
+#home-card-journal:not(.is-open) #activity-journal { flex: 1 1 0; min-height: 0; overflow: hidden; contain: size; padding-bottom: 0; }
+#home-card-journal:not(.is-open) .act-seeall-row { position: sticky; bottom: 0; margin: 0; padding: 34px 0 14px; background: linear-gradient(rgb(var(--surface) / 0), rgb(var(--surface)) 62%); }
+
+/* The menu's panels (home/side-panels.ts): day heads like the Journal's. */
+.panel-day { margin: 14px 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: rgb(var(--ink-500)); }
+.panel-day:first-child { margin-top: 0; }
+#side-panel-body .home-row:first-of-type, #side-panel-body .panel-day + .home-row { border-top: 0; }
+#side-panel-body #tree-header .side-label { visibility: hidden; } /* the panel's title already says it */
+
+/* Tags: one plain chip each, the most used first, the count beside the name. */
+.home-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.home-tagc { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: rgb(var(--line) / .05); color: rgb(var(--ink-200)); font: 500 13px Manrope, system-ui, sans-serif; cursor: pointer; transition: background .12s, color .12s; }
+.home-tagc::before { content: "#"; margin-right: -3px; color: rgb(var(--ink-500)); }
+.home-tagc i { font-style: normal; font-size: 12px; color: rgb(var(--ink-500)); font-variant-numeric: tabular-nums; }
+.home-tagc:hover { background: rgb(var(--line) / .09); color: rgb(var(--ink-100)); }
+.home-tagc-more { color: rgb(var(--ink-400)); background: none; }
+.home-tagc-more::before { content: none; }
+
+.home-keys { display: flex; flex-wrap: wrap; gap: 8px 16px; color: rgb(var(--ink-500)); font-size: 12px; }
+.home-keys kbd { padding: 1px 6px; border-radius: 5px; border: 1px solid rgb(var(--line) / .14); background: rgb(var(--line) / .04); color: rgb(var(--ink-300)); font: 11px 'JetBrains Mono', monospace; }
+
+
+@media (max-width: 1100px) {
+  .home-card.c7, .home-card.c6, .home-card.c5, .home-card.c4 { grid-column: span 12; }
+  .home-card.r2 { grid-row: auto; }
+  #home-card-journal:not(.is-open) #activity-journal { flex: none; height: 560px; contain: none; }
+}
+@media (max-width: 900px) {
+  .home-hero { flex-direction: column; }
+  .home-hero-l { min-height: 0; padding: 22px 20px 18px; }
+  .home-hero-r { align-self: stretch; width: auto; margin: 0 14px 14px; }
+  .hl-body { grid-template-columns: minmax(0, 1fr); }
+  .hl-stats { padding: 10px 0 0; border-left: 0; border-top: 1px solid rgb(var(--line) / .1); }
+  .home-mark { font-size: 40px; }
+  .home-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  .home-stat, .home-stat:first-child { padding: 0; border-left: 0; }
+}

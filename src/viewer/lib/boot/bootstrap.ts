@@ -64,9 +64,14 @@ export class Boot {
 
           if (data.cloud && data.email) {
             document.getElementById('user-email')!.textContent = data.name || data.email;
+            const role = t(data.role === 'admin' ? 'settingsRoleAdmin' : 'settingsRoleViewer');
+
+            document.getElementById('user-sub')!.textContent = data.name ? role + ' · ' + data.email : role;
             const avatar = document.getElementById('user-avatar');
 
             if (avatar) avatar.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 30);
+            // The folded menu's account button wears the same face.
+            document.getElementById('side-me-btn')!.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 30);
             document.getElementById('user-bar')!.classList.remove('hidden');
           }
           // Member (non-admin): viewer-mode class (CSS hides the Todos widget); per-doc authorization
@@ -149,7 +154,6 @@ export class Boot {
       contentTree.reload();
       decorateTreeBadges();
       contentTree.decorateRemoteOrigins();
-      homeView.renderRecent();
 
       // Invalidate the lazy indexes: content / backlinks / search / wikilink maps may have changed.
       setBacklinksIndex(null);
@@ -176,9 +180,9 @@ export class Boot {
         } else {
           setCurrentFile(newFile);
         }
-      } else if (document.getElementById('home-activity-mount') && window.refreshActivityData) {
-        // Home on screen: do NOT re-render it (that re-mounts the activity card and wipes its open
-        // inbox editor / poll). The tree is already patched; refresh only the active tab's data.
+      } else if (document.getElementById('home-activity-card') && window.refreshActivityData) {
+        // Home on screen: do NOT re-render it (that re-mounts the activity cards and wipes the open
+        // inbox editor / poll). The tree is already patched; refresh only the activity's data.
         window.refreshActivityData();
       } else {
         // First load / not-found page: (re-)route from the hash now fileMap reflects accessible docs.

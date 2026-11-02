@@ -21,4 +21,5 @@ interface ActivityRenderCtx {
   docTitle(p: string): string;
   skelRows(n: number): string;
   openDocHistory(path: string): void;
+  hasDoc(path: string): boolean;
 }

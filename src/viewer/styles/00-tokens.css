@@ -1,9 +1,11 @@
 /* The palette, as tokens. The Tailwind palette classes (bg-navy-800, text-ink-300, ring-accent/40…)
-   and the stylesheets read their colour here, so a skin restyles the viewer by redefining these, and
-   an extension can re-tint it the same way. Each value is "R G B", so an opacity can be added:
+   and the stylesheets read their colour here, so a theme restyles the viewer by redefining these,
+   and an extension can re-tint it the same way. Each value is "R G B", so an opacity can be added:
    rgb(var(--accent) / .4).
    navy: the surfaces, from the deepest (900: wells, list rows) to the most raised (500: a hovered
-   chip); 700 is the page. ink: the text, from the strongest (100) to the most muted (500). */
+   chip). ink: the text, from the strongest (100) to the most muted (500). page: the background
+   everything sits on. The rest dresses the menu and the home: surface (cards), line (hairlines),
+   brand (the instance accent, Atlas gold by default), ai (what an AI wrote), glow and glass. */
 :root {
   --navy-900: 14 13 18;
   --navy-800: 26 24 30;
@@ -16,4 +18,66 @@
   --ink-400: 134 138 144;
   --ink-500: 134 138 144; /* same as 400: the former #5e6066 read at 2.5:1 on cards */
   --accent: 29 155 209;
+
+  --page: 21 20 26;
+  --side: 18 17 23;
+  --surface: 27 26 33;
+  --surface-2: 33 31 40;
+  --raise: 38 36 46;
+  --line: 255 255 255;
+  --line-a: .07;
+  --brand: var(--brand-dark, 232 148 28);
+  --on-brand: var(--on-brand-dark, 255 255 255);
+  --ai: 79 179 224;
+  --teal: 94 234 212;
+  --ok: 74 222 128;
+  --glow-a: .16;
+  --glass-a: .085;
+  --glass-b: .025;
+  --glass-edge: rgba(255, 255, 255, .08);
+  --glass-hi: rgba(255, 255, 255, .22);
+  --rim-a: rgba(255, 255, 255, .28);
+  --rim-b: rgba(255, 255, 255, .10);
+  --sheen: rgba(255, 255, 255, .14);
+  --float-shadow: 0 18px 50px -12px rgba(0, 0, 0, .7);
+  --mark-shadow: 0 1px 2px rgba(0, 0, 0, .6), 0 0 1px rgba(0, 0, 0, .85);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --navy-900: 236 234 229;
+  --navy-800: 255 255 255;
+  --navy-700: 246 245 242;
+  --navy-600: 233 231 226;
+  --navy-500: 220 218 212;
+  --ink-100: 24 23 29;
+  --ink-200: 46 45 53;
+  --ink-300: 74 73 83;
+  --ink-400: 99 98 108;
+  --ink-500: 107 106 116;
+  --accent: 22 119 168;
+
+  --page: 246 245 242;
+  --side: 239 238 233;
+  --surface: 255 255 255;
+  --surface-2: 248 247 244;
+  --raise: 236 235 230;
+  --line: 20 18 30;
+  --line-a: .08;
+  --brand: var(--brand-light, 196 116 12);
+  --on-brand: var(--on-brand-light, 255 255 255);
+  --ai: 31 115 166;
+  --teal: 13 148 136;
+  --ok: 21 128 61;
+  --glow-a: .16;
+  --glass-a: .58;
+  --glass-b: .28;
+  --glass-edge: rgba(255, 255, 255, .65);
+  --glass-hi: rgba(255, 255, 255, 1);
+  --rim-a: rgba(255, 255, 255, .75);
+  --rim-b: rgba(232, 148, 28, .14);
+  --sheen: rgba(255, 255, 255, .7);
+  --float-shadow: 0 18px 50px -14px rgba(30, 25, 10, .28);
+  --mark-shadow: 0 1px 1px rgba(80, 40, 0, .18);
+  color-scheme: light;
 }

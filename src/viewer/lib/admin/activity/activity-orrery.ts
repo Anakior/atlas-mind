@@ -39,9 +39,9 @@ export class ActivityOrrery {
         nodes +=
           `<g class="act-node" data-i="${it.i}" tabindex="0" transform="translate(${x.toFixed(1)},${y.toFixed(1)})">
             <g class="act-node-inner">
-              <circle r="19" fill="#14131a" stroke="${c}" stroke-opacity=".6"/>
+              <circle r="19" style="fill:rgb(var(--page))" stroke="${c}" stroke-opacity=".6"/>
               <svg x="-11" y="-11" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${this.ctx.TY(it.e.type).d}"/></svg>
-              ${it.e.ai ? '<circle cx="13" cy="-13" r="5" fill="#14131a" stroke="#e8941c" stroke-opacity=".8"/><circle cx="13" cy="-13" r="1.8" fill="#e8941c"/>' : ''}
+              ${it.e.ai ? '<circle cx="13" cy="-13" r="5" style="fill:rgb(var(--page))" stroke="#e8941c" stroke-opacity=".8"/><circle cx="13" cy="-13" r="1.8" fill="#e8941c"/>' : ''}
             </g>
           </g>`;
       });
@@ -56,14 +56,17 @@ export class ActivityOrrery {
 
   html(): string {
     const { ringSvg, nodes, cx, cy } = this.orreryNodes();
+    // The legend names only what the sky shows.
+    const drawn = new Set(this.orreryItems.slice(0, ActivityIcons.ORRERY_CAP).map((e) => e.type));
     const legend = Object.keys(ActivityIcons.TYPES)
+      .filter((k) => drawn.has(k))
       .map((k) => `<span class="act-legend-chip">${this.ctx.iconSvg(k, 12)}<span>${this.ctx.verb(k)}</span></span>`)
       .join('');
 
     return (
       `<div class="act-orrery flex items-start gap-4">
         <div class="act-sky relative flex-1 min-w-0">
-          <svg viewBox="0 0 720 540" style="width:100%;height:auto;overflow:visible">
+          <svg viewBox="${cx - 266} ${cy - 266} 532 532" style="width:100%;height:auto;overflow:visible">
             <defs>
               <radialGradient id="actcore" cx="42%" cy="38%"><stop offset="0" stop-color="#ffd9a0"/><stop offset="55%" stop-color="#e8941c"/><stop offset="100%" stop-color="#8a4f0e"/></radialGradient>
               <radialGradient id="actglow" cx="50%" cy="50%"><stop offset="0" stop-color="rgba(232,148,28,.15)"/><stop offset="70%" stop-color="rgba(232,148,28,0)"/></radialGradient>

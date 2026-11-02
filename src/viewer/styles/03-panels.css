@@ -86,3 +86,10 @@
 .nf-seg-btn { appearance: none; border: 0; background: transparent; color: #9a9ca1; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 7px; cursor: pointer; transition: background .12s, color .12s; }
 .nf-seg-btn:hover { color: #e7e8ea; }
 .nf-seg-btn.active { background: rgb(var(--accent)); color: #fff; }
+
+/* The history panel's placeholder (content/history-panel.ts): revision rows and a few lines of diff. */
+.hist-skel > div { padding: 8px 8px 9px; }
+.hist-skel span { display: block; height: .75rem; width: 70%; }
+.hist-skel span + span { height: .6rem; width: 40%; margin-top: .45rem; }
+.hist-skel-detail span, .hist-skel-detail span + span { height: .8rem; width: 85%; margin: 0 0 .7rem; }
+.hist-skel-detail span:nth-child(2) { width: 60%; }

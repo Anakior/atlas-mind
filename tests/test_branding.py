@@ -299,12 +299,12 @@ class TestBrandingFromToml(unittest.TestCase):
 
     def test_dist_index_styles_prefix_and_fixed_wordmark(self):
         text = self.srv.get("/").text
-        # Sidebar H1: escaped prefix in the Corinthia span, fixed "Atlas"
-        # wordmark in serif (Lora) deep-gold, "Mind" as the animated nebula pill.
-        self.assertIn(f">{BRANDED_PREFIX_ESCAPED}</span>", text)
-        self.assertIn("'Corinthia',cursive", text)
-        self.assertIn("'Lora',Georgia,serif", text)
-        self.assertIn(">Atlas</span>", text)
+        # Menu brand: the escaped prefix on its own line in Corinthia, the fixed
+        # "Atlas" wordmark in serif (Lora) deep-gold, "Mind" as the nebula pill.
+        self.assertIn(f'class="wm-prefix side-prefix">{BRANDED_PREFIX_ESCAPED}</div>', text)
+        self.assertIn("font-family: Corinthia, cursive", text)
+        self.assertIn("font-family: Lora, Georgia, serif", text)
+        self.assertIn('<span class="wm-atlas">Atlas</span>', text)
         self.assertIn('class="nebula-pill"', text)
         # The product identity's decorative fonts are loaded locally (vendored:
         # /vendor/fonts.css, no more fonts.googleapis request).

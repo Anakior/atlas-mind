@@ -59,6 +59,8 @@ module.exports = {
           500: token('ink-500'),
         },
         accent: token('accent'),
+        page: token('page'),
+        brand: token('brand'),
       },
       fontFamily: {
         sans: ['Manrope', 'system-ui', 'sans-serif'],

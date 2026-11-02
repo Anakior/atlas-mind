@@ -45,9 +45,9 @@ export class ActivityHealth {
 
   html(): string {
     const tab = (active: boolean, v: string, label: string): string =>
-      `<button type="button" data-htab="${v}" class="px-3 py-1.5 text-xs font-medium transition ${active ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" style="border-bottom:2px solid ${active ? '#1d9bd1' : 'transparent'};margin-bottom:-1px">${label}</button>`;
+      `<button type="button" data-htab="${v}" class="px-3 py-1.5 text-xs font-medium transition ${active ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" style="border-bottom:2px solid ${active ? 'rgb(var(--accent))' : 'transparent'};margin-bottom:-1px">${label}</button>`;
     const toggle =
-      `<div class="flex mb-3" style="border-bottom:1px solid #2a2a32">`
+      `<div class="flex mb-3" style="border-bottom:1px solid rgb(var(--line) / var(--line-a))">`
       + tab(this.healthTab === 'stale', 'stale', t('healthTabStale'))
       + tab(this.healthTab === 'cont', 'cont', t('healthTabCont'))
       + `</div>`;
@@ -91,15 +91,15 @@ export class ActivityHealth {
         ? escapeHtml((c.evidence && c.evidence.length && c.evidence[0].text) || c.subject || '')
         : t('healthValueConflict', escapeHtml(c.subject || ''), escapeHtml(c.a_value || ''), escapeHtml(c.b_value || ''));
       const confPill = c.confidence === 'high'
-        ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#1d3a5b;color:#9ecbff" data-tip="${escapeHtml(t('healthConfHighHint'))}">${t('healthConfHigh')}</span>`
-        : `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#2a2a32;color:#9a9aa5" data-tip="${escapeHtml(t('healthReviewHint'))}">${t('healthReview')}</span>`;
+        ? `<span class="act-hpill is-high shrink-0 text-xs px-1.5 py-0.5 rounded" data-tip="${escapeHtml(t('healthConfHighHint'))}">${t('healthConfHigh')}</span>`
+        : `<span class="act-hpill shrink-0 text-xs px-1.5 py-0.5 rounded" data-tip="${escapeHtml(t('healthReviewHint'))}">${t('healthReview')}</span>`;
 
       return `<div class="py-1.5"><div class="flex items-center gap-2 text-sm">`
         + `<div class="flex items-center gap-2 min-w-0 flex-1">`
-        + (c.verdict === 'real' ? `<span class="shrink-0 text-xs px-1.5 py-0.5 rounded" style="background:#5b1d1d;color:#ffb4b4">${t('healthReal')}</span>` : confPill)
-        + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${escapeHtml(c.a)}">${escapeHtml(this.ctx.docTitle(c.a))}</span>`
+        + (c.verdict === 'real' ? `<span class="act-hpill is-real shrink-0 text-xs px-1.5 py-0.5 rounded">${t('healthReal')}</span>` : confPill)
+        + `<span class="act-doclink text-ink-200 cursor-pointer truncate" data-path="${escapeHtml(c.a)}">${escapeHtml(this.ctx.docTitle(c.a))}</span>`
         + `<span class="text-ink-500 shrink-0">⇄</span>`
-        + `<span class="text-ink-200 hover:text-accent cursor-pointer truncate" data-path="${escapeHtml(c.b)}">${escapeHtml(this.ctx.docTitle(c.b))}</span></div>`
+        + `<span class="act-doclink text-ink-200 cursor-pointer truncate" data-path="${escapeHtml(c.b)}">${escapeHtml(this.ctx.docTitle(c.b))}</span></div>`
         + `<button type="button" class="act-cdismiss shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-lg border subtle-border bg-navy-600 hover:bg-navy-500 text-ink-300 hover:text-ink-100 transition" data-a="${escapeHtml(c.a)}" data-b="${escapeHtml(c.b)}" data-aline="${c.a_line || ''}" data-bline="${c.b_line || ''}" data-tip="${escapeHtml(t('healthDismissHint'))}">✓ ${t('healthDismiss')}</button></div>`
         + (meta ? `<div class="text-xs text-ink-500 mt-0.5 truncate">${meta}</div>` : '') + '</div>';
     }).join('');

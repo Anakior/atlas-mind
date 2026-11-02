@@ -3,7 +3,6 @@ import datetime
 import math
 import posixpath
 import re
-import subprocess
 import time
 
 import server as _s
@@ -213,26 +212,6 @@ def _api_recent(days: int, limit: int, ctx=None) -> list:
 _MONTH_SECONDS = 2629800  # 30.4375 days
 
 
-_DATES = {}  # one entry: each doc's last commit date, for the (mind, HEAD) they were read at
-
-
-def _commit_dates() -> dict:
-    """The build's per-doc commit dates, read again only once HEAD moves: a review asks folder
-    by folder, and the full git log is the slow part."""
-    root = _s.CONFIG.root
-    try:
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(root), capture_output=True,
-                              text=True, timeout=10).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        head = ""
-    if not head:
-        return _s._import_build()._git_commit_dates(root)
-    if (root, head) not in _DATES:
-        _DATES.clear()
-        _DATES[(root, head)] = _s._import_build()._git_commit_dates(root)
-    return _DATES[(root, head)]
-
-
 def _api_stale(months: int, limit: int, ctx=None, prefix: str = "") -> list:
     """Docs nobody has looked at for `months`+ months (13c obsolescence), the longest overdue
     first. A look is an edit (dated by the doc's last git commit, which survives clone/pull
@@ -240,7 +219,7 @@ def _api_stale(months: int, limit: int, ctx=None, prefix: str = "") -> list:
     one in a row doubling the wait. A doc flagged outdated waits for an edit, not a review:
     _api_outdated lists it instead. `prefix` keeps one folder. Deterministic, ACL-scrubbed per ctx."""
     threshold, now = months * _MONTH_SECONDS, time.time()
-    dates = _commit_dates()
+    dates = _s._import_build()._git_commit_dates(_s.CONFIG.root)
     confirmed = attestations.load()
     items = []
     for rel, path in _s._iter_doc_files():

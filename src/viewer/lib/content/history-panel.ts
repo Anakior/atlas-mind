@@ -62,8 +62,9 @@ export class HistoryPanel {
     if (!this.available(target)) return;
     this.file = target;
     historyPathEl.textContent = target.path;
-    historyList.innerHTML = '<div class="text-ink-500 px-2 py-1">…</div>';
-    historyDetail.innerHTML = '<div class="text-ink-500">' + escapeHtml(t('historyPick')) + '</div>';
+    // A placeholder in the panel's own shape until the revisions arrive (git can take a while).
+    historyList.innerHTML = '<div class="hist-skel">' + '<div><span class="skeleton"></span><span class="skeleton"></span></div>'.repeat(6) + '</div>';
+    historyDetail.innerHTML = '<div class="hist-skel hist-skel-detail"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>';
     historyOverlay.classList.remove('hidden');
     let data: { revisions?: Revision[] };
 
@@ -87,6 +88,7 @@ export class HistoryPanel {
       return;
     }
 
+    historyDetail.innerHTML = '<div class="text-ink-500">' + escapeHtml(t('historyPick')) + '</div>';
     this.allRevisions = revisions;
     this.aiOnly = false; // each doc opens unfiltered
     this.currentSha = null;

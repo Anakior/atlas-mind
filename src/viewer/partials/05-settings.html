@@ -16,6 +16,7 @@
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="groups" data-i18n="settingsTabGroups">Groupes</button>
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="shares" data-i18n="settingsTabShares">Partages</button>
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="nodes" data-i18n="settingsTabNodes">N&oelig;uds</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="appearance" data-i18n="settingsTabAppearance">Apparence</button>
     </div>
     <div id="settings-body" class="flex-1 overflow-y-auto scrollbar-thin p-5">
       <div id="settings-content">
@@ -262,6 +263,33 @@
           <h4 class="text-sm font-semibold text-ink-100" data-i18n="securitySessionsTitle">Sessions</h4>
           <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="securitySessionsHint">D&eacute;connecte tous les appareils o&ugrave; ce compte est connect&eacute;, y compris celui-ci.</p>
           <button id="security-logout-all" class="mt-3 px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded font-medium" data-i18n="securityLogoutAll">D&eacute;connecter toutes mes sessions</button>
+        </div>
+      </section>
+
+      <!-- Apparence (admin): the instance accent and the prefix, the same for every account. -->
+      <section id="settings-pane-appearance" class="settings-pane hidden">
+        <div class="bg-navy-900 border subtle-border rounded-lg p-4 mb-4">
+          <h4 class="text-sm font-semibold text-ink-100" data-i18n="appearanceAccentTitle">Couleur d'accent</h4>
+          <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="appearanceAccentHint">Les boutons, les badges, ce qui a boug&eacute; cette semaine. Une couleur par instance pour les distinguer d'un coup d'&oelig;il.</p>
+          <div id="appearance-swatches" class="appearance-swatches mt-3"></div>
+        </div>
+        <div id="appearance-prefix-card" class="bg-navy-900 border subtle-border rounded-lg p-4 mb-4">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <h4 id="appearance-prefix-title" class="text-sm font-semibold text-ink-100"></h4>
+              <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="appearancePrefixHint">Le nom &eacute;crit avant &laquo;&nbsp;Atlas&nbsp;&raquo;, dans le menu et sur l'accueil.</p>
+            </div>
+            <button id="appearance-prefix" type="button" class="home-switch" role="switch" aria-checked="true"><span class="home-switch-knob"></span></button>
+          </div>
+        </div>
+        <div id="appearance-tagline-card" class="bg-navy-900 border subtle-border rounded-lg p-4">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <h4 id="appearance-tagline-title" class="text-sm font-semibold text-ink-100"></h4>
+              <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="appearanceTaglineHint">La phrase sous le logo, sur l'accueil.</p>
+            </div>
+            <button id="appearance-tagline" type="button" class="home-switch" role="switch" aria-checked="true"><span class="home-switch-knob"></span></button>
+          </div>
         </div>
       </section>
       </div>

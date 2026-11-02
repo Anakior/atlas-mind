@@ -53,6 +53,22 @@
   </div>
 </div>
 
+<!-- The menu's panels (home/side-panels.ts): Inbox, Journal and Récents over any page, like Tâches. -->
+<div id="side-panel" class="hidden fixed inset-0 z-50 overflow-y-auto overlay-backdrop">
+  <div style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
+    <div class="flex items-center justify-between" style="margin-bottom:1.5rem">
+      <div>
+        <div id="side-panel-title" class="text-lg font-semibold text-ink-100 font-sans"></div>
+        <div id="side-panel-sub" class="text-xs text-ink-400 font-sans"></div>
+      </div>
+      <button id="side-panel-close" class="p-1.5 text-ink-400 hover:text-ink-100 rounded hover:bg-ink-100/10" data-tip="Fermer (Esc)" data-i18n-tip="closeEsc">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="side-panel-body"></div>
+  </div>
+</div>
+
 <button id="toc-show" class="hidden fixed top-14 right-3 z-20 p-2 bg-navy-800/90 backdrop-blur border subtle-border rounded-lg text-ink-300 hover:text-ink-100 hover:bg-navy-700 shadow-lg" title="Afficher le sommaire (Ctrl+J)" data-i18n-title="showToc">
   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
 </button>

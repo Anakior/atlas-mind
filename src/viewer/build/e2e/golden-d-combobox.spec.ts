@@ -45,7 +45,6 @@ async function openInboxEditor(page: Page) {
   await page.route('**/api/inbox*', (route) => route.fulfill({ json: { inbox } }));
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.locator('#home-activity-card [data-view="inbox"]').click();
   await page.locator('#ibx-focus').waitFor();
   await page.locator('#ibx-focus .ibx-destchip').click();
   // The card may still be sliding in (ibxpop, 8px): measure once it has landed.

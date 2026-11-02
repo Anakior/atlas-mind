@@ -19,7 +19,18 @@ export class ActivityJournal {
     const ty = this.ctx.TY(e.type);
     const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${escapeHtml(e.ai)}</span>` : '';
     const undo = !IS_OFFLINE_BUILD && e.sha && e.agoMin < RUN_WINDOW_MIN
-      ? `<button type="button" class="act-undo" data-sha="${escapeHtml(e.sha)}" title="${escapeHtml(t('actUndo'))}" aria-label="${escapeHtml(t('actUndo'))}">${ActivityUndo.ICON}</button>`
+      ? `<button type="button" class="act-undo" data-sha="${escapeHtml(e.sha)}" data-tip="${escapeHtml(t('actUndo'))}" aria-label="${escapeHtml(t('actUndo'))}">${ActivityUndo.ICON}</button>`
+      : '';
+
+    // A doc still in the mind opens from its title or the hover button; a deleted or moved one only
+    // has its history left.
+    const live = this.ctx.hasDoc(e.path);
+    const openTip = escapeHtml(t('actOpenDoc'));
+    const title = live
+      ? `<a class="act-open act-title text-ink-300 truncate min-w-0" href="#${encodeURIComponent(e.path)}" data-tip="${openTip}">${escapeHtml(e.title)}</a>`
+      : `<span class="text-ink-300 truncate min-w-0">${escapeHtml(e.title)}</span>`;
+    const open = live
+      ? `<button type="button" class="act-open act-open-btn" data-tip="${openTip}" aria-label="${openTip}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></button>`
       : '';
 
     return (
@@ -30,24 +41,25 @@ export class ActivityJournal {
           <div class="flex items-center gap-1.5 text-sm mt-0.5">
             <span class="shrink-0" style="line-height:0">${this.ctx.iconSvg(e.type, 14)}</span>
             <span class="shrink-0" style="color:${ty.color};font-weight:600;white-space:nowrap">${this.ctx.verbPhrase(e.type)}</span>
-            <span class="text-ink-300 truncate min-w-0">${escapeHtml(e.title)}</span>
+            ${title}
             ${e.count && e.count > 1 ? `<span class="text-ink-500 text-xs shrink-0">×${e.count}</span>` : ''}
           </div>
         </div>
-        ${undo}
+        ${open}${undo}
         <div class="shrink-0 text-xs text-ink-500 font-mono" title="${escapeHtml(e.sha)}">${this.ctx.rel(e.agoMin)}</div>
       </div>`
     );
   }
 
-  html(): string {
+  // The home shows the first entries and a "See all" toggle; the menu's panel (full) shows them all.
+  html(full = false): string {
     const all = this.ctx.shownItems();
 
     if (!all.length) return `<div class="text-ink-500 text-sm py-4 text-center">${this.ctx.aiOnly ? t('actEmptyAi') : t('actEmpty')}</div>`;
 
     let out = '';
     let day = '';
-    const shown = this.ctx.expanded ? all : all.slice(0, ActivityIcons.JOURNAL_PREVIEW);
+    const shown = full || this.ctx.expanded ? all : all.slice(0, ActivityIcons.JOURNAL_PREVIEW);
 
     shown.forEach((e) => {
       const k = this.ctx.dayKey(e.agoMin);
@@ -59,8 +71,8 @@ export class ActivityJournal {
       out += this.row(e);
     });
     // Toggle in place, no extra view to navigate to, the feed just unfolds.
-    if (all.length > ActivityIcons.JOURNAL_PREVIEW) {
-      out += `<div class="text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${this.ctx.expanded ? t('actCollapse') : t('actSeeAll')}</a></div>`;
+    if (!full && all.length > ActivityIcons.JOURNAL_PREVIEW) {
+      out += `<div class="act-seeall-row text-right mt-3"><a class="act-seeall text-sm text-accent hover:underline cursor-pointer">${this.ctx.expanded ? t('actCollapse') : t('actSeeAll')}</a></div>`;
     }
 
     return out;

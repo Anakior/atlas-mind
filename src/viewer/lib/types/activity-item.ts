@@ -34,7 +34,7 @@ interface ActivityItem {
 interface ActivityDigest {
   docs: number;
   created: number;
-  checked: number;
-  contributors: number;
   ai: number;
+  days: { human: number; ai: number }[]; // the last 7 calendar days, today last
+  top: { folder: string; n: number } | null; // the top-level folder with the most changes
 }

@@ -10,6 +10,7 @@ import { layoutChrome } from '../home/layout-chrome';
 import { historyOverlay, historyPanel } from '../content/history-panel';
 import { commandPalette } from './command-palette';
 import { tasksOverlay } from './tasks-overlay';
+import { sidePanels } from '../home/side-panels';
 import { mindGraph } from './graph-boot';
 
 export class KeyboardRouter {
@@ -36,6 +37,13 @@ export class KeyboardRouter {
 
     if (e.key === 'Escape' && tasksOverlay.isOpen()) {
       tasksOverlay.close();
+
+      return;
+    }
+
+    // A field in the panel (the Inbox's "file under") takes its own Escape first.
+    if (e.key === 'Escape' && sidePanels.isOpen() && !(e.target as HTMLElement).closest('input, textarea, select')) {
+      sidePanels.close();
 
       return;
     }

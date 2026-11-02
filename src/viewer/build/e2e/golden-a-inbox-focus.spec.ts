@@ -35,7 +35,6 @@ test('A — inbox focus + uncommitted value survive the 5s poll', async ({ page 
   await page.route('**/api/inbox*', (route) => route.fulfill({ json: { inbox } }));
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.locator('#home-activity-card [data-view="inbox"]').click();
   const focus = page.locator('#ibx-focus');
   await focus.waitFor();
 

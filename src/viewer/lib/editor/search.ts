@@ -6,7 +6,7 @@
 // online, normalizes both engines to NormalizedHit[], and renders the results pane under the tree.
 // makeSnippet stays a pure helper (the highlighted excerpt around the first matching word).
 
-import { searchEl, searchResultsEl, treeEl, recentList, recentSection } from '../core/dom-refs';
+import { searchEl, searchResultsEl, treeEl } from '../core/dom-refs';
 import { t } from '../core/i18n';
 import { fileMap } from '../core/tree';
 import { EMBED_CONTENT, IS_OFFLINE_BUILD } from '../core/data-csrf';
@@ -216,14 +216,11 @@ export class Search {
       treeEl.classList.remove('hidden');
       if (this.treeHeaderEl) this.treeHeaderEl.classList.remove('hidden');
 
-      if (recentList.children.length > 0) recentSection.classList.remove('hidden');
-
       return;
     }
 
     treeEl.classList.add('hidden');
     if (this.treeHeaderEl) this.treeHeaderEl.classList.add('hidden');
-    recentSection.classList.add('hidden');
     searchResultsEl.classList.remove('hidden');
     this.searchDebounce = setTimeout(() => this.renderSearchResults(q), 140);
   }

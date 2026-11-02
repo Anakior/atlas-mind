@@ -1,13 +1,17 @@
 import { currentFile, tocHasLinks, tocHasNotes } from '../core/state';
 import { tocPanel, tocList, treeEl } from '../core/dom-refs';
+import { t } from '../core/i18n';
 
-// The viewer's layout chrome: sidebar collapse + per-doc TOC panel visibility. State (the collapsed
-// flag, the per-doc toc-hidden map) lives in LayoutChrome; its entry points (toggleSidebar / toggleToc
+// The viewer's layout chrome: the menu folded to a column of icons (Ctrl+B) + per-doc TOC panel
+// visibility. State (the folded flag, the per-doc toc-hidden map) lives in LayoutChrome; its entry points (toggleSidebar / toggleToc
 // / applyToc / isMobile) are public methods on the exported layoutChrome singleton, imported by the
 // modules that drive the chrome (graph/command-palette.ts, graph/keyboard-router.ts, content/toc.ts,
 // graph/todo-surface.ts).
+const MORPH_MS = 190; // the menu's width transition (12-shell.css), plus a frame
+
 export class LayoutChrome {
   private sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === '1';
+  private morphTimer = 0;
   private tocHiddenMap: Record<string, boolean> = {};
 
   constructor() {
@@ -22,21 +26,18 @@ export class LayoutChrome {
     return window.matchMedia('(max-width: 767px)').matches;
   }
 
+  // Folded, the menu stays as a column of icons (a drawer on a phone, never folded there). Its
+  // entries lose their labels, so the labels become their tooltips.
   applySidebar(): void {
-    if (this.isMobile()) {
-      sidebarEl.style.marginLeft = '';
-      sidebarShowInline.classList.remove('hidden');
+    const rail = this.sidebarCollapsed && !this.isMobile();
 
-      return;
-    }
-
-    if (this.sidebarCollapsed) {
-      sidebarEl.style.marginLeft = '-20rem';
-      sidebarShowInline.classList.remove('hidden');
-    } else {
-      sidebarEl.style.marginLeft = '';
-      sidebarShowInline.classList.add('hidden');
-    }
+    sidebarEl.classList.toggle('is-rail', rail);
+    sidebarShowInline.classList.toggle('hidden', !this.isMobile());
+    sidebarToggle.dataset.tip = t(rail ? 'expandSidebar' : 'collapseSidebar');
+    sidebarEl.querySelectorAll<HTMLElement>('.side-link:not([data-i18n-tip])').forEach((a) => {
+      if (rail) a.dataset.tip = a.querySelector('span:not(.side-badge)')?.textContent?.trim() || '';
+      else delete a.dataset.tip;
+    });
   }
 
   toggleSidebar(): void {
@@ -48,7 +49,12 @@ export class LayoutChrome {
 
     this.sidebarCollapsed = !this.sidebarCollapsed;
     localStorage.setItem('sidebar-collapsed', this.sidebarCollapsed ? '1' : '0');
+    // Only the width moves: the content is hidden while it does (it would reflow on the way), then
+    // fades back in at its new layout.
+    sidebarEl.classList.add('is-morphing');
     this.applySidebar();
+    clearTimeout(this.morphTimer);
+    this.morphTimer = window.setTimeout(() => sidebarEl.classList.remove('is-morphing'), MORPH_MS);
   }
 
   private isTocHiddenForCurrent(): boolean {

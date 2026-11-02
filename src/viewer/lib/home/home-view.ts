@@ -1,56 +1,25 @@
 import { fileMap } from '../core/tree';
 import { escapeHtml, relativeDate } from '../core/utils';
-import { recentSection, recentList, sharedSection, sharedList, contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, tocPanel } from '../core/dom-refs';
+import { sharedSection, sharedList, contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, tocPanel } from '../core/dom-refs';
 import { IS_OFFLINE_BUILD, SITE_PREFIX, TAGLINE } from '../core/data-csrf';
 import { t, LANG } from '../core/i18n';
 import { currentFile, setCurrentFile, mdCount } from '../core/state';
 import { todos, loadContent } from '../content/content-tree';
 import { docRenderer, isViewable } from '../content/doc-renderer';
 import { tagBrowsePage } from '../content/tag-browse';
-import { mindGraph } from '../graph/graph-boot';
 import { Dialogs } from '../modals/dialogs';
 import { tocShow } from './layout-chrome';
 
 // Home dashboard + the viewer's hash router. The home view stays imperative innerHTML, NOT the keyed
 // runtime: contentEl is co-owned by other content renderers (showMarkdown, renderHtmlFrame,
 // openHistory), so a render()-based home would desync the runtime's per-container child map. HomeView
-// is stateless; its entry points (showWelcome / routeFromHash / showNotFound / renderRecent) are public
+// is stateless; its entry points (showWelcome / routeFromHash / showNotFound) are public
 // methods on the exported homeView singleton, imported by the modules that route and render (e.g. the
 // command palette and bootstrap). Module scope keeps everything else private.
+const TAGS_SHOWN = 30; // the home lists the most used tags; the rest is one click away
+
 export class HomeView {
   // ---- home renderers (imperative innerHTML; see file header) ----
-  renderRecent(): void {
-    const files = Object.values(fileMap)
-      .filter((f) => f.ext === '.md' && f.mtime)
-      .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, 3);
-
-    if (files.length === 0) return;
-    recentSection.classList.remove('hidden');
-    recentList.innerHTML = files
-      .map(
-        (f) => `
-    <li class="overflow-hidden"><a class="tree-item w-full flex flex-col px-2 py-1 rounded cursor-pointer" data-path="${escapeHtml(f.path)}">
-      <span class="block text-xs text-ink-200 truncate w-full" data-name="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
-      <span class="text-[10px] text-ink-500">${relativeDate(f.mtime)}</span>
-    </a></li>
-  `,
-      )
-      .join('');
-    recentList.querySelectorAll<HTMLAnchorElement>('a').forEach((a) => {
-      a.addEventListener('click', (e) => {
-        e.preventDefault();
-        const path = a.dataset.path;
-        const f = path ? fileMap[path] : undefined;
-
-        if (f) {
-          docRenderer.show(f);
-          history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-        }
-      });
-    });
-  }
-
   // "Shared with me": docs another member shared WITH the viewer, discovered via
   // /api/shared-with-me. Cloud-only and fully defensive — any failure (offline build, local mode,
   // empty list, network error) just leaves the section hidden, so it can never break the home view.
@@ -159,9 +128,10 @@ export class HomeView {
     setCurrentFile(null);
     document.querySelector('main')!.scrollTop = 0; // a fresh home view starts at the top
     // Reset width/padding overrides left by a previous .html render (renderHtmlFrame), else the home
-    // page inherits full-width; restore the todo widget hidden during the HTML preview.
-    contentEl.style.maxWidth = '';
-    contentEl.style.padding = '';
+    // page inherits full-width; restore the todo widget hidden during the HTML preview. The home
+    // itself runs wider than a doc.
+    contentEl.style.maxWidth = '84rem';
+    contentEl.style.padding = '26px 34px 120px';
     document.getElementById('todo-widget')?.classList.remove('hidden');
 
     const byCategory: Record<string, number> = {};
@@ -183,93 +153,33 @@ export class HomeView {
       .slice(0, 4);
     const todoSummary = todos.length ? `${todos.filter((td) => td.done).length}/${todos.length}` : '–';
 
-    // Docs modified this week vs last, for the "this week" stat delta.
-    const dayMs = 86400 * 1000;
-    const now = new Date();
-
-    now.setHours(0, 0, 0, 0);
-    const todayDow = (now.getDay() + 6) % 7;
-    const monday = new Date(now.getTime() - todayDow * dayMs);
-    const startOfThisWeek = monday.getTime() / 1000;
-    const startOfPrevWeek = (monday.getTime() - 7 * dayMs) / 1000;
-    let weekModif = 0;
-    let prevWeekModif = 0;
-
-    for (const f of Object.values(fileMap)) {
-      if (f.ext !== '.md' || !f.mtime) continue;
-      if (f.mtime >= startOfThisWeek) weekModif += 1;
-      else if (f.mtime >= startOfPrevWeek) prevWeekModif += 1;
-    }
-
-    const weekDelta = weekModif - prevWeekModif;
-    const weekDeltaTxt = weekDelta === 0 ? '=' : (weekDelta > 0 ? '+' : '') + weekDelta;
-    const weekDeltaColor = weekDelta > 0 ? '#4ade80' : weekDelta < 0 ? '#f87171' : '#868a90';
-
-    const categoryItems = catEntries
-      .map(([cat, n]) => {
-        return (
-          '<div class="flex items-center justify-between px-3 py-2 rounded border subtle-border bg-black/15 hover:bg-black/25 transition"><span class="text-sm text-ink-200 font-mono truncate">' +
-          escapeHtml(cat) +
-          '</span><span class="text-xs text-ink-400 font-semibold ml-2">' +
-          n +
-          '</span></div>'
-        );
-      })
+    const ico = (d: string): string => `<svg class="side-i" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+    const folderTop = catEntries.slice(0, 5);
+    const folderMax = folderTop.length ? folderTop[0][1] : 1;
+    const folderBars = folderTop
+      .map(([cat, n]) => `<div class="home-bar"><span class="home-bar-k">${escapeHtml(cat === 'root' ? t('rootLabel') : cat)}</span><span class="home-bar-t"><i style="width:${Math.round((100 * n) / folderMax)}%"></i></span><span class="home-bar-n">${n}</span></div>`)
       .join('');
 
     const recentItems = recent
       .map((f) => {
-        return (
-          '<a data-recent-path="' +
-          escapeHtml(f.path) +
-          '" class="block p-3 rounded-lg border subtle-border bg-black/15 hover:bg-black/30 hover:border-accent/30 transition cursor-pointer">' +
-          '<div class="text-sm text-ink-100 font-medium font-sans truncate">' +
-          escapeHtml(f.name) +
-          '</div>' +
-          '<div class="text-[11px] text-ink-500 mt-0.5 font-sans">' +
-          relativeDate(f.mtime) +
-          ' · ' +
-          escapeHtml(f.path.split('/').slice(0, -1).join('/') || t('rootLabel')) +
-          '</div>' +
-          '</a>'
-        );
+        const dir = f.path.split('/').slice(0, -1).join('/') || t('rootLabel');
+
+        return `<a data-recent-path="${escapeHtml(f.path)}" class="home-row"><span class="home-row-t"><b>${escapeHtml(f.name)}</b><em>${escapeHtml(dir)}</em></span><span class="home-row-w">${relativeDate(f.mtime)}</span></a>`;
       })
       .join('');
 
     const longest = Object.values(fileMap)
       .filter((f) => f.ext === '.md' && f.words)
       .sort((a, b) => (b.words ?? 0) - (a.words ?? 0))
-      .slice(0, 6);
+      .slice(0, 3);
     const maxWords = longest.length ? longest[0].words ?? 1 : 1;
-    const rankingHtml = longest.length
-      ? longest
-          .map((f, i) => {
-            const words = f.words ?? 0;
-            const pct = Math.max(4, Math.round((100 * words) / maxWords));
+    const rankingHtml = longest
+      .map((f) => {
+        const words = f.words ?? 0;
 
-            return (
-              '<a data-recent-path="' +
-              escapeHtml(f.path) +
-              '" class="block cursor-pointer group">' +
-              '<div class="flex items-center gap-2">' +
-              '<span class="text-ink-500 font-mono text-xs w-4 text-right">' +
-              (i + 1) +
-              '</span>' +
-              '<span class="text-sm text-ink-200 group-hover:text-accent truncate flex-1">' +
-              escapeHtml(f.name) +
-              '</span>' +
-              '<span class="text-[11px] text-ink-500 font-mono whitespace-nowrap">' +
-              words.toLocaleString(LANG) +
-              '</span>' +
-              '</div>' +
-              '<div class="h-1 mt-1 ml-6 rounded bg-black/30 overflow-hidden"><div class="h-full rounded" style="width:' +
-              pct +
-              '%;background:rgba(29,155,209,0.55)"></div></div>' +
-              '</a>'
-            );
-          })
-          .join('')
-      : '<span class="text-sm text-ink-500">—</span>';
+        return `<a data-recent-path="${escapeHtml(f.path)}" class="home-bar home-bar-doc"><span class="home-bar-k">${escapeHtml(f.name)}</span><span class="home-bar-t"><i style="width:${Math.max(4, Math.round((100 * words) / maxWords))}%"></i></span><span class="home-bar-n">${words.toLocaleString(LANG)}</span></a>`;
+      })
+      .join('');
 
     // Tag cloud: font size ∝ number of docs.
     const tagCounts: Record<string, number> = {};
@@ -281,82 +191,68 @@ export class HomeView {
     }
 
     const tagEntries = Object.entries(tagCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    const maxTagCount = tagEntries.length ? tagEntries[0][1] : 1;
-    const tagCloud = tagEntries
-      .map(([tag, n]) => {
-        const scale = (0.78 + 0.5 * (n / maxTagCount)).toFixed(2);
-
-        return (
-          '<button class="doc-tag" data-hometag="' +
-          escapeHtml(tag) +
-          '" style="font-size:' +
-          scale +
-          'rem">#' +
-          escapeHtml(tag) +
-          '<span class="doc-tag-count">' +
-          n +
-          '</span></button>'
-        );
-      })
-      .join('');
+    const tagChip = ([tag, n]: [string, number]): string =>
+      `<button type="button" class="home-tagc" data-hometag="${escapeHtml(tag)}">${escapeHtml(tag)}<i>${n}</i></button>`;
+    const allTags = tagEntries.map(tagChip).join('');
+    const tagCloud = tagEntries.slice(0, TAGS_SHOWN).map(tagChip).join('')
+      + (tagEntries.length > TAGS_SHOWN ? `<button type="button" class="home-tagc home-tagc-more" data-tags-more>${t('tagsMore', tagEntries.length - TAGS_SHOWN)}</button>` : '');
+    const kbd = (k: string, label: string): string => `<span><kbd>${k}</kbd> ${label}</span>`;
 
     contentEl.innerHTML = `
-    <h1 class="!mb-2"><span style="font-family:'Corinthia',cursive;font-weight:700;font-size:1.7em;line-height:.9;color:#eef0f2">${escapeHtml(SITE_PREFIX)}</span> <span style="display:inline-flex;align-items:center;gap:.4em;line-height:1;margin-left:.22em"><span style="font-family:'Lora',Georgia,serif;font-style:italic;font-weight:600;font-size:1.3em;color:#e8941c;text-shadow:0 1px 2px rgba(0,0,0,0.6),0 0 1px rgba(0,0,0,0.85)">Atlas</span><span class="nebula-pill">Mind</span></span></h1>
-    <p class="lead text-ink-400 !mt-0">${escapeHtml(TAGLINE)}</p>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 not-prose mt-6 mb-8">
-      <div class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t('statDocs')}</div>
-        <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${mdCount}</div>
-        <div class="text-[11px] text-ink-400 mt-0.5">${t('statDocsSub')}</div>
-      </div>
-      <div class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t('statWords')}</div>
-        <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${(totalWords / 1000).toFixed(1)}k</div>
-        <div class="text-[11px] text-ink-400 mt-0.5">${t('statWordsSub', Math.round(totalWords / 220))}</div>
-      </div>
-      <div class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">${t('statWeek')}</div>
-        <div class="text-3xl font-extrabold text-accent mt-1 font-sans">${weekModif} <span class="text-sm font-bold ml-1" style="color:${weekDeltaColor}">${weekDeltaTxt}</span></div>
-        <div class="text-[11px] text-ink-400 mt-0.5">${t('statWeekSub')}</div>
-      </div>
-      <div class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">To-do</div>
-        <div id="home-todo-stat" class="text-3xl font-extrabold text-accent mt-1 font-sans">${escapeHtml(todoSummary)}</div>
-        <div class="text-[11px] text-ink-400 mt-0.5">${t('statTodoSub')}</div>
-      </div>
-    </div>
+    <div class="home not-prose">
+      <section class="home-hero">
+        <div class="home-hero-l">
+          <h1 class="home-mark">${SITE_PREFIX ? `<span class="wm-prefix">${escapeHtml(SITE_PREFIX)}</span>` : ''}<span class="wm-atlas">Atlas</span><span class="nebula-pill">Mind</span></h1>
+          <p class="home-tag">${escapeHtml(TAGLINE)}</p>
+          <div class="home-stats">
+            <div class="home-stat"><b>${mdCount}</b><span>${t('statDocs')}</span></div>
+            <div class="home-stat"><b>${new Intl.NumberFormat(LANG, { notation: 'compact', maximumFractionDigits: 1 }).format(totalWords)}</b><span>${t('statWordsSub', Math.round(totalWords / 220))}</span></div>
+            <div class="home-stat"><b id="home-todo-stat">${escapeHtml(todoSummary)}</b><span>${t('statTodoSub')}</span></div>
+          </div>
+        </div>
+        <div id="activity-highlights" class="home-hero-r glass"></div>
+      </section>
 
-    <div class="not-prose mb-10" id="home-activity-mount"></div>
+      <section id="home-activity-card" class="home-week">
+        <div class="home-sec">
+          <h2>${t('actTitle')}</h2>
+          <div id="activity-ai" class="home-sec-end"></div>
+        </div>
+        <div class="home-grid">
+          <section id="home-card-journal" class="home-card c7 r2">
+            <header class="home-card-h"><h3>${ico('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>')}${t('actJournal')}</h3></header>
+            <div id="activity-journal" class="home-card-b act-journal"></div>
+          </section>
+          <section id="home-card-orrery" class="home-card c5">
+            <header class="home-card-h"><h3>${ico('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 3"/>')}${t('actConstellation')}</h3></header>
+            <div id="activity-orrery" class="home-card-b"></div>
+          </section>
+          <section id="home-card-recent" class="home-card c5">
+            <header class="home-card-h"><h3>${ico('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>')}${t('recentlyModified')}</h3></header>
+            <div class="home-card-b home-rows">${recentItems || '<p class="home-empty">' + t('noRecentDocs') + '</p>'}</div>
+          </section>
+          ${IS_OFFLINE_BUILD ? '' : `<section id="home-card-inbox" class="home-card c4">
+            <header class="home-card-h"><h3>${ico('<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>')}${t('actInbox')}<span id="inbox-badge" class="side-badge hidden"></span></h3></header>
+            <div id="activity-inbox" class="home-card-b"></div>
+          </section>`}
+          <section id="home-card-health" class="home-card ${IS_OFFLINE_BUILD ? 'c6' : 'c4'}">
+            <header class="home-card-h"><h3>${ico('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>')}${t('actHealth')}</h3></header>
+            <div id="activity-health" class="home-card-b"></div>
+          </section>
+          <section id="home-card-folders" class="home-card ${IS_OFFLINE_BUILD ? 'c6' : 'c4'}">
+            <header class="home-card-h"><h3>${ico('<path d="M3 20h18"/><path d="M6 16V9M11 16V5M16 16v-4M21 16V8"/>')}${t('categories')} · ${t('longestDocs')}</h3></header>
+            <div class="home-card-b home-bars">${folderBars}${rankingHtml ? '<div class="home-bars-gap"></div>' + rankingHtml : ''}</div>
+          </section>
+          <section id="home-card-tags" class="home-card c12">
+            <header class="home-card-h"><h3>${ico('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>')}Tags</h3></header>
+            <div class="home-card-b home-tags">${tagCloud || '<p class="home-empty">' + t('noTags') + '</p>'}</div>
+          </section>
+        </div>
+      </section>
 
-    <div class="not-prose mb-10">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="!mb-0 !mt-0">Tags</h2>
-        <button id="home-graph-btn" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-navy-600 hover:bg-navy-500 text-ink-100 rounded-lg border subtle-border transition" title="${t('graphBtnTitle')}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>${t('graphLabel')}</button>
+      <div class="home-keys">
+        ${kbd('Ctrl+K', t('hintPalette'))}${kbd('/', t('hintSearch'))}${kbd('Ctrl+B', t('hintSidebar'))}${kbd('Ctrl+J', t('hintToc'))}${kbd('E', t('hintEdit'))}${kbd('N', t('hintNewTodo'))}
       </div>
-      <div class="doc-tags">${tagCloud || '<span class="text-sm text-ink-500">' + t('noTags') + '</span>'}</div>
-    </div>
-
-    <h2 class="!mt-0 !mb-4">${t('recentlyModified')}</h2>
-    <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-3 mb-10">${recentItems || '<div class="text-sm text-ink-500">' + t('noRecentDocs') + '</div>'}</div>
-
-    <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-      <div>
-        <h2 class="!mb-4 !mt-0">${t('categories')}</h2>
-        <div class="grid grid-cols-1 gap-2">${categoryItems}</div>
-      </div>
-      <div>
-        <h2 class="!mb-4 !mt-0">${t('longestDocs')}</h2>
-        <div class="space-y-2.5">${rankingHtml}</div>
-      </div>
-    </div>
-
-    <div class="not-prose mt-8 text-xs text-ink-500 flex flex-wrap gap-x-4 gap-y-2 items-center">
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+K</kbd> ${t('hintPalette')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">/</kbd> ${t('hintSearch')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+B</kbd> ${t('hintSidebar')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Ctrl+J</kbd> ${t('hintToc')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">E</kbd> ${t('hintEdit')}</span>
-      <span><kbd class="bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">N</kbd> ${t('hintNewTodo')}</span>
     </div>
   `;
     contentEl.querySelectorAll<HTMLElement>('[data-recent-path]').forEach((a) => {
@@ -371,19 +267,18 @@ export class HomeView {
         }
       });
     });
-    contentEl.querySelectorAll<HTMLElement>('[data-hometag]').forEach((b) =>
-      b.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (b.dataset.hometag) tagBrowsePage.showTag(b.dataset.hometag);
-      }),
-    );
+    contentEl.querySelector('#home-card-tags')!.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-hometag], [data-tags-more]');
 
-    const homeGraphBtn = contentEl.querySelector('#home-graph-btn');
+      if (!b) return;
+      e.preventDefault();
+      if (b.dataset.hometag) tagBrowsePage.showTag(b.dataset.hometag);
+      else b.parentElement!.innerHTML = allTags;
+    });
 
-    if (homeGraphBtn) homeGraphBtn.addEventListener('click', () => mindGraph.open());
-    // The Activity island (#home-activity-mount) is owned by the activity module
-    // (admin/activity/activity-boot.ts wires window.mountActivity to activity-card.ts): it fills the
-    // empty mount and re-mounts on SSE. Home only leaves the slot for it.
+    // The week's cards (#home-activity-card) are filled by the activity module
+    // (admin/activity/activity-boot.ts wires window.mountActivity to activity-card.ts), which also
+    // refreshes them on SSE. Home only lays out the slots.
     if (window.mountActivity) window.mountActivity();
 
     breadcrumbPath.textContent = '/';
@@ -393,12 +288,12 @@ export class HomeView {
     tocPanel.classList.add('hidden');
     tocPanel.classList.remove('flex');
     tocShow.classList.add('hidden');
+    window.dispatchEvent(new Event('atlas:home'));
   }
 }
 
 export const homeView = new HomeView();
 
-homeView.renderRecent();
 homeView.renderSharedWithMe();
 
 document.getElementById('home-link')!.addEventListener('click', () => {

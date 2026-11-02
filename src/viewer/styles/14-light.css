@@ -1,0 +1,162 @@
+/* The light theme's corrections. The tokens (00-tokens.css) flip most of the viewer; this covers what
+   was drawn for a dark page only: colours written in place in the older stylesheets and the
+   Tailwind classes picked for a dark page (text-rose-300, bg-black/30…). Light-only, so the dark
+   theme is untouched. Code blocks stay dark on purpose: the highlighting is a dark theme. */
+
+/* Prose: the typography plugin's inverted palette, and the blue ramp of the headings and links. */
+:root[data-theme="light"] .prose-invert {
+  --tw-prose-body: rgb(var(--ink-200));
+  --tw-prose-headings: rgb(var(--ink-100));
+  --tw-prose-lead: rgb(var(--ink-300));
+  --tw-prose-links: rgb(var(--accent));
+  --tw-prose-bold: rgb(var(--ink-100));
+  --tw-prose-counters: rgb(var(--ink-400));
+  --tw-prose-bullets: rgb(var(--ink-500) / .6);
+  --tw-prose-hr: rgb(var(--line) / .1);
+  --tw-prose-quotes: rgb(var(--ink-200));
+  --tw-prose-quote-borders: rgb(var(--line) / .15);
+  --tw-prose-captions: rgb(var(--ink-400));
+  --tw-prose-kbd: rgb(var(--ink-100));
+  --tw-prose-code: rgb(var(--ink-100));
+  --tw-prose-th-borders: rgb(var(--line) / .18);
+  --tw-prose-td-borders: rgb(var(--line) / .1);
+}
+:root[data-theme="light"] .prose h2:where(:not(.home *)) { color: #14628c; }
+:root[data-theme="light"] .prose h3:where(:not(.home *)) { color: #1d5878; }
+:root[data-theme="light"] .prose h4:where(:not(.home *)) { color: #3b5b70; }
+:root[data-theme="light"] .prose a:where(:not(.home *)) { color: #0f6f9e; }
+:root[data-theme="light"] .prose a:where(:not(.home *)):hover { color: #0a5378; }
+:root[data-theme="light"] .prose :not(pre) > code { color: #0f6f9e; }
+:root[data-theme="light"] .prose hr,
+:root[data-theme="light"] .prose table tr { border-color: rgb(var(--line) / .1); }
+:root[data-theme="light"] .prose .search-hit { color: inherit; background: rgba(251, 191, 36, .45); }
+:root[data-theme="light"] .prose a.wikilink { color: #0f6f9e; background: rgb(var(--accent) / .08); border-color: rgb(var(--accent) / .28); }
+:root[data-theme="light"] .prose a.wikilink:hover { color: #0a5378; background: rgb(var(--accent) / .14); border-color: rgb(var(--accent) / .5); }
+:root[data-theme="light"] .prose a.wikilink.broken { color: #b4232c; background: rgba(180, 35, 44, .06); border-color: rgba(180, 35, 44, .3); }
+:root[data-theme="light"] .prose .json-doc-summary { color: rgb(var(--ink-400)); }
+:root[data-theme="light"] .prose .json-doc-summary--invalid { color: #b4232c; }
+:root[data-theme="light"] .image-doc { background: repeating-conic-gradient(#e9e7e1 0% 25%, rgb(var(--navy-700)) 0% 50%) 50% / 24px 24px; }
+
+/* Tags */
+:root[data-theme="light"] .doc-tag,
+:root[data-theme="light"] .doc-tag-add { color: #14628c; }
+:root[data-theme="light"] .doc-tag:hover,
+:root[data-theme="light"] .doc-tag-add:hover { color: #0a4a6b; }
+:root[data-theme="light"] .doc-tag-folder { color: rgb(var(--ink-400)); }
+:root[data-theme="light"] .doc-tag-folder:hover { color: rgb(var(--ink-200)); }
+:root[data-theme="light"] .doc-tag-x:hover { color: #b4232c; }
+
+/* Tree, panels, dialogs */
+:root[data-theme="light"] .tree-remote-badge { color: #17708f; background: rgba(23, 112, 143, .1); }
+:root[data-theme="light"] .tree-remote-origin { color: #0f7a78; background: rgba(15, 122, 120, .1); }
+:root[data-theme="light"] .tree-action-btn { color: rgb(var(--ink-400)); }
+:root[data-theme="light"] .tree-action-btn:hover { color: rgb(var(--ink-100)); }
+:root[data-theme="light"] .kb-tree-badge { color: #b45309; }
+:root[data-theme="light"] .panel-card,
+:root[data-theme="light"] .dialog-card,
+:root[data-theme="light"] .atlas-cb-pop {
+  background: rgba(255, 255, 255, .86);
+  border-color: rgb(var(--line) / .1);
+  box-shadow: 0 18px 48px -14px rgba(30, 25, 10, .25), inset 0 1px 0 #fff;
+}
+:root[data-theme="light"] .panel-divider,
+:root[data-theme="light"] .subtle-border { border-color: rgb(var(--line) / .1); }
+:root[data-theme="light"] .md-tb-sep { background: rgb(var(--line) / .12); }
+:root[data-theme="light"] .nf-seg { background: rgb(var(--line) / .05); }
+:root[data-theme="light"] .nf-seg-btn { color: rgb(var(--ink-400)); }
+:root[data-theme="light"] .nf-seg-btn:hover { color: rgb(var(--ink-100)); }
+:root[data-theme="light"] #sidebar-backdrop { background: rgba(30, 25, 10, .3); }
+:root[data-theme="light"] #demo-banner { box-shadow: 0 12px 34px -12px rgba(30, 25, 10, .3); }
+:root[data-theme="light"] #demo-banner svg,
+:root[data-theme="light"] #demo-banner strong { color: #b4650a; }
+:root[data-theme="light"] #demo-banner #demo-banner-cta { color: #0f6f9e; }
+
+/* Settings and account messages */
+:root[data-theme="light"] #reset-pw-error,
+:root[data-theme="light"] #settings-error { color: #b4232c; }
+:root[data-theme="light"] #reset-pw-success { color: #047857; }
+:root[data-theme="light"] #settings-token-result .token-warning-bar,
+:root[data-theme="light"] #settings-token-result .token-warning-icon { color: #a15c07; }
+:root[data-theme="light"] #settings-token-result .token-warning-text { color: #854d0e; }
+
+/* Notes (annotations) */
+:root[data-theme="light"] #kb-note-pop { background: rgb(var(--surface)); border-color: rgb(var(--line) / .12); box-shadow: 0 10px 30px rgba(30, 25, 10, .2); }
+:root[data-theme="light"] #kb-note-pop textarea { border-color: rgb(var(--line) / .14); }
+:root[data-theme="light"] #kb-note-pop .kb-quote { color: rgb(var(--ink-400)); }
+:root[data-theme="light"] .kb-btn-ghost { color: rgb(var(--ink-300)); }
+:root[data-theme="light"] .kb-btn-del { color: #b4232c; }
+:root[data-theme="light"] #toc-notes .kb-note-snip { color: rgb(var(--ink-200)); }
+:root[data-theme="light"] #toc-notes .kb-note-meta { color: rgb(var(--ink-500)); }
+
+/* Activity */
+:root[data-theme="light"] .act-undo,
+:root[data-theme="light"] .act-open-btn,
+:root[data-theme="light"] .act-undo-panel .act-undo-note,
+:root[data-theme="light"] .act-undo-head > span,
+:root[data-theme="light"] .act-undo-doc .what { color: rgb(var(--ink-400)); }
+:root[data-theme="light"] .act-undo:hover,
+:root[data-theme="light"] .act-open-btn:hover,
+:root[data-theme="light"] .act-undo-head b,
+:root[data-theme="light"] .act-undo-close:hover { color: rgb(var(--ink-100)); }
+:root[data-theme="light"] .act-undo-error { color: #b4232c; }
+:root[data-theme="light"] .act-egg { color: rgb(var(--brand)); }
+:root[data-theme="light"] .act-hpill { background: rgb(var(--line) / .06); color: rgb(var(--ink-400)); }
+:root[data-theme="light"] .act-hpill.is-high { background: rgba(22, 119, 168, .1); color: #14628c; }
+:root[data-theme="light"] .act-hpill.is-real { background: rgba(180, 35, 44, .1); color: #b4232c; }
+
+/* Inbox */
+:root[data-theme="light"] .ibx-chip.on,
+:root[data-theme="light"] .ibx-qrow.active .ibx-qt { color: #14628c; }
+:root[data-theme="light"] .ibx-ago,
+:root[data-theme="light"] .ibx-lbl,
+:root[data-theme="light"] .ibx-next-h,
+:root[data-theme="light"] .ibx-qa,
+:root[data-theme="light"] .ibx-btn .k { color: rgb(var(--ink-500)); }
+:root[data-theme="light"] .ibx-pill.hi { color: #0b7a53; background: rgba(15, 138, 95, .1); }
+:root[data-theme="light"] .ibx-pill.md { color: rgb(var(--ink-400)); background: rgb(var(--line) / .06); }
+:root[data-theme="light"] .ibx-pill.lo { color: rgb(var(--ink-500)); background: rgb(var(--line) / .06); }
+:root[data-theme="light"] .ibx-body { color: rgb(var(--ink-300)); }
+:root[data-theme="light"] .ibx-type { color: hsl(var(--th, 210) 60% 30%); background: hsl(var(--th, 210) 55% 50% / .1); border-color: hsl(var(--th, 210) 50% 42% / .3); }
+:root[data-theme="light"] .ibx-signal { color: rgb(var(--ink-200)); background: rgb(var(--line) / .04); }
+:root[data-theme="light"] .ibx-destchip { color: #0f6f9e; background: rgb(var(--accent) / .08); border-color: rgb(var(--accent) / .28); }
+:root[data-theme="light"] .ibx-destchip.editable:hover { background: rgb(var(--accent) / .14); border-color: rgb(var(--accent) / .5); }
+:root[data-theme="light"] .ibx-destedit,
+:root[data-theme="light"] .ibx-tagedit-input { color: rgb(var(--ink-100)); }
+:root[data-theme="light"] .ibx-btn.keep { color: #0b6e4b; background: rgba(15, 138, 95, .1); border-color: rgba(15, 138, 95, .35); }
+:root[data-theme="light"] .ibx-btn.keep:hover { background: rgba(15, 138, 95, .16); }
+:root[data-theme="light"] .ibx-btn.keep .k { color: #0b7a53; border-color: rgba(15, 138, 95, .35); }
+:root[data-theme="light"] .ibx-btn.trash:hover { color: #b4232c; }
+:root[data-theme="light"] .ibx-mark { color: #0b7a53; }
+:root[data-theme="light"] .ibx-digest { border-color: rgb(var(--line) / .1); }
+:root[data-theme="light"] .ibx-toast { color: #0b6e4b; }
+
+/* The Tailwind classes chosen for a dark page. */
+:root[data-theme="light"] .text-rose-300,
+:root[data-theme="light"] .text-rose-400,
+:root[data-theme="light"] .hover\:text-rose-300:hover,
+:root[data-theme="light"] .hover\:text-rose-400:hover,
+:root[data-theme="light"] .text-red-400 { color: #be123c; }
+:root[data-theme="light"] .text-emerald-300,
+:root[data-theme="light"] .text-emerald-400,
+:root[data-theme="light"] .hover\:text-emerald-300:hover { color: #047857; }
+:root[data-theme="light"] .text-sky-400,
+:root[data-theme="light"] .text-sky-300\/70,
+:root[data-theme="light"] .text-blue-200,
+:root[data-theme="light"] .text-blue-400 { color: #0f6f9e; }
+:root[data-theme="light"] .text-amber-300,
+:root[data-theme="light"] .hover\:text-amber-300:hover { color: #a15c07; }
+:root[data-theme="light"] .text-orange-400 { color: #c2410c; }
+:root[data-theme="light"] .text-purple-400 { color: #7e22ce; }
+:root[data-theme="light"] .bg-black\/20,
+:root[data-theme="light"] .bg-black\/30,
+:root[data-theme="light"] .hover\:bg-black\/30:hover { background-color: rgb(var(--line) / .045); }
+:root[data-theme="light"] .bg-black\/40 { background-color: rgb(var(--line) / .06); }
+:root[data-theme="light"] .shadow-black\/70 { --tw-shadow-color: rgba(30, 25, 10, .22); --tw-shadow: var(--tw-shadow-colored); }
+
+/* The Mind stays a night sky in both themes: its overlay keeps the dark palette. */
+:root[data-theme="light"] #graph-overlay {
+  --navy-900: 14 13 18; --navy-800: 26 24 30; --navy-700: 35 34 42; --navy-600: 47 45 54; --navy-500: 62 60 71;
+  --ink-100: 255 255 255; --ink-200: 209 210 211; --ink-300: 176 177 181; --ink-400: 134 138 144; --ink-500: 134 138 144;
+  --accent: 29 155 209; --line: 255 255 255; --surface: 27 26 33;
+  color-scheme: dark;
+}

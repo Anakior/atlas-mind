@@ -18,7 +18,7 @@
     #todo-body { max-height: 65vh !important; }
     /* Todo items in touch mode (larger, better spaced) */
     #todo-header { padding: 0.9rem 1rem !important; }
-    #todo-title { font-size: 0.8rem !important; letter-spacing: 0.1em !important; }
+    #todo-title { font-size: 0.95rem !important; }
     #todo-count { font-size: 0.85rem !important; }
     #todo-list .todo-row { padding: 0.95rem 1rem !important; gap: 0.85rem !important; align-items: center !important; }
     #todo-list .todo-check { width: 1.4rem !important; height: 1.4rem !important; margin-top: 0 !important; flex-shrink: 0; }
@@ -35,9 +35,9 @@
       bottom: 0.75rem !important;
       right: 0.75rem !important;
       border-radius: 9999px !important;
-      background: rgb(var(--accent) / 0.95) !important;
-      border-color: rgb(var(--accent) / 0.95) !important;
-      box-shadow: 0 8px 24px -4px rgb(var(--accent) / 0.55) !important;
+      background: rgb(var(--brand)) !important;
+      border-color: rgb(var(--brand)) !important;
+      box-shadow: 0 8px 24px -4px rgb(var(--brand) / 0.55) !important;
     }
     #todo-widget.is-collapsed #todo-header {
       padding: 0 !important;
@@ -53,7 +53,7 @@
     #todo-widget.is-collapsed #todo-count,
     #todo-widget.is-collapsed #todo-chevron { display: none !important; }
     #todo-widget.is-collapsed #todo-icon {
-      color: white !important;
+      color: rgb(var(--on-brand)) !important;
       width: 1.1rem !important;
       height: 1.1rem !important;
     }
@@ -61,7 +61,7 @@
       display: inline-flex !important;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: rgb(var(--on-brand));
       font-weight: 700;
       font-size: 0.95rem;
       line-height: 1;

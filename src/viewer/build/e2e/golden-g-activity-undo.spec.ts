@@ -56,3 +56,19 @@ test('G — a run opened from the journal is undone for the docs left ticked', a
   await row.locator('.act-undo').click();
   await expect(page.locator('.act-undo-panel')).toHaveCount(0);
 });
+
+test('G — a journal row opens its doc from the title, its history from the rest', async ({ page }) => {
+  await page.route('**/api/activity*', (route) => route.fulfill({ json: activity }));
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  // notes/pricing.md is not in the dev mind: a doc gone from the mind has only its history left.
+  const gone = page.locator('#activity-journal .act-row').first();
+  await expect(gone).toContainText('Pricing notes');
+  await expect(gone.locator('.act-open')).toHaveCount(0);
+
+  const row = page.locator('#activity-journal .act-row').nth(1);
+  await row.hover();
+  await expect(row.locator('.act-open-btn')).toBeVisible();
+  await row.locator('.act-title').click();
+  await expect(page).toHaveURL(/#welcome\.md$/);
+  await expect(page.locator('#content h1').first()).toHaveText('Welcome to Atlas Mind');
+});

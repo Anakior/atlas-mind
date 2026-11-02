@@ -38,7 +38,7 @@ export class ActivityIcons {
   };
 
   static readonly ORRERY_CAP = 18; // aggregated entries (distinct doc-activities), not raw commits
-  static readonly JOURNAL_PREVIEW = 8;
+  static readonly JOURNAL_PREVIEW = 24; // the home shows what fits its card, the rest behind "See all"
 
   // Easter egg: flick the orrery (one full orbit) + bounce the sun on click; every 5th click, a
   // little supernova line floats up. Pure fun; reduced-motion gets just the line.

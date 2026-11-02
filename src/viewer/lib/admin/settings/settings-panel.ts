@@ -1,5 +1,5 @@
 // ── Settings panel (admin + cloud mode) ──────────────────────────────────────
-// Thin shell over the seven per-tab controllers (./*-tab.ts): owns the user-bar gear, open/close, and
+// Thin shell over the eight per-tab controllers (./*-tab.ts): owns the user-bar gear, open/close, and
 // the tab switch. Each tab's lists/forms/fetches live in its own controller; the shell just builds
 // the shared SettingsContext, constructs the controllers, and dispatches open() → selectTab() →
 // the active tab's load().
@@ -17,6 +17,7 @@ import { SettingsNodes } from './nodes-tab';
 import { SettingsRemotes } from './remotes-tab';
 import { SettingsGroups } from './groups-tab';
 import { SettingsProfile } from './profile-tab';
+import { SettingsAppearance } from './appearance-tab';
 
 // A tab slower than this shows the loading placeholder; faster ones swap straight in. Once shown,
 // the placeholder stays long enough to read as a state rather than a flicker.
@@ -46,6 +47,7 @@ export class SettingsPanel {
   private readonly remotes = new SettingsRemotes(this.ctx);
   private readonly groups = new SettingsGroups(this.ctx);
   private readonly profile = new SettingsProfile(this.ctx);
+  private readonly appearance = new SettingsAppearance(this.ctx);
 
   constructor() {
     this.settingsBtn.addEventListener('click', () => this.open());
@@ -160,6 +162,7 @@ export class SettingsPanel {
     if (name === 'shares') return this.shares.load();
     if (name === 'nodes') return Promise.all([this.nodes.load(), this.remotes.load()]);
     if (name === 'groups') return this.groups.load();
+    if (name === 'appearance') return this.appearance.load();
     securityPane.refreshState();
 
     return this.profile.load();

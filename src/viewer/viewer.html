@@ -13,6 +13,24 @@
 <title>__SITE_NAME__</title>
 __HEAD_META__
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
+<script>
+// Appearance before the first paint: the saved theme (dark by default, or the system's in auto) and
+// the instance accent and prefix display cached from the last visit, so a reload never flashes.
+(function () {
+  var d = document.documentElement;
+  try {
+    var m = localStorage.getItem('atlas:theme') || 'dark';
+    d.dataset.themeMode = m;
+    d.dataset.theme = m === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : m;
+    var a = JSON.parse(localStorage.getItem('atlas:appearance') || 'null');
+    if (a && a.vars) for (var k in a.vars) d.style.setProperty(k, a.vars[k]);
+    if (a && a.showPrefix === false) d.dataset.prefix = 'off';
+    if (a && a.showTagline === false) d.dataset.tagline = 'off';
+  } catch (e) {
+    d.dataset.theme = 'dark';
+  }
+})();
+</script>
 <!-- PRECOMPILED Tailwind (replaces the Play CDN "?plugins=typography" and its
      inline tailwind.config, now in web/tailwind/tailwind.config.cjs).
      After adding/removing Tailwind classes in this file, regenerate:

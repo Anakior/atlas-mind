@@ -9,7 +9,6 @@ interface MindGraphState {
   edges: MindEdge[];
   regionAnchors: Record<string, { x: number; y: number }>;
   subAnchors: Record<string, { x: number; y: number }>;
-  ring: number;
   mode: 'organic' | 'structured';
   showTags: boolean;
   clusters: Array<{ x: number; y: number; r: number; sub: string; color: string }>;

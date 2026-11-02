@@ -200,15 +200,17 @@ export class Inbox {
     return d.toISOString().slice(0, 10);
   }
 
+  // The count shows on the home's Inbox card and on the menu's Inbox entry.
   private updateBadge(): void {
-    const b = document.getElementById('inbox-badge');
+    const n = this.queue().length;
 
-    if (b) {
-      const n = this.queue().length;
+    ['inbox-badge', 'side-inbox-badge'].forEach((id) => {
+      const b = document.getElementById(id);
 
+      if (!b) return;
       b.textContent = String(n);
       b.classList.toggle('hidden', !n);
-    }
+    });
   }
 
   // ---- views (vnode trees; the keyed reconciler reuses live nodes by key) ----
@@ -467,6 +469,7 @@ export class Inbox {
     } catch (_) {}
     inbox.forEach((it) => this.applyOverride(it));
     this.inbox = inbox;
+    this.updateBadge();
     this.session = { kept: 0, trashed: 0, snoozed: 0 };
     this.activePath = null;
     this.filter = null;
@@ -477,6 +480,7 @@ export class Inbox {
   // Detect new items and grow ONLY the list; while an editor is open the sub region stays frozen, so
   // the input never shifts and the combobox popup stays anchored.
   private poll(): void {
+    if (this.box && !this.box.isConnected) { this.stopPoll(); return; } // the home was left
     if (!this.box || this.box.classList.contains('hidden') || !this.inbox) return;
     fetch('/api/inbox?limit=200')
       .then((r) => (r.ok ? r.json() : null))

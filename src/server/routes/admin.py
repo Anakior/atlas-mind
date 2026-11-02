@@ -1,9 +1,10 @@
-"""Admin routes: user/token/node/remote administration + update check.
+"""Admin routes: user/token/node/remote administration, the instance appearance + update check.
 
 All routes are table-guarded ADMIN (GET) or ADMIN_CSRF (POST/DELETE); the leading
 self._require_admin_or_403() / self._check_csrf_or_403() guards have been stripped
 from the bodies because the route table now applies them at the verb level.
 """
+import re
 import sys
 import time
 import store
@@ -199,6 +200,50 @@ def tokens_delete(handler):
         _s.registry_503(handler, "[tokens] revoke", e)
         return
     handler._send_json(200, {"ok": True})
+
+
+# ── Appearance: the accent and the prefix, the same for every account ──
+_HEX_COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def appearance_get(handler):
+    """GET /api/appearance — the instance's accent and prefix setting (any account)."""
+    try:
+        appearance = _s.get_store().get_appearance()
+    except Exception as e:
+        _s.registry_503(handler, "[admin] read appearance", e)
+        return
+    handler._send_json(200, appearance)
+
+
+def appearance_post(handler):
+    """POST /api/appearance {brand?: "#rrggbb" | null, show_prefix?: bool, show_tagline?: bool} —
+    null puts the accent back to Atlas gold. Only the fields sent change."""
+    data = handler._read_json()
+    data = data if isinstance(data, dict) else {}
+    fields = {}
+    if "brand" in data:
+        brand = data["brand"]
+        if brand is not None and not (isinstance(brand, str) and _HEX_COLOUR.match(brand)):
+            handler._send_json(400, {"error": "brand must be #rrggbb or null"})
+            return
+        fields["brand"] = brand.lower() if brand else None
+    for key in ("show_prefix", "show_tagline"):
+        if key not in data:
+            continue
+        if not isinstance(data[key], bool):
+            handler._send_json(400, {"error": f"{key} must be a boolean"})
+            return
+        fields[key] = data[key]
+    if not fields:
+        handler._send_json(400, {"error": "nothing to set"})
+        return
+    try:
+        appearance = _s.get_store().set_appearance(fields)
+    except Exception as e:
+        _s.registry_503(handler, "[admin] save appearance", e)
+        return
+    handler._send_json(200, appearance)
 
 
 # ── Atlas nodes — administration (hive) ────────────────────────────

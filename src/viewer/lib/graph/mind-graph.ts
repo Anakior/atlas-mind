@@ -15,8 +15,10 @@ import { loadBacklinksIndex } from '../content/backlinks';
 import { tagBrowsePage } from '../content/tag-browse';
 import { docRenderer } from '../content/doc-renderer';
 import { GraphPalette } from './graph-palette';
-import { GraphLayout } from './graph-layout';
+import { GraphLayout, SIM_TICKS } from './graph-layout';
 import { GraphRenderer } from './graph-renderer';
+
+const PRESETTLE = 120; // ticks run before the first frame: the two busiest seconds of the layout
 
 export class MindGraph {
   private overlay = document.getElementById('graph-overlay')!;
@@ -61,14 +63,8 @@ export class MindGraph {
     this.state = model.state;
     this.layout.applyView(this.state);
     this.resize();
+    this.presettle(this.state, EMBED_MIND ? SIM_TICKS : PRESETTLE);
     this.layout.fitCamera(this.state);
-
-    // Embed hero: pre-settle the layout off-screen so it appears already organized (no nodes flying
-    // into place on the landing page).
-    if (EMBED_MIND) {
-      for (let i = 0; i < 480; i++) this.layout.simStep(this.state);
-      this.state.ticks = 480;
-    }
 
     if (this.raf != null) cancelAnimationFrame(this.raf);
     this.loop();
@@ -98,7 +94,7 @@ export class MindGraph {
 
     // Structured "map" mode has fixed positions → no physics, just draw (hover/zoom/pan and node
     // breathing still animate).
-    if (st.mode !== 'structured' && st.ticks < 480) {
+    if (st.mode !== 'structured' && st.ticks < SIM_TICKS) {
       this.layout.simStep(st);
       st.ticks++;
     }
@@ -244,6 +240,14 @@ export class MindGraph {
     }
   }
 
+  // Run the first ticks off-screen, where a layout moves the most: the graph appears already
+  // organized instead of unfolding (the landing-page embed settles fully).
+  private presettle(st: MindGraphState, ticks: number): void {
+    st.ticks = 0;
+    if (st.mode === 'structured') return;
+    for (; st.ticks < ticks; st.ticks++) this.layout.simStep(st);
+  }
+
   private setMode(mode: 'organic' | 'structured'): void {
     const st = this.state;
 
@@ -257,7 +261,7 @@ export class MindGraph {
       this.layout.reseedOrganic(st);
     }
 
-    st.ticks = 0;
+    this.presettle(st, PRESETTLE);
     st.hover = null;
     this.layout.fitCamera(st);
     this.updateModeUI();

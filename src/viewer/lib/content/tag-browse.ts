@@ -44,6 +44,8 @@ export class TagBrowsePage {
         '</div></a></li>';
     }
 
+    contentEl.style.maxWidth = '';
+    contentEl.style.padding = '';
     contentEl.innerHTML = html + '</ul>';
     contentEl.querySelectorAll('[data-tagdoc]').forEach((a) =>
       a.addEventListener('click', (e) => {

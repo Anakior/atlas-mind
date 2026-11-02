@@ -8,13 +8,59 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+### Added
+- **A new home.** At the top, the logo, the tagline, three figures and the week at a glance: a bar
+  per day with the AI's share in its own colour, the docs touched, the new ones, those written by an
+  AI, and the busiest folder. Then the activity, all at once instead of behind tabs, with the "AI
+  only" switch: the Journal, filling its card down to "See all", beside the Constellation and the
+  recent docs; then the Inbox, the Health and the folders with the longest docs; then the tags and
+  the shortcuts. The bar that only said "/" is gone from the home on a computer.
+- **A light theme.** Three small buttons at the foot of the menu switch between light, dark and
+  auto, which follows the system. The choice is kept per browser and applied before the first
+  paint. The Mind stays a night sky in both. An extension that paints with fixed colours can add
+  its own light rules under `:root[data-theme="light"]`.
+- **Each instance its own accent.** Settings › Appearance (admins) picks the accent colour, among a
+  few or any other, for every account of the instance, so two Atlas instances tell apart at a
+  glance; on the light page it darkens until it reads. The same tab hides the site prefix (the
+  name written before "Atlas") and the tagline under the logo. It is stored in the registry (`settings.json`) and served by
+  `GET /api/appearance`, set by `POST /api/appearance`.
+- **A Journal entry opens its doc.** Its title is now a link to the doc, and a button shown on hover
+  does the same, next to the undo one; the rest of the row still opens the doc's history. A doc
+  since deleted or moved keeps only its history. The undo button now reads "Undo this change", and
+  both buttons show the viewer's own tooltips like the rest of the page.
+
 ### Changed
+- **A new menu.** Home, Inbox (with its count), Journal, The Mind, Tasks and Recent on top. Inbox,
+  Journal and Recent open a panel over the page, the way Tasks does, so the inbox, the latest
+  changes or the docs edited last are a click away from any doc. The pinned and shared docs and the
+  folders follow, running under the glass card at the foot that holds the account, the version and
+  the theme switch. The logo and the prefix are unchanged. Folded (Ctrl+B), the menu stays as a
+  column of icons instead of disappearing, each with its label as a tooltip: search opens the
+  palette, a Folders entry opens the folder tree in a panel, the avatar opens the account card. Only
+  its width moves as it folds, the content showing again once it is in place. On a phone it is still
+  a drawer.
+- **Loading keeps its shape.** Each part of the home, and the history panel, shows a quiet
+  placeholder the size of what is coming instead of an empty frame, and the loading shimmer is
+  neutral instead of gold.
+- **The floating to-do looks like the home's cards**: categories as a segmented control, the accent
+  on the add button, the checkboxes and the phone bubble. Every option it had is still there.
 - **The viewer's palette is a set of CSS variables.** The surfaces (`--navy-900` to `--navy-500`),
   the text (`--ink-100` to `--ink-500`) and the accent live in `styles/00-tokens.css`, and both the
   Tailwind palette classes and the engine's stylesheets read them. Nothing changes on screen. An
   extension now re-tints the viewer by redefining a variable instead of overriding classes with
-  `!important` (see `examples/extensions/custom-theme`). It is the first step towards a second,
-  more mainstream design, offered next to this one.
+  `!important` (see `examples/extensions/custom-theme`). The light theme and the instance accent
+  are built on them.
+
+### Fixed
+- **The tree, the inbox and the stale list answer faster.** Each doc's last commit date came from a
+  full `git log` run again on every request (seconds on a mind with a long history); it is now read
+  again only when HEAD moves, after a commit or a pull.
+- **The Mind opens already in place, and stays still.** A folder's docs all started in the same few
+  pixels, so a big folder burst apart, then kept shaking: two docs pressed together pushed each
+  other further than the gap between them on every step, for as long as the layout ran. They now
+  start spread on a spiral sized to the folder, the push between two close docs eases off, the steps
+  shrink as the layout settles, its busiest first moments run before it is shown, and the view
+  frames the whole graph instead of a fixed ring that a big folder overflowed.
 
 ## [1.12.1] - 2026-11-02
 

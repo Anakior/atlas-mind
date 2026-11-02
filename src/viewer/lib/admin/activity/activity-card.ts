@@ -1,20 +1,23 @@
-// Activity card (home) — the shell / controller: Journal / Constellation / Santé views over the
-// attributed git history. Reads GET /api/activity (the read side of the attribution layer); reuses the
-// real constellation avatars. Hidden offline / when there is nothing to show.
+// Activity on the home — the shell / controller: Journal / Constellation / Santé views over the
+// attributed git history, beside the Inbox. Reads GET /api/activity (the read side of the attribution
+// layer); reuses the real constellation avatars. The home (home/home-view.ts) lays out one card per
+// view; this shell fills them all at once, no tabs, so the week reads at a glance.
 //
 // The card is split across the sibling ./activity-*.ts modules: static registries live in
 // ./activity-icons, the pure projections in ./activity-model, and the three views in
 // ./activity-{journal,orrery,health}. This shell owns the data lifecycle (load → aggregate →
-// digest), the shared state + helper cluster, the card chrome (skeleton, digest, view switch, wiring),
+// digest), the shared state + helper cluster, the chrome (skeleton, highlights, AI filter, wiring),
 // and hands each view a render context (see ActivityRenderCtx) so the helpers are defined once and can
 // never diverge between views. The single instance is constructed in ./activity-boot; the imports above
 // guarantee every class is defined before `new ActivityCard()` runs.
 
 import { EMBED_ACTIVITY, IS_OFFLINE_BUILD } from '../../core/data-csrf';
 import { LANG, t } from '../../core/i18n';
+import { escapeHtml } from '../../core/utils';
 import { fileMap } from '../../core/tree';
 import { avatarSeed, constellationSvg } from '../../ui/avatar';
 import { historyPanel } from '../../content/history-panel';
+import { docRenderer } from '../../content/doc-renderer';
 import { ActivityIcons } from './activity-icons';
 import { ActivityModel } from './activity-model';
 import { ActivityJournal } from './activity-journal';
@@ -28,6 +31,7 @@ export class ActivityCard {
   private aiOnly = false; // 13d: filter the feed to AI-authored events only
   private digest: ActivityDigest | null = null; // 13b: factual digest of the last 7 days
   private expanded = false;
+  private panelJournal: HTMLElement | null = null; // the Journal in the menu's panel, while open
 
   // ---- views (each renders from the shared helper cluster + live state via the render context) ----
   private readonly journalView: ActivityJournal;
@@ -60,6 +64,7 @@ export class ActivityCard {
       docTitle: (p) => self.docTitle(p),
       skelRows: (n) => self.skelRows(n),
       openDocHistory: (path) => self.openDocHistory(path),
+      hasDoc: (path) => typeof fileMap !== 'undefined' && !!fileMap[path],
     };
 
     this.journalView = new ActivityJournal(ctx);
@@ -110,7 +115,7 @@ export class ActivityCard {
     try {
       return constellationSvg(avatarSeed(e.first, e.last, e.email), size);
     } catch (_) {
-      return `<span class="inline-block rounded-lg" style="width:${size}px;height:${size}px;background:#23222a"></span>`;
+      return `<span class="inline-block rounded-lg" style="width:${size}px;height:${size}px;background:rgb(var(--raise))"></span>`;
     }
   }
 
@@ -159,35 +164,41 @@ export class ActivityCard {
     if (f) historyPanel.open(f);
   }
 
+  // Go straight to the doc a change touched, the way the tree opens it.
+  private openDoc(path: string): void {
+    const f = typeof fileMap !== 'undefined' ? fileMap[path] : undefined;
+
+    if (!f) return;
+    docRenderer.show(f);
+    history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+  }
+
   // ── Digest (the weekly summary above the Journal) ─────────────────────────
-  private digestHtml(): string {
+  // The hero's week: a bar per day (the AI's share on top), the figures, the busiest folder. Nothing
+  // when nothing happened.
+  private highlightsHtml(): string {
     const d = this.digest;
 
-    if (!d) return '';
+    if (!d || !d.docs) return '';
 
-    const ic = (path: string, color: string): string =>
-      `<svg width="13" height="13" fill="none" stroke="${color}" stroke-width="1.9" viewBox="0 0 24 24" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
-    const pill = (icon: string, n: number, label: string): string =>
-      `<span class="act-legend-chip">${icon}<span class="text-ink-100 font-semibold">${n}</span> ${label}</span>`;
-    const parts: string[] = [];
+    const max = Math.max(1, ...d.days.map((x) => x.human + x.ai));
+    const weekday = new Intl.DateTimeFormat(LANG, { weekday: 'narrow' });
+    const bars = d.days
+      .map((x, k) => {
+        const n = x.human + x.ai;
+        const day = weekday.format(new Date(Date.now() - (6 - k) * 86400000));
 
-    if (d.docs) parts.push(pill(ic('M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z', '#5e6066'), d.docs, t('digestDocs', d.docs)));
-    if (d.created) parts.push(pill(ic('M12 4v16m8-8H4', this.TY('create').color), d.created, t('digestCreated', d.created)));
-    if (d.checked) parts.push(pill(ic('M5 13l4 4L19 7', this.TY('check').color), d.checked, t('digestChecked', d.checked)));
-    if (d.contributors) parts.push(pill(ic('M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4z', '#5e6066'), d.contributors, t('digestContributors', d.contributors)));
-    if (d.ai) parts.push(pill(ic('M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z', '#e8941c'), d.ai, t('digestViaAi', d.ai)));
-    if (!parts.length) return '';
+        return `<div class="hl-day${k === 6 ? ' is-today' : ''}" data-tip="${escapeHtml(t('hlDayTip', n, x.ai))}">`
+          + `<i class="hl-bar"><em style="height:${n ? Math.max(6, Math.round((100 * n) / max)) : 0}%"><b class="hl-ai" style="flex:${x.ai}"></b><b style="flex:${x.human}"></b></em></i>`
+          + `<span>${escapeHtml(day)}</span></div>`;
+      })
+      .join('');
+    const stat = (n: number, label: string, cls = ''): string => `<div class="hl-stat${cls}"><b>${n}</b><span>${label}</span></div>`;
 
-    const hr = '<hr style="border:none;border-top:1px solid #2a2a32;margin:0">';
-
-    return (
-      `<div style="position:relative;margin-bottom:12px">
-        ${hr}
-        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 9px">${parts.join('')}</div>
-        ${hr}
-        <span class="act-digest-when text-ink-500" style="position:absolute;right:0;bottom:5px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;pointer-events:none">${t('digestWeek')}</span>
-      </div>`
-    );
+    return `<div class="hl-head"><span class="hl-label">${t('digestWeek')}</span>`
+      + (d.top ? `<span class="hl-top">${t('hlTop')} <b>${escapeHtml(d.top.folder)}</b> · ${t('hlTopN', d.top.n)}</span>` : '')
+      + `</div><div class="hl-body"><div class="hl-bars">${bars}</div>`
+      + `<div class="hl-stats">${stat(d.docs, t('hlDocs', d.docs))}${stat(d.created, t('hlCreated', d.created))}${stat(d.ai, t('hlAi'), ' is-ai')}</div></div>`;
   }
 
   // ── Skeletons (first-load placeholder; also lent to the Health view via the context) ──────────────
@@ -199,6 +210,24 @@ export class ActivityCard {
       + '<div class="act-skel" style="width:38px;height:8px"></div></div>';
   }
 
+  // The week panel and the orrery while the feed loads: their own frame, empty, so nothing jumps.
+  private skelHighlights(): string {
+    const day = '<div class="hl-day"><i class="hl-bar"></i><span>&nbsp;</span></div>';
+    const stat = '<div class="hl-stat"><b class="act-skel" style="width:2.2rem">&nbsp;</b><span>&nbsp;</span></div>';
+
+    return `<div class="hl-head"><span class="hl-label">${t('digestWeek')}</span></div>`
+      + `<div class="hl-body"><div class="hl-bars">${day.repeat(7)}</div><div class="hl-stats">${stat.repeat(3)}</div></div>`;
+  }
+
+  private skelOrrery(): string {
+    const ring = (r: number) => `<circle cx="0" cy="0" r="${r}"/>`;
+
+    // The orrery's own layout (a square sky beside the legend column), so the card keeps its height.
+    return `<div class="act-orrery flex items-start gap-4"><div class="act-sky relative flex-1 min-w-0">`
+      + `<svg class="act-orrery-skel" viewBox="-266 -266 532 532">${ring(104)}${ring(172)}${ring(236)}<circle class="act-orrery-skel-sun" r="26"/></svg>`
+      + '</div><div class="act-legend"></div></div>';
+  }
+
   private skelRows(n: number): string {
     let s = '';
 
@@ -207,117 +236,63 @@ export class ActivityCard {
     return s;
   }
 
-  private skeletonHtml(): string {
-    return '<div class="border subtle-border rounded-lg p-4 bg-black/15">'
-      + '<div class="flex items-center justify-between mb-4">'
-      + '<div class="act-skel" style="width:90px;height:18px"></div>'
-      + '<div class="act-skel" style="width:150px;height:26px;border-radius:8px"></div></div>'
-      + this.skelRows(4) + '</div>';
-  }
-
-  // ── Card shell + view switch ──────────────────────────────────────────
-  private segClass(active: boolean): string {
-    return 'activity-seg px-3 py-1 text-xs font-medium ' + (active ? 'is-active bg-accent text-white' : 'text-ink-300');
-  }
-
-  // A checkbox-style filter (small box + label), not a button, reads as "filter the feed".
+  // ── Chrome: the AI filter, the slots, the wiring ─────────────────────
+  // A switch, not a button: it filters the Journal and the Constellation to what an AI wrote.
   private aiFilterHtml(): string {
-    return `<button type="button" data-ai-filter class="flex items-center gap-1.5 text-xs transition ${this.aiOnly ? 'text-accent' : 'text-ink-400 hover:text-ink-200'}" title="${t('actAiOnly')}">` +
-      `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;font-size:10px;color:#fff;border:1.5px solid ${this.aiOnly ? '#1d9bd1' : '#5e6066'};background:${this.aiOnly ? '#1d9bd1' : 'transparent'}">${this.aiOnly ? '✓' : ''}</span>` +
-      `${t('actAiOnly')}</button>`;
+    return `<button type="button" data-ai-filter class="home-switch" role="switch" aria-checked="${this.aiOnly}">${t('actAiOnly')}<span class="home-switch-knob"></span></button>`;
   }
 
-  private cardHtml(): string {
-    return (
-      `<div id="home-activity-card" class="border subtle-border rounded-lg p-4 bg-black/15">
-        <div class="act-card-head flex items-center justify-between gap-3 mb-3">
-          <h2 class="!mb-0 !mt-0">${t('actTitle')}</h2>
-          <div class="act-card-controls flex items-center gap-2 shrink-0">
-            ${this.aiFilterHtml()}
-            <div class="act-seg-group inline-flex rounded-lg border subtle-border overflow-hidden">
-              <button type="button" data-view="journal" class="${this.segClass(true)}">${t('actJournal')}</button>
-              <button type="button" data-view="orrery" class="${this.segClass(false)}">${t('actConstellation')}</button>
-              <button type="button" data-view="health" class="${this.segClass(false)}">${t('actHealth')}</button>
-              ${IS_OFFLINE_BUILD ? '' : `<button type="button" data-view="inbox" class="${this.segClass(false)}">${t('actInbox')} <span id="inbox-badge" class="act-ibadge hidden"></span></button>`}
-            </div>
-          </div>
-        </div>
-        <div id="activity-digest">${this.digestHtml()}</div>
-        <div id="activity-journal">${this.journalView.html()}</div>
-        <div id="activity-orrery" class="hidden"></div>
-        <div id="activity-health" class="hidden"></div>
-        <div id="activity-inbox" class="hidden"></div>
-      </div>`
-    );
+  private renderOrrery(el: HTMLElement): void {
+    el.innerHTML = this.orreryView.html();
+    this.orreryView.wireHover(el);
+    this.orreryView.wireSun(el);
   }
 
-  private setView(card: HTMLElement, v: string, persist: boolean): void {
-    const journalEl = card.querySelector('#activity-journal')!;
-    const orreryEl = card.querySelector<HTMLElement>('#activity-orrery')!;
-    const healthEl = card.querySelector<HTMLElement>('#activity-health')!;
-    const inboxEl = card.querySelector<HTMLElement>('#activity-inbox');
-    const digestEl = card.querySelector('#activity-digest'); // the weekly digest belongs to Journal only
-
-    if (digestEl) digestEl.classList.toggle('hidden', v !== 'journal');
-    if (v === 'orrery') {
-      if (!orreryEl.dataset.rendered) { orreryEl.innerHTML = this.orreryView.html(); orreryEl.dataset.rendered = '1'; this.orreryView.wireHover(orreryEl); this.orreryView.wireSun(orreryEl); }
-      // clear leftover one-shot animation classes so re-showing the tab never replays them
-      orreryEl.querySelectorAll('.act-spin,.act-sun,.act-egg').forEach((el) => el.classList.remove('spinning', 'pop', 'show'));
-    } else if (v === 'health' && !healthEl.dataset.rendered) {
-      healthEl.dataset.rendered = '1'; healthEl.innerHTML = this.healthView.html(); this.healthView.load(healthEl);
-    } else if (v === 'inbox' && inboxEl && !inboxEl.dataset.rendered && window.AtlasInbox) {
-      inboxEl.dataset.rendered = '1'; window.AtlasInbox.mount(inboxEl); // the Inbox is its own module (inbox/inbox.ts)
-    }
-    journalEl.classList.toggle('hidden', v !== 'journal');
-    orreryEl.classList.toggle('hidden', v !== 'orrery');
-    healthEl.classList.toggle('hidden', v !== 'health');
-    if (inboxEl) inboxEl.classList.toggle('hidden', v !== 'inbox');
-    if (window.AtlasInbox) { if (v === 'inbox') window.AtlasInbox.show(); else window.AtlasInbox.hide(); }
-    card.querySelectorAll<HTMLElement>('[data-view]').forEach((b) => { b.className = this.segClass(b.dataset.view === v); });
-    if (persist) { try { localStorage.setItem('atlas:activityView', v); } catch (_) {} }
+  // The Journal, and its card's open state ("See all" lets it grow past the card).
+  private renderJournal(root: HTMLElement): void {
+    root.querySelector('#activity-journal')!.innerHTML = this.journalView.html();
+    root.querySelector('#home-card-journal')!.classList.toggle('is-open', this.expanded);
   }
 
-  private wire(card: HTMLElement): void {
-    let saved = 'journal';
+  // The hero's highlights sit outside the root, at the top of the home.
+  private renderHighlights(): void {
+    const el = document.getElementById('activity-highlights');
 
-    try { saved = localStorage.getItem('atlas:activityView') || 'journal'; } catch (_) {}
+    if (el) el.innerHTML = this.highlightsHtml();
+  }
 
-    const q = new URLSearchParams(location.search).get('view');
+  // The feed's views: the hero's highlights, the AI filter, the Journal and the Constellation.
+  private fill(root: HTMLElement): void {
+    this.renderHighlights();
+    root.querySelector('#activity-ai')!.innerHTML = this.aiFilterHtml();
+    this.renderJournal(root);
+    this.renderOrrery(root.querySelector<HTMLElement>('#activity-orrery')!);
+  }
 
-    if (q === 'journal' || q === 'orrery' || q === 'health' || q === 'inbox') saved = q;
-    if (saved === 'inbox' && IS_OFFLINE_BUILD) saved = 'journal'; // inbox tab is online-only
-    this.setView(card, saved, false);
-    card.querySelectorAll<HTMLElement>('[data-view]').forEach((b) =>
-      b.addEventListener('click', () => this.setView(card, b.dataset.view!, true)));
-    card.addEventListener('click', (ev) => {
+  private wire(root: HTMLElement): void {
+    root.addEventListener('click', (ev) => {
       const fbtn = (ev.target as HTMLElement).closest<HTMLElement>('[data-ai-filter]');
 
       if (fbtn) {
         this.aiOnly = !this.aiOnly;
         this.expanded = false;
-        fbtn.outerHTML = this.aiFilterHtml();
-        card.querySelector('#activity-journal')!.innerHTML = this.journalView.html();
-
-        const orreryEl = card.querySelector<HTMLElement>('#activity-orrery')!;
-
-        if (orreryEl.dataset.rendered) { orreryEl.innerHTML = this.orreryView.html(); this.orreryView.wireHover(orreryEl); this.orreryView.wireSun(orreryEl); }
+        this.fill(root);
 
         return;
       }
-      if ((ev.target as HTMLElement).closest('[data-view]')) return;
       if ((ev.target as HTMLElement).closest('.act-seeall')) {
         this.expanded = !this.expanded;
-        card.querySelector('#activity-journal')!.innerHTML = this.journalView.html();
+        this.renderJournal(root);
 
         return;
       }
       if ((ev.target as HTMLElement).closest('.act-hsee')) {
-        this.healthView.toggleStale(card.querySelector<HTMLElement>('#activity-health')!);
+        this.healthView.toggleStale(root.querySelector<HTMLElement>('#activity-health')!);
 
         return;
       }
       if ((ev.target as HTMLElement).closest('.act-csee')) {
-        this.healthView.toggleCand(card.querySelector<HTMLElement>('#activity-health')!);
+        this.healthView.toggleCand(root.querySelector<HTMLElement>('#activity-health')!);
 
         return;
       }
@@ -325,7 +300,7 @@ export class ActivityCard {
       const ht = (ev.target as HTMLElement).closest<HTMLElement>('[data-htab]');
 
       if (ht) {
-        this.healthView.setTab(ht.dataset.htab!, card.querySelector<HTMLElement>('#activity-health')!);
+        this.healthView.setTab(ht.dataset.htab!, root.querySelector<HTMLElement>('#activity-health')!);
 
         return;
       }
@@ -333,7 +308,7 @@ export class ActivityCard {
       const cd = (ev.target as HTMLElement).closest<HTMLButtonElement>('.act-cdismiss');
 
       if (cd) {
-        this.healthView.dismiss(cd, card.querySelector<HTMLElement>('#activity-health')!);
+        this.healthView.dismiss(cd, root.querySelector<HTMLElement>('#activity-health')!);
 
         return;
       }
@@ -347,7 +322,17 @@ export class ActivityCard {
       }
       if ((ev.target as HTMLElement).closest('.act-undo-panel')) return;
 
-      const rowEl = (ev.target as HTMLElement).closest<HTMLElement>('[data-path]');
+      const openEl = (ev.target as HTMLElement).closest<HTMLElement>('.act-open');
+
+      if (openEl) {
+        ev.preventDefault();
+        this.openDoc(openEl.closest<HTMLElement>('[data-path]')!.dataset.path!);
+
+        return;
+      }
+      if ((ev.target as HTMLElement).closest('#activity-inbox')) return; // the Inbox handles its own clicks
+
+      const rowEl = (ev.target as HTMLElement).closest<HTMLElement>('.act-journal [data-path], #activity-health [data-path], #activity-orrery [data-path]');
 
       if (rowEl && rowEl.dataset.path) this.openDocHistory(rowEl.dataset.path);
     });
@@ -375,66 +360,84 @@ export class ActivityCard {
     }
   }
 
-  // ── Public API (mountActivity / refreshActivityData) ──────────────────
-  // Fill the mount left by showWelcome(). Robust to evaluation order: showWelcome guards on
-  // window.mountActivity, and ./activity-boot also self-calls mountActivity on load, so the card
-  // mounts whichever runs first.
-  async mount(): Promise<void> {
-    const m = document.getElementById('home-activity-mount');
+  // The menu's Journal panel (home/side-panels.ts): the whole feed in a fresh box, wired like the
+  // home's (open a doc, its history, undo).
+  async openJournal(host: HTMLElement): Promise<void> {
+    const box = document.createElement('div');
 
-    if (!m) return;
-    // Re-fetch on every mount: the feed must reflect edits made since the home was last shown
-    // (e.g. a task toggle), no caching, or it stays stale until reload.
-    this.expanded = false;
-    // Don't leave the card slot blank while /api/activity fetches: cached card instantly on
-    // re-visit, a skeleton on the very first load.
-    if (this.items && this.items.length) { m.innerHTML = this.cardHtml(); this.wire(m.querySelector<HTMLElement>('#home-activity-card')!); }
-    else if (this.items === null) m.innerHTML = this.skeletonHtml();
+    box.className = 'act-journal';
+    host.replaceChildren(box);
+    this.wire(box);
+    this.panelJournal = box;
+    if (!this.items) {
+      box.innerHTML = this.skelRows(8);
+      const loaded = await this.load();
 
-    const loaded = await this.load();
-
-    this.items = loaded ? ActivityModel.aggregate(loaded) : loaded;
-    this.digest = loaded ? ActivityModel.computeDigest(loaded) : null;
-    if (!this.items || !this.items.length) { m.innerHTML = ''; return; } // offline / nothing → no card
-    m.innerHTML = this.cardHtml();
-    this.wire(m.querySelector<HTMLElement>('#home-activity-card')!);
-    if (!IS_OFFLINE_BUILD && window.AtlasInbox) window.AtlasInbox.refreshBadge(); // light count without opening the tab
+      this.items = loaded ? ActivityModel.aggregate(loaded) : [];
+      this.digest = loaded ? ActivityModel.computeDigest(loaded) : null;
+    }
+    if (box.isConnected) box.innerHTML = this.journalView.html(true);
   }
 
-  // Live-reload refresh that does NOT re-mount the card: softReload() calls this so only the active
-  // tab updates in place. Dormant tabs and the self-managing Inbox are left untouched.
-  async refreshData(): Promise<void> {
-    const card = document.getElementById('home-activity-card');
+  // ── Public API (mountActivity / refreshActivityData) ──────────────────
+  // Fill the slots showWelcome() just laid out. Robust to evaluation order: showWelcome guards on
+  // window.mountActivity, and ./activity-boot also self-calls mountActivity on load.
+  async mount(): Promise<void> {
+    const root = document.getElementById('home-activity-card');
 
-    if (!card) return;
+    if (!root || root.dataset.mounted) return;
+    root.dataset.mounted = '1';
+    this.expanded = false;
+    this.wire(root);
+    root.querySelector('#activity-ai')!.innerHTML = this.aiFilterHtml(); // no data needed: in place from the start
 
-    const inbox = card.querySelector('#activity-inbox');
+    // The Santé and the Inbox load on their own; the feed fills the rest.
+    const health = root.querySelector<HTMLElement>('#activity-health')!;
 
-    if (inbox && !inbox.classList.contains('hidden')) return; // Inbox active: it manages itself
-    if (!IS_OFFLINE_BUILD && window.AtlasInbox) window.AtlasInbox.refreshBadge(); // keep the home badge live
+    health.innerHTML = this.healthView.html();
+    this.healthView.load(health);
+
+    const inbox = root.querySelector<HTMLElement>('#activity-inbox');
+
+    if (inbox && window.AtlasInbox) {
+      window.AtlasInbox.mount(inbox);
+      window.AtlasInbox.show();
+    }
+    // Re-fetch on every mount (the feed must show edits made since the home was last shown), with
+    // the last feed or a skeleton meanwhile.
+    if (this.items && this.items.length) this.fill(root);
+    else {
+      const hl = document.getElementById('activity-highlights');
+
+      if (hl) hl.innerHTML = this.skelHighlights();
+      root.querySelector('#activity-journal')!.innerHTML = this.skelRows(8);
+      root.querySelector('#activity-orrery')!.innerHTML = this.skelOrrery();
+    }
 
     const loaded = await this.load();
 
-    if (!loaded) return;
+    if (!root.isConnected) return; // the home was left meanwhile
+    this.items = loaded ? ActivityModel.aggregate(loaded) : [];
+    this.digest = loaded ? ActivityModel.computeDigest(loaded) : null;
+    this.fill(root);
+  }
+
+  // Live-reload refresh: the feed's views update in place; the Inbox and the Santé manage themselves,
+  // so an inbox item being edited is never touched.
+  async refreshData(): Promise<void> {
+    const root = document.getElementById('home-activity-card');
+
+    if (!IS_OFFLINE_BUILD && window.AtlasInbox) window.AtlasInbox.refreshBadge(); // the menu's count, home or not
+    if (!root) return;
+
+    const loaded = await this.load();
+
+    if (!loaded || !root.isConnected) return;
     this.items = ActivityModel.aggregate(loaded);
     this.digest = ActivityModel.computeDigest(loaded);
-
-    const journal = card.querySelector('#activity-journal');
-
-    if (journal && !journal.classList.contains('hidden')) {
-      journal.innerHTML = this.journalView.html();
-
-      const dg = card.querySelector('#activity-digest');
-
-      if (dg && !dg.classList.contains('hidden')) dg.innerHTML = this.digestHtml();
-
-      return;
-    }
-
-    const orrery = card.querySelector<HTMLElement>('#activity-orrery');
-
-    if (orrery && !orrery.classList.contains('hidden') && orrery.dataset.rendered) {
-      orrery.innerHTML = this.orreryView.html(); this.orreryView.wireHover(orrery); this.orreryView.wireSun(orrery);
-    }
+    this.renderHighlights();
+    this.renderJournal(root);
+    this.renderOrrery(root.querySelector<HTMLElement>('#activity-orrery')!);
+    if (this.panelJournal?.isConnected) this.panelJournal.innerHTML = this.journalView.html(true);
   }
 }

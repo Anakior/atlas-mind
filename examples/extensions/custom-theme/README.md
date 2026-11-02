@@ -31,6 +31,11 @@ value in `custom-theme.css` to pick your shade, or uncomment the other options
   and the engine's stylesheets alike: redefine a token rather than override the
   classes. For anything else, inspect the viewer with the devtools to find the
   class to override.
+- The viewer has a light theme: `:root[data-theme="light"]` redefines the same
+  tokens. A rule of yours with a fixed colour needs its light twin under that
+  selector, or it shows the dark page's colour on the light one.
+- The instance accent (buttons, badges, this week's docs) is the `--brand` token.
+  Admins pick it in Settings › Appearance; prefer that over an extension.
 - For logic (not just style), add a `.js` (inlined the same way) or a `.py`
   (loaded at server boot, can expose routes). See the `pob/` example and the
   *Extensions* section of the scaffolded `atlas.toml`.

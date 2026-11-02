@@ -87,11 +87,11 @@ export class Todos {
     todoList!.innerHTML = visible
       .map(
         (item) => `
-    <li class="todo-row group flex items-start gap-2 px-3 py-2 hover:bg-navy-800/40" data-id="${item.id}">
+    <li class="todo-row group flex items-start gap-2.5" data-id="${item.id}">
       <input type="checkbox" ${item.done ? 'checked' : ''}
-        class="todo-check mt-0.5 w-4 h-4 rounded border-navy-600 bg-navy-900 text-blue-500 focus:ring-blue-400/40 cursor-pointer accent-blue-500">
+        class="todo-check mt-0.5 w-4 h-4 cursor-pointer">
       <span class="todo-text flex-1 text-sm leading-snug ${item.done ? 'line-through text-ink-500' : 'text-ink-100'} cursor-pointer">${escapeHtml(item.text)}</span>
-      <button class="todo-del opacity-0 group-hover:opacity-100 text-ink-500 hover:text-rose-400 text-base leading-none transition-opacity" title="${escapeHtml(t('del'))}">&times;</button>
+      <button class="todo-del opacity-0 group-hover:opacity-100 text-ink-500 hover:text-rose-400 text-base leading-none transition-opacity" data-tip="${escapeHtml(t('del'))}">&times;</button>
     </li>
   `,
       )
@@ -220,7 +220,7 @@ export class Todos {
     input.type = 'text';
     input.value = item.text;
     input.className =
-      'todo-edit flex-1 px-2 py-0.5 text-sm bg-navy-900 border border-blue-400 rounded text-ink-100 focus:outline-none focus:ring-1 focus:ring-blue-400/40';
+      'todo-edit flex-1';
     textSpan.replaceWith(input);
     input.focus();
     input.select();

@@ -47,6 +47,10 @@ def _count_words(text: str) -> int:
     return len(text.split())
 
 
+# The last read of the dates, for the (mind, HEAD) it was made at. See _git_commit_dates.
+_DATES_AT_HEAD: dict = {}
+
+
 def _git_commit_dates(repo_root: Path) -> dict[str, int]:
     """Map posix relative path → unix ts of the last commit that touches the file.
 
@@ -59,10 +63,21 @@ def _git_commit_dates(repo_root: Path) -> dict[str, int]:
     `git log` outputs reverse-chronological → the 1st occurrence of a path is its
     most recent commit. Returns {} if git is unavailable (st_mtime fallback).
 
-    Recomputed on every walk() call (via _accum), never cached at module level:
-    the long-lived server calls walk() again on /api/tree after each pull; a
-    cache would freeze the dates until restart.
+    The full log is the slow part of a /api/tree (seconds on a mind with a long
+    history), so the map is kept for the HEAD it was read at: a commit or a pull
+    moves HEAD and the next call reads it again, so the dates never go stale.
+    Callers only read the map.
     """
+    try:
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(repo_root),
+                              capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if not head:
+        return {}  # not a repo, or no commit yet
+    key = (str(repo_root), head)
+    if _DATES_AT_HEAD.get("key") == key:
+        return _DATES_AT_HEAD["dates"]
     try:
         out = subprocess.run(
             ["git", "-c", "core.quotePath=false", "log",
@@ -80,9 +95,10 @@ def _git_commit_dates(repo_root: Path) -> dict[str, int]:
             ts = int(line[5:])
         elif line and ts:
             # Strip the content/ prefix to match the doc identity (rel).
-            key = line[8:] if line.startswith("content/") else line
-            if key not in dates:
-                dates[key] = ts
+            rel = line[8:] if line.startswith("content/") else line
+            if rel not in dates:
+                dates[rel] = ts
+    _DATES_AT_HEAD.update(key=key, dates=dates)
     return dates
 
 
@@ -117,9 +133,8 @@ def walk(path: Path, *, content_root: Path | None = None,
         excluded_prefixes = EXCLUDED_PREFIXES
     if _accum is None:
         _accum = {"md_files": []}
-    # Computed once per top-level walk() (recursive calls reuse it), never cached
-    # at module level — see _git_commit_dates. The mind's git root = parent of
-    # content/.
+    # Read once per top-level walk() (recursive calls reuse it), again only once
+    # HEAD moves — see _git_commit_dates. The mind's git root = parent of content/.
     if "git_dates" not in _accum:
         _accum["git_dates"] = _git_commit_dates(content_root.parent)
     node = {"name": path.name, "type": "dir", "children": []}

@@ -123,7 +123,7 @@ if (!todoFilter || !TODO_CATS.includes(todoFilter)) todoFilter = TODO_CATS[0];
   if (!wrap) return;
   wrap.innerHTML = TODO_CATEGORIES.map(
     (c) =>
-      `<button type="button" data-cat="${escapeHtml(c.cat)}" class="todo-filter-btn flex-1 px-3 py-2 transition hover:bg-ink-100/5 text-ink-500">${escapeHtml(c.label)}</button>`,
+      `<button type="button" data-cat="${escapeHtml(c.cat)}" class="todo-filter-btn">${escapeHtml(c.label)}</button>`,
   ).join('');
 })();
 
@@ -133,9 +133,7 @@ export function renderTodoFilterTabs(): void {
     const active = cat === todoFilter;
     const pending = todos.filter((td) => tcat(td) === cat && !td.done).length;
 
-    btn.classList.toggle('text-accent', active);
-    btn.classList.toggle('bg-accent/10', active);
-    btn.classList.toggle('text-ink-500', !active);
+    btn.classList.toggle('is-on', active);
     btn.textContent = pending > 0 ? `${TODO_FILTER_LABELS[cat!]} (${pending})` : TODO_FILTER_LABELS[cat!];
   });
 }

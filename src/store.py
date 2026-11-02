@@ -430,6 +430,7 @@ class FileStore:
     GROUPS_FILE = "groups.json"  # principals: {group_name: [emails]}
     TODOS_FILE = "todos.json"    # per-member todos (private, not git): {email: [items]}
     OAUTH_CLIENTS_FILE = "oauth_clients.json"  # OAuth clients registered via DCR
+    SETTINGS_FILE = "settings.json"  # instance-wide viewer settings: {appearance: {brand, show_prefix, show_tagline}}
 
     def __init__(self, base_dir):
         self.base = Path(base_dir)
@@ -443,6 +444,7 @@ class FileStore:
             self.GROUPS_FILE: threading.Lock(),
             self.TODOS_FILE: threading.Lock(),
             self.OAUTH_CLIENTS_FILE: threading.Lock(),
+            self.SETTINGS_FILE: threading.Lock(),
         }
         self._cache: dict = {}  # name -> (mtime_ns, data)
         self._ensure_gitignore()
@@ -1478,6 +1480,29 @@ class FileStore:
             data = dict(self._load(self.TODOS_FILE, dict))
             data[email] = [dict(t) for t in items]
             self._write(self.TODOS_FILE, data)
+
+    # ── instance settings (the viewer's appearance) ──────────────────────
+    # settings.json is a DICT. "appearance" holds what an admin picked for every account: the
+    # accent ("brand", #rrggbb; absent = Atlas gold) and whether the site prefix and the tagline show.
+
+    def get_appearance(self) -> dict:
+        with self._locks[self.SETTINGS_FILE]:
+            return dict(self._load(self.SETTINGS_FILE, dict).get("appearance") or {})
+
+    def set_appearance(self, fields: dict) -> dict:
+        """Merge `fields` into the appearance; a None value drops the field (back to the
+        default). Returns the appearance as stored."""
+        with self._rmw(self.SETTINGS_FILE):
+            data = dict(self._load(self.SETTINGS_FILE, dict))
+            appearance = dict(data.get("appearance") or {})
+            for key, value in fields.items():
+                if value is None:
+                    appearance.pop(key, None)
+                else:
+                    appearance[key] = value
+            data["appearance"] = appearance
+            self._write(self.SETTINGS_FILE, data)
+            return dict(appearance)
 
     # ── Atlas nodes (hive) ─────────────────────────────────────────────
     def create_node(self, name: str, path: str, token: str) -> dict:

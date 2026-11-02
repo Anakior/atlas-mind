@@ -9,6 +9,10 @@ import { EMBED_MIND } from '../core/state';
 import { GraphPalette } from './graph-palette';
 import type { BacklinkEntry } from '../content/backlinks';
 
+const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+const SEED_SPACING = 20; // px between the seeded docs of a folder, about the distance they settle at
+export const SIM_TICKS = 480; // the organic layout's whole run; it is at rest by the last tick
+
 export class GraphLayout {
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -84,7 +88,6 @@ export class GraphLayout {
       // Immediate subfolder (one level under the family) → color tint + a layout sub-anchor.
       const subRegion = !isRemote && parts.length > 2 ? parts[1] : '';
       const subKey = subRegion ? region + '/' + subRegion : '';
-      const anchor = subAnchors[subKey] || regionAnchors[region] || null;
       const n: MindNode = {
         kind: 'doc',
         path: f.path,
@@ -97,9 +100,8 @@ export class GraphLayout {
         remote: isRemote,
         mtime: f.mtime || 0,
         recent: false,
-        // Seed near the folder's zone so the layout settles already-organized.
-        x: anchor ? anchor.x + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520,
-        y: anchor ? anchor.y + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520,
+        x: 0, // seeded in the folder's zone by reseedOrganic, once every node exists
+        y: 0,
         vx: 0,
         vy: 0,
         deg: 0,
@@ -179,7 +181,6 @@ export class GraphLayout {
       edges,
       regionAnchors,
       subAnchors,
-      ring: RING,
       mode: 'organic',
       showTags: false, // de-cluttered by default; toggle to bring the tag web back
       clusters: [],
@@ -191,6 +192,8 @@ export class GraphLayout {
       panFrom: null,
       moved: false,
     };
+
+    this.reseedOrganic(state);
 
     return { state, docCount, linkCount, tagCount };
   }
@@ -207,36 +210,66 @@ export class GraphLayout {
     st.hover = null;
   }
 
-  // Re-seed organic positions near each node's folder anchor (used when switching back from the
-  // structured map so the force layout relaxes from an already-zoned start).
+  // Seed organic positions in each node's folder zone (on build, and when switching back from the
+  // structured map), so the force layout relaxes from an already-zoned start. A folder's docs go on
+  // a golden-angle spiral around its anchor, growing with their count: a big folder starts spread
+  // out instead of piled in a few pixels, where its own repulsion would throw the nodes about for
+  // seconds. Nodes with no anchor (tags) start anywhere.
   reseedOrganic(st: MindGraphState): void {
+    const byAnchor = new Map<{ x: number; y: number }, MindNode[]>();
+
     for (const n of st.nodes) {
       const anc = (st.subAnchors && st.subAnchors[n.subKey ?? '']) || (st.regionAnchors && st.regionAnchors[n.region ?? '']);
 
-      n.x = anc ? anc.x + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520;
-      n.y = anc ? anc.y + (Math.random() - 0.5) * 70 : (Math.random() - 0.5) * 520;
       n.vx = 0;
       n.vy = 0;
+      if (anc) {
+        if (!byAnchor.has(anc)) byAnchor.set(anc, []);
+        byAnchor.get(anc)!.push(n);
+      } else {
+        n.x = (Math.random() - 0.5) * 520;
+        n.y = (Math.random() - 0.5) * 520;
+      }
+    }
+    for (const [anc, group] of byAnchor) {
+      group.forEach((n, i) => {
+        const d = SEED_SPACING * Math.sqrt(i + 0.5);
+
+        n.x = anc.x + d * Math.cos(i * GOLDEN);
+        n.y = anc.y + d * Math.sin(i * GOLDEN);
+      });
     }
   }
 
-  // Fit the camera to the whole layout. Organic fits the anchor ring; structured fits the fixed packed
-  // bbox. The hero keeps its own framing.
+  // Fit the camera to the whole layout. Organic frames the nodes' bounding box; structured fits the
+  // fixed packed bbox. The hero keeps its own framing.
   fitCamera(st: MindGraphState): void {
     st.cam.ox = this.canvas.clientWidth / 2;
     st.cam.oy = this.canvas.clientHeight / 2;
 
     if (EMBED_MIND) return;
-    let half: number;
 
-    if (st.mode === 'structured') {
-      half = 60;
-      for (const n of st.nodes) half = Math.max(half, Math.abs(n.x) + n.r, Math.abs(n.y) + n.r);
-      half += 70;
-    } else {
-      half = (st.ring || 360) + 220;
+    if (st.mode === 'organic') {
+      // Frame the nodes where they are: a big folder reaches well past the anchor ring.
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+
+      for (const n of st.nodes) {
+        x0 = Math.min(x0, n.x - n.r);
+        x1 = Math.max(x1, n.x + n.r);
+        y0 = Math.min(y0, n.y - n.r);
+        y1 = Math.max(y1, n.y + n.r);
+      }
+      st.cam.scale = Math.min(1, this.canvas.clientWidth / (x1 - x0 + 160), this.canvas.clientHeight / (y1 - y0 + 160));
+      st.cam.ox -= ((x0 + x1) / 2) * st.cam.scale;
+      st.cam.oy -= ((y0 + y1) / 2) * st.cam.scale;
+
+      return;
     }
 
+    let half = 60;
+
+    for (const n of st.nodes) half = Math.max(half, Math.abs(n.x) + n.r, Math.abs(n.y) + n.r);
+    half += 70;
     st.cam.scale = Math.min(1, (Math.min(this.canvas.clientWidth, this.canvas.clientHeight) / (2 * half)) * 0.92);
   }
 
@@ -387,10 +420,14 @@ export class GraphLayout {
   simStep(st: MindGraphState): void {
     const { nodes, edges } = st;
     const REP = 13000,
+      SOFT = 400, // px²: the repulsion eases off under ~20px instead of growing without bound
       SPRING = 0.02,
       REST = 120,
       CENTER = 0.0034,
       GRAVITY = 0.009;
+    // Cooling: the steps shrink as the run goes on. Without it a crowded folder never settles: two
+    // close docs push each other further than the gap between them, every tick, until the last one.
+    const cool = Math.max(0.02, 1 - st.ticks / SIM_TICKS);
 
     for (let i = 0; i < nodes.length; i++) {
       const a = nodes[i];
@@ -401,7 +438,7 @@ export class GraphLayout {
           dy = a.y - b.y,
           d2 = dx * dx + dy * dy || 0.01,
           d = Math.sqrt(d2);
-        const f = REP / d2,
+        const f = REP / (d2 + SOFT),
           fx = (f * dx) / d,
           fy = (f * dy) / d;
 
@@ -445,8 +482,8 @@ export class GraphLayout {
       if (n === st.drag) continue;
       n.vx *= 0.86;
       n.vy *= 0.86;
-      n.x += Math.max(-25, Math.min(25, n.vx));
-      n.y += Math.max(-25, Math.min(25, n.vy));
+      n.x += Math.max(-25, Math.min(25, n.vx * cool));
+      n.y += Math.max(-25, Math.min(25, n.vy * cool));
     }
   }
 }
