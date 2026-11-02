@@ -1,6 +1,6 @@
 // AtlasCombobox — the reusable "search + create" field (folders, tags, ACL principals, group members).
-// One <body>-level fixed popup per instance, anchored once from the input's rect; there is no scroll/
-// resize re-position listener, so the input must not move while the popup is open (golden D). The
+// One <body>-level fixed popup per instance, kept under the input every frame while it is open: the
+// input can still move then (the inbox card's entrance animation, a scroll; golden D). The
 // factory entry AtlasCombobox(input, opts) -> ComboboxController is exported for the modules that
 // consume it. CSS lives in styles/03-panels.css. Opts/controller shapes:
 // types/combobox-controller.ts + types/combobox-options.ts.
@@ -19,6 +19,7 @@ export class Combobox implements ComboboxController {
   private items: Array<string | { __create: string }> = []; // strings, plus an optional create sentinel at the end
   private active = 0;
   private isOpen = false;
+  private raf = 0;
   private chipBox: HTMLDivElement | null = null;
   private values: string[] = []; // multi mode
 
@@ -115,18 +116,23 @@ export class Combobox implements ComboboxController {
       this.pop.innerHTML = html;
     }
 
+    this.pop.classList.remove('hidden');
+    this.isOpen = true;
+    this.input.setAttribute('aria-expanded', 'true');
+    if (!this.raf) this.follow();
+
+    const a = this.pop.children[this.active];
+
+    if (a) a.scrollIntoView({ block: 'nearest' });
+  }
+
+  private follow(): void {
     const r = this.input.getBoundingClientRect();
 
     this.pop.style.left = r.left + 'px';
     this.pop.style.top = r.bottom + 4 + 'px';
     this.pop.style.width = r.width + 'px';
-    this.pop.classList.remove('hidden');
-    this.isOpen = true;
-    this.input.setAttribute('aria-expanded', 'true');
-
-    const a = this.pop.children[this.active];
-
-    if (a) a.scrollIntoView({ block: 'nearest' });
+    this.raf = requestAnimationFrame(() => this.follow());
   }
 
   private choose(it: string | { __create: string } | null | undefined): void {
@@ -252,12 +258,15 @@ export class Combobox implements ComboboxController {
   }
 
   close(): void {
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
     this.pop.classList.add('hidden');
     this.isOpen = false;
     this.input.setAttribute('aria-expanded', 'false');
   }
 
   destroy(): void {
+    this.close();
     this.pop.remove();
     if (this.chipBox) this.chipBox.remove();
   }

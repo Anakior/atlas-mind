@@ -27,7 +27,7 @@ Tokens**, or `atlas token create <mind>` locally) and use
 | `search_docs` | ranked search, each hit with its section and how far to trust it |
 | `grep_docs`   | find the exact lines that state a fact          |
 | `read_doc`    | read a document, a line range or one section     |
-| `list_tree`   | browse the folder structure                      |
+| `list_tree`   | browse the folders, and what waits in your inbox |
 | `recent_docs` | see what changed lately                          |
 | `changes_since` | what changed since the AI last looked (a cursor it keeps) |
 | `resume_session` | pick up a saved work session: resume command, open points, what moved since |

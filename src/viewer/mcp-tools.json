@@ -321,7 +321,7 @@
   },
   {
     "name": "list_tree",
-    "description": "List the full tree of the knowledge base (metadata only, no content). Handy to understand the folder organization before navigating.",
+    "description": "List the full tree of the knowledge base (metadata only, no content). Handy to understand the folder organization before navigating. Your inbox items waiting to be triaged are under inbox/.",
     "inputSchema": {
       "type": "object",
       "properties": {}

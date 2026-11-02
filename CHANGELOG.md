@@ -8,6 +8,23 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-11-02
+
+### Fixed
+- **An agent can see what waits in the inbox.** The inbox is kept out of search and the graph, and
+  `list_tree` left it out too, so an agent asked to go through the inbox found nothing there and
+  answered that it was empty. `list_tree` now ends with an `inbox` folder holding the items the
+  caller may read and has not trashed or snoozed: a person's lane stays theirs. Its description
+  says so, which changes the tool definition.
+- The folder list under the inbox's "File under" field could open a few pixels off its field. The
+  item card slides in when it appears, and the list was placed once, so opening it during that
+  slide left it where the field was at that moment. The list now follows its field while it is
+  open. The end-to-end test that checked it failed about one run in four for that reason; it now
+  measures once the card has landed, and a new case moves the card to check the list follows.
+
+### Evals
+- The inbox question no longer gives the item's path: "go through what is waiting in my inbox".
+
 ## [1.12.0] - 2026-11-02
 
 ### Added

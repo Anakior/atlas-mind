@@ -301,6 +301,33 @@ class TestInboxIsolation(unittest.TestCase):
             self.assertIn(r.status, (403, 404), f"{action} on another user's item must be refused, got {r.status}")
         self.assertTrue(item.exists())  # untouched
 
+    def test_list_tree_shows_your_waiting_items_and_no_one_else_s(self):
+        # Search seals the inbox off, so list_tree is where an agent finds what waits in it.
+        err, _ = _call(self.srv, self.token, "create_inbox_item",
+                       {"title": "Secret astreinte", "content": "x", "confidence": 0.7})
+        self.assertFalse(err)
+        item = list(self.srv.content_root.glob(f"inbox/{USER_SLUG}/{TOKEN_SOURCE}/*.md"))[0]
+        rel = item.relative_to(self.srv.content_root).as_posix()
+        err, tree = _call(self.srv, self.token, "list_tree", {})
+        self.assertFalse(err)
+        paths = _tree_paths(tree)
+        self.assertIn(rel, paths)
+        self.assertNotIn(f"inbox/{ALICE}/gmail/2026-06-25-trashed.md", paths)
+        self.assertNotIn(f"inbox/{ALICE}/gmail/2026-06-25-snoozed.md", paths)
+        # An agent acting for the viewer never sees it: the admin's lane is the admin's.
+        fs = file_store_of(self.srv)
+        meta, other = fs.create_api_identity("viewer-bot")
+        fs.upsert_user(meta["email"], {"acts_as": VIEWER_EMAIL})
+        err, tree = _call(self.srv, other, "list_tree", {})
+        self.assertFalse(err)
+        self.assertNotIn(rel, _tree_paths(tree))
+
+
+def _tree_paths(node):
+    if node.get("type") == "file":
+        return [node["path"]]
+    return [p for c in node.get("children", []) for p in _tree_paths(c)]
+
 
 if __name__ == "__main__":
     unittest.main()

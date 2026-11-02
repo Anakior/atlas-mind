@@ -327,11 +327,33 @@ def _tool_read_doc(args, ctx):
                         {"type": "text", "text": f"[{footer}]"}]}
 
 
+def _inbox_tree(ctx):
+    """The caller's waiting inbox items as an `inbox` folder, or None. The walk seals inbox/ off
+    the tree, yet an agent asked to go through the inbox has to find what waits there. What the
+    caller may read, like the viewer's inbox: a person's lane is theirs (create_inbox_item owns it)."""
+    root = {"name": "inbox", "type": "dir", "children": []}
+    for it in sorted(_s._api_inbox_list(200, ctx), key=lambda i: i["path"]):
+        node = root
+        *dirs, name = it["path"].split("/")[1:]
+        for d in dirs:
+            sub = next((c for c in node["children"] if c["type"] == "dir" and c["name"] == d), None)
+            if sub is None:
+                sub = {"name": d, "type": "dir", "children": []}
+                node["children"].append(sub)
+            node = sub
+        node["children"].append({"name": name, "type": "file", "path": it["path"], "ext": ".md",
+                                 "mtime": it["captured_at"], "title": it["title"]})
+    return root if root["children"] else None
+
+
 def _tool_list_tree(args, ctx):
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
         if ctx is not None:
             tree = _s._filter_tree(tree, lambda p: _s.can_read(p, ctx))
+        inbox = _inbox_tree(ctx)
+        if inbox:
+            tree["children"].append(inbox)
         return json_result(tree or {})
     except Exception as e:
         print(f"[mcp] list_tree failed: {e}", file=sys.stderr)

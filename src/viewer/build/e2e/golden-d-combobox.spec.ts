@@ -3,9 +3,9 @@ import { test, expect, type Page } from '@playwright/test';
 // GOLDEN D — the inbox destination combobox popup survives a live update AND stays
 // correctly positioned under its input.
 //
-// The popup is a single div.atlas-cb-pop appended to <body>, position:fixed, placed
-// ONCE from input.getBoundingClientRect() (13-combobox.js:97-100). It has no scroll/
-// resize re-position listener, so "still positioned" holds iff the input never moves.
+// The popup is a single div.atlas-cb-pop appended to <body>, position:fixed, re-placed
+// under the input every frame while open (ui/combobox.ts), so it follows the focus card's
+// entrance animation. A live update must still leave the input where it is.
 //
 // Two triggers, two protections — both must hold, and the migration must keep them:
 //  - poll: the editing() guard skips everything above the input (22-inbox.js:313-317).
@@ -48,6 +48,8 @@ async function openInboxEditor(page: Page) {
   await page.locator('#home-activity-card [data-view="inbox"]').click();
   await page.locator('#ibx-focus').waitFor();
   await page.locator('#ibx-focus .ibx-destchip').click();
+  // The card may still be sliding in (ibxpop, 8px): measure once it has landed.
+  await page.locator('#ibx-focus').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   await expect(page.locator('input.ibx-destedit')).toBeFocused();
   await expect(page.locator(OPEN_POPUP)).toBeVisible();
 
@@ -86,6 +88,18 @@ test('D — combobox survives an SSE soft-reload, still anchored', async ({ page
   const after = await measure(page);
   expect(after.input).toEqual(before.input);  // the input never moved
   expectAnchored(after);
+});
+
+test('D — the popup follows its input when the card moves', async ({ page }) => {
+  await openInboxEditor(page);
+  const before = await measure(page);
+  await page.locator('#ibx-focus').evaluate((el) => { (el as HTMLElement).style.transition = 'none'; (el as HTMLElement).style.transform = 'translateY(12px)'; });
+  expect((await measure(page)).input.top).toBe(before.input.top + 12);
+
+  await expect.poll(async () => {
+    const m = await measure(page);
+    return Math.abs(m.pop.top - (m.input.bottom + 4));
+  }).toBeLessThanOrEqual(1);
 });
 
 test('D — combobox survives the 5s poll, still anchored', async ({ page }) => {
