@@ -40,6 +40,7 @@ export class Avatar {
     return name + (email == null ? '' : String(email));
   }
 
+  private static renders = 0;
   private readonly rng: Rng;
   private readonly size: number;
   private readonly small: boolean;
@@ -56,8 +57,10 @@ export class Avatar {
     this.size = size;
     // Small render: drop fine detail + cut blur so the graph stays a crisp silhouette at 24px.
     this.small = size <= 36;
-    // Suffix every gradient/filter/clip id with the seed so avatars on one page don't collide.
-    this.uid = 's' + this.rng.seed.toString(36);
+    // Suffix every gradient/filter/clip id with the seed and a running count, so no two avatars on
+    // a page share one: the same face drawn twice (the menu, the Journal) would otherwise use the
+    // first copy's gradients, and a hidden first copy draws none of them (no branches, no glow).
+    this.uid = 's' + this.rng.seed.toString(36) + '_' + (++Avatar.renders).toString(36);
     const palette = this.pickPalette();
     this.prim = palette.prim;
     this.acc = palette.acc;

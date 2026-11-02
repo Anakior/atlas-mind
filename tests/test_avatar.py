@@ -26,6 +26,21 @@ def _svg(identity, size=56):
     return out.stdout
 
 
+def _svg_twice(identity, size=56):
+    # Two renders of the same identity in ONE page (one module instance), as the menu and the
+    # Journal draw the same person's face.
+    script = (
+        "const {pathToFileURL}=require('url');"
+        "import(pathToFileURL(process.argv[1]).href).then(m=>"
+        "process.stdout.write(m.constellationSvg(process.argv[2], +process.argv[3])"
+        "+'\\n'+m.constellationSvg(process.argv[2], +process.argv[3])));"
+    )
+    out = subprocess.run(
+        ["node", "-e", script, str(requirable(AVATAR)), identity, str(size)],
+        capture_output=True, text=True, check=True)
+    return out.stdout.split("\n")
+
+
 def _seed(first, last, email):
     script = (
         "const {pathToFileURL}=require('url');"
@@ -58,6 +73,16 @@ class TestConstellationAvatar(unittest.TestCase):
         ids_b = set(re.findall(r'id="([^"]+)"', _svg("bob@example.com")))
         self.assertTrue(ids_a)
         self.assertEqual(ids_a & ids_b, set())
+
+    def test_same_face_twice_on_a_page_shares_no_id(self):
+        # A copy hidden first (the folded menu's button) would leave the others with no
+        # gradients or glow if they pointed at its ids; the drawing itself stays the same.
+        a, b = _svg_twice("ada@example.com")
+        ids_a = set(re.findall(r'id="([^"]+)"', a))
+        self.assertTrue(ids_a)
+        self.assertEqual(ids_a & set(re.findall(r'id="([^"]+)"', b)), set())
+        same_ids = lambda svg: re.sub(r'(_s[0-9a-z]+)_[0-9a-z]+', r'\1', svg)
+        self.assertEqual(same_ids(a), same_ids(b))
 
     def test_avatar_seed_is_name_plus_email(self):
         # No name -> pure email (stable, same as before names existed).

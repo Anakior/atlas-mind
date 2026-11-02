@@ -6,6 +6,15 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
+## [2.0.2] - 2026-11-02
+
+### Fixed
+- **Your avatar lost its branches and its glow.** The same face drawn twice on a page gave both
+  copies the same gradient and filter names, so each used the first copy's. Since 2.0 the first one
+  is the folded menu's button, hidden while the menu is open, and a hidden copy draws none of them:
+  in the menu, the Journal and Settings, your avatar showed bare dots. Each drawing now names its
+  own. The MCP tools are unchanged.
+
 ## [2.0.1] - 2026-11-02
 
 ### Fixed
