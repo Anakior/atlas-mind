@@ -6,6 +6,16 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
+## [2.0.3] - 2026-11-02
+
+### Fixed
+- **White folder names on a light menu, in the installed app.** The first time the app opened
+  after an update, the service worker still answered with the previous release's stylesheet,
+  and a cache could keep it there. The new page then ran on the old classes: in 1.x the menu's
+  text colours were fixed for a dark page, so in the light theme the folder tree showed white
+  names on a light background. The stylesheet's address now carries the version, so a new page
+  always loads the stylesheet that goes with it. The MCP tools are unchanged.
+
 ## [2.0.2] - 2026-11-02
 
 ### Fixed

@@ -127,7 +127,7 @@ def _escape_closing_tag(text: str, closing_re: re.Pattern) -> str:
 
 
 _VENDOR_SCRIPT_RE = re.compile(r'<script src="/vendor/([^"]+)"></script>')
-_VENDOR_LINK_RE = re.compile(r'<link rel="stylesheet" href="/vendor/([^"]+)">')
+_VENDOR_LINK_RE = re.compile(r'<link rel="stylesheet" href="/vendor/([^"?]+)(?:\?[^"]*)?">')
 _VENDOR_CSS_URL_RE = re.compile(r"url\((/vendor/[^)]+)\)")
 # Icon <link> (favicon + apple-touch-icon): in file:// the absolute href
 # /icon.svg would resolve to file:///icon.svg (not found) — rewritten as a data: URI.

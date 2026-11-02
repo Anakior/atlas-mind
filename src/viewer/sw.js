@@ -10,17 +10,20 @@
  *
  * CACHE_VERSION embarque __ENGINE_VERSION__ (substitué quand le serveur sert ce
  * fichier) : à chaque release le nom de cache change, donc `activate` purge l'ancien
- * et `install` reprécache — sinon les vendored non versionnés (tailwind.css, fonts…)
- * resteraient bloqués sur leur ancienne copie après déploiement. Les .md sont
- * versionnés par ?v=<mtime> (cache-buster d'URL).
+ * et `install` reprécache — sinon les vendored non versionnés (fonts, libs…)
+ * resteraient bloqués sur leur ancienne copie après déploiement. tailwind.css est
+ * versionné par ?v=<version> et les .md par ?v=<mtime> (cache-buster d'URL) : le
+ * premier chargement après un déploiement, encore servi par l'ancien worker, ne
+ * peut pas marier la nouvelle page à l'ancien CSS.
  */
 const CACHE_VERSION = 'atlas-cache-__ENGINE_VERSION__';
 const PRECACHE = [
   '/',
   '/manifest.json',
   '/icon.svg',
-  // Libs vendorées (chargées par le shell — voir web/viewer.html).
-  '/vendor/tailwind.css',
+  // Libs vendorées (chargées par le shell — voir web/viewer.html). tailwind.css porte
+  // la version dans son URL, comme dans le shell.
+  '/vendor/tailwind.css?v=__ENGINE_VERSION__',
   '/vendor/fonts.css',
   '/vendor/marked.min.js',
   '/vendor/purify.min.js',

@@ -38,8 +38,10 @@ __HEAD_META__
        cd /tmp/twbuild && npm install tailwindcss@3 @tailwindcss/typography
        npx tailwindcss -c <repo>/web/tailwind/tailwind.config.cjs \
          -i <repo>/web/tailwind/input.css -o <repo>/web/vendor/tailwind.css --minify
-     (details in the header of web/vendor/tailwind.css) -->
-<link rel="stylesheet" href="/vendor/tailwind.css">
+     (details in the header of web/vendor/tailwind.css)
+     The version in the URL ties it to this page: the service worker and the browser
+     cache can't hand a new page the previous release's classes. -->
+<link rel="stylesheet" href="/vendor/tailwind.css?v=__VERSION__">
 <!-- Local fonts (Corinthia + Rubik 80s Fade = identity of the "Atlas" wordmark;
      Manrope/Lora/JetBrains Mono = UI/prose/code): vendored in
      /vendor/fonts/, no more requests to Google Fonts. -->

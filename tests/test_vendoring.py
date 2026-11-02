@@ -92,7 +92,9 @@ class TestVendoringOnline(unittest.TestCase):
 
     def test_dist_index_references_vendor_assets(self):
         text = self.srv.get("/").text
-        for ref in ('href="/vendor/tailwind.css"', 'href="/vendor/fonts.css"',
+        # tailwind.css carries the version: a new page never gets the previous
+        # release's CSS from a cache.
+        for ref in ('href="/vendor/tailwind.css?v=', 'href="/vendor/fonts.css"',
                     'src="/vendor/marked.min.js"', 'src="/vendor/purify.min.js"',
                     'href="/vendor/highlight-github-dark.min.css"',
                     'src="/vendor/highlight.min.js"',
@@ -102,6 +104,7 @@ class TestVendoringOnline(unittest.TestCase):
     def test_vendor_assets_served_with_content_types(self):
         cases = {
             "/vendor/tailwind.css": "text/css",
+            "/vendor/tailwind.css?v=2.0.3": "text/css",
             "/vendor/fonts.css": "text/css",
             "/vendor/highlight-github-dark.min.css": "text/css",
             "/vendor/marked.min.js": "text/javascript",
@@ -248,7 +251,7 @@ class TestVendoringSources(unittest.TestCase):
         # placeholder, stamped at serve time (see test_browse.test_pwa_assets) so
         # every release busts the worker cache. The raw file keeps the placeholder.
         self.assertIn("atlas-cache-__ENGINE_VERSION__", text)
-        for asset in ("/vendor/tailwind.css", "/vendor/fonts.css",
+        for asset in ("/vendor/tailwind.css?v=__ENGINE_VERSION__", "/vendor/fonts.css",
                       "/vendor/marked.min.js", "/vendor/purify.min.js",
                       "/vendor/highlight.min.js", "/vendor/minisearch.min.js",
                       "/vendor/fonts/manrope-latin.woff2"):
