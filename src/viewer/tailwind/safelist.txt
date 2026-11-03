@@ -1106,6 +1106,7 @@ inboxQueue
 inboxSameSubject
 inboxSnooze
 inboxSnoozed
+inboxTags
 inboxTrash
 inboxTrashed
 inboxTypeTitle

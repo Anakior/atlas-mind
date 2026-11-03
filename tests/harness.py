@@ -335,12 +335,19 @@ class AtlasServer:
         return env
 
     def git(self, *args: str, check: bool = False, env: dict | None = None) -> subprocess.CompletedProcess:
-        """git in the test mind (machine config neutralized; `env` adds variables)."""
-        return subprocess.run(
-            ["git", *args], cwd=str(self.root), env={**self._git_env(), **(env or {})},
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=30, check=check,
-        )
+        """git in the test mind (machine config neutralized; `env` adds variables). The running
+        server's own sync can hold index.lock for an instant (after a push, say): wait it out."""
+        for _ in range(50):
+            done = subprocess.run(
+                ["git", *args], cwd=str(self.root), env={**self._git_env(), **(env or {})},
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+            )
+            if done.returncode == 0 or "index.lock" not in done.stderr:
+                break
+            time.sleep(0.1)
+        if check:
+            done.check_returncode()
+        return done
 
     def _init_git(self) -> None:
         self.git("init", "-q", "-b", "main", check=True)

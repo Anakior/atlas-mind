@@ -296,7 +296,7 @@ export class Inbox {
             h('span', { class: 'sic' }, this.svg(Inbox.ILINK)),
             h('div', null, h('b', null, t('inboxSameSubject')), ' ', h('span', { class: 'doc' }, nb)))
         : null,
-      h('div', { class: 'ibx-dest' }, this.destView(it), h('span', { class: 'ibx-lbl' }, 'tags'), h('span', { class: 'ibx-tags' }, this.tagsView(it))),
+      h('div', { class: 'ibx-dest' }, this.destView(it), h('span', { class: 'ibx-lbl' }, t('inboxTags')), h('span', { class: 'ibx-tags' }, this.tagsView(it))),
       h('div', { class: 'ibx-actions' },
         h('button', { type: 'button', class: 'ibx-btn keep' + (sd ? '' : ' disabled'), disabled: !sd, title: sd ? null : t('inboxPickFolderFirst'), onClick: () => this.act('keep') },
           this.svg(Inbox.ICHECK), t('inboxKeep') + ' ', h('span', { class: 'k' }, 'K')),

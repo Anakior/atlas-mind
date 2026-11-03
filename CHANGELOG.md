@@ -6,6 +6,17 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
+## [2.1.1] - 2026-11-03
+
+### Fixed
+- **The Inbox in a narrow card.** In the home's column, on a phone or in the menu's panel, the
+  card now follows its own width. The folder and the tags each get their own row, so the tags wrap
+  under one another instead of leaving their label at the end of a line and the "+" alone below.
+  The four actions share one row, two by two when it gets narrower, without their key hints (the
+  keys still work). The time stays inside the card, under the badges when they take the line, and
+  the queue drops its times to keep room for the titles. The tags label is translated
+  ("étiquettes"). The MCP tools are unchanged.
+
 ## [2.1.0] - 2026-11-03
 
 Atlas for people who don't code. An Atlas installs from the alwaysdata marketplace without a

@@ -1,6 +1,6 @@
 /* Inbox triage tab (home Activity card). Owned by src/viewer/lib/22-inbox.js; ibx- prefixed. The
    container is positioned for the "N new" toast. */
-#activity-inbox { position: relative; }
+#activity-inbox { position: relative; container-type: inline-size; }
 
 /* source + type filter row */
 .ibx-sub { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -16,11 +16,11 @@
 .ibx-focus.ibx-leaving { transform: translateX(26px); opacity: 0; }
 .ibx-focus.ibx-entering { animation: ibxpop .26s ease; }
 @keyframes ibxpop { 0% { transform: translateY(8px) scale(.99); opacity: 0; } 100% { transform: none; opacity: 1; } }
-.ibx-frow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ibx-frow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 10px; }
 .ibx-ic { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .ibx-ic svg { width: 15px; height: 15px; }
 .ibx-spacer { flex: 1; }
-.ibx-ago { font-size: 11px; color: #5e6066; font-family: ui-monospace, monospace; white-space: nowrap; }
+.ibx-ago { font-size: 11px; color: #5e6066; font-family: ui-monospace, monospace; white-space: nowrap; margin-left: auto; }
 .ibx-pill { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
 .ibx-pill.hi { background: rgba(95, 208, 166, .14); color: #5fd0a6; }
 .ibx-pill.md { background: #2a2a32; color: #9a9aa5; }
@@ -35,8 +35,9 @@
 .ibx-signal b { font-weight: 700; }
 .ibx-signal .doc { color: rgb(var(--ink-100)); font-weight: 600; }
 
-/* destination + tags row (one line: "classer dans [folder] tags #a #b +") */
-.ibx-dest { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 14px; }
+/* destination, then tags: a label column and a value column, so the tags wrap under each other */
+.ibx-dest { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px 10px; margin: 12px 0 14px; }
+.ibx-dest > .ibx-destchip, .ibx-dest > .ibx-destedit { justify-self: start; max-width: 100%; }
 .ibx-tags { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ibx-lbl { font-size: 11px; color: #5e6066; text-transform: uppercase; letter-spacing: .05em; }
 .ibx-destchip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #36c5f0; font-weight: 500; border: 1px solid rgba(54, 197, 240, .3); background: rgba(54, 197, 240, .12); border-radius: .35rem; padding: 4px 9px; font-family: ui-monospace, monospace; }
@@ -52,7 +53,7 @@
 /* actions */
 .ibx-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ibx-btn { appearance: none; border: 1px solid rgb(var(--ink-100) / .1); background: rgb(var(--navy-700)); color: rgb(var(--ink-200)); font: inherit; font-size: 13px; font-weight: 600; padding: 8px 13px; border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: .12s; }
-.ibx-btn svg { width: 15px; height: 15px; }
+.ibx-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
 .ibx-btn:hover { background: rgb(var(--navy-600)); color: rgb(var(--ink-100)); }
 .ibx-btn .k { font-size: 10px; font-family: ui-monospace, monospace; color: #5e6066; border: 1px solid rgb(var(--ink-100) / .1); border-radius: 5px; padding: 1px 5px; }
 .ibx-btn.keep { background: rgba(95, 208, 166, .13); border-color: rgba(95, 208, 166, .35); color: #9be9c9; }
@@ -61,6 +62,20 @@
 .ibx-btn.trash:hover { color: #ffb4b4; }
 .ibx-btn.ghost { background: transparent; color: rgb(var(--ink-400)); }
 .ibx-btn.ghost:hover { color: rgb(var(--ink-200)); }
+/* A narrow card (the home's column): the four actions share one row, without their key hints. */
+@container (max-width: 520px) {
+  .ibx-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+  .ibx-actions .ibx-spacer, .ibx-btn .k { display: none; }
+  .ibx-btn { justify-content: center; padding: 8px 10px; }
+}
+/* Narrower still (a 1280 screen, a phone): each label above its value, the actions two by two,
+   and the queue drops its times so the titles keep their room. */
+@container (max-width: 350px) {
+  .ibx-dest { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .ibx-dest > .ibx-lbl ~ .ibx-lbl { margin-top: 7px; }
+  .ibx-actions { grid-template-columns: 1fr 1fr; }
+  .ibx-qa { display: none; }
+}
 .ibx-btn[disabled], .ibx-btn.disabled { opacity: .45; cursor: not-allowed; background: rgb(var(--ink-100) / .03); border-color: rgb(var(--ink-100) / .1); color: rgb(var(--ink-400)); }
 .ibx-btn.keep.disabled .k, .ibx-btn.keep[disabled] .k { color: rgb(var(--ink-400)); border-color: rgb(var(--ink-100) / .1); }
 
