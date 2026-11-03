@@ -18,6 +18,7 @@ import { renderSkeleton } from './skeleton';
 import { toc, readingTimeFromWords } from './toc';
 import { historyPanel } from './history-panel';
 import { contentTree, loadContent } from './content-tree';
+import { docLabel } from '../core/tree';
 import { frameRenderer } from './frames';
 import { stripFrontmatter, docTags } from './tags';
 import { markdown } from './markdown';
@@ -47,10 +48,13 @@ export class DocRenderer {
     contentEl.style.padding = '';
     document.getElementById('todo-widget')?.classList.remove('hidden');
     contentEl.innerHTML = renderSkeleton(file);
-    // Breadcrumb: replace the technical prefix « remotes/ » with the « Mental nodes / » label.
-    breadcrumbPath.textContent = file.path.startsWith('remotes/')
-      ? t('remotesLabel') + ' / ' + file.path.slice('remotes/'.length)
-      : file.path;
+    // Breadcrumb: its folders, then the doc by its title; « remotes/ » reads « Mental nodes / ».
+    const folders = file.path.slice(0, file.path.lastIndexOf('/') + 1);
+
+    breadcrumbPath.textContent =
+      (folders.startsWith('remotes/') ? t('remotesLabel') + ' / ' + folders.slice('remotes/'.length) : folders) +
+      docLabel(file);
+    breadcrumbPath.title = file.path;
     const parts: string[] = [];
 
     if (file.mtime) parts.push(t('modifiedAgo', relativeDate(file.mtime)));
@@ -158,7 +162,7 @@ export class DocRenderer {
     if (currentFile !== file) return;
     const body = stripFrontmatter(content);
 
-    contentEl.innerHTML = docTags.renderDocTags(file) + markdown.render(body);
+    contentEl.innerHTML = docTags.renderDocTags(file) + markdown.render(body, file.path);
     attachCopyButtons();
     taskCheckboxes.wireTaskCheckboxes(file, content);
     renderBacklinksFor(file);

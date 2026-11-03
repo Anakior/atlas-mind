@@ -2,8 +2,8 @@
 
 _{{date}}_
 
-**Rôle :** 
-**Coordonnées :** 
+- **Rôle :** 
+- **Coordonnées :** 
 
 ## Historique
 

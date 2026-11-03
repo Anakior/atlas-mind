@@ -39,6 +39,7 @@ h1 .brand{font-family:'Corinthia',cursive;font-weight:700;font-size:1.7em;line-h
 .intro{font-size:13px;color:#b0b1b5;text-align:center;margin:0 0 22px;line-height:1.5}
 form{display:flex;flex-direction:column;gap:16px}
 .field{display:flex;flex-direction:column;gap:6px}
+.field[hidden]{display:none}
 .field > label{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#868a90}
 input{
   padding:12px 14px;border:1px solid #2a2a32;background:rgba(0,0,0,0.3);
@@ -69,7 +70,7 @@ button:active{transform:scale(0.98)}
   <p class="intro">__SETUP_INTRO__</p>
   <form id="setup-form">
     __ERROR_HTML__
-    <div class="field">
+    <div class="field" id="token-field">
       <label for="setup-token">__TOKEN_LABEL__</label>
       <input id="setup-token" name="setup_token" class="token-input" type="text" placeholder="__TOKEN_PLACEHOLDER__" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required autofocus>
       <p class="field-help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span>__TOKEN_HELP__</span></p>
@@ -94,6 +95,18 @@ button:active{transform:scale(0.98)}
   </form>
 </div>
 <script>
+// A /setup#code=… link carries the setup code: it fills the field, which then goes away
+// (nothing technical to type), and leaves the address bar. The fragment never reaches
+// the server's or a proxy's logs.
+(function () {
+  const code = new URLSearchParams(location.hash.slice(1)).get('code');
+  if (!code) return;
+  const field = document.getElementById('token-field');
+  document.getElementById('setup-token').value = code;
+  field.hidden = true;
+  history.replaceState(null, '', location.pathname);
+  document.getElementById('setup-first-name').focus();
+})();
 // Soumission en JSON (les endpoints admin exigent application/json + même
 // origine). Pas de form action HTML : on POST en fetch same-origin.
 document.getElementById('setup-form').addEventListener('submit', async function(e) {

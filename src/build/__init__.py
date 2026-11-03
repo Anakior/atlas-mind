@@ -26,7 +26,7 @@ from build.paths import (  # noqa: F401  (re-exported as build.*)
     DEFAULT_TODO_CATEGORIES,
 )
 from build.parse import (  # noqa: F401
-    _parse_frontmatter, _inbox_meta, _rewrite_inbox_fm, _folder_tags, _resolve_wikilink,
+    _parse_frontmatter, _inbox_meta, _rewrite_inbox_fm, _folder_tags, _resolve_wikilink, _doc_title,
     _WIKILINK_RE, build_links_index, build_tasks_index,
 )
 from build.assets import (  # noqa: F401
@@ -155,7 +155,6 @@ def walk(path: Path, *, content_root: Path | None = None,
         if path == content_root and child.is_dir() and child.name == "inbox":
             continue
         entries.append(child)
-    entries.sort(key=lambda p: (not p.is_dir(), p.name.lower()))
     for child in entries:
         if child.is_dir():
             sub = walk(child, content_root=content_root,
@@ -197,6 +196,8 @@ def walk(path: Path, *, content_root: Path | None = None,
                 print(f"[build] skip metadata for {rel}: {e}", file=sys.stderr)
                 text = None
             if text is not None:
+                if title := _doc_title(text, ext):
+                    file_node["title"] = title
                 tags_fm, body = _parse_frontmatter(text)
                 # Tags = parent folders (always) ∪ frontmatter (custom).
                 for t in tags_fm:
@@ -218,6 +219,8 @@ def walk(path: Path, *, content_root: Path | None = None,
                 print(f"[build] skip metadata for {rel}: {e}", file=sys.stderr)
                 text = None
             if text is not None:
+                if title := _doc_title(text, ext):
+                    file_node["title"] = title
                 file_node["words"] = _count_words(re.sub(r"<[^>]+>", " ", text))
                 _accum["md_files"].append(
                     {"path": rel, "name": child.name, "content": text, "body": "", "tags": tags})
@@ -228,5 +231,7 @@ def walk(path: Path, *, content_root: Path | None = None,
         if tags:
             file_node["tags"] = tags
         node["children"].append(file_node)
+    # Folders first, then the files in the order their names are shown: their titles.
+    node["children"].sort(key=lambda n: (n["type"] == "file", (n.get("title") or n["name"]).lower()))
     return node
 

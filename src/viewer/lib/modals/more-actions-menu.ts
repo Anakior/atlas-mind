@@ -8,6 +8,7 @@ import { t } from '../core/i18n';
 import { currentFile } from '../core/state';
 import { setStatus } from '../core/net';
 import { refreshTreeOrReload } from './new-file-modal';
+import { refreshTrashLink } from '../home/side-panels';
 
 export class MoreActionsMenu {
   constructor() {
@@ -59,6 +60,7 @@ export class MoreActionsMenu {
         location.hash = '';
         setStatus(t('docDeleted'), 'ok');
         await refreshTreeOrReload();
+        void refreshTrashLink();
       } catch (err) {
         Dialogs.notifyError('err', (err as Error).message);
       }

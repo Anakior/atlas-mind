@@ -7,6 +7,7 @@ _folder_tags, _resolve_wikilink, _WIKILINK_RE, build_links_index,
 build_tasks_index) and the tests import build.build_tasks_index."""
 from __future__ import annotations
 
+import html
 import re
 
 _FM_RE = re.compile(r"^---[ \t]*\r?\n(.*?)\r?\n---[ \t]*\r?\n?", re.S)
@@ -115,6 +116,43 @@ def _rewrite_inbox_fm(text: str, updates: dict) -> str:
         if val is not None:
             out.append(f"{key}: {_fm_safe(val)}")
     return "---\n" + "\n".join(out) + "\n---" + body
+
+
+_TITLE_FM_RE = re.compile(r"^title[ \t]*:[ \t]*(.+?)[ \t]*$", re.I | re.M)
+_H1_RE = re.compile(r"^#[ \t]+(.+?)[ \t#]*$")
+_HTML_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+
+
+def _plain(text: str) -> str:
+    """A heading as read, without its Markdown: [label](url) and [[target|label]] give their
+    label, emphasis and code marks go."""
+    text = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", text)
+    text = re.sub(r"\[\[([^\]]+)\]\]", r"\1", text)
+    text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    return " ".join(re.sub(r"[*_`]", "", text).split())[:120]
+
+
+def _doc_title(text: str, ext: str) -> str:
+    """The title a person gave the doc: `title:` in its frontmatter, else its first `# heading`
+    outside code; the <title> of a page. "" when it has none (the file name then stands)."""
+    if ext == ".html":
+        m = _HTML_TITLE_RE.search(text)
+        return " ".join(html.unescape(m.group(1)).split())[:120] if m else ""
+    fm = _FM_RE.match(text)
+    if fm:
+        m = _TITLE_FM_RE.search(fm.group(1))
+        if m:
+            return _plain(m.group(1).strip("'\""))
+        text = text[fm.end():]
+    fenced = False
+    for line in text.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif not fenced:
+            m = _H1_RE.match(line)
+            if m:
+                return _plain(m.group(1))
+    return ""
 
 
 def _folder_tags(rel: str) -> list[str]:

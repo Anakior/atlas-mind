@@ -1,7 +1,7 @@
 # {{title}}
 
-**Date :** {{date}}
-**Participants :** 
+- **Date :** {{date}}
+- **Participants :** 
 
 ## Contexte
 

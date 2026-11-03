@@ -21,6 +21,11 @@ export function relativeDate(epoch: number): string {
   });
 }
 
+// This page comes from the computer it runs on: a link to it opens nowhere else.
+export function isLoopback(): boolean {
+  return ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+}
+
 export function slugify(s: string): string {
   return s
     .toLowerCase()

@@ -7,7 +7,7 @@
 import { IS_OFFLINE_BUILD, EMBED_CONTENT, TREE } from '../core/data-csrf';
 import { t } from '../core/i18n';
 import { escapeHtml } from '../core/utils';
-import { fileMap } from '../core/tree';
+import { fileMap, docLabel } from '../core/tree';
 import { treeEl } from '../core/dom-refs';
 import { currentFile } from '../core/state';
 import { h, raw, render } from '../runtime/atlas-dom';
@@ -16,6 +16,7 @@ import { dirRenameModal } from '../modals/new-file-modal';
 import { settingsPanel } from '../admin/settings/settings-panel';
 import { docRenderer, isViewable, IMAGE_EXTS } from './doc-renderer';
 import { decorateTreeBadges } from './notes/notes-index';
+import { startMove } from './file-drop';
 
 // ─── Content loader (a small service; kept as functions for now, classed later) ───────────────
 export const contentCache = new Map<string, string>();
@@ -243,7 +244,7 @@ export class ContentTree {
 
     const aChildren: Child[] = [
       raw(this.iconFor(child.ext)),
-      h('span', { class: 'truncate min-w-0 flex-1 leading-snug', 'data-name': child.name }, child.name),
+      h('span', { class: 'truncate min-w-0 flex-1 leading-snug', 'data-name': child.name, title: child.title ? child.name : null }, docLabel(child)),
       this.visBadge(child),
     ];
 
@@ -259,6 +260,9 @@ export class ContentTree {
       key: 'f:' + child.path,
       class: 'tree-item group w-full px-2 py-1.5 rounded flex items-start gap-2 cursor-pointer text-ink-200' + (isRemoteFile ? ' tree-remote' : ''),
       'data-path': child.path,
+      // Dragged onto a folder, it moves there (file-drop.ts).
+      draggable: isRemoteFile || IS_OFFLINE_BUILD ? null : 'true',
+      onDragstart: (e: DragEvent) => startMove(e, child.path),
     };
 
     if (currentFile && child.path === currentFile.path) props.class += ' active';

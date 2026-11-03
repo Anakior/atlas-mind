@@ -4,6 +4,7 @@
 
 import { t } from '../../core/i18n';
 import { avatarSeed, constellationSvg } from '../../ui/avatar';
+import { showAccount } from '../../home/side-nav';
 import { SettingsContext } from './settings-shared';
 
 export class SettingsProfile {
@@ -42,6 +43,13 @@ export class SettingsProfile {
         method: 'POST',
         body: JSON.stringify({ first_name: first, last_name: last }),
       });
+      // The new name shows at once: in the menu's account card, and on this tab's face.
+      const me = await this.ctx.fetch<MeAuthenticated>('/api/me');
+
+      showAccount(me);
+      const avatar = document.getElementById('account-profile-avatar');
+
+      if (avatar && me.email) avatar.innerHTML = constellationSvg(avatarSeed(me.first_name, me.last_name, me.email), 64);
       const status = document.getElementById('account-profile-status');
       if (status) {
         status.textContent = t('profileSaved');

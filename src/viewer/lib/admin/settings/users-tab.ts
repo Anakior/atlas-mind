@@ -22,7 +22,8 @@ export class SettingsUsers {
     document.getElementById('settings-invite-close')!.addEventListener('click', () => this.hideInviteResult());
   }
 
-  async load(): Promise<void> {
+  // The number of accounts listed (Team shows Groups only from two).
+  async load(): Promise<number> {
 
     try {
       const users = await this.ctx.fetch<any[]>('/api/admin/users');
@@ -31,7 +32,7 @@ export class SettingsUsers {
         this.list.innerHTML =
           '<li class="text-sm text-ink-500">' + t('settingsNoUsers') + '</li>';
 
-        return;
+        return 0;
       }
 
       this.list.innerHTML = users
@@ -105,8 +106,12 @@ export class SettingsUsers {
           );
         })
         .join('');
+
+      return users.length;
     } catch (e) {
       this.ctx.showError((e as Error).message);
+
+      return 0;
     }
   }
 

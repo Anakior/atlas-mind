@@ -799,15 +799,14 @@ class TestAdminUiPanel(unittest.TestCase):
         self.assertRegex(self.index, r"await fetch\([\"']/api/tree[\"']\)")  # quote-agnostic: esbuild re-quotes the .ts literal
 
     def test_settings_panel_markup_present(self):
-        # Panel container + its three tabs + the gear entry point.
+        # Panel container + its four sections + the gear entry point.
         self.assertIn('id="settings-backdrop"', self.index)
         self.assertIn('id="settings-panel"', self.index)
         self.assertIn('id="settings-btn"', self.index)
-        # Batch 2d: a fourth "Security" tab (2FA + sessions) is added.
-        for tab in ("users", "tokens", "shares", "security"):
+        for tab in ("me", "atlas", "ai", "hive", "shares", "team", "appearance"):
             self.assertIn(f'data-tab="{tab}"', self.index)
-        # The corresponding panes.
-        for pane in ("users", "tokens", "shares", "security"):
+        # The panes the sections stack.
+        for pane in ("users", "tokens", "shares", "security", "phone", "copies", "appearance", "nodes", "groups"):
             self.assertIn(f'id="settings-pane-{pane}"', self.index)
 
     def test_settings_token_one_time_display_present(self):
@@ -823,7 +822,7 @@ class TestAdminUiPanel(unittest.TestCase):
         # of the title) must be present in the same file.
         for fr_value in ("settingsTitle: 'Paramètres'",
                          "settingsTabUsers: 'Utilisateurs'",
-                         "settingsTabTokens: 'Tokens'",
+                         "settingsTabTokens: 'Assistants IA'",
                          "settingsTabShares: 'Partages'"):
             _assert_i18n(self, self.index, fr_value)
         for en_value in ("settingsTitle: 'Settings'",
@@ -843,16 +842,31 @@ class TestAdminUiPanel(unittest.TestCase):
         # body.admin-cloud stays set to manage the visibility of admin tabs.
         self.assertRegex(self.index, r"classList\.add\([\"']admin-cloud[\"']\)")
         self.assertRegex(self.index, r"data\.role\s*===\s*[\"']admin[\"']")
-        # Admin-only tabs stay hidden outside admin-cloud — a member must not see a tab
-        # it cannot use (e.g. Groups, whose /api/admin/groups is admin-gated).
-        for tab in ("users", "nodes", "groups", "shares"):
+        # Admin-only sections stay hidden outside admin-cloud — a member must not see a
+        # section it cannot use (Team: /api/admin/users and groups; the share list), nor the
+        # copies in My Atlas. Hive and the appearance are the admin's too, and also the
+        # local operator's (a mind on this computer has no accounts: it is theirs).
+        for tab in ("shares", "team"):
             self.assertIn(
                 'body:not(.admin-cloud) .settings-tab[data-tab="%s"]' % tab,
                 self.index)
-        # Tokens is per-account (a member manages their own) → gated on cloud-auth, not
-        # admin, like the Profile tab.
+        for tab in ("hive", "appearance"):
+            self.assertIn(
+                'body:not(.admin-cloud):not(.local-mode) .settings-tab[data-tab="%s"]' % tab,
+                self.index)
+        self.assertIn('body:not(.admin-cloud) #settings-pane-copies', self.index)
+        # AI assistants (the tokens) is per-account (a member manages their own) → gated on
+        # cloud-auth, not admin, like Me; on this computer, the operator's.
         self.assertIn(
-            'body:not(.cloud-authed) .settings-tab[data-tab="tokens"]', self.index)
+            'body:not(.cloud-authed):not(.local-mode) .settings-tab[data-tab="ai"]', self.index)
+
+    def test_a_mind_on_this_computer_has_its_settings(self):
+        # No account locally: the card says where it runs, keeps the gear, drops the sign-out,
+        # and Claude's access is made for Claude Code / Desktop (claude.ai can't reach it).
+        self.assertIn("body.local-mode #settings-btn", self.index)
+        self.assertIn("body.local-mode #logout-link", self.index)
+        self.assertIn('id="settings-local-connect"', self.index)
+        self.assertIn("mcp-remote", self.index)
 
     def test_settings_uses_admin_endpoints_via_fetch(self):
         # The panel talks to the admin endpoints (no CLI-only logic).
@@ -926,9 +940,9 @@ class TestSecurityUi(unittest.TestCase):
         cls.srv.stop()
 
     def test_security_pane_and_actions_present(self):
-        # Security tab + pane, 2FA status, enable/disable buttons, sign out of
-        # all sessions.
-        self.assertIn('data-tab="security"', self.index)
+        # Me section + its security pane, 2FA status, enable/disable buttons, sign out
+        # of all sessions.
+        self.assertIn('data-tab="me"', self.index)
         self.assertIn('id="settings-pane-security"', self.index)
         self.assertIn('id="security-totp-status"', self.index)
         self.assertIn('id="security-totp-enable"', self.index)
@@ -981,12 +995,12 @@ class TestSecurityUi(unittest.TestCase):
         self.assertIn('Dialogs.confirm(', self.index)
 
     def test_security_i18n_keys_in_both_languages(self):
-        for fr_value in ("settingsTabProfile: 'Profil'",
+        for fr_value in ("settingsTabMe: 'Moi'",
                          "securityTotpEnable: 'Activer le 2FA'",
                          "securityLogoutAll: 'Déconnecter toutes mes sessions'",
                          "totpRecoveryWarn:"):
             _assert_i18n(self, self.index, fr_value)
-        for en_value in ("settingsTabProfile: 'Profile'",
+        for en_value in ("settingsTabMe: 'Me'",
                          "securityTotpEnable: 'Enable 2FA'",
                          "securityLogoutAll: 'Sign out all my sessions'",
                          "totpRecoveryWarn:"):

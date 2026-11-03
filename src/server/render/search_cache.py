@@ -6,6 +6,7 @@ import re
 import sys
 
 import server as _s
+from server.pure import file_text
 
 _DOC_CACHE: dict = {}
 
@@ -13,12 +14,18 @@ _DOC_CACHE: dict = {}
 def _doc_text(rel: str, path):
     """The text a doc is searched in, or None if unreadable. For an .html, its visible text
     (not the markup): search and snippets stay readable. read_doc / GET file themselves
-    return the raw HTML."""
+    return the raw HTML. For an office file or a PDF, the text inside it."""
+    if path.suffix.lower() in file_text.EXTS:
+        # A scan has no text: kept as empty (found by its name only) rather than read again.
+        return file_text.extract(path) or ""
     try:
         content = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
-    return _s._html_to_text(content) if rel.lower().endswith(".html") else content
+    if rel.lower().endswith(".html"):
+        return _s._html_to_text(content)
+    # A big .csv is searched in its head only: the cache holds it for good.
+    return content if rel.lower().endswith(".md") else content[:file_text.MAX_CHARS]
 
 
 def _doc_entry(rel: str, path):

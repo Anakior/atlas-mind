@@ -33,6 +33,8 @@ class Guard(enum.Enum):
     CSRF_BASE = "csrf_base"    # _require_auth_or_401 + _check_csrf_or_403
     ADMIN = "admin"            # _require_admin_or_403
     ADMIN_CSRF = "admin_csrf"  # _require_admin_or_403 + _check_csrf_or_403
+    UPLOAD = "upload"          # CSRF_BASE taking a binary body (a file)
+    ADMIN_UPLOAD = "admin_upload"  # ADMIN_CSRF taking a binary body (a backup)
     BEARER = "bearer"          # no cookie guard; the route self-verifies a Bearer token
     PAGE_AUTH = "page_auth"    # _require_auth_or_redirect (navigable page → 303 login)
 
@@ -88,6 +90,10 @@ def _apply_guard(handler, guard) -> bool:
         return handler._require_admin_or_403()
     if guard is Guard.ADMIN_CSRF:
         return handler._require_admin_or_403() and handler._check_csrf_or_403()
+    if guard is Guard.UPLOAD:
+        return handler._require_auth_or_401() and handler._check_csrf_or_403(upload=True)
+    if guard is Guard.ADMIN_UPLOAD:
+        return handler._require_admin_or_403() and handler._check_csrf_or_403(upload=True)
     if guard is Guard.PAGE_AUTH:
         return handler._require_auth_or_redirect()
     raise ValueError(f"unknown Guard: {guard!r}")

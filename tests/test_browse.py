@@ -192,9 +192,11 @@ class TestBrowseMind(unittest.TestCase):
         # skill/ and .secret.md are excluded; notes/ disappears ENTIRELY because
         # its only content (quick.md, the to-do) is excluded → empty dir pruned.
         self.assertEqual(names, ["projets", "recherche", "accueil.md", "outil.py"])
+        # Files read in the order of what is shown: a doc's title, else its name.
         projets = next(c for c in tree["children"] if c["name"] == "projets")
-        self.assertEqual([c["name"] for c in projets["children"]],
-                         ["alpha.md", "beta.md", "deck.html", "notes.txt"])
+        shown = [(c.get("title") or c["name"]).lower() for c in projets["children"]]
+        self.assertEqual(shown, sorted(shown))
+        self.assertEqual(next(c for c in projets["children"] if c["name"] == "deck.html")["title"], "Deck")
 
     def test_tree_file_metadata(self):
         files = _collect_files(self.srv.get("/api/tree").json())

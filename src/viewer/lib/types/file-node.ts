@@ -8,6 +8,7 @@ interface FileNode {
   ext: string;          // lowercased suffix, e.g. ".md"
   mtime: number;        // epoch seconds (git commit date, st_mtime fallback)
   words?: number;       // .md / .html only
+  title?: string;       // the doc's own title (frontmatter, first # heading, <title>), when it has one
   content?: string;     // offline build only
   tags?: string[];      // folder ∪ frontmatter; present only when non-empty
   vis?: 'private' | 'shared' | 'granted';

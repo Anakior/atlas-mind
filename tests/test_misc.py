@@ -141,14 +141,17 @@ class TestMiscLocal(unittest.TestCase):
             [{"url": f"http://127.0.0.1:{self.srv.port}"}],
         )
 
-    def test_openapi_servers_echo_arbitrary_host_header(self):
-        # Characterization: the host in `servers` is copied verbatim from the
-        # request's Host header, without validation.
+    def test_openapi_servers_echo_the_host_header(self):
+        # The host in `servers` is the request's Host. Local mode only answers to
+        # loopback names and IP literals (a domain name gets 421: DNS rebinding).
         resp = self.srv.get("/.well-known/openapi.json",
-                            headers={"Host": "example.test:1234"})
+                            headers={"Host": "192.168.1.20:1234"})
         self.assertEqual(resp.status, 200)
         self.assertEqual(resp.json()["servers"],
-                         [{"url": "http://example.test:1234"}])
+                         [{"url": "http://192.168.1.20:1234"}])
+        resp = self.srv.get("/.well-known/openapi.json",
+                            headers={"Host": "example.test:1234"})
+        self.assertEqual(resp.status, 421)
 
     # ── /login & /logout in local mode ────────────────────────────────────────
 
@@ -222,7 +225,7 @@ class TestMiscLocal(unittest.TestCase):
         self.assertEqual(resp.headers.get("Content-Type"), "text/html; charset=utf-8")
         self.assertEqual(resp.headers.get("X-Robots-Tag"), "noindex, nofollow")
         self.assertEqual(resp.headers.get("Cache-Control"), "no-store")
-        self.assertIn("accueil.md", resp.text)  # title = file name
+        self.assertIn("<title>Accueil</title>", resp.text)  # title = the doc's own
         self.assertIn("Bienvenue dans le mind de test.", resp.text)
 
     def test_share_link_garbage_token_404_invalid_page(self):
@@ -242,14 +245,14 @@ class TestMiscLocal(unittest.TestCase):
         self.assertEqual(resp.status, 410)
         self.assertIn("expir", resp.text)  # "Lien expir&eacute;"
 
-    def test_share_link_valid_served_title_is_filename(self):
-        # A live link is served outright; the share page's <title> = the file name
-        # alone (not the path).
+    def test_share_link_valid_served_title_is_the_doc_title(self):
+        # A live link is served outright; the share page's <title> = the doc's own
+        # title (its first heading), never its path.
         token = self.srv.post(
             "/api/share", json_body={"path": "projets/beta.md"}).json()["token"]
         resp = self.srv.get(f"/s/{token}")
         self.assertEqual(resp.status, 200)
-        self.assertIn("<title>beta.md</title>", resp.text)
+        self.assertIn("<title>Projet Bêta</title>", resp.text)
         self.assertIn("Aucun lien sortant ici.", resp.text)
 
     def test_share_list_ok_with_file_store(self):

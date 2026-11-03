@@ -1,9 +1,11 @@
 """MCP tool dispatch (read-side queries live in pure/queries.py, git parsing in pure/git_history.py)."""
 import base64
+import contextvars
 import datetime
 import difflib
 import functools
 import json
+import mimetypes
 import posixpath
 import re
 import sys
@@ -16,7 +18,7 @@ from server.pure.queries import (
     _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
     _api_stale, _api_outdated, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
 )
-from server.pure import attestations, contradictions, provenance, resources
+from server.pure import attestations, contradictions, docs, file_links, file_text, provenance, resources
 from server.pure.git_history import (
     _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
     _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
@@ -42,7 +44,24 @@ def _soft_delete(target: Path) -> str:
         dest = dest.with_name(f"{rel.stem}-{n}{rel.suffix}")
         n += 1
     target.replace(dest)
-    return ".trash/" + rel.as_posix()
+    return dest.relative_to(content_root).as_posix()
+
+
+def trash_doc(target: Path, ctx, ai=None) -> str:
+    """Delete a doc the reversible way, for the viewer and delete_doc alike: into
+    .trash/ with its ACL (so the freed path keeps no stale entry a future doc there
+    would inherit), its share links revoked (a trashed doc must stop serving them),
+    then one attributed commit. Returns the trash path."""
+    rel = target.relative_to(_s.CONFIG.content_root).as_posix()
+    trashed = _soft_delete(target)
+    try:
+        store = _s.get_store()
+        store.repoint_acl_by_path(rel, trashed)
+        store.delete_shares_for_path(rel)
+    except Exception as e:
+        print(f"[delete cleanup] {e}", file=sys.stderr)
+    _s.commit_change(ctx, f"deleted: {target.stem}", target, _s.CONFIG.content_root / trashed, ai=ai)
+    return trashed
 
 
 def text_result(s: str, is_error: bool = False) -> dict:
@@ -254,7 +273,8 @@ def _tool_search_docs(args, ctx):
     if tag:
         payload["tag"] = tag
     result = json_result(payload)
-    result["content"] += [resources.link(h["path"]) for h in hits]  # attachable as resources
+    # The docs among them, attachable as resources.
+    result["content"] += [resources.link(h["path"]) for h in hits if h["path"].endswith((".md", ".html"))]
     return result
 
 
@@ -294,12 +314,52 @@ def _tool_grep_docs(args, ctx):
     return json_result(payload)
 
 
+# Files read as they are, like a note (without one to edit them through).
+_PLAIN_TEXT = (".txt", ".csv", ".tsv", ".json")
+_INLINE_IMAGE_MAX = 1 << 20
+# The current MCP request's public URL, for the links a tool hands out.
+request_base = contextvars.ContextVar("request_base", default="")
+
+
+def _file_text(target):
+    """The text inside a file that is not a doc, or None when it has none to give."""
+    ext = target.suffix.lower()
+    if ext in file_text.EXTS:
+        return file_text.extract(target)
+    if ext in _PLAIN_TEXT:
+        return target.read_text(encoding="utf-8", errors="replace")
+    return None
+
+
+def _file_pointer(rel, target):
+    """Where to open a file with no text to return (a scanned PDF, an image, a recording): its
+    path on disk to a local agent, a link valid an hour online. A small image also comes inline."""
+    why = ("is a PDF with no text in it (a scan, or locked)" if target.suffix.lower() == ".pdf"
+           else "has no text to return here")
+    if not _s.CONFIG.auth_enabled:
+        return text_result(f"{rel} {why}. Open the file itself: {target}")
+    url = request_base.get() + file_links.make(rel)
+    out = {"content": [{"type": "text", "text": f"{rel} {why}. Fetch the file itself "
+                        f"(link valid one hour, no sign-in needed): {url}"}]}
+    mime = mimetypes.guess_type(target.name)[0] or ""
+    if mime.startswith("image/") and mime != "image/svg+xml" and target.stat().st_size <= _INLINE_IMAGE_MAX:
+        out["content"].append({"type": "image", "mimeType": mime,
+                               "data": base64.b64encode(target.read_bytes()).decode()})
+    return out
+
+
 def _tool_read_doc(args, ctx):
     rel = (args.get("path") or "").strip()
     target = _s._validate_doc_path(rel)
-    if not target or not target.exists() or not _visible(rel, ctx):
-        return _not_found(rel, ctx)
-    text = target.read_text(encoding="utf-8")
+    if target and target.exists() and _visible(rel, ctx):
+        text, kind = target.read_text(encoding="utf-8"), None
+    else:
+        target = docs.content_file(rel, _s.CONFIG.content_root)
+        if target is None or not _visible(rel, ctx):
+            return _not_found(rel, ctx)
+        text, kind = _file_text(target), f"text of the {target.suffix} file, read-only"
+        if text is None:
+            return _file_pointer(rel, target)
     lines = text.splitlines()
     start = clamp_int(args.get("start_line"), 0, 0)
     end = clamp_int(args.get("end_line"), 0, 0)
@@ -321,7 +381,7 @@ def _tool_read_doc(args, ctx):
         body, scope = text, f"{len(lines)} lines"
     hit = {"path": rel, "mtime": target.stat().st_mtime}
     _add_trust_signals([hit], ctx)
-    footer = " · ".join([rel, scope, *_signal_notes(hit), f"version {_version(text)}"])
+    footer = " · ".join([rel, scope, *_signal_notes(hit), kind or f"version {_version(text)}"])
     # Its own block, so the version never gets copied into an edit along with the text.
     return {"content": [{"type": "text", "text": provenance.fence(body, rel)},
                         {"type": "text", "text": f"[{footer}]"}]}
@@ -346,6 +406,23 @@ def _inbox_tree(ctx):
     return root if root["children"] else None
 
 
+def _with_sync_warning(payload):
+    """Add a `warning` the agent should relay when changes stopped reaching the remote:
+    the person may never open the viewer that shows the banner."""
+    try:
+        health = _s.sync_health()
+    except Exception:
+        return payload
+    if health["status"] == "error":
+        err = health["error"]
+        what = ("could not record the latest changes in its history" if err["op"] == "commit"
+                else f"could not save changes online; {health['unpushed']} change(s) "
+                     "exist only on this server")
+        payload["warning"] = (f"Atlas {what} ({err['kind']} error on git {err['op']}). "
+                              "Tell the user so they can fix it from Atlas.")
+    return payload
+
+
 def _tool_list_tree(args, ctx):
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
@@ -354,7 +431,7 @@ def _tool_list_tree(args, ctx):
         inbox = _inbox_tree(ctx)
         if inbox:
             tree["children"].append(inbox)
-        return json_result(tree or {})
+        return json_result(_with_sync_warning(tree or {}))
     except Exception as e:
         print(f"[mcp] list_tree failed: {e}", file=sys.stderr)
         return text_result("Error listing the tree", is_error=True)
@@ -693,18 +770,7 @@ def _tool_delete_doc(args, ctx):
         return _not_found(rel, ctx)
     if ctx is not None and not _s.can_write(rel, ctx, "owner"):
         return text_result("Insufficient permission (need owner to delete this document).", is_error=True)
-    trashed = _soft_delete(target)
-    # The ACL follows the doc into .trash so the freed path keeps no stale
-    # entry a future doc created there would inherit; its share links are
-    # revoked (a trashed doc must stop serving public links).
-    try:
-        _store = _s.get_store()
-        _store.repoint_acl_by_path(rel, trashed)
-        _store.delete_shares_for_path(rel)
-    except Exception as e:
-        print(f"[delete cleanup] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"deleted: {target.stem}", target, _s.CONFIG.content_root / trashed,
-                     ai=args.get("ai"))
+    trashed = trash_doc(target, ctx, ai=args.get("ai"))
     return text_result(f"Document moved to trash (reversible): {rel} -> {trashed}")
 
 
@@ -1085,8 +1151,8 @@ def _tool_brief(args, ctx):
             if p not in seen and _visible(p, ctx):
                 seen.add(p)
                 related.append(p)
-    return json_result({"topic": topic, "budget_tokens": budget, "sources": sources,
-                        "related": related[:8], "omitted": omitted})
+    return json_result(_with_sync_warning({"topic": topic, "budget_tokens": budget, "sources": sources,
+                                           "related": related[:8], "omitted": omitted}))
 
 
 def _doc_changes(commits: list) -> list:

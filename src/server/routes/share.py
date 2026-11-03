@@ -61,9 +61,9 @@ def _annotate_share(doc):
 
 
 def list_shares(handler):
-    """GET /api/share/list — admin: the share links, each with a copyable token and
-    a `file_exists` flag (a moved/deleted target is flagged broken, with a
-    `suggested_path` so it can be reactivated)."""
+    """GET /api/share/list — admin: the share links (never their token: it is shown
+    once, at creation), each with a `file_exists` flag (a moved/deleted target is
+    flagged broken, with a `suggested_path` so it can be reactivated)."""
     query = handler._query()
     filter_path = (query.get("path", [""])[0] or "").strip()
     include_revoked = query.get("include_revoked", ["0"])[0] == "1"

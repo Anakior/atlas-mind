@@ -698,10 +698,11 @@ _warm_lock = threading.Lock()
 
 
 def schedule_warm(delay: float = _WARM_DELAY_S) -> None:
-    """Memoize the whole mind's candidates in the background once its content has been still
-    for `delay` seconds (each call pushes the run back: an agent's burst of edits costs one
-    scan), so the next weekly review or contradictions call reads them instead of scanning.
-    The whole mind is an admin's view, which an admin's token shares."""
+    """Memoize the whole mind's candidates (and the text search reads) in the background once
+    its content has been still for `delay` seconds (each call pushes the run back: an agent's
+    burst of edits costs one scan), so the next weekly review, contradictions call or search
+    reads them instead of scanning. The whole mind is an admin's view, which an admin's token
+    shares."""
     global _warm_timer
     with _warm_lock:
         if _warm_timer is not None:
@@ -713,6 +714,7 @@ def schedule_warm(delay: float = _WARM_DELAY_S) -> None:
 
 def _warm():
     from server.pure import queries  # lazy: avoids an import cycle at module load
+    queries.warm_search()
     _candidates(sorted(queries._doc_corpus(None)))
 
 

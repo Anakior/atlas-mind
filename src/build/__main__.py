@@ -207,6 +207,10 @@ def _rebuild_tailwind(web_dir) -> None:
     css.touch()
 
 
+# Display labels of the default todo categories, per mind language.
+_TODO_LABELS = {"fr": {"work": "Travail", "personal": "Personnel"}}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--offline", action="store_true",
@@ -229,7 +233,10 @@ def main() -> int:
     extensions_dir, web_dir = cfg.extensions_dir, cfg.web_dir
     _rebuild_js_bundle(web_dir)
     _rebuild_tailwind(web_dir)
-    todo_cats = [{"cat": c, "label": cfg.todo_cat_headers.get(c, c.capitalize())}
+    # The default keys get a label in the mind's language; the key and the todo file's
+    # headers stay as they are, so existing todos keep their category.
+    labels = _TODO_LABELS.get(lang, {})
+    todo_cats = [{"cat": c, "label": labels.get(c) or cfg.todo_cat_headers.get(c, c.capitalize())}
                  for c in cfg.todo_categories]
     out_online = dist_dir / "index.html"
     out_offline = dist_dir / "index-offline.html"

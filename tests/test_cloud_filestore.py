@@ -9,8 +9,10 @@ Behaviors characterized here (current contract, not necessarily ideal):
 - A failed login (wrong password OR unknown email) returns the SAME 401
   "Invalid credentials" (anti-enumeration, dummy scrypt hash consumed).
 - An account with role 'api' CANNOT log in via password, even a correct one.
-- /api/share/list returns the cleartext token: a share link is a capability URL
-  (kept in cleartext so the admin can re-copy it), not an auth secret.
+- A share link is shown once, when it is made: the registry keeps only its SHA256
+  (a leaked or backed-up registry hands out no live link), and /api/share/list
+  never returns it. A registry from before is converted when opened: its links keep
+  working.
 - A token absent from the registry resolves to nothing → 404 (fail-CLOSED: the
   registry is the single source of truth for a share's target and validity).
 - The DELETE /api/share/<id> route accepts uuid4 ids (36 chars) AND legacy
@@ -906,6 +908,18 @@ class TestCloudFileStoreShares(unittest.TestCase):
             acl.effective_level("r3-unit.md", acl.share_ctx("not-the-token"), self.fs))
         self.assertIsNone(acl.effective_level("r3-unit.md", acl.ANON, self.fs))
 
+    def test_a_registry_from_before_forgets_its_links_but_they_keep_working(self):
+        token = secrets.token_urlsafe(24)
+        registry = self.srv.root / ".atlas" / "shares.json"
+        shares = self._shares_on_disk() if registry.exists() else []
+        shares.append({"id": "legacy-1", "path": "accueil.md", "token": token,
+                       "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+                       "expires_at": 0, "created_at": int(time.time()), "revoked": False})
+        (self.srv.root / ".atlas" / "shares.json").write_text(json.dumps(shares), encoding="utf-8")
+        file_store_of(self.srv)  # opening the registry converts it
+        self.assertNotIn(token, json.dumps(self._shares_on_disk()))
+        self.assertEqual(self.srv.get(f"/s/{token}").status, 200)
+
     def test_share_lifecycle_create_list_revoke(self):
         created = self._create_share("accueil.md")
         share_id, token = created["id"], created["token"]
@@ -914,9 +928,10 @@ class TestCloudFileStoreShares(unittest.TestCase):
         self.assertEqual(share_id.count("-"), 4)
         self.assertEqual(created["path"], "accueil.md")
 
-        # On disk: the cleartext token (capability URL) AND its SHA256 index.
+        # On disk: only the SHA256 index, never the link itself.
         record = next(s for s in self._shares_on_disk() if s["id"] == share_id)
-        self.assertEqual(record["token"], token)
+        self.assertNotIn("token", record)
+        self.assertNotIn(token, json.dumps(self._shares_on_disk()))
         self.assertEqual(
             record["token_sha256"],
             hashlib.sha256(token.encode()).hexdigest())
@@ -927,19 +942,15 @@ class TestCloudFileStoreShares(unittest.TestCase):
         self.assertEqual(public.status, 200)
         self.assertIn("Bienvenue dans le mind de test.", public.text)
 
-        # Admin listing returns the stored cleartext token so the admin can
-        # re-copy the link, with file_exists telling the UI it is still live.
+        # Admin listing: the link's path and state, with file_exists telling the UI it
+        # is still live, but not the link (it was shown once, at creation).
         listing = self.srv.get(
             "/api/share/list", headers={"Cookie": self.admin_cookie}).json()
         entry = next(d for d in listing if d["id"] == share_id)
-        self.assertEqual(entry["token"], token)
+        self.assertNotIn("token", entry)
         self.assertEqual(entry["path"], "accueil.md")
         self.assertFalse(entry["revoked"])
         self.assertTrue(entry["file_exists"])
-        # The listed link actually works.
-        relink = self.srv.get(f"/s/{entry['token']}")
-        self.assertEqual(relink.status, 200)
-        self.assertIn("Bienvenue dans le mind de test.", relink.text)
 
         # Revocation → link 410, then re-revocation → 404.
         revoke = self.srv.delete(

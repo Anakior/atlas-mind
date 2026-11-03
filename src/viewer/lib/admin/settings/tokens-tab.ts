@@ -2,10 +2,11 @@
 // token result panel (plaintext + MCP URL) is the shell's only cross-tab dependency here — open()
 // hides it via hideResult().
 
-import { t } from '../../core/i18n';
-import { escapeHtml } from '../../core/utils';
+import { LANG, t } from '../../core/i18n';
+import { escapeHtml, relativeDate } from '../../core/utils';
+import { claudeInstallUrl, mcpUrl } from '../../home/connect-card';
 import { Dialogs } from '../../modals/dialogs';
-import { SettingsContext, shareFormatDate } from './settings-shared';
+import { SettingsContext, copyBox, shareFormatDate } from './settings-shared';
 
 // The access presets of the creation form, keyed by their scopes (store.API_SCOPES order).
 const SCOPE_LABELS: Record<string, string> = {
@@ -40,11 +41,42 @@ export class SettingsTokens {
     );
     document.getElementById('settings-token-close')!.addEventListener('click', () => this.hideResult());
     // The OAuth entry point an assistant connects to (it then signs the person in).
-    (document.getElementById('settings-oauth-url') as HTMLInputElement).value = location.origin + '/mcp';
+    (document.getElementById('settings-oauth-url') as HTMLInputElement).value = mcpUrl();
+    (document.getElementById('settings-oauth-claude') as HTMLAnchorElement).href = claudeInstallUrl();
     document.getElementById('settings-oauth-copy')!.addEventListener('click', (e) =>
       this.ctx.copyFromInput(e.currentTarget as HTMLElement, 'settings-oauth-url'),
     );
     this.list.addEventListener('click', (e) => this.onClick(e));
+    document.getElementById('settings-local-make')!.addEventListener('click', () => this.makeLocal());
+  }
+
+  // A mind on this computer: an access for Claude (dated, one per click), then what to paste where.
+  // Claude Code speaks HTTP; Claude Desktop runs local servers as commands, mcp-remote bridges it.
+  private async makeLocal(): Promise<void> {
+    const when = new Date().toLocaleString(LANG, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+    try {
+      const made = await this.ctx.fetch<{ token: string }>('/api/tokens', {
+        method: 'POST',
+        body: JSON.stringify({ label: t('settingsTokenLocalLabel') + ' · ' + when }),
+      });
+      const url = location.origin + '/mcp/' + made.token;
+      const code = `claude mcp add --transport http --scope user atlas ${url}`;
+      const desktop = JSON.stringify({ atlas: { command: 'npx', args: ['-y', 'mcp-remote', url] } }, null, 2);
+      const slot = document.getElementById('settings-local-snippets')!;
+
+      slot.innerHTML =
+        `<p class="text-xs text-ink-200 font-medium mt-4">${t('settingsTokenLocalCode')}</p>` +
+        copyBox(code, 'data-local-code') +
+        `<p class="text-xs text-ink-200 font-medium mt-4">${t('settingsTokenLocalDesktop')}</p>` +
+        copyBox(desktop, 'data-local-desktop') +
+        `<p class="text-xs text-ink-500 mt-3 leading-snug">${t('settingsTokenLocalOnce')}</p>`;
+      this.ctx.copyOn(slot, '[data-local-code]', () => code);
+      this.ctx.copyOn(slot, '[data-local-desktop]', () => desktop);
+      void this.load();
+    } catch (e) {
+      this.ctx.showError((e as Error).message);
+    }
   }
 
   async load(): Promise<void> {
@@ -64,8 +96,9 @@ export class SettingsTokens {
         .map((tk) => {
           const created = [
             tk.created_at ? t('createdShort', shareFormatDate(tk.created_at)) : '',
+            tk.last_used_at ? t('lastUsedShort', relativeDate(tk.last_used_at)) : t('neverUsed'),
             scopeLabel(tk.scopes),
-            tk.oauth ? 'OAuth' : '',
+            tk.oauth ? t('accessSignedIn') : '',
           ]
             .filter(Boolean)
             .join(' · ');

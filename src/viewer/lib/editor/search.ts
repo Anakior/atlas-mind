@@ -8,7 +8,7 @@
 
 import { searchEl, searchResultsEl, treeEl } from '../core/dom-refs';
 import { t } from '../core/i18n';
-import { fileMap } from '../core/tree';
+import { fileMap, docLabel } from '../core/tree';
 import { EMBED_CONTENT, IS_OFFLINE_BUILD } from '../core/data-csrf';
 import { escapeHtml } from '../core/utils';
 import { docRenderer } from '../content/doc-renderer';
@@ -62,7 +62,7 @@ export class Search {
       if (f.ext !== '.md') continue;
       const c = EMBED_CONTENT![f.path] || '';
 
-      docs.push({ id: f.path, name: f.name, path: f.path, content: c, preview: c.slice(0, 240) });
+      docs.push({ id: f.path, name: docLabel(f), path: f.path, content: c, preview: c.slice(0, 240) });
     }
 
     return docs;
@@ -187,7 +187,7 @@ export class Search {
 
       a.innerHTML =
         '<div class="text-sm font-medium text-ink-100 truncate">' +
-        escapeHtml(file.name) +
+        escapeHtml(docLabel(file)) +
         '</div><div class="text-[10px] text-ink-500">' +
         escapeHtml(file.path) +
         '</div>' +

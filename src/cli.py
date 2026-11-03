@@ -20,6 +20,11 @@ Usage:
     python3 src/cli.py token revoke-all <dir> --acts-as a@b.c
     python3 src/cli.py share list <dir>
     python3 src/cli.py share revoke <dir> --id <id>
+    python3 src/cli.py setup-code [--url https://my-atlas.example]
+    python3 src/cli.py export <dir> [--out notes.zip]
+    python3 src/cli.py import <file|folder|zip> [--into folder] [--dir <mind>]
+    python3 src/cli.py sync <https://my-atlas.example> [<dir>]   # a copy here, then: sync <dir> [--every 60]
+    python3 src/cli.py doctor <dir> [--fix | --sync]
 
 All user/token/share commands operate on the mind's FileStore
 (<mind>/.atlas by default, or store.dir from atlas.toml).
@@ -27,20 +32,23 @@ All user/token/share commands operate on the mind's FileStore
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime
 import getpass
+import hashlib
 import json
 import os
+import platform
 import re
 import secrets
-import shlex
 import shutil
 import stat
 import subprocess
 import sys
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit
 
 ENGINE_SRC = Path(__file__).resolve().parent
 if str(ENGINE_SRC) not in sys.path:
@@ -203,80 +211,81 @@ WELCOME_MD_EN = """\
 tags: [help]
 ---
 
-# Welcome
+# Welcome to your Atlas
 
-This mind is served by Atlas. Any Markdown document placed under `content/`
-shows up in the viewer, organized along the folder tree.
+Your Atlas is your memory: notes of your own that your AI can read, search and add
+to when you ask it. Everything stays in plain files you can open elsewhere and take
+with you whenever you like.
 
-## Supported syntax
+## Getting started
 
-- Plain Markdown: headings, lists, tables, code blocks, images.
-- Wikilinks: [[notes/example]] targets a document by its path,
-  [[example|an alias]] changes the displayed text (the link graph and the
-  backlinks are built automatically).
-- YAML frontmatter at the top of a file: `tags: [help]` adds tags; parent
-  folders also become tags automatically.
+- **Connect your AI**: on the home page, "Add to Claude". Then just tell it "note
+  this in my Atlas" or "what does my Atlas say about…".
+- **Write a note**: the **+** button at the top of the menu. A title is enough.
+- **File things your way**: folders are free-form. The **Inbox** receives what your
+  AI suggests keeping: you choose what stays.
 
-## Organization
+## Writing
 
-- `notes/` : an example subfolder — see [[notes/example]].
-- `inbox/` : quick drop for documents to sort later.
-- `ai-sessions/` : saved sessions from your AI assistant (see the template).
-- `agents/` : reusable AI agent definitions.
+Notes are written in Markdown, the format of plain notes: `# Title`, `- list`,
+`**bold**`. The editor's toolbar does it for you.
 
-## With your AI
+- To link two notes, write the other one's name between double brackets:
+  [[notes/example]]. The link works both ways: the linked note shows what points
+  to it.
+- To add tags, start the note with:
 
-Atlas is meant as the external memory shared with an AI assistant: the
-`AGENTS.md` file (at the root) explains how to connect it (MCP) so it can read
-and enrich your memory palace.
+  ```
+  ---
+  tags: [project, idea]
+  ---
+  ```
+
+## Nothing gets lost
+
+Every change is kept in the note's history, whether it came from you or your AI:
+you can look at a past version, or undo what an AI did. A deleted note goes to the
+**Trash**, where it can be restored.
 """
 
 EXAMPLE_MD_EN = """\
 # Example note
 
 An ordinary note, filed under `notes/`. The link [[welcome]] goes back to the
-home page: a wikilink resolves by path (`notes/example`) or by filename
-(`example`), with an optional alias after `|`.
+welcome note: a note's name between double brackets is enough, its path
+(`notes/example`) settles two notes of the same name, and
+`[[welcome|other text]]` changes the text shown.
 """
 
 AGENTS_MD_EN = """\
-# AGENTS.md — how your AI assistant uses this Atlas
+# Instructions for your AI
 
-This Atlas is the external memory shared between you and your AI assistant. This
-file tells the AI how to read and enrich your Atlas. Adapt it to your
-conventions: every MCP client receives it as the server's instructions when it
-connects, so keep it short and directive (capped at 8,000 characters).
+Your AI assistant reads this document every time it connects to your Atlas. Adapt
+it: this is where you tell it how to work with you. Keep it short and directive
+(8,000 characters at most).
 
 ## Principle
 
-- The Atlas is the **source of truth**. Before answering on an already
-  documented topic, the AI consults the Atlas (search + read) rather than
-  guessing.
-- Any durable knowledge produced (recap, decision, note, analysis) is **written
-  into the Atlas**, not lost in the conversation thread.
+- The Atlas is the **source of truth**. Before answering on a topic already noted,
+  search and read the Atlas rather than guessing.
+- What is worth keeping (a recap, a decision, an idea, an analysis) is **written into
+  the Atlas**, not left in the conversation.
+- When you were not asked to write, suggest an item in the **Inbox** instead: the
+  person decides whether to keep it.
 
-## Access via MCP
+## Filing (adapt it)
 
-The Atlas exposes an MCP server: thirty-four tools to read, write, triage, map,
-rewind and audit your mind. Point your assistant at `https://<your-atlas>/mcp`: it
-signs you in over OAuth and asks what it may do (read, inbox, write). Or mint a token
-yourself (**Settings → Tokens**, or `atlas token create <mind>` locally) and use
-`https://<your-atlas>/mcp/<token>`. The AI can then search, read and create
-documents directly in your memory palace.
-
-## Filing conventions (adapt them)
-
-When the AI creates a document, it files it by type:
 - `notes/` — miscellaneous notes, quick captures.
-- `ai-sessions/` — saved work sessions (see `ai-sessions/TEMPLATE.md`).
-- `agents/` — reusable AI agent definitions (see `agents/README.md`).
-- (add your own folders: projects/, meetings/, courses/…)
+- `ai-sessions/` — saved work sessions (template: `ai-sessions/TEMPLATE.md`).
+- `agents/` — reusable agent instructions (see `agents/README.md`).
+- Add your own folders: projects/, meetings/, courses/…
 
 ## Rules
 
-- **No date in filenames** (the filesystem and git already carry it); the name
-  describes the **topic**. kebab-case.
-- Ask before writing if the target folder is ambiguous.
+- Talk plainly to the person: no technical terms (commit, MCP, frontmatter…) unless
+  they use them.
+- No date in filenames: the name describes the **topic**, lowercase with hyphens.
+- Ask before writing if the folder is not obvious.
 """
 
 AGENTS_README_MD_EN = """\
@@ -369,80 +378,83 @@ WELCOME_MD_FR = """\
 tags: [aide]
 ---
 
-# Bienvenue
+# Bienvenue dans ton Atlas
 
-Ce mind est servi par Atlas. Tout document Markdown déposé sous `content/`
-apparaît dans le viewer, organisé selon l'arborescence des dossiers.
+Ton Atlas, c'est ta mémoire : des notes à toi, que ton IA peut lire, chercher et
+compléter quand tu le lui demandes. Tout reste dans des fichiers simples, que tu
+peux ouvrir ailleurs et emporter quand tu veux.
 
-## Syntaxe supportée
+## Pour commencer
 
-- Markdown classique : titres, listes, tableaux, blocs de code, images.
-- Wikilinks : [[notes/example]] cible un document par son chemin,
-  [[example|un alias]] change le texte affiché (le graphe de liens et les
-  rétroliens sont construits automatiquement).
-- Frontmatter YAML en tête de fichier : `tags: [aide]` ajoute des tags ;
-  les dossiers parents deviennent aussi des tags automatiquement.
+- **Branche ton IA** : sur l'accueil, « Ajouter à Claude ». Ensuite, dis-lui
+  simplement « note ça dans mon Atlas » ou « qu'est-ce que mon Atlas dit de… ».
+- **Écris une note** : le bouton **+** en haut du menu. Un titre suffit.
+- **Range comme tu veux** : les dossiers sont libres. L'**Inbox** reçoit ce que
+  ton IA te propose de garder : tu choisis ce qui reste.
 
-## Organisation
+## Écrire
 
-- `notes/` : un exemple de sous-dossier — voir [[notes/example]].
-- `inbox/` : dépôt rapide pour les documents à trier plus tard.
-- `ai-sessions/` : sauvegardes de session de ton assistant IA (voir le modèle).
-- `agents/` : définitions d'agents IA réutilisables.
+Les notes s'écrivent en Markdown, le format des notes simples : `# Titre`,
+`- liste`, `**gras**`. La barre d'outils de l'éditeur le fait pour toi.
 
-## Avec ton IA
+- Pour relier deux notes, écris le nom de l'autre entre doubles crochets :
+  [[notes/example]]. Le lien marche dans les deux sens : la note liée montre qui
+  pointe vers elle.
+- Pour ajouter des tags, commence la note par :
 
-Atlas est pensé comme la mémoire externe partagée avec un assistant IA : le
-fichier `AGENTS.md` (racine) explique comment la brancher (MCP) pour qu'elle
-lise et enrichisse ton palais mental.
+  ```
+  ---
+  tags: [projet, idée]
+  ---
+  ```
+
+## Rien ne se perd
+
+Chaque modification est gardée dans l'historique de la note, qu'elle vienne de
+toi ou de ton IA : tu peux revoir une version passée, ou annuler ce qu'une IA a
+fait. Une note supprimée part dans la **Corbeille**, d'où elle se restaure.
 """
 
 EXAMPLE_MD_FR = """\
 # Exemple de note
 
-Une note ordinaire, rangée dans `notes/`. Le lien [[welcome]] ramène à la
-page d'accueil : un wikilink se résout par chemin (`notes/example`) ou par
-nom de fichier (`example`), avec un alias optionnel après `|`.
+Une note ordinaire, rangée dans `notes/`. Le lien [[welcome]] ramène à la note
+de bienvenue : le nom d'une note entre doubles crochets suffit, son chemin
+(`notes/example`) lève le doute entre deux notes du même nom, et
+`[[welcome|un autre texte]]` change le texte affiché.
 """
 
 AGENTS_MD_FR = """\
-# AGENTS.md — comment ton assistant IA utilise cet Atlas
+# Consignes pour ton IA
 
-Cet Atlas est la mémoire externe partagée entre toi et ton assistant IA. Ce
-fichier dit à l'IA comment lire et enrichir ton Atlas. Adapte-le à tes
-conventions : chaque client MCP le reçoit comme instructions du serveur à la
-connexion, donc garde-le court et directif (plafonné à 8 000 caractères).
+Ce document est lu par ton assistant IA chaque fois qu'il se connecte à ton Atlas.
+Adapte-le : c'est ici que tu lui dis comment travailler avec toi. Garde-le court et
+directif (8 000 caractères au plus).
 
 ## Principe
 
-- L'Atlas est la **source de vérité**. Avant de répondre sur un sujet déjà
-  documenté, l'IA consulte l'Atlas (recherche + lecture) plutôt que de deviner.
-- Toute connaissance durable produite (récap, décision, note, analyse) est
-  **écrite dans l'Atlas**, pas perdue dans le fil de conversation.
+- L'Atlas est la **source de vérité**. Avant de répondre sur un sujet déjà noté,
+  cherche et lis dans l'Atlas plutôt que de deviner.
+- Ce qui mérite d'être gardé (un récap, une décision, une idée, une analyse) est
+  **écrit dans l'Atlas**, pas laissé dans la conversation.
+- Quand on ne t'a pas demandé d'écrire, propose plutôt une fiche dans l'**Inbox** :
+  la personne décide de la garder.
 
-## Accès via MCP
+## Rangement (à adapter)
 
-L'Atlas expose un serveur MCP : trente-quatre outils pour lire, écrire, trier,
-cartographier, rembobiner et auditer ton mind. Branche ton assistant sur
-`https://<ton-atlas>/mcp` : il te connecte en OAuth et te demande ce qu'il peut faire
-(lecture, inbox, écriture). Ou crée toi-même un token (**Paramètres → Tokens**, ou
-`atlas token create <mind>` en local) et utilise `https://<ton-atlas>/mcp/<token>`.
-L'IA peut alors chercher, lire et créer des documents directement dans ton palais
-mental.
-
-## Conventions de rangement (à adapter)
-
-Quand l'IA crée un document, elle le range selon son type :
 - `notes/` — notes diverses, captures rapides.
-- `ai-sessions/` — sauvegardes de session de travail (voir `ai-sessions/TEMPLATE.md`).
-- `agents/` — définitions d'agents IA réutilisables (voir `agents/README.md`).
-- (ajoute tes dossiers : projets/, reunions/, cours/…)
+- `ai-sessions/` — sauvegardes de session de travail (modèle :
+  `ai-sessions/TEMPLATE.md`).
+- `agents/` — consignes d'agents réutilisables (voir `agents/README.md`).
+- Ajoute tes dossiers : projets/, réunions/, cours/…
 
 ## Règles
 
-- **Pas de date dans les noms de fichiers** (le filesystem et git la portent
-  déjà) ; le nom décrit le **sujet**. kebab-case.
-- Demander avant d'écrire si le dossier cible est ambigu.
+- Parle simplement à la personne : pas de termes techniques (commit, MCP,
+  frontmatter…) sauf si elle les emploie.
+- Pas de date dans les noms de fichiers : le nom décrit le **sujet**, en minuscules
+  avec des tirets.
+- Demande avant d'écrire si le dossier n'est pas évident.
 """
 
 AGENTS_README_MD_FR = """\
@@ -583,6 +595,55 @@ def _git_init_main(mind: Path) -> str:
     return "git repo initialized (branch main)."
 
 
+def _first_commit(mind: Path) -> str:
+    """The scaffold's root commit: the mind has a history from the start, so the
+    server's path-scoped commits build on a HEAD and nobody has to commit by hand.
+    Made as Atlas, whose starter docs these are: not the machine's git user's, nor
+    Claude's when Claude Code runs the init (CLAUDECODE would trip the hook)."""
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+
+    def _git(*args):
+        return subprocess.run(["git", *args], cwd=str(mind), capture_output=True,
+                              text=True, env=env)
+
+    if shutil.which("git") is None or not (mind / ".git").exists():
+        return "no repo: no first commit."
+    if _git("rev-parse", "--verify", "-q", "HEAD").returncode == 0:
+        return "history already present, kept."
+    _git("add", "-A")
+    result = _git("-c", "user.name=Atlas", "-c", "user.email=atlas@localhost",
+                  "commit", "-q", "-m", "chore: new mind")
+    if result.returncode != 0:
+        return f"first commit failed: {(result.stderr or result.stdout).strip()}"
+    return "first commit made."
+
+
+def init_mind(mind: Path, lang: str, prefix: str = "", tagline: str = "") -> dict:
+    """Scaffold a mind (never overwriting a file), make it a git repo with its first
+    commit and the Claude Code hook. Shared by `atlas init` and a cloud boot that has
+    no repo to clone. Returns what it did, for the caller to report."""
+    tagline = tagline or (DEFAULT_TAGLINE_FR if lang == "fr" else DEFAULT_TAGLINE_EN)
+    mind.mkdir(parents=True, exist_ok=True)
+    created: list = []
+    kept: list = []
+    _scaffold_file(mind / "atlas.toml",
+                   _render_atlas_toml(prefix, tagline, lang), created, kept)
+    _scaffold_file(mind / ".gitignore", GITIGNORE_TEMPLATE, created, kept)
+    # .gitkeep: an empty inbox/ must survive the git clone; the "." prefix
+    # keeps it out of the viewer (EXCLUDED_PREFIXES).
+    _scaffold_file(mind / "content" / "inbox" / ".gitkeep", "", created, kept)
+    # Extensions hook (CSS/JS inlined at build, *.py loaded at server boot):
+    # empty ready-to-use folder, documented in atlas.toml.
+    _scaffold_file(mind / ".atlas" / "extensions" / ".gitkeep", "",
+                   created, kept)
+    for rel, content in _scaffold_docs(lang):
+        _scaffold_file(mind / rel, content, created, kept)
+    git_message = _git_init_main(mind)
+    hook_message = _install_commit_hook(mind)[1]
+    return {"created": created, "kept": kept, "git": git_message,
+            "hook": hook_message, "commit": _first_commit(mind)}
+
+
 # Claude Code runs its shell with CLAUDECODE=1, so a commit made there is Claude's even
 # when its message lacks the trailers Atlas reads. A message that names its author
 # already, and a merge (it brings in others' work), are left alone.
@@ -668,33 +729,16 @@ def cmd_init(args) -> int:
             "anyway (existing files are kept).")
 
     lang, prefix, tagline = _personalize(args)
-    mind.mkdir(parents=True, exist_ok=True)
-
-    created: list = []
-    kept: list = []
-    _scaffold_file(mind / "atlas.toml",
-                   _render_atlas_toml(prefix, tagline, lang), created, kept)
-    _scaffold_file(mind / ".gitignore", GITIGNORE_TEMPLATE, created, kept)
-    # .gitkeep: an empty inbox/ must survive the git clone; the "." prefix
-    # keeps it out of the viewer (EXCLUDED_PREFIXES).
-    _scaffold_file(mind / "content" / "inbox" / ".gitkeep", "", created, kept)
-    # Extensions hook (CSS/JS inlined at build, *.py loaded at server boot):
-    # empty ready-to-use folder, documented in atlas.toml.
-    _scaffold_file(mind / ".atlas" / "extensions" / ".gitkeep", "",
-                   created, kept)
-    for rel, content in _scaffold_docs(lang):
-        _scaffold_file(mind / rel, content, created, kept)
-
-    git_message = _git_init_main(mind)
-    hook_message = _install_commit_hook(mind)[1]
+    done = init_mind(mind, lang, prefix, tagline)
 
     print(f"Mind initialized: {mind}")
-    for path in created:
+    for path in done["created"]:
         print(f"  created : {path.relative_to(mind)}")
-    for path in kept:
+    for path in done["kept"]:
         print(f"  kept    : {path.relative_to(mind)} (existing, untouched)")
-    print(f"  git     : {git_message}")
-    print(f"  hook    : {hook_message}")
+    print(f"  git     : {done['git']}")
+    print(f"  hook    : {done['hook']}")
+    print(f"  commit  : {done['commit']}")
     print()
     # Absolute paths so every command is copy-pasteable from ANY working directory.
     print("Next steps:")
@@ -706,7 +750,7 @@ def cmd_init(args) -> int:
     print("commits content changes and pushes them to that remote, which is how")
     print("an online instance persists and shares its state:")
     print(f"  git -C {mind} remote add origin git@github.com:<you>/<your-mind>.git")
-    print(f"  git -C {mind} add -A && git -C {mind} commit -m initial && git -C {mind} push -u origin main")
+    print(f"  git -C {mind} push -u origin main")
     print("Keep the repository PRIVATE — it holds your notes (the .atlas/ account")
     print("registry stays local, it is gitignored). The deployment needs push")
     print("credentials (a deploy key or a token with write access). Full guide:")
@@ -1111,6 +1155,10 @@ def cmd_dev_inbox(args) -> int:
 DEPLOY_DOCKERFILE = """\
 # Atlas Mind container image — installs the engine from PyPI.
 FROM python:3.12-slim
+# git keeps the history; ssh pushes the copy connected from Settings (GitHub deploy key).
+RUN apt-get update \\
+    && apt-get install -y --no-install-recommends git openssh-client ca-certificates \\
+    && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir "atlas-mind[bcrypt]"
 # Non-root runtime user.
 RUN useradd --uid 10001 --create-home app
@@ -1229,10 +1277,11 @@ WantedBy=multi-user.target
 
 DEPLOY_FLY_DOCKERFILE = """\
 # Atlas Mind on Fly.io — installs the engine from PyPI and clones your mind
-# (a PRIVATE git repo) at boot. git is needed for that clone + the content push.
+# (a PRIVATE git repo) at boot. git is needed for that clone + the content push;
+# ssh for a copy connected from Settings (the instance's own GitHub deploy key).
 FROM python:3.12-slim
 RUN apt-get update \\
-    && apt-get install -y --no-install-recommends git ca-certificates \\
+    && apt-get install -y --no-install-recommends git openssh-client ca-certificates \\
     && rm -rf /var/lib/apt/lists/*
 # Pin the version for reproducible deploys, e.g. "atlas-mind[bcrypt]==0.1.1".
 RUN pip install --no-cache-dir "atlas-mind[bcrypt]"
@@ -1250,8 +1299,9 @@ ENV KB_AUTH_ENABLED=1 \\
     PORT=8765 \\
     PYTHONUNBUFFERED=1
 EXPOSE 8765
-# Cloud-mode boot: clones GITHUB_REPO_URL into /app/repo (or pulls if already
-# there), builds the viewer, serves, and commits+pushes content writes back.
+# Cloud-mode boot: clones GITHUB_REPO_URL into KB_REPO_PATH (on the volume, set in
+# fly.toml; or pulls if already there), builds the viewer, serves, and
+# commits+pushes content writes back.
 # `atlas serve` is NOT used here — it expects content/ to already exist; the
 # clone happens inside this entrypoint instead.
 CMD ["python", "-m", "atlas_mind.server"]
@@ -1292,6 +1342,10 @@ kill_timeout = '30s'
   # the content; the Fly rootfs is ephemeral, the volume makes it persistent.
   ATLAS_STORE = 'file'
   ATLAS_STORE_DIR = '/data/atlas-store'
+  # The content checkout lives on the volume too: a commit not pushed yet (remote
+  # down, token expired) survives a restart or a redeploy instead of vanishing with
+  # the rootfs. Fly hands the mount to the image's user (`app`), so it can write here.
+  KB_REPO_PATH = '/data/kb'
 
 [mounts]
   source = 'atlas_store'
@@ -1388,11 +1442,39 @@ def _build_github_repo_url(repo: str, token: str) -> str:
     return f"https://x-access-token:{token}@github.com/{slug}.git"
 
 
+def new_setup_code() -> tuple:
+    """A one-time setup code and its SHA-256: the hash goes on the server
+    (ATLAS_SETUP_CODE_SHA256), the code only in the /setup#code=… link."""
+    code = secrets.token_urlsafe(24)
+    return code, hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def setup_link(base_url: str, code: str) -> str:
+    """The link that creates the first admin. The code rides in the fragment, which
+    never reaches a server or a proxy log."""
+    return f"{base_url.rstrip('/')}/setup#code={code}"
+
+
+def cmd_setup_code(args) -> int:
+    """`atlas setup-code`: a fresh code for the first admin, without a shell on the
+    server — its hash goes in the server's env, the link to whoever creates the admin."""
+    code, digest = new_setup_code()
+    print("1. Set this on the server (it reads it at start-up), e.g. on Fly:")
+    print(f"     fly secrets set -a <your-app> ATLAS_SETUP_CODE_SHA256={digest}")
+    print(f"   elsewhere: ATLAS_SETUP_CODE_SHA256={digest}")
+    print("2. Open or send this link: it creates the first admin, and works only while")
+    print("   no admin exists.")
+    print(f"     {setup_link(args.url or 'https://<your-atlas>', code)}")
+    return 0
+
+
 def _fly_wizard(mind: Path, app_name: str, region: str) -> int:
-    """End-to-end guided Fly deploy: provision app+volume, set secrets (auto
-    SESSION_SECRET), deploy, and create the admin — no setup token, no manual
-    secret juggling. Requires an interactive terminal and the fly CLI; every
-    outward step is confirmed once up front."""
+    """End-to-end guided Fly deploy: provision the app + volume in the personal org
+    (where Fly waives bills under $5), set the secrets, deploy, then print the
+    /setup link that creates the first admin — no shell into the machine, no
+    password typed here. GitHub is optional: without it a new mind starts on the
+    volume. Requires an interactive terminal and the fly CLI; every outward step
+    is confirmed once up front."""
     if not sys.stdin.isatty():
         raise CliError("--wizard needs an interactive terminal.")
     fly = shutil.which("fly") or shutil.which("flyctl")
@@ -1400,36 +1482,36 @@ def _fly_wizard(mind: Path, app_name: str, region: str) -> int:
         raise CliError("the `fly` CLI is required for --wizard (install: "
                        "https://fly.io/docs/flyctl/install/, then `fly auth login`).")
 
-    def run(*cmd, label):
+    def run(*cmd, label, shown=None):
+        # `shown`: the command as printed, when its real arguments carry secrets.
         print(f"\n-> {label}")
-        print(f"   $ fly {' '.join(str(c) for c in cmd)}")
+        print(f"   $ fly {shown or ' '.join(str(c) for c in cmd)}")
         return subprocess.run([fly, *[str(c) for c in cmd]]).returncode
 
-    print(f"\nGuided Fly deploy — app '{app_name}' (region {region}).")
-    print("You will be asked for your private GitHub repo + token and the admin login.\n")
+    print(f"\nGuided Fly deploy — app '{app_name}' (region {region}, personal org).\n")
+    env = {}
+    repo = _prompt("Private GitHub repo holding the mind (<you>/<repo>), "
+                   "or empty to start a new mind without GitHub", "")
+    if repo:
+        print("GitHub token: a fine-grained PAT with Contents: Read and write on that repo")
+        print("  (create one at https://github.com/settings/personal-access-tokens/new).")
+        token = getpass.getpass("GitHub token (input hidden): ").strip()
+        if not token:
+            raise CliError("a GitHub token is required to clone and push that repo.")
+        env["GITHUB_REPO_URL"] = _build_github_repo_url(repo, token)
+    else:
+        lang = _prompt("Language of the new mind (en/fr)", "en")
+        env["ATLAS_LANG"] = lang if lang in ("en", "fr") else "en"
+    code, env["ATLAS_SETUP_CODE_SHA256"] = new_setup_code()
 
-    repo = _prompt("Private GitHub repo (https://github.com/<you>/<repo>.git or <you>/<repo>)", "")
-    if not repo:
-        raise CliError("a GitHub repo is required (the mind is cloned from it at boot).")
-    print("GitHub token: a fine-grained PAT with Contents: Read and write on that repo")
-    print("  (create one at https://github.com/settings/personal-access-tokens/new).")
-    token = getpass.getpass("GitHub token (input hidden): ").strip()
-    if not token:
-        raise CliError("a GitHub token is required (clone + push authentication).")
-    repo_url = _build_github_repo_url(repo, token)
-
-    admin_email = _normalize_email(_prompt("Admin email", ""))
-    admin_pw = _ask_password()
-    if len(admin_pw) < MIN_PASSWORD_LENGTH:
-        raise CliError(f"admin password too short (min {MIN_PASSWORD_LENGTH} characters).")
-
-    print("\nAbout to: create the Fly app + volume, set the secrets, deploy, and create")
-    print(f"the admin — on app '{app_name}'.")
+    print(f"\nAbout to: create the Fly app '{app_name}' + its volume, set the secrets and")
+    print("deploy. Then you get the link that creates the first admin.")
     if _prompt("Proceed?", "yes").strip().lower() not in ("y", "yes", "o", "oui"):
         print("Aborted. Your deploy/ files are already written; re-run when ready.")
         return 1
 
-    run("apps", "create", app_name, label=f"Create the Fly app '{app_name}'")  # tolerate exists
+    # Tolerates an existing app (a re-run).
+    run("apps", "create", app_name, "--org", "personal", label=f"Create the Fly app '{app_name}'")
     existing = subprocess.run([fly, "volumes", "list", "-a", app_name],
                               capture_output=True, text=True).stdout
     if "atlas_store" in existing:
@@ -1438,29 +1520,24 @@ def _fly_wizard(mind: Path, app_name: str, region: str) -> int:
              "-a", app_name, "--yes", label="Create the data volume") != 0:
         raise CliError("volume creation failed — fix the issue above and re-run.")
 
-    if run("secrets", "set", "-a", app_name,
-           f"SESSION_SECRET={secrets.token_hex(32)}",
-           f"GITHUB_REPO_URL={repo_url}",
-           label="Set SESSION_SECRET + GITHUB_REPO_URL") != 0:
+    # SESSION_SECRET signs sessions and share links: a re-run keeps the one in place.
+    set_already = subprocess.run([fly, "secrets", "list", "-a", app_name],
+                                 capture_output=True, text=True).stdout
+    if "SESSION_SECRET" not in set_already:
+        env["SESSION_SECRET"] = secrets.token_hex(32)
+    names = " ".join(f"{k}=***" for k in env)
+    if run("secrets", "set", "-a", app_name, "--stage", *(f"{k}={v}" for k, v in env.items()),
+           label="Set the secrets", shown=f"secrets set -a {app_name} --stage {names}") != 0:
         raise CliError("setting secrets failed — fix the issue above and re-run.")
 
     if run("deploy", "-c", str(mind / "deploy" / "fly.toml"),
            label="Build + deploy (waits until healthy)") != 0:
         raise CliError("deploy failed — check `fly logs` and re-run.")
 
-    # `fly ssh` runs as ROOT, so the store files would land root-owned and the
-    # non-root server (uid 10001 'app') could not read them → chown them back.
-    # /data/atlas-store must match ATLAS_STORE_DIR in DEPLOY_FLY_TOML.
-    admin_cmd = ("atlas user add /app/repo --email " + shlex.quote(admin_email)
-                 + " --role admin --password " + shlex.quote(admin_pw)
-                 + " && chown -R app:app /data/atlas-store")
-    if run("ssh", "console", "-a", app_name, "-C", admin_cmd,
-           label="Create the admin account (over SSH, no setup token)") != 0:
-        print(f"\nAdmin creation over SSH failed. Fallback: open "
-              f"https://{app_name}.fly.dev/setup and paste the token from `fly logs`.")
-        return 1
-
-    print(f"\n[done] Open https://{app_name}.fly.dev/login and sign in as {admin_email}.")
+    print("\n[done] Your Atlas is online. Create its first admin with this link — open it")
+    print("yourself, or send it to the person who will use this Atlas:")
+    print(f"  {setup_link(f'https://{app_name}.fly.dev', code)}")
+    print("It works until an admin exists. Lost it? `atlas setup-code` makes a new one.")
     return 0
 
 
@@ -1513,26 +1590,29 @@ def cmd_deploy(args) -> int:
         print( "  Cloud mode commits content writes into the mounted repo; set GITHUB_REPO_URL in .env")
         print( "  to also auto-push to your PRIVATE GitHub remote.")
     elif args.target == "fly":
-        print(f"Going online on Fly.io as '{app_name}' (the mind is cloned from a PRIVATE GitHub repo at boot).")
+        print(f"Going online on Fly.io as '{app_name}'.")
         print("  TIP: re-run with --wizard to do ALL of the steps below interactively")
-        print("  (provision, secrets, deploy, admin) — no setup token, no manual juggling.")
-        print(f"  1. Push {mind} to a PRIVATE GitHub repo (atlas.toml + content/ — no engine code).")
-        print(f"  2. Create the app (name already set in deploy/fly.toml) and the data volume:")
-        print(f"       fly apps create {app_name}")
+        print("  (provision, secrets, deploy, first-admin link) — no shell, no manual juggling.")
+        print(f"  1. Optional: push {mind} to a PRIVATE GitHub repo (atlas.toml + content/, no")
+        print( "     engine code) to keep a copy there. Without it a new mind starts on the volume.")
+        print( "  2. Create the app in your personal org (Fly waives its bills under $5) and the")
+        print( "     data volume (the app name is already in deploy/fly.toml):")
+        print(f"       fly apps create {app_name} --org personal")
         print(f"       fly volumes create atlas_store --region cdg --size 1 -a {app_name}")
-        print( "  3. Set the secrets. <TOKEN> = a GitHub fine-grained PAT with Contents:Read-and-write")
-        print( "     on the mind repo — create it at https://github.com/settings/personal-access-tokens/new")
-        print( "     (Repository access: only that repo; Permissions: Contents -> Read and write).")
+        print(f"  3. Make a first-admin code: `{_invocation()} setup-code --url https://{app_name}.fly.dev`")
+        print( "     prints its ATLAS_SETUP_CODE_SHA256 and the link. Then set the secrets:")
         print(f"       fly secrets set -a {app_name} \\")
         print( "         SESSION_SECRET=$(python3 -c \"import secrets;print(secrets.token_hex(32))\") \\")
+        print( "         ATLAS_SETUP_CODE_SHA256=<from setup-code> \\")
         print( "         GITHUB_REPO_URL=\"https://x-access-token:<TOKEN>@github.com/<you>/<your-mind>.git\"")
+        print( "     (GITHUB_REPO_URL only with a repo. <TOKEN> = a fine-grained PAT, that repo only,")
+        print( "     Contents: Read and write — https://github.com/settings/personal-access-tokens/new.")
+        print( "     Without a repo, ATLAS_LANG=fr or en picks the new mind's language.)")
         print( "  4. Deploy:")
         print( "       fly deploy -c deploy/fly.toml")
-        print( "  5. First boot clones the repo + builds the viewer. Create the admin account —")
-        print( "     easiest over SSH, NO setup token needed:")
-        print(f"       fly ssh console -a {app_name} -C \"atlas user add /app/repo --email you@example.com --role admin --password 'CHANGE-ME'\"")
-        print( "     (Or open the URL and paste the /setup token from `fly logs`.) Then log in.")
-        print( "  6. Edits via the viewer/MCP auto-commit+push to your GitHub repo.")
+        print( "  5. Open the setup-code link (or send it to whoever will use this Atlas): it")
+        print( "     creates the first admin, who picks their own password.")
+        print( "  6. Edits via the viewer/MCP are committed, and pushed to the repo if there is one.")
         print( "  Optional: for INSTANT push-to-update (vs the ~5 min poll), set a")
         print( "  GITHUB_WEBHOOK_SECRET secret + a GitHub webhook to /webhook/github (see deploy/fly.toml).")
     else:
@@ -1631,7 +1711,10 @@ def cmd_user_add(args) -> int:
         raise CliError(
             f"the email {email} is already taken — run `atlas user remove` first "
             "to replace it.")
-    password = args.password if args.password is not None else _ask_password()
+    if args.password == "-":
+        password = sys.stdin.readline().rstrip("\r\n")
+    else:
+        password = args.password if args.password is not None else _ask_password()
     if len(password) < MIN_PASSWORD_LENGTH:
         raise CliError(
             f"password too short (minimum {MIN_PASSWORD_LENGTH} characters).")
@@ -1882,6 +1965,8 @@ def cmd_doctor(args) -> int:
     repair the safe ones): entries left behind by user/group deletions, document
     deletions, or out-of-band (git/filesystem) moves."""
     cfg = _load_config(_require_mind(args.dir))
+    if args.sync:
+        return _doctor_sync(cfg)
     file_store = _file_store(cfg)
     report = file_store.audit_registry(cfg.content_root)
     if sum(len(v) for v in report.values()) == 0:
@@ -1915,7 +2000,286 @@ def cmd_doctor(args) -> int:
     return 0
 
 
+def _doctor_sync(cfg) -> int:
+    """`atlas doctor --sync`: the mind against its remote, plus a live check that the
+    remote answers. A running server's own failures live in its memory: GET /api/sync."""
+    from server.services.git_sync import GitSync, classify_git_error, mask_url
+    gs = GitSync(config=cfg)
+    health = gs.health()
+    if not health["remote"]:
+        print("No remote: this mind exists only here. Connect a private remote to "
+              "keep a copy elsewhere.")
+        return 0
+    upstream = gs.run("rev-parse", "--abbrev-ref", "@{u}").stdout.strip()
+    print(f"Remote branch: {upstream}")
+    oldest = health["oldest_unpushed_at"]
+    since = f" (oldest from {time.strftime('%Y-%m-%d %H:%M', time.localtime(oldest))})" if oldest else ""
+    print(f"Unpushed commits: {health['unpushed']}{since}")
+    try:
+        probe = gs.run("ls-remote", "-q", upstream.split("/", 1)[0], timeout=30)
+        out = probe.stderr if probe.returncode else ""
+    except subprocess.TimeoutExpired:
+        out = "git ls-remote timed out"
+    if not out:
+        print("Remote reachable: yes")
+        return 0
+    first = next((ln.strip() for ln in out.splitlines() if ln.strip()), "")
+    print(f"Remote reachable: NO ({classify_git_error(out)}): {mask_url(first)}")
+    return 1
+
+
 # ─── backup / restore ───────────────────────────────────────────────────────────
+
+
+def cmd_export(args) -> int:
+    """The same zip as the viewer's "leave with your notes" (GET /api/export), with the
+    whole history: whoever runs this has the mind's folder anyway."""
+    from server.pure.export import exportable, write_export
+    cfg = _load_config(_require_mind(args.dir))
+    out = Path(args.out) if args.out else Path.cwd() / f"{cfg.site_slug}-notes.zip"
+    rels = exportable(cfg.content_root, lambda rel: True)
+    with open(out, "wb") as f:
+        write_export(f, cfg.content_root, rels, cfg.site_slug, cfg.lang,
+                     cfg.root if (cfg.root / ".git").exists() else None)
+    print(f"Notes exported: {out} ({len(rels)} files)")
+    return 0
+
+
+def cmd_import(args) -> int:
+    """Files from this computer into the mind, as a drop in the viewer does: a file, a folder
+    (kept as a folder) or a .zip (unpacked into a folder of its name). Never over an existing
+    file ("name (2).ext"); a page that would run in the viewer (.html, .svg), another type
+    the viewer doesn't take, or a file over 25 MB stays out."""
+    import contextlib
+    import zipfile
+    from server.pure import uploads
+    cfg = _load_config(_require_mind(args.dir))
+    src = Path(args.source)
+    into = (args.into or "").strip().strip("/")
+    if into and uploads.clean_path(into) is None:
+        print(f"Not a folder name for the mind: {into}", file=sys.stderr)
+        return 1
+    if not src.exists():
+        print(f"Nothing at {src}", file=sys.stderr)
+        return 1
+    under = (lambda name: f"{into}/{name}" if into else name)
+    skipped, plan = [], []  # plan: (rel, open the bytes)
+    archive = contextlib.ExitStack()
+    if src.is_file() and src.suffix.lower() == ".zip":
+        try:
+            entries, skipped = uploads.zip_entries(src, under(src.stem))
+        except uploads.UploadError as e:
+            print(f"Cannot unpack {src}: {e.code}", file=sys.stderr)
+            return 1
+        zf = archive.enter_context(zipfile.ZipFile(src))
+        plan = [(rel, (lambda m=member: zf.open(m))) for member, rel in entries]
+    else:
+        files = [src] if src.is_file() else sorted(p for p in src.rglob("*") if p.is_file())
+        for path in files:
+            name = src.name if path == src else f"{src.name}/{path.relative_to(src).as_posix()}"
+            rel = uploads.clean_rel(under(name))
+            if rel is None or path.stat().st_size > uploads.MAX_FILE:
+                skipped.append(name)
+            else:
+                plan.append((rel, (lambda p=path: open(p, "rb"))))
+    written = []
+    with archive:
+        for rel, read in plan:
+            rel = uploads.free_rel(cfg.content_root, rel)
+            target = cfg.content_root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with read() as data, open(target, "wb") as out:
+                shutil.copyfileobj(data, out)
+            written.append(target)
+    if written and (cfg.root / ".git").exists():
+        _copy_git(cfg.root, "add", "--", *(str(p) for p in written))
+        _copy_git(cfg.root, *_copy_who(cfg.root), "commit", "-q", "-m",
+                  f"created: {src.stem if src.suffix.lower() == '.zip' else src.name} ({len(written)})")
+    print(f"{len(written)} file(s) added" + (f", {len(skipped)} left out: " + ", ".join(skipped[:10])
+                                             + (" …" if len(skipped) > 10 else "") if skipped else ""))
+    return 0
+
+
+def _copy_git(cwd: Path, *args, text=True) -> subprocess.CompletedProcess:
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    return subprocess.run(["git", "-c", "core.quotepath=false", *args], cwd=str(cwd),
+                          capture_output=True, text=text, env=env)
+
+
+def _copy_who(dest: Path) -> list:
+    """A commit identity for a computer where git has none set."""
+    return [] if _copy_git(dest, "config", "user.email").stdout.strip() else [
+        "-c", "user.name=Atlas copy", "-c", "user.email=copy@atlas.local"]
+
+
+def _beside(dest: Path, rel: str) -> str:
+    """Where this copy's version of a note goes when both sides changed it, the viewer's
+    way: "<note> (my version).md", numbered when taken."""
+    try:
+        suffix = "ma version" if AtlasConfig.load(root=dest).lang == "fr" else "my version"
+    except AtlasConfigError:
+        suffix = "my version"
+    path = PurePosixPath(rel)
+    n = 1
+    while True:
+        name = f"{path.stem} ({suffix}{f' {n}' if n > 1 else ''}){path.suffix}"
+        if not (dest / path.with_name(name)).exists():
+            return path.with_name(name).as_posix()
+        n += 1
+
+
+def _keep_both(dest: Path) -> list:
+    """Take the instance's changes when the same notes changed here too: the online
+    version stays in place, this copy's goes beside it. Never a git screen. Returns the
+    copies made."""
+    who = _copy_who(dest)
+    base = _copy_git(dest, "merge-base", "HEAD", "FETCH_HEAD").stdout.strip()
+
+    def changed(rev):
+        return set(_copy_git(dest, "diff", "--name-only", base, rev).stdout.splitlines())
+
+    def blob(path):
+        return _copy_git(dest, "rev-parse", "--verify", "--quiet", f"HEAD:{path}").stdout.strip()
+
+    mine = {path: blob(path) for path in changed("HEAD") & changed("FETCH_HEAD")}
+    if _copy_git(dest, *who, "merge", "-q", "--no-edit", "-X", "theirs", "FETCH_HEAD").returncode:
+        # What -X theirs leaves open: a note deleted on one side, edited on the other.
+        for path in _copy_git(dest, "diff", "--name-only", "--diff-filter=U").stdout.splitlines():
+            if _copy_git(dest, "cat-file", "-e", f"FETCH_HEAD:{path}").returncode == 0:
+                _copy_git(dest, "checkout", "FETCH_HEAD", "--", path)
+            else:
+                _copy_git(dest, "rm", "-q", "--", path)
+        _copy_git(dest, *who, "commit", "-q", "--no-edit")
+    copies = []
+    for path, before in mine.items():
+        if before and blob(path) != before:
+            rel = _beside(dest, path)
+            (dest / rel).write_bytes(_copy_git(dest, "cat-file", "blob", before, text=False).stdout)
+            copies.append(rel)
+    if copies:
+        _copy_git(dest, "add", "--", *copies)
+        _copy_git(dest, *who, "commit", "-q", "-m", "notes: keep both versions")
+    return copies
+
+
+def _copy_refusal(stderr: str) -> str:
+    """Why the instance said no, in its own words when it gave some."""
+    for line in stderr.splitlines():
+        if "Atlas:" in line:
+            return line.split("Atlas:", 1)[1].strip()
+    if "401" in stderr:
+        return "the instance refused this access token"
+    if "403" in stderr:
+        return ("only the owner of a mind with a single account can copy it: "
+                "a copy carries every file and the whole history")
+    lines = stderr.strip().splitlines()
+    return lines[-1] if lines else "git failed"
+
+
+def _git_base(url: str) -> str:
+    """An Atlas address as its git URL: https://my-atlas.example → …/git."""
+    base = url.rstrip("/")
+    return base if base.endswith("/git") else base + "/git"
+
+
+def _same_atlas(a: str, b: str) -> bool:
+    """Two git URLs of the same Atlas, whatever credentials or trailing slash they carry."""
+    pa, pb = urlsplit(_git_base(a)), urlsplit(_git_base(b))
+    return ((pa.scheme, pa.hostname, pa.port, pa.path.rstrip("/"))
+            == (pb.scheme, pb.hostname, pb.port, pb.path.rstrip("/")))
+
+
+def _copy_here(url: str):
+    """The copy of `url`'s Atlas this command runs in (this folder or one above), or None."""
+    top = _copy_git(Path.cwd(), "rev-parse", "--show-toplevel")
+    if top.returncode:
+        return None
+    root = Path(top.stdout.strip())
+    origin = _copy_git(root, "remote", "get-url", "origin").stdout.strip()
+    return root if origin and _same_atlas(origin, url) else None
+
+
+def _sync_clone(url: str, dest) -> int:
+    base = _git_base(url)
+    host = urlsplit(base).hostname or "atlas"
+    # The notes of that Atlas, not a name a developer's own checkout may already hold.
+    dest = Path(dest) if dest else Path.cwd() / (host.split(".")[0] + "-notes")
+    if dest.exists() and any(dest.iterdir()):
+        raise CliError(f"{dest} is not empty: pick another folder")
+    token = (os.environ.get("ATLAS_TOKEN")
+             or getpass.getpass("Access token (Settings > Copies > On your computer): ")).strip()
+    if not token:
+        raise CliError("an access token is needed")
+    header = "Authorization: Basic " + base64.b64encode(f"atlas:{token}".encode()).decode()
+    clone = _copy_git(Path.cwd(), "-c", f"http.extraHeader={header}", "clone", "-q", base, str(dest))
+    if clone.returncode:
+        raise CliError(_copy_refusal(clone.stderr))
+    # The token stays with this copy only (its .git/config), for the next syncs.
+    _copy_git(dest, "config", f"http.{base}.extraHeader", header)
+    print(f"Your copy: {dest}\nEdit the notes in content/, then run: atlas sync \"{dest}\"")
+    return 0
+
+
+def _sync_once(dest: Path) -> str:
+    """Send this copy's note changes, take the instance's: one round."""
+    _copy_git(dest, "add", "-A", "--", "content")
+    _copy_git(dest, "add", "-A", "--", "AGENTS.md")
+    if _copy_git(dest, "diff", "--cached", "--quiet").returncode:
+        _copy_git(dest, *_copy_who(dest), "commit", "-q", "-m",
+                  f"notes: from {platform.node() or 'a copy'}")
+    received, kept = 0, []
+    for _ in range(3):  # the instance may record a change of its own while we push
+        fetch = _copy_git(dest, "fetch", "-q", "origin", "main")
+        if fetch.returncode:
+            raise CliError(_copy_refusal(fetch.stderr))
+        new = int(_copy_git(dest, "rev-list", "--count", "HEAD..FETCH_HEAD").stdout or 0)
+        if new and _copy_git(dest, "rebase", "-q", "--autostash", "FETCH_HEAD").returncode:
+            _copy_git(dest, "rebase", "--abort")
+            kept += _keep_both(dest)
+        received += new
+        sent = int(_copy_git(dest, "rev-list", "--count", "FETCH_HEAD..HEAD").stdout or 0)
+        push = _copy_git(dest, "push", "-q", "origin", "HEAD:main") if sent else None
+        if push is None or push.returncode == 0:
+            break
+        if "fetch first" not in push.stderr and "non-fast-forward" not in push.stderr:
+            raise CliError("the instance refused the changes: " + _copy_refusal(push.stderr))
+    else:
+        raise CliError("the instance keeps changing: run atlas sync again in a moment")
+    if not (sent or received):
+        return "Up to date."
+    summary = f"{sent} change(s) sent, {received} received."
+    if kept:
+        summary += ("\nChanged here and online: the online version stays, yours is beside it: "
+                    + ", ".join(kept))
+    return summary
+
+
+def cmd_sync(args) -> int:
+    """A copy of an online mind on this computer, kept in step through its own git
+    (/git): `atlas sync <url> [dir]` makes it, then `atlas sync [dir]` sends the note
+    changes made here and takes the others'. Only content/ and AGENTS.md travel."""
+    if shutil.which("git") is None:
+        raise CliError("git is needed: https://git-scm.com/downloads")
+    if re.match(r"https?://", args.target):
+        # Run from inside a copy of that same Atlas (one `git clone` made), it syncs that copy
+        # rather than nesting a second one in it.
+        dest = None if args.dir else _copy_here(args.target)
+        if dest is None:
+            return _sync_clone(args.target, args.dir)
+    else:
+        dest = Path(args.target)
+    if not (dest / ".git").exists():
+        raise CliError(f"{dest} is not a copy: make one with atlas sync <address> [folder]")
+    while True:
+        try:
+            print(_sync_once(dest))
+        except CliError as e:
+            if not args.every:
+                raise
+            print(f"Error: {e}", file=sys.stderr)
+        if not args.every:
+            return 0
+        time.sleep(args.every)
 
 
 def cmd_backup(args) -> int:
@@ -2073,7 +2437,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_user_add.add_argument("--first-name", default=None, help="Account holder's first name.")
     p_user_add.add_argument("--last-name", default=None, help="Account holder's last name.")
     p_user_add.add_argument("--password", default=None,
-                            help="Password (otherwise prompted with hidden input).")
+                            help="Password (otherwise prompted with hidden input); '-' reads "
+                                 "it from stdin, keeping it out of the process list.")
     p_user_add.set_defaults(func=cmd_user_add)
     p_user_list = user_sub.add_parser("list", help="List the accounts.")
     p_user_list.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
@@ -2145,13 +2510,53 @@ def build_parser() -> argparse.ArgumentParser:
     p_hook.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
     p_hook.set_defaults(func=cmd_hook)
 
+    p_setup = subparsers.add_parser(
+        "setup-code",
+        help="Make a code for the first admin of an online instance: its hash for the "
+             "server, a /setup link for whoever creates the admin (no shell needed).")
+    p_setup.add_argument("--url", default=None,
+                         help="The instance's address, to print a ready link "
+                              "(e.g. https://my-atlas.fly.dev).")
+    p_setup.set_defaults(func=cmd_setup_code)
+
     p_doctor = subparsers.add_parser(
         "doctor",
         help="Audit the ACL/share registry for orphans (--fix to repair safe ones).")
     p_doctor.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
     p_doctor.add_argument("--fix", action="store_true",
                           help="Apply the safe repairs (drop orphan ACL/shares/grants).")
+    p_doctor.add_argument("--sync", action="store_true",
+                          help="Check the mind against its git remote instead: unpushed "
+                               "commits and whether the remote answers.")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_export = subparsers.add_parser(
+        "export", help="Zip the mind's notes and their whole history (git bundle), to "
+                       "leave with them: plain files, readable anywhere.")
+    p_export.add_argument("dir", nargs="?", default=".", help="Directory of the mind (default: current directory).")
+    p_export.add_argument("--out", default=None,
+                          help="Output zip path (default: ./<mind>-notes.zip).")
+    p_export.set_defaults(func=cmd_export)
+
+    p_import = subparsers.add_parser(
+        "import", help="Put files from this computer into the mind: a file, a folder, or a .zip "
+                       "(unpacked into a folder of its name). Never over an existing file.")
+    p_import.add_argument("source", help="The file, folder or .zip to bring in.")
+    p_import.add_argument("--into", default="", help="The mind's folder to put it in (default: the top).")
+    p_import.add_argument("--dir", default=".", help="Directory of the mind (default: current directory).")
+    p_import.set_defaults(func=cmd_import)
+
+    p_sync = subparsers.add_parser(
+        "sync", help="A copy of an online mind on this computer: `atlas sync <address> [folder]` "
+                     "makes it (asking for an access token), then `atlas sync [folder]` sends the "
+                     "note changes made here and takes the others'.")
+    p_sync.add_argument("target", nargs="?", default=".",
+                        help="The instance's address (first time), else the copy's folder (default: .).")
+    p_sync.add_argument("dir", nargs="?", default=None,
+                        help="Folder for a new copy (default: <instance>-notes).")
+    p_sync.add_argument("--every", type=int, default=0, metavar="SECONDS",
+                        help="Keep syncing, every SECONDS.")
+    p_sync.set_defaults(func=cmd_sync)
 
     p_backup = subparsers.add_parser(
         "backup", help="Snapshot the .atlas registry (accounts/shares/ACLs/groups) to a zip.")

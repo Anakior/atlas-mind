@@ -6,6 +6,95 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
+## [2.1.0] - 2026-11-03
+
+Atlas for people who don't code. An Atlas installs from the alwaysdata marketplace without a
+terminal and starts on its own disk, GitHub becoming an optional copy. Files go in by drag and
+drop, your AI reads PDF and Office files, and the settings are sorted into tabs. One MCP change:
+`read_doc` now reads PDF, Office, .txt and .csv files. Its description says so, so refresh the
+connector for your assistant to know; the other tools are unchanged.
+
+### Added
+- **Install from the alwaysdata marketplace.** `deploy/alwaysdata/atlas.sh` asks for a language,
+  an email and a password, then installs the engine, creates the mind and its first admin, and
+  starts the site: about a minute on the free plan, no card, no terminal. The public listing
+  awaits alwaysdata's review.
+- **Start without GitHub.** A cloud instance without `GITHUB_REPO_URL` creates its mind on its own
+  disk (`ATLAS_LANG` picks the language) with a first commit; `atlas init` makes that commit too. A
+  folder that holds files but no repository stops the boot instead of being overwritten.
+- **The first admin without ssh.** The server keeps only the hash of a setup code
+  (`ATLAS_SETUP_CODE_SHA256`), and the link `/setup#code=…` fills it in; `atlas setup-code` makes
+  one. The Fly wizard no longer needs GitHub, `fly ssh` or an admin password, and prints the link
+  at the end.
+- **Copies of your Atlas**, in Settings › My Atlas:
+  - **On GitHub**, in four steps and without a token: create an empty private repository, name
+    it, paste the instance's deploy key, connect. Every refusal from git comes back as its cause
+    (key missing, write access not ticked, repository not found or not empty).
+  - **On your computer**: `git clone` from the instance itself (the new `/git` route), with a
+    password per computer, then `atlas sync` both ways, `--every N` to keep at it. A conflict
+    keeps the online version and puts yours beside it as "note (my version).md". A push that
+    touches anything but `content/` and `AGENTS.md` is refused whole.
+  - **Restore**: from a "Download my notes" zip, from the GitHub repository ("Take this repository
+    back", the way back after a lost instance), or from a full backup.
+- **Full backup.** The notes, their history and the registry under `.atlas/`: account and 2FA, AI
+  access, rights, shares, tasks, settings, GitHub key. The password, and the 2FA code if it is on,
+  is asked again. Restoring it puts the registry back as it was. For the owner of a single-account
+  Atlas; `atlas backup` stays for a shared one.
+- **Leave with your notes.** `GET /api/export` (in the account card) and `atlas export`: a zip of
+  the files you can read, plus the history as a `git bundle` when the Atlas is wholly yours.
+- **Drop files in.** Onto the window or a folder of the tree, by pasting an image into the editor,
+  or with "Add files…" in New document; `atlas import` applies the same rules. Notes, Office, PDF,
+  images, audio and video only (no HTML or SVG), 25 MB a file, a .zip unpacked into its own folder,
+  never an overwrite ("name (2).ext"). A file dropped beside a note takes that note's privacy. The
+  Journal shows dropped files.
+- **Your AI reads PDF and Office files.** `read_doc` reads .docx, .xlsx, .pptx and OpenDocument
+  files, a PDF page by page (section "Page 3"), and .txt, .csv and .json; search finds their text.
+  Standard library only, no new dependency. A file with no text in it (a scan, an image, a
+  recording) comes back as its path on disk locally, or online as a signed link valid for an hour,
+  with a small image inline. Known limits: a page in columns reads in drawing order, and Excel
+  dates come out as numbers.
+- **Connect your AI.** A home card and Settings › AI assistants carry an "Add to Claude" button
+  (Claude's own pre-filled link), the address for other assistants, and then "Claude read your
+  Atlas" with three first requests to try. Each access shows when it was last used. On your own
+  computer, the snippets for Claude Code and Claude Desktop.
+- **Sync health in sight.** A banner when changes have not reached GitHub, with Retry, a warning at
+  the top of `list_tree` and `brief` so the AI says it too, `/api/sync` and `atlas doctor --sync`.
+- **On a phone.** An installable app (icons, share target into a quick capture whose text never
+  reaches the server), a QR code of the address in Settings › My Atlas › On your phone, and an
+  editor with Write and Preview.
+- **Send as a file.** Share offers the note as a standalone HTML page, its images, libraries and
+  fonts inside (`GET /api/export/page`); on 127.0.0.1, where a link would only open on that
+  computer, it comes first.
+- **A Trash in the viewer.** Deleting from the viewer goes through the same trash as `delete_doc`,
+  and a doc comes back in one click.
+- **Drag to file.** A note or a file of the tree dropped on a folder moves there; a note's
+  `[[links]]` follow.
+
+### Changed
+- **Titles instead of file names.** The front-matter `title:`, else the first heading, else a
+  page's `<title>`: in the tree (sorted by title, the file name as tooltip), the breadcrumb, search,
+  the palette, the home, the activity, `list_tree` and a shared page.
+- **A new note in two moves.** ⊕, type the title, Enter: the editor opens. The open note's folder
+  comes first, the path to be created shows under the title, and templates are cards.
+- **Settings in tabs.** Me, My Atlas, AI assistants, Hive (published nodes and subscriptions),
+  Shares (only while links exist), Team (groups from two accounts on) and Appearance (admins).
+  Settings now open on a local Atlas too.
+- **Share links are stored hashed.** A link shows once, when it is made. Links made before keep
+  working but can no longer be copied again.
+- **Saving never overwrites the AI.** If Claude changed the note while you edited it, you get
+  "Keep both" instead of a silent overwrite; a draft is kept in the browser, and leaving asks first.
+- **Plain words.** Developer jargon is gone from the French interface, and the first note and the
+  AI's instructions (`AGENTS.md`) are rewritten for people who don't code, in both languages.
+- **Fly keeps the mind on its volume** (`/data/kb`); a clone left in `/app/repo` moves there at boot.
+- **Local guards.** A local instance only answers its loopback names (else 421) and applies the
+  JSON and same-origin checks too; `[server] public_url` / `ATLAS_PUBLIC_URL` gives the address
+  behind a proxy or tunnel.
+
+### Fixed
+- The name saved in Settings shows in the account card without a reload.
+- A notes folder named `git` at the top level loads again.
+- The meeting and contact templates put each field on its own line.
+
 ## [2.0.3] - 2026-11-02
 
 ### Fixed

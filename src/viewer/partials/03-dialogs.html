@@ -9,6 +9,9 @@
     </div>
     <p id="share-path" class="text-xs text-ink-500 font-mono mb-4 truncate"></p>
     <div id="share-step1">
+      <!-- A mind on this computer: a link would only open here, so the note goes as a file. -->
+      <p id="share-local" class="notice-local hidden" data-i18n="shareLocalNote">Ton Atlas tourne sur cet ordinateur&nbsp;: un lien ne s&rsquo;ouvrirait que sur lui. Envoie plut&ocirc;t la note en fichier.</p>
+      <div id="share-link-part">
       <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-2 block" data-i18n="shareDuration">Dur&eacute;e de validit&eacute;</label>
       <div id="share-duration" class="grid grid-cols-4 gap-1.5 mb-4">
         <button data-days="1" class="share-dur px-2 py-1.5 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 border subtle-border rounded">24h</button>
@@ -16,8 +19,10 @@
         <button data-days="30" class="share-dur px-2 py-1.5 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 border subtle-border rounded" data-i18n="days30">30 jours</button>
         <button data-days="0" class="share-dur px-2 py-1.5 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 border subtle-border rounded" data-i18n="never">Jamais</button>
       </div>
+      </div>
       <div id="share-error" class="text-xs text-rose-400 hidden mb-2"></div>
-      <div class="flex justify-end mt-4">
+      <div class="flex items-center justify-end gap-2 mt-4">
+        <a id="share-file" class="mr-auto px-2 py-1.5 text-sm text-ink-400 hover:text-ink-100 rounded" download data-i18n="shareAsFile">Envoyer en fichier</a>
         <button id="share-cancel" class="px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-i18n="close">Fermer</button>
       </div>
     </div>
@@ -27,7 +32,8 @@
         <input id="share-url" readonly class="flex-1 px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent/40">
         <button id="share-copy" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded font-medium" data-i18n="copy">Copier</button>
       </div>
-      <p id="share-expiry" class="text-xs text-ink-500 mb-3"></p>
+      <p id="share-expiry" class="text-xs text-ink-500 mb-1"></p>
+      <p class="text-xs text-ink-500 mb-3" data-i18n="shareLinkOnce">Copie-le maintenant&nbsp;: il ne sera plus affich&eacute;. Tu pourras toujours le r&eacute;voquer.</p>
       <div class="flex justify-end gap-2">
         <button id="share-new" class="px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-i18n="shareOther">Autre dur&eacute;e</button>
         <button id="share-close" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium" data-i18n="done">Termin&eacute;</button>

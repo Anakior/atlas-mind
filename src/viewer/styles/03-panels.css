@@ -37,6 +37,9 @@
   .palette-active .text-ink-100 { color: rgb(var(--ink-100)); }
   .md-tb-btn { padding: 5px 9px; border-radius: 4px; color: rgb(var(--ink-300)); font-size: 12px; font-weight: 500; min-width: 32px; text-align: center; transition: background 0.08s, color 0.08s; }
   .md-tb-btn:hover { background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-100)); }
+  /* The edit view fills the screen under the header; the Write/Preview switch is the phone's. */
+  .md-edit { height: calc(100vh - 11rem); height: calc(100dvh - 11rem); }
+  .md-modes { display: none; margin-bottom: 0.5rem; }
   .md-tb-sep { width: 1px; background: #2a2a32; margin: 3px 4px; }
   /* Single backdrop for ALL overlays/modals — one source of truth so they never
      drift apart (matches the Tasks view: navy tint + 12px blur). */
@@ -93,3 +96,14 @@
 .hist-skel span + span { height: .6rem; width: 40%; margin-top: .45rem; }
 .hist-skel-detail span, .hist-skel-detail span + span { height: .8rem; width: 85%; margin: 0 0 .7rem; }
 .hist-skel-detail span:nth-child(2) { width: 60%; }
+/* A mind on this computer: what a link can't do, said before it is made. */
+.notice-local { font-size: 12px; line-height: 1.45; color: rgb(var(--ink-200)); background: rgb(var(--accent) / .1); border: 1px solid rgb(var(--accent) / .3); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+/* …and the file it sends instead becomes the dialog's main action. */
+#share-file.share-file-main { background: rgb(var(--accent)); color: #fff; font-weight: 500; padding: 6px 12px; }
+/* The phone QR: dark modules need a light quiet zone in both themes. */
+.phone-qr { background: #fff; padding: 6px; border-radius: 8px; line-height: 0; }
+/* New document: the skeletons as cards (the hidden <select> holds the choice). */
+.nf-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.nf-card { appearance: none; font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 8px; cursor: pointer; color: rgb(var(--ink-300)); background: rgb(var(--ink-100) / .04); border: 1px solid rgb(var(--ink-100) / .1); transition: background .12s, color .12s, border-color .12s; }
+.nf-card:hover { color: rgb(var(--ink-100)); border-color: rgb(var(--ink-100) / .25); }
+.nf-card.active { color: #fff; background: rgb(var(--accent)); border-color: rgb(var(--accent)); }

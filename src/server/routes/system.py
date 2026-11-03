@@ -1,4 +1,4 @@
-"""System routes: healthcheck, public static assets, service worker, OpenAPI
+"""System routes: healthcheck, sync health, public static assets, service worker, OpenAPI
 spec, GitHub webhook, and the SSE live-reload stream."""
 import hashlib
 import hmac
@@ -13,6 +13,21 @@ def healthz(handler):
     """GET /healthz — Fly healthcheck (public, no auth or registry, so an Atlas
     outage doesn't fail the check and trigger a needless machine restart)."""
     handler._send_bytes(200, b"ok", "text/plain; charset=utf-8")
+
+
+def sync_get(handler):
+    """GET /api/sync — the mind against its remote, for the viewer banner. git's own
+    message stays with admins: it can name hosts and paths."""
+    health = _s.sync_health()
+    if health["error"] and not handler._is_admin():
+        health["error"].pop("message", None)
+    handler._send_json(200, health)
+
+
+def sync_post(handler):
+    """POST /api/sync — retry the pull/push now, in the background (the banner's button)."""
+    _s._CTX.git_sync.sync_now()
+    handler._send_json(202, {"ok": True})
 
 
 def static_get(handler):

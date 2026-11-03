@@ -9,7 +9,10 @@ import { t } from '../core/i18n';
 import { setStatus } from '../core/net';
 import { fileMap, index } from '../core/tree';
 import { sse } from '../core/sse-coord';
-import { avatarSeed, constellationSvg } from '../ui/avatar';
+import { startSyncBanner } from '../ui/sync-banner';
+import { refreshTrashLink } from '../home/side-panels';
+import { connectCard } from '../home/connect-card';
+import { showAccount, showLocal } from '../home/side-nav';
 import { contentTree, contentCache, setWlMaps } from '../content/content-tree';
 import { decorateTreeBadges } from '../content/notes/notes-index';
 import { setBacklinksIndex, setBacklinksLoading } from '../content/backlinks';
@@ -62,18 +65,8 @@ export class Boot {
           if (data.csrf_token) setCsrfToken(data.csrf_token);
           if (typeof data.totp_enabled === 'boolean') setTotpEnabled(data.totp_enabled);
 
-          if (data.cloud && data.email) {
-            document.getElementById('user-email')!.textContent = data.name || data.email;
-            const role = t(data.role === 'admin' ? 'settingsRoleAdmin' : 'settingsRoleViewer');
-
-            document.getElementById('user-sub')!.textContent = data.name ? role + ' · ' + data.email : role;
-            const avatar = document.getElementById('user-avatar');
-
-            if (avatar) avatar.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 30);
-            // The folded menu's account button wears the same face.
-            document.getElementById('side-me-btn')!.innerHTML = constellationSvg(avatarSeed(data.first_name, data.last_name, data.email), 30);
-            document.getElementById('user-bar')!.classList.remove('hidden');
-          }
+          if (data.cloud && data.email) showAccount(data);
+          else if (!data.cloud) showLocal();
           // Member (non-admin): viewer-mode class (CSS hides the Todos widget); per-doc authorization
           // is enforced server-side. The write affordances stay (a disallowed action gets a clean 403).
           if (data.role && data.role !== 'admin') document.body.classList.add('viewer-mode');
@@ -83,7 +76,10 @@ export class Boot {
           if (data.cloud) {
             document.body.classList.add('cloud-authed');
             securityPane.refreshState();
+            void connectCard.mount();
           }
+          startSyncBanner();
+          void refreshTrashLink();
         }
         // Render the per-account FILTERED tree (the baked tree is the full build-time view).
         this.softReload();

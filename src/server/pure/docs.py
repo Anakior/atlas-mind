@@ -6,10 +6,12 @@ without a built config; server/__init__ wraps them with CONFIG-injecting shims).
 rest read config/git/build through the `server` facade (`_s`) and are re-exported as
 `server._*`.
 """
+import os
 import re
 import sys
 import unicodedata
 from functools import lru_cache
+from pathlib import PurePosixPath
 
 import server as _s
 
@@ -37,11 +39,48 @@ def validate_doc_path(rel: str, content_root):
         return None
 
 
-def iter_doc_files(content_root, excluded):
-    """Yields (relative_path, Path) for each doc tracked by the viewer (.md + .html).
+def content_file(rel: str, content_root):
+    """The existing file of any type at `rel` inside content_root, or None. Same path bar
+    as an uploaded file (no hidden segment, nothing escaping the root)."""
+    from server.pure.uploads import clean_path
+    rel = clean_path(rel)
+    if rel is None:
+        return None
+    try:
+        target = (content_root / rel).resolve()
+        target.relative_to(content_root)
+    except (ValueError, OSError):
+        return None
+    return target if target.is_file() else None
+
+
+def move_file(src_rel: str, dst_rel: str, content_root):
+    """Move a file that is not a doc (a PDF, an image): no [[link]] names it, so it just
+    moves, keeping its kind. Same (status, payload) as move_md_with_relink."""
+    from server.pure.uploads import clean_path
+    if clean_path(src_rel) is None:
+        return ("invalid", "Invalid path (inside the mind, no '..')")
+    src = content_file(src_rel, content_root)
+    if src is None:
+        return ("not_found", f"Source not found: {src_rel}")
+    dst_rel = clean_path(dst_rel)
+    if dst_rel is None or PurePosixPath(dst_rel).suffix.lower() != src.suffix.lower():
+        return ("invalid", "Invalid destination (inside the mind, same kind of file)")
+    dst = content_root / dst_rel
+    if dst.exists():
+        return ("exists", f"Target already exists: {dst_rel} (no overwrite)")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    src_canon = src.relative_to(content_root.resolve()).as_posix()
+    os.replace(src, dst)
+    return ("ok", {"from": src_canon, "to": dst_rel, "rewrites": [], "links_updated": 0})
+
+
+def iter_doc_files(content_root, excluded, suffixes=(".md", ".html")):
+    """Yields (relative_path, Path) for each doc tracked by the viewer (.md + .html), or
+    each file with one of `suffixes`.
 
     `excluded` is the set of filenames to skip (build.EXCLUDED_NAMES)."""
-    for path in [*content_root.rglob("*.md"), *content_root.rglob("*.html")]:
+    for path in [p for suffix in suffixes for p in content_root.rglob("*" + suffix)]:
         if any(p == ".git" or p.startswith(".") for p in path.relative_to(content_root).parts):
             continue
         if path.name in excluded:

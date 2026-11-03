@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-title-fr="Atlas Mind — C’est ton esprit, pas celui d’un autre.">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -79,79 +79,8 @@
   ]
 }
 </script>
+<link rel="stylesheet" href="/assets/site.css">
 <style>
-  :root{
-    --sky-0:#1f1d2a; --sky-1:#0e0d12; --panel:#15131d; --panel-2:#1b1825;
-    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.13);
-    --gold:#fbc678; --gold-soft:rgba(251,198,120,.14);
-    --teal:#5fd0c4; --teal-soft:rgba(95,208,196,.12); --blue:#1d9bd1;
-    --ink:#ece9f2; --muted:#a39fb3; --muted-2:#736f85;
-    /* liquid glass — same recipe as the Atlas login card */
-    --glass:rgba(35,34,42,.55); --glass-2:rgba(35,34,42,.68); --glass-line:rgba(255,255,255,.1);
-    --glass-blur:saturate(180%) blur(22px);
-    --glass-sh:0 18px 48px -16px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08);
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
-  body{
-    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    color:var(--ink); background:var(--sky-1); line-height:1.6;
-    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
-    overflow-x:hidden;
-  }
-  a{color:inherit;text-decoration:none}
-  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-
-  /* ── cosmic backdrop (pure CSS, no network) ── */
-  .sky{position:fixed;inset:0;z-index:-2;
-    background:
-      radial-gradient(ellipse 80% 60% at 70% 30%, rgba(29,155,209,.12), transparent),
-      radial-gradient(ellipse 60% 40% at 20% 80%, rgba(251,198,120,.08), transparent),
-      #0e0d12;}
-  .stars{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.6;
-    background-image:
-      radial-gradient(1px 1px at 20% 30%, #fff, transparent),
-      radial-gradient(1px 1px at 70% 18%, #fff, transparent),
-      radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,.8), transparent),
-      radial-gradient(1.4px 1.4px at 88% 55%, #fff, transparent),
-      radial-gradient(1px 1px at 55% 88%, rgba(255,255,255,.7), transparent),
-      radial-gradient(1px 1px at 12% 80%, #fff, transparent),
-      radial-gradient(1.2px 1.2px at 33% 12%, #fff, transparent);
-    background-repeat:no-repeat;animation:twinkle 7s ease-in-out infinite;}
-  @keyframes twinkle{0%,100%{opacity:.35}50%{opacity:.7}}
-
-  /* ── nav ── */
-  nav{position:sticky;top:0;z-index:20;
-    backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
-    background:rgba(20,19,26,.55);border-bottom:1px solid var(--glass-line)}
-  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
-  .brand{display:flex;align-items:center;gap:11px;font-weight:650;letter-spacing:.2px}
-  .brand img{width:28px;height:28px;display:block}
-  /* Brand wordmark — consistent with the app: serif deep-gold "Atlas" (white outline)
-     + nebula "Mind" pill. System serif (no external font load, on-ethos). */
-  .brand-wm{display:inline-flex;align-items:center;gap:8px;line-height:1}
-  .brand-atlas{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:700;font-size:22px;color:#e8941c;text-shadow:0 1px 2px rgba(0,0,0,.6),0 0 1px rgba(0,0,0,.85)}
-  .nebula-pill{position:relative;isolation:isolate;overflow:hidden;display:inline-block;font-weight:700;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#eaf6fb;text-shadow:0 0 6px rgba(255,255,255,.4);padding:3px 7px;border-radius:999px;border:1px solid rgba(124,200,235,.38);box-shadow:inset 0 0 10px rgba(99,102,241,.5),0 0 12px rgba(29,155,209,.4);background:#080a14}
-  .nebula-pill::before{content:"";position:absolute;inset:-100%;z-index:-2;background:radial-gradient(40% 62% at 25% 30%,rgba(139,148,255,.92),transparent 60%),radial-gradient(46% 66% at 80% 70%,rgba(45,220,250,.78),transparent 62%),radial-gradient(54% 74% at 60% 22%,rgba(40,170,225,.68),transparent 66%);background-repeat:no-repeat;animation:nebulaA 10s linear infinite}
-  .nebula-pill::after{content:"";position:absolute;inset:-100%;z-index:-1;background:radial-gradient(32% 52% at 72% 32%,rgba(120,225,255,.7),transparent 60%),radial-gradient(36% 58% at 28% 76%,rgba(139,148,255,.62),transparent 62%);background-repeat:no-repeat;mix-blend-mode:screen;animation:nebulaB 6.5s linear infinite}
-  @keyframes nebulaA{0%{transform:translate(-18%,-12%) scale(1.3)}25%{transform:translate(16%,-15%) scale(1.42)}50%{transform:translate(19%,14%) scale(1.3)}75%{transform:translate(-14%,17%) scale(1.44)}100%{transform:translate(-18%,-12%) scale(1.3)}}
-  @keyframes nebulaB{0%{transform:translate(16%,11%) scale(1.4);opacity:.45}33%{transform:translate(-14%,15%) scale(1.55);opacity:1}66%{transform:translate(-17%,-13%) scale(1.45);opacity:.8}100%{transform:translate(16%,11%) scale(1.4);opacity:.45}}
-  @media (prefers-reduced-motion:reduce){.nebula-pill::before{animation:none}.nebula-pill::after{animation:nebulaBreathe 6s ease-in-out infinite}@keyframes nebulaBreathe{0%,100%{opacity:.55}50%{opacity:1}}}
-  .nav-links{display:flex;align-items:center;gap:26px;font-size:14.5px;color:var(--muted)}
-  .nav-links a:hover{color:var(--ink)}
-  .nav-cta{padding:7px 15px;border:1px solid var(--line-2);border-radius:9px;color:var(--ink)!important}
-  .nav-cta:hover{border-color:var(--gold);background:var(--gold-soft)}
-  @media(max-width:620px){.nav-links a.hide-sm{display:none}}
-
-  /* ── buttons ── */
-  .btn{display:inline-flex;align-items:center;gap:9px;font-weight:600;font-size:15.5px;
-    padding:13px 22px;border-radius:11px;transition:.18s;border:1px solid transparent}
-  .btn-gold{background:linear-gradient(180deg,#fcd193,#f6b657);color:#2a1c06;
-    box-shadow:0 8px 30px -10px rgba(251,198,120,.55)}
-  .btn-gold:hover{transform:translateY(-2px);box-shadow:0 14px 38px -10px rgba(251,198,120,.7)}
-  .btn-ghost{border-color:var(--line-2);color:var(--ink)}
-  .btn-ghost:hover{border-color:var(--muted);background:rgba(255,255,255,.04)}
-
   /* ── hero ── */
   header{padding:88px 0 64px;text-align:center;position:relative}
   .eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);
@@ -196,12 +125,6 @@
   .shot-glow{position:absolute;inset:auto 10% -30px;height:80px;
     background:radial-gradient(50% 100% at 50% 0,rgba(251,198,120,.35),transparent 70%);filter:blur(20px);z-index:-1}
 
-  /* ── sections ── */
-  section{padding:78px 0;position:relative}
-  .kicker{font-size:13px;font-weight:650;letter-spacing:1.8px;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
-  h2{font-size:clamp(27px,3.7vw,40px);line-height:1.12;letter-spacing:-.8px;font-weight:720}
-  .sub{color:var(--muted);font-size:17px;max-width:620px;margin-top:14px}
-  .center{text-align:center}.center .sub{margin-left:auto;margin-right:auto}
 
   /* ── problem ── */
   .problem{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
@@ -329,24 +252,7 @@
   /* ── final CTA ── */
   .final{text-align:center;border-top:1px solid var(--line);
     background:radial-gradient(80% 100% at 50% 0,rgba(251,198,120,.07),transparent 60%)}
-  .codeblock{max-width:560px;margin:34px auto 0;text-align:left;border:1px solid var(--line-2);border-radius:14px;
-    background:#0c0b13;overflow:hidden}
-  .codeblock .top{padding:10px 16px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted-2);
-    display:flex;justify-content:space-between}
-  .codeblock pre{padding:18px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;
-    color:var(--ink);overflow-x:auto;line-height:1.85;
-    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
-  .codeblock pre::-webkit-scrollbar{height:7px}
-  .codeblock pre::-webkit-scrollbar-track{background:transparent}
-  .codeblock pre::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:8px}
-  .codeblock pre::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.24)}
-  .codeblock .c{color:var(--muted-2)}.codeblock .p{color:var(--gold)}
-  .badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:30px;font-size:13px;color:var(--muted)}
-  .badges span{border:1px solid var(--line);border-radius:999px;padding:6px 14px}
 
-  footer{border-top:1px solid var(--line);padding:38px 0;color:var(--muted-2);font-size:14px}
-  footer .wrap{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
-  footer a{color:var(--muted)}footer a:hover{color:var(--ink)}
 </style>
 </head>
 <body>
@@ -358,26 +264,27 @@
     <span class="brand-wm"><span class="brand-atlas">Atlas</span><span class="nebula-pill">Mind</span></span>
   </a>
   <div class="nav-links">
-    <a class="hide-sm" href="#why">Why</a>
-    <a class="hide-sm" href="#superpowers">Superpowers</a>
-    <a class="hide-sm" href="#apps">Apps</a>
-    <a class="hide-sm" href="#activity">Activity</a>
-    <a class="hide-sm" href="#how">How it works</a>
-    <a class="hide-sm" href="#hive">Hive Mind</a>
-    <a class="hide-sm" href="#start">Install</a>
-    <a class="nav-cta" href="https://github.com/Anakior/atlas-mind">GitHub ↗</a>
+    <a class="hide-md" href="#why"><span lang="en">Why</span><span lang="fr">Pourquoi</span></a>
+    <a class="hide-md" href="#superpowers"><span lang="en">Superpowers</span><span lang="fr">Super-pouvoirs</span></a>
+    <a class="hide-md" href="#hive">Hive Mind</a>
+    <a class="nav-icon hide-sm" href="https://github.com/Anakior/atlas-mind" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 16 16" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    <span class="lang-switch" role="group" aria-label="Language / Langue">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="fr" aria-pressed="false">FR</button>
+    </span>
+    <a class="nav-cta" href="./demo/"><span lang="en">Live demo</span><span lang="fr">Voir la démo</span></a>
   </div>
 </div></nav>
 
 <header id="top"><div class="wrap">
-  <span class="eyebrow"><span class="dot"></span> Self-hostable · AGPL-3.0 · no database</span>
-  <h1>It's <span class="grad">your mind</span>,<br>not someone else's.</h1>
-  <p class="lede">Atlas Mind is a self-hosted, git-native knowledge base where your notes stay <b>plain files in your own private git repository</b>, served by an engine you can read line by line — and an <b>external brain you share with your AI</b> over an open protocol. Own the data. Own the engine. Own the mind.</p>
+  <span class="eyebrow"><span class="dot"></span><span lang="en"> Self-hostable · AGPL-3.0 · no database</span><span lang="fr"> Auto-hébergeable · AGPL-3.0 · sans base de données</span></span>
+  <h1><span lang="en">It's <span class="grad">your mind</span>,<br>not someone else's.</span><span lang="fr">C’est <span class="grad">ton esprit</span>,<br>pas celui d’un autre.</span></h1>
+  <p class="lede"><span lang="en">Atlas Mind is a self-hosted, git-native knowledge base where your notes stay <b>plain files in your own private git repository</b>, served by an engine you can read line by line — and an <b>external brain you share with your AI</b> over an open protocol. Own the data. Own the engine. Own the mind.</span><span lang="fr">Atlas Mind est une base de connaissances auto-hébergée, bâtie sur git : tes notes restent <b>des fichiers ordinaires dans ton propre dépôt git privé</b>, servies par un moteur que tu peux lire ligne à ligne, et deviennent <b>un cerveau externe que tu partages avec ton IA</b> par un protocole ouvert. Tes données. Ton moteur. Ton esprit.</span></p>
   <div class="cta-row">
-    <a class="btn btn-gold" href="./demo/">▶ Explore the live demo</a>
-    <a class="btn btn-ghost" href="https://github.com/Anakior/atlas-mind">★ Star on GitHub</a>
+    <a class="btn btn-primary" href="./demo/"><span lang="en">Explore the live demo</span><span lang="fr">Voir la démo en direct</span></a>
+    <a class="btn btn-ghost" href="#start"><span lang="en">Get started</span><span lang="fr">Démarrer</span></a>
   </div>
-  <p class="micro">No account. No upload. The demo is the real viewer, running entirely in your browser.</p>
+  <p class="micro"><span lang="en">No account. No upload. The demo is the real viewer, running entirely in your browser.</span><span lang="fr">Sans compte, sans envoi : la démo est le vrai viewer, qui tourne entièrement dans ton navigateur.</span></p>
 
   <div class="shot">
     <div class="shot-frame">
@@ -395,116 +302,116 @@
     </div>
     <div class="shot-glow"></div>
   </div>
-  <p class="micro" style="margin-top:16px">The Mind — a live, force-directed knowledge graph of your notes.</p>
+  <p class="micro" style="margin-top:16px"><span lang="en">The Mind — a live, force-directed knowledge graph of your notes.</span><span lang="fr">The Mind : la carte vivante de tes notes, un graphe qui s’organise tout seul.</span></p>
 </div></header>
 
 <section id="why" class="problem"><div class="wrap">
   <div class="problem-grid">
     <div>
-      <div class="kicker">The problem</div>
-      <h2>You rent the space.<br>They hold the keys.</h2>
-      <p>Notion, and every hosted notes app, ask you to pour your thinking into <b>their</b> structure, on <b>their</b> servers, in <b>their</b> format. Leave, and you fight an exporter to get a tangle of files back. Your AI assistant reads your brain only by pulling it into <b>their</b> cloud.</p>
-      <p>Atlas Mind inverts that: a self-hosted Notion alternative, and a way to publish an Obsidian-style vault you actually own. Your knowledge never leaves your disk, and nothing you write trains anyone's model.</p>
+      <div class="kicker"><span lang="en">The problem</span><span lang="fr">Le problème</span></div>
+      <h2><span lang="en">You rent the space.<br>They hold the keys.</span><span lang="fr">Tu loues l’espace.<br>Ils gardent les clés.</span></h2>
+      <p><span lang="en">Notion, and every hosted notes app, ask you to pour your thinking into <b>their</b> structure, on <b>their</b> servers, in <b>their</b> format. Leave, and you fight an exporter to get a tangle of files back. Your AI assistant reads your brain only by pulling it into <b>their</b> cloud.</span><span lang="fr">Notion, comme toutes les applis de notes hébergées, te demande de verser ta pensée dans <b>leur</b> structure, sur <b>leurs</b> serveurs, dans <b>leur</b> format. Pour partir, il faut batailler avec un export pour récupérer un fouillis de fichiers. Et ton assistant IA ne lit ta tête qu’en l’aspirant dans <b>leur</b> cloud.</span></p>
+      <p><span lang="en">Atlas Mind inverts that: a self-hosted Notion alternative, and a way to publish an Obsidian-style vault you actually own. Your knowledge never leaves your disk, and nothing you write trains anyone's model.</span><span lang="fr">Atlas Mind fait l’inverse : une alternative à Notion que tu héberges toi-même, et une façon de publier un coffre à la Obsidian qui t’appartient vraiment. Ce que tu sais ne quitte jamais ton disque, et rien de ce que tu écris n’entraîne le modèle de qui que ce soit.</span></p>
     </div>
     <div class="rent">
-      <div class="row"><span class="x">✕</span> Their database — export to leave</div>
-      <div class="row"><span class="x">✕</span> Their servers — your notes, their cloud</div>
-      <div class="row"><span class="x">✕</span> Their format — held hostage</div>
-      <div class="row ok"><span class="x">✓</span> A folder of files in your own private git repo</div>
+      <div class="row"><span class="x">✕</span><span lang="en"> Their database — export to leave</span><span lang="fr"> Leur base de données : un export pour partir</span></div>
+      <div class="row"><span class="x">✕</span><span lang="en"> Their servers — your notes, their cloud</span><span lang="fr"> Leurs serveurs : tes notes, leur cloud</span></div>
+      <div class="row"><span class="x">✕</span><span lang="en"> Their format — held hostage</span><span lang="fr"> Leur format : tes notes en otage</span></div>
+      <div class="row ok"><span class="x">✓</span><span lang="en"> A folder of files in your own private git repo</span><span lang="fr"> Un dossier de fichiers dans ton propre dépôt git privé</span></div>
     </div>
   </div>
 </div></section>
 
 <section id="pillars" class="center"><div class="wrap">
-  <div class="kicker">Built on three ideas</div>
-  <h2>One place for your knowledge,<br>whatever shape it takes.</h2>
-  <p class="sub">Everything ships in the box — a single Python server on the standard library, no database, nothing of yours sent anywhere.</p>
+  <div class="kicker"><span lang="en">Built on three ideas</span><span lang="fr">Bâti sur trois idées</span></div>
+  <h2><span lang="en">One place for your knowledge,<br>whatever shape it takes.</span><span lang="fr">Un seul endroit pour ce que tu sais,<br>quelle que soit sa forme.</span></h2>
+  <p class="sub"><span lang="en">Everything ships in the box — a single Python server on the standard library, no database, nothing of yours sent anywhere.</span><span lang="fr">Tout est dans la boîte : un seul serveur Python sur la bibliothèque standard, sans base de données, rien de toi envoyé nulle part.</span></p>
   <div class="pillars">
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M21 8.5 12 3 3 8.5 12 14l9-5.5Z"/><path d="m3 13 9 5.5 9-5.5"/></svg></div>
-      <h3>Multi-format, not just Markdown</h3>
-      <p>Markdown is first-class — rendered, linked, searched. But Atlas also previews standalone <b>HTML</b> decks, <b>PDFs</b>, <b>Word .docx</b>, <b>images</b> and <b>JSON</b> inline, rendered in your browser. Nothing uploaded anywhere.</p>
+      <h3><span lang="en">Multi-format, not just Markdown</span><span lang="fr">Tous les formats, pas seulement Markdown</span></h3>
+      <p><span lang="en">Markdown is first-class — rendered, linked, searched. But Atlas also previews standalone <b>HTML</b> decks, <b>PDFs</b>, <b>Word .docx</b>, <b>images</b> and <b>JSON</b> inline, rendered in your browser. Nothing uploaded anywhere.</span><span lang="fr">Le Markdown est chez lui : rendu, relié, cherché. Mais Atlas affiche aussi les présentations <b>HTML</b>, les <b>PDF</b>, les <b>.docx</b> de Word, les <b>images</b> et le <b>JSON</b>, directement dans ton navigateur. Rien n’est envoyé ailleurs.</span></p>
       <div class="tag">Markdown · HTML · PDF · DOCX · images · JSON</div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
-      <h3>AI-native by design</h3>
-      <p>Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with thirty-four tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects, and the rituals you write down become commands. Assistants sign in over <b>OAuth</b>: you choose what each may do, and revoke it in a click.</p>
-      <div class="tag"><a href="#superpowers">MCP · 34 tools · REST API →</a></div>
+      <h3><span lang="en">AI-native by design</span><span lang="fr">Pensé pour l’IA</span></h3>
+      <p><span lang="en">Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with thirty-four tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects, and the rituals you write down become commands. Assistants sign in over <b>OAuth</b>: you choose what each may do, and revoke it in a click.</span><span lang="fr">Atlas est la mémoire que ton assistant lit et enrichit. Il expose un point d’accès <b>MCP</b> avec trente-quatre outils pour lire, écrire, trier, cartographier, remonter le temps et auditer ton esprit. <code>atlas init</code> pose tes conventions, que chaque assistant reçoit dès qu’il se connecte, et les rituels que tu écris deviennent des commandes. Les assistants se connectent par <b>OAuth</b> : tu choisis ce que chacun peut faire, et tu le retires en un clic.</span></p>
+      <div class="tag"><a href="#superpowers"><span lang="en">MCP · 34 tools · REST API →</span><span lang="fr">MCP · 34 outils · API REST →</span></a></div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M20 4c-7 0-13 4-13 11v3l11-11"/><path d="M7 18c-1.2 1.2-2 2.4-2.5 3.5"/><path d="M16 8.5 9.5 15"/></svg></div>
-      <h3>Lightweight &amp; self-contained</h3>
-      <p>A self-hosted Markdown wiki with <b>no database</b>: one Python HTTP server plus a build step, entirely on the standard library. Accounts and share links are plain JSON on disk, fonts and libraries vendored, so nothing of yours goes out.</p>
-      <div class="tag">stdlib · no DB · vendored</div>
+      <h3><span lang="en">Lightweight &amp; self-contained</span><span lang="fr">Léger et autonome</span></h3>
+      <p><span lang="en">A self-hosted Markdown wiki with <b>no database</b>: one Python HTTP server plus a build step, entirely on the standard library. Accounts and share links are plain JSON on disk, fonts and libraries vendored, so nothing of yours goes out.</span><span lang="fr">Un wiki Markdown auto-hébergé <b>sans base de données</b> : un serveur HTTP Python et une étape de build, entièrement sur la bibliothèque standard. Les comptes et les liens de partage sont du JSON sur le disque, polices et bibliothèques sont embarquées : rien de toi ne sort.</span></p>
+      <div class="tag"><span lang="en">stdlib · no DB · vendored</span><span lang="fr">stdlib · sans base · tout embarqué</span></div>
     </div>
   </div>
 </div></section>
 
 <section id="superpowers" class="powers center"><div class="wrap">
-  <div class="kicker">AI-native · Model Context Protocol</div>
-  <h2>Give your mind <span class="grad">superpowers</span>.</h2>
-  <p class="sub" style="margin:14px auto 0">Connect Atlas to Claude (or any MCP client) and your knowledge base stops being a passive archive: it becomes a <b>persistent memory for Claude</b>, an MCP server for your notes it can <b>read, write, triage, map, rewind and audit</b>, on your own machine, with nothing shipped to anyone's cloud. <b>Thirty-four tools, six superpowers.</b></p>
+  <div class="kicker"><span lang="en">AI-native · Model Context Protocol</span><span lang="fr">Pensé pour l’IA · Model Context Protocol</span></div>
+  <h2><span lang="en">Give your mind <span class="grad">superpowers</span>.</span><span lang="fr">Donne des <span class="grad">super-pouvoirs</span> à ton esprit.</span></h2>
+  <p class="sub" style="margin:14px auto 0"><span lang="en">Connect Atlas to Claude (or any MCP client) and your knowledge base stops being a passive archive: it becomes a <b>persistent memory for Claude</b>, an MCP server for your notes it can <b>read, write, triage, map, rewind and audit</b>, on your own machine, with nothing shipped to anyone's cloud. <b>Thirty-four tools, six superpowers.</b></span><span lang="fr">Branche Atlas sur Claude (ou n’importe quel client MCP) et ta base de connaissances cesse d’être une archive passive : elle devient <b>une mémoire durable pour Claude</b>, un serveur MCP pour tes notes qu’il peut <b>lire, écrire, trier, cartographier, remonter dans le temps et auditer</b>, sur ta propre machine, sans rien expédier dans le cloud de personne. <b>Trente-quatre outils, six super-pouvoirs.</b></span></p>
   <div class="powers-grid">
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></div>
-      <h3>Reads your whole mind</h3>
-      <p>Ask in plain language and your AI gets a ready-made <b>brief</b> on the topic — the right sections, within a token budget — finds the exact line that states a fact, and catches up on what changed since it last looked. Every hit says <b>how far to trust it</b>: who edited it last, whether an AI did, whether it went stale or was judged contradicted.</p>
+      <h3><span lang="en">Reads your whole mind</span><span lang="fr">Lit tout ton esprit</span></h3>
+      <p><span lang="en">Ask in plain language and your AI gets a ready-made <b>brief</b> on the topic — the right sections, within a token budget — finds the exact line that states a fact, and catches up on what changed since it last looked. Every hit says <b>how far to trust it</b>: who edited it last, whether an AI did, whether it went stale or was judged contradicted.</span><span lang="fr">Demande en langage courant et ton IA reçoit un <b>dossier</b> tout prêt sur le sujet, les bonnes sections dans un budget de tokens, retrouve la ligne exacte qui énonce un fait, et rattrape ce qui a changé depuis sa dernière visite. Chaque résultat dit <b>jusqu’où s’y fier</b> : qui l’a modifié en dernier, si c’était une IA, s’il a vieilli ou s’il a été jugé contredit.</span></p>
       <div class="tools"><code>brief</code><code>search_docs</code><code>grep_docs</code><code>read_doc</code><code>list_tree</code><code>recent_docs</code><code>changes_since</code><code>resume_session</code></div>
     </div>
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
-      <h3>Writes it back</h3>
-      <p>It doesn't just answer — it files. Capture a decision, rewrite a section surgically, rename or refile a note with every <b>[[backlink]]</b> fixed automatically, archive what's stale (soft-deleted to trash, never erased). Every edit comes back as a diff, can be rehearsed first, and is refused if you changed the note since the AI read it. Your rituals travel too: a weekly review, a session save, a decision from your template — each one a command every assistant offers, written once as a note in your mind.</p>
+      <h3><span lang="en">Writes it back</span><span lang="fr">Écrit en retour</span></h3>
+      <p><span lang="en">It doesn't just answer — it files. Capture a decision, rewrite a section surgically, rename or refile a note with every <b>[[backlink]]</b> fixed automatically, archive what's stale (soft-deleted to trash, never erased). Every edit comes back as a diff, can be rehearsed first, and is refused if you changed the note since the AI read it. Your rituals travel too: a weekly review, a session save, a decision from your template — each one a command every assistant offers, written once as a note in your mind.</span><span lang="fr">Il ne se contente pas de répondre : il range. Noter une décision, réécrire une section avec précision, renommer ou déplacer une note en réparant chaque <b>[[lien entrant]]</b>, archiver ce qui a vieilli (mis à la corbeille, jamais effacé). Chaque modification revient sous forme de diff, peut être essayée d’abord, et est refusée si tu as changé la note depuis que l’IA l’a lue. Tes rituels voyagent aussi : une revue hebdomadaire, une sauvegarde de session, une décision tirée de ton modèle, chacun devient une commande que tout assistant propose, écrite une seule fois comme une note de ton esprit.</span></p>
       <div class="tools"><code>create_doc</code><code>edit_doc</code><code>move_doc</code><code>delete_doc</code></div>
     </div>
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
-      <h3>Sees the connections</h3>
-      <p>Your AI traverses the wikilink graph the way you do: forward links, backlinks, a bird's-eye map of hubs and orphans, every note under a tag. It reasons about your mind's <b>shape</b>, not just its words.</p>
+      <h3><span lang="en">Sees the connections</span><span lang="fr">Voit les liens</span></h3>
+      <p><span lang="en">Your AI traverses the wikilink graph the way you do: forward links, backlinks, a bird's-eye map of hubs and orphans, every note under a tag. It reasons about your mind's <b>shape</b>, not just its words.</span><span lang="fr">Ton IA parcourt le graphe des liens comme toi : liens sortants, liens entrants, une vue d’ensemble des carrefours et des notes isolées, toutes les notes d’une étiquette. Elle raisonne sur la <b>forme</b> de ton esprit, pas seulement sur ses mots.</span></p>
       <div class="tools"><code>get_links</code><code>get_backlinks</code><code>get_mind_topology</code><code>list_by_tag</code></div>
     </div>
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 3v3.5h3.5"/><path d="M12 7.5V12l3 1.8"/></svg></div>
-      <h3>Travels through time</h3>
-      <p>“When did we decide this — and what was it before?” Your AI reads any <b>past version</b> of a note, diffs two points in time, finds a sentence you <b>deleted months ago</b>, traces a line back to the commit that wrote it, sets <b>what you thought then</b> beside what you think now, claim by claim, follows a moving changelog, and restores a version in one move — powered by the git history your mind already carries.</p>
+      <h3><span lang="en">Travels through time</span><span lang="fr">Voyage dans le temps</span></h3>
+      <p><span lang="en">“When did we decide this — and what was it before?” Your AI reads any <b>past version</b> of a note, diffs two points in time, finds a sentence you <b>deleted months ago</b>, traces a line back to the commit that wrote it, sets <b>what you thought then</b> beside what you think now, claim by claim, follows a moving changelog, and restores a version in one move — powered by the git history your mind already carries.</span><span lang="fr">« Quand a-t-on décidé ça, et c’était quoi avant ? » Ton IA lit n’importe quelle <b>version passée</b> d’une note, compare deux moments, retrouve une phrase <b>effacée il y a des mois</b>, remonte une ligne jusqu’au commit qui l’a écrite, met <b>ce que tu pensais alors</b> à côté de ce que tu penses aujourd’hui, affirmation par affirmation, suit un journal des changements et restaure une version d’un geste, grâce à l’historique git que ton esprit porte déjà.</span></p>
       <div class="tools"><code>doc_history</code><code>doc_at</code><code>doc_diff</code><code>search_history</code><code>then_and_now</code><code>show_shift</code><code>changelog</code><code>doc_blame</code><code>doc_revert</code></div>
     </div>
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
-      <h3>Knows who did what</h3>
-      <p>Every change is attributed in the git history — who wrote it, when, and whether an <b>AI</b> made the edit. Your assistant reads the activity stream, draws the mind's <b>weather</b> folder by folder, surfaces <b>stale</b> notes untouched for months and records the ones that still hold, and flags <b>same-topic documents</b> that may now contradict each other — then reviews them for you. And when an agent's session went wrong, it <b>undoes the run</b> in one commit: all of it, everything after a given point, or only the documents you name.</p>
+      <h3><span lang="en">Knows who did what</span><span lang="fr">Sait qui a fait quoi</span></h3>
+      <p><span lang="en">Every change is attributed in the git history — who wrote it, when, and whether an <b>AI</b> made the edit. Your assistant reads the activity stream, draws the mind's <b>weather</b> folder by folder, surfaces <b>stale</b> notes untouched for months and records the ones that still hold, and flags <b>same-topic documents</b> that may now contradict each other — then reviews them for you. And when an agent's session went wrong, it <b>undoes the run</b> in one commit: all of it, everything after a given point, or only the documents you name.</span><span lang="fr">Chaque changement est attribué dans l’historique git : qui l’a écrit, quand, et si c’est une <b>IA</b>. Ton assistant lit le fil d’activité, dresse la <b>météo</b> de ton esprit dossier par dossier, fait remonter les notes <b>oubliées</b> depuis des mois et retient celles qui tiennent toujours, signale les <b>documents d’un même sujet</b> qui pourraient se contredire, puis les relit pour toi. Et quand la session d’un agent a mal tourné, il <b>annule le passage</b> en un commit : en entier, à partir d’un point donné, ou seulement les documents que tu nommes.</span></p>
       <div class="tools"><code>activity</code><code>agent_runs</code><code>undo_run</code><code>mind_weather</code><code>stale</code><code>confirm_doc</code><code>contradictions</code><code>judge_contradiction</code></div>
     </div>
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z"/></svg></div>
-      <h3>Triages the noise</h3>
-      <p>Point your agents at the firehose: mail, alerts, a competitor's move, a CI webhook. They pre-sort it, and each item lands as a ready-to-file card in your own inbox, with a suggested folder, tags and the note it echoes. Keep, trash or snooze in a keystroke; Keep files it into your mind.</p>
+      <h3><span lang="en">Triages the noise</span><span lang="fr">Trie le bruit</span></h3>
+      <p><span lang="en">Point your agents at the firehose: mail, alerts, a competitor's move, a CI webhook. They pre-sort it, and each item lands as a ready-to-file card in your own inbox, with a suggested folder, tags and the note it echoes. Keep, trash or snooze in a keystroke; Keep files it into your mind.</span><span lang="fr">Branche tes agents sur le flot : mails, alertes, le mouvement d’un concurrent, un webhook de CI. Ils le pré-trient, et chaque élément arrive dans ta propre inbox sous forme de carte prête à ranger, avec un dossier suggéré, des étiquettes et la note qu’il rappelle. Garder, jeter ou reporter d’une touche ; Garder le range dans ton esprit.</span></p>
       <div class="tools"><code>create_inbox_item</code></div>
     </div>
 
   </div>
-  <p class="powers-note">Every tool runs <b>locally</b> and respects the same boundaries as the viewer — shared mirrors stay read-only, deletes are reversible, a token can be limited to reading or the inbox, and not a byte leaves your disk. Your assistant gets a memory; you keep the keys.</p>
+  <p class="powers-note"><span lang="en">Every tool runs <b>locally</b> and respects the same boundaries as the viewer — shared mirrors stay read-only, deletes are reversible, a token can be limited to reading or the inbox, and not a byte leaves your disk. Your assistant gets a memory; you keep the keys.</span><span lang="fr">Chaque outil tourne <b>chez toi</b> et respecte les mêmes limites que le viewer : les miroirs partagés restent en lecture seule, les suppressions sont réversibles, un jeton peut être limité à la lecture ou à l’inbox, et pas un octet ne quitte ton disque. Ton assistant gagne une mémoire ; tu gardes les clés.</span></p>
 </div></section>
 
 <section id="apps" class="apps"><div class="wrap">
   <div class="center">
-    <div class="kicker">MCP Apps · interactive views</div>
-    <h2>Not just answers.<br>Your mind, <span class="grad">in the conversation</span>.</h2>
-    <p class="sub">Some questions are better answered with something to click. In a host that renders MCP Apps, Atlas answers them with a small interactive view, right in the chat: you tick, open and decide, and your assistant is told what you chose.</p>
+    <div class="kicker"><span lang="en">MCP Apps · interactive views</span><span lang="fr">MCP Apps · vues interactives</span></div>
+    <h2><span lang="en">Not just answers.<br>Your mind, <span class="grad">in the conversation</span>.</span><span lang="fr">Pas seulement des réponses.<br>Ton esprit, <span class="grad">dans la conversation</span>.</span></h2>
+    <p class="sub"><span lang="en">Some questions are better answered with something to click. In a host that renders MCP Apps, Atlas answers them with a small interactive view, right in the chat: you tick, open and decide, and your assistant is told what you chose.</span><span lang="fr">Certaines questions se répondent mieux avec quelque chose à cliquer. Dans un client qui affiche les MCP Apps, Atlas y répond par une petite vue interactive, au cœur de la conversation : tu coches, tu ouvres, tu décides, et ton assistant apprend ce que tu as choisi.</span></p>
   </div>
 
   <div class="app-row">
     <div class="app-text">
-      <div class="app-ask"><span>You</span>Where was I on the offline sync?</div>
-      <h3>Pick up where you left off</h3>
-      <p>Your recent work, one line per piece of it, whatever machine it ran on. Open one and the save is laid out: the <b>open points</b> to tick, with how long each has been carried, <b>what moved since</b> in the docs it links to, diffs included, and the command that resumes the session where it ran. <b>Continue here</b> hands the points you kept to the conversation.</p>
+      <div class="app-ask"><span><span lang="en">You</span><span lang="fr">Toi</span></span><span lang="en">Where was I on the offline sync?</span><span lang="fr">Où j’en étais sur la synchro hors ligne ?</span></div>
+      <h3><span lang="en">Pick up where you left off</span><span lang="fr">Reprendre là où tu t’étais arrêté</span></h3>
+      <p><span lang="en">Your recent work, one line per piece of it, whatever machine it ran on. Open one and the save is laid out: the <b>open points</b> to tick, with how long each has been carried, <b>what moved since</b> in the docs it links to, diffs included, and the command that resumes the session where it ran. <b>Continue here</b> hands the points you kept to the conversation.</span><span lang="fr">Ton travail récent, une ligne par chantier, quelle que soit la machine. Ouvres-en un et la sauvegarde se déplie : les <b>points ouverts</b> à cocher, avec depuis combien de temps chacun traîne, <b>ce qui a bougé depuis</b> dans les documents liés, diffs compris, et la commande qui reprend la session là où elle tournait. <b>Continuer ici</b> passe à la conversation les points que tu as gardés.</span></p>
       <div class="tools"><code>resume_session</code></div>
     </div>
     <div class="app-stack">
@@ -516,9 +423,9 @@
 
   <div class="app-row flip">
     <div class="app-text">
-      <div class="app-ask"><span>You</span>How's the weather in my Atlas?</div>
-      <h3>Clear the fog, a doc at a time</h3>
-      <p>Your folders ranked by what nobody has looked at for months, by activity, by contradictions or by how much an AI wrote. Open a folder and review its forgotten docs one by one: <b>still true</b>, <b>needs an update</b>, or <b>to the trash</b>, each verdict recorded in your name, the confirmed ones left alone for longer each time. The periodic reports gone missing are listed too, one click from being prepared.</p>
+      <div class="app-ask"><span><span lang="en">You</span><span lang="fr">Toi</span></span><span lang="en">How's the weather in my Atlas?</span><span lang="fr">Quelle météo dans mon Atlas ?</span></div>
+      <h3><span lang="en">Clear the fog, a doc at a time</span><span lang="fr">Dissiper le brouillard, un document à la fois</span></h3>
+      <p><span lang="en">Your folders ranked by what nobody has looked at for months, by activity, by contradictions or by how much an AI wrote. Open a folder and review its forgotten docs one by one: <b>still true</b>, <b>needs an update</b>, or <b>to the trash</b>, each verdict recorded in your name, the confirmed ones left alone for longer each time. The periodic reports gone missing are listed too, one click from being prepared.</span><span lang="fr">Tes dossiers classés par ce que personne n’a regardé depuis des mois, par activité, par contradictions ou par la part écrite par une IA. Ouvre un dossier et passe ses documents oubliés un par un : <b>toujours vrai</b>, <b>à mettre à jour</b> ou <b>à la corbeille</b>, chaque verdict enregistré à ton nom, les documents confirmés laissés tranquilles un peu plus longtemps à chaque fois. Les rapports périodiques manquants sont listés aussi, à un clic d’être préparés.</span></p>
       <div class="tools"><code>mind_weather</code><code>stale</code><code>confirm_doc</code></div>
     </div>
     <div class="app-stack" style="--lift:22%">
@@ -530,9 +437,9 @@
 
   <div class="app-row">
     <div class="app-text">
-      <div class="app-ask"><span>You</span>What did I think of Pro pricing in August?</div>
-      <h3>What you thought then, beside what you think now</h3>
-      <p>Atlas reads your mind as it was that day and as it is now, your assistant pairs the claims, and <b>every quote is checked word for word</b> against the version it comes from before it is shown: <b>reversed</b>, <b>refined</b>, <b>held</b>, <b>dropped</b> or <b>new</b>, with the days the topic moved and the docs still saying the old. <b>Why did I think that then?</b> asks for your reasoning back then, from what the mind said on that date only.</p>
+      <div class="app-ask"><span><span lang="en">You</span><span lang="fr">Toi</span></span><span lang="en">What did I think of Pro pricing in August?</span><span lang="fr">Qu’est-ce que je pensais du tarif Pro en août ?</span></div>
+      <h3><span lang="en">What you thought then, beside what you think now</span><span lang="fr">Ce que tu pensais alors, à côté de ce que tu penses aujourd’hui</span></h3>
+      <p><span lang="en">Atlas reads your mind as it was that day and as it is now, your assistant pairs the claims, and <b>every quote is checked word for word</b> against the version it comes from before it is shown: <b>reversed</b>, <b>refined</b>, <b>held</b>, <b>dropped</b> or <b>new</b>, with the days the topic moved and the docs still saying the old. <b>Why did I think that then?</b> asks for your reasoning back then, from what the mind said on that date only.</span><span lang="fr">Atlas lit ton esprit tel qu’il était ce jour-là et tel qu’il est aujourd’hui, ton assistant met les affirmations en regard, et <b>chaque citation est vérifiée mot pour mot</b> dans la version d’où elle vient avant d’être montrée : <b>inversée</b>, <b>affinée</b>, <b>maintenue</b>, <b>abandonnée</b> ou <b>nouvelle</b>, avec les jours où le sujet a bougé et les documents qui disent encore l’ancien. <b>Pourquoi je pensais ça à l’époque ?</b> retrouve ton raisonnement d’alors, à partir de ce que l’esprit disait à cette date seulement.</span></p>
       <div class="tools"><code>then_and_now</code><code>show_shift</code></div>
     </div>
     <div class="app-stack solo">
@@ -543,9 +450,9 @@
 
   <div class="app-row flip">
     <div class="app-text">
-      <div class="app-ask"><span>You</span>What did Claude do this morning?</div>
-      <h3>Keep the good part of a run, cut the rest</h3>
-      <p>Everything written lately, in runs: what one writer did in one go, an AI or a person, even an agent that never said it was one. Open a run and play it back <b>commit by commit</b>, each with its diff. <b>Discard from here</b> keeps what came before and undoes the rest; <b>Remove</b> undoes a single doc. Each cut is shown before it is made, then made in one commit in your name, and nothing is lost: the history keeps it all.</p>
+      <div class="app-ask"><span><span lang="en">You</span><span lang="fr">Toi</span></span><span lang="en">What did Claude do this morning?</span><span lang="fr">Qu’a fait Claude ce matin ?</span></div>
+      <h3><span lang="en">Keep the good part of a run, cut the rest</span><span lang="fr">Garder le bon d’un passage, couper le reste</span></h3>
+      <p><span lang="en">Everything written lately, in runs: what one writer did in one go, an AI or a person, even an agent that never said it was one. Open a run and play it back <b>commit by commit</b>, each with its diff. <b>Discard from here</b> keeps what came before and undoes the rest; <b>Remove</b> undoes a single doc. Each cut is shown before it is made, then made in one commit in your name, and nothing is lost: the history keeps it all.</span><span lang="fr">Tout ce qui a été écrit récemment, par passages : ce qu’un même auteur a fait d’une traite, une IA ou une personne, même un agent qui ne l’a jamais dit. Ouvre un passage et rejoue-le <b>commit par commit</b>, chacun avec son diff. <b>Annuler à partir d’ici</b> garde ce qui précède et défait le reste ; <b>Retirer</b> défait un seul document. Chaque coupe est montrée avant d’être faite, puis faite en un commit à ton nom, et rien n’est perdu : l’historique garde tout.</span></p>
       <div class="tools"><code>agent_runs</code><code>undo_run</code></div>
     </div>
     <div class="app-stack">
@@ -555,94 +462,94 @@
     </div>
   </div>
 
-  <p class="apps-note">The views open in <b>Claude</b> on the web and desktop, <b>ChatGPT</b> and <b>VS Code</b> with Copilot. Anywhere else, Claude Code included, the same tools answer in text: nothing is lost, it is just less to click.</p>
+  <p class="apps-note"><span lang="en">The views open in <b>Claude</b> on the web and desktop, <b>ChatGPT</b> and <b>VS Code</b> with Copilot. Anywhere else, Claude Code included, the same tools answer in text: nothing is lost, it is just less to click.</span><span lang="fr">Les vues s’ouvrent dans <b>Claude</b> sur le web et sur ordinateur, dans <b>ChatGPT</b> et dans <b>VS Code</b> avec Copilot. Ailleurs, Claude Code compris, les mêmes outils répondent en texte : rien ne se perd, il y a juste moins à cliquer.</span></p>
 </div></section>
 
 <section id="activity" class="center"><div class="wrap">
-  <div class="kicker">Your mind remembers</div>
-  <h2>An activity layer, over the<br>history you already keep.</h2>
-  <p class="sub">Every change is a git commit, so the home page opens on a living record of how your knowledge grew — and who grew it. Each edit is <b>attributed</b>: its author, its date, and whether an <b>AI</b> made it.</p>
+  <div class="kicker"><span lang="en">Your mind remembers</span><span lang="fr">Ton esprit se souvient</span></div>
+  <h2><span lang="en">An activity layer, over the<br>history you already keep.</span><span lang="fr">Une couche d’activité, sur<br>l’historique que tu gardes déjà.</span></h2>
+  <p class="sub"><span lang="en">Every change is a git commit, so the home page opens on a living record of how your knowledge grew — and who grew it. Each edit is <b>attributed</b>: its author, its date, and whether an <b>AI</b> made it.</span><span lang="fr">Chaque changement est un commit git : l’accueil s’ouvre donc sur le récit vivant de la façon dont tes connaissances ont grandi, et de qui les a fait grandir. Chaque modification est <b>attribuée</b> : son auteur, sa date, et si une <b>IA</b> l’a faite.</span></p>
   <div class="pillars">
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="4" cy="6" r="1.3"/><circle cx="4" cy="12" r="1.3"/><circle cx="4" cy="18" r="1.3"/><path d="M9 6h12M9 12h12M9 18h12"/></svg></div>
       <h3>Journal</h3>
-      <p>A day-by-day feed of who changed what, with a badge on AI-authored edits. Click any entry to peek that document's history without leaving the page, or undo the run it belongs to, whole or for the docs you pick. A "this week" digest sums up the pulse.</p>
-      <div class="tag">who · what · when · undo</div>
+      <p><span lang="en">A day-by-day feed of who changed what, with a badge on AI-authored edits. Click any entry to peek that document's history without leaving the page, or undo the run it belongs to, whole or for the docs you pick. A "this week" digest sums up the pulse.</span><span lang="fr">Le fil, jour après jour, de qui a changé quoi, avec un badge sur les modifications écrites par une IA. Clique une entrée pour voir l’historique du document sans quitter la page, ou annule le passage auquel elle appartient, en entier ou pour les documents choisis. Un résumé « cette semaine » donne le pouls.</span></p>
+      <div class="tag"><span lang="en">who · what · when · undo</span><span lang="fr">qui · quoi · quand · annuler</span></div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="7" r="1.5"/><circle cx="17" cy="6" r="1.5"/><circle cx="12" cy="13" r="1.5"/><circle cx="7" cy="18" r="1.5"/><circle cx="18" cy="17" r="1.5"/><path d="m7.4 7.6 3.6 4.6M16 6.7l-3.4 5.5M11.2 14l-3.4 3.4M13 13.6l4 3"/></svg></div>
       <h3>Constellation</h3>
-      <p>The people behind your mind drawn as a small constellation — a glanceable picture of who has been active lately, each star a contributor.</p>
-      <div class="tag">contributors</div>
+      <p><span lang="en">The people behind your mind drawn as a small constellation — a glanceable picture of who has been active lately, each star a contributor.</span><span lang="fr">Les personnes derrière ton esprit, dessinées en petite constellation : d’un coup d’œil, qui a été actif récemment, chaque étoile un contributeur.</span></p>
+      <div class="tag"><span lang="en">contributors</span><span lang="fr">contributeurs</span></div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z"/><path d="m9 11.5 2 2 4-4"/></svg></div>
-      <h3>Health</h3>
-      <p>Two maintenance lenses: <b>obsolescence</b> — documents untouched for months — and <b>contradictions</b> — same-topic notes that may now disagree. A shortlist your AI can open and review.</p>
+      <h3><span lang="en">Health</span><span lang="fr">Santé</span></h3>
+      <p><span lang="en">Two maintenance lenses: <b>obsolescence</b> — documents untouched for months — and <b>contradictions</b> — same-topic notes that may now disagree. A shortlist your AI can open and review.</span><span lang="fr">Deux regards d’entretien : l’<b>obsolescence</b>, les documents intouchés depuis des mois, et les <b>contradictions</b>, les notes d’un même sujet qui pourraient ne plus être d’accord. Une courte liste que ton IA peut ouvrir et relire.</span></p>
       <div class="tag">obsolescence · contradictions</div>
     </div>
   </div>
 </div></section>
 
 <section class="quote"><div class="wrap">
-  <div class="kicker center" style="text-align:center">The whole point</div>
-  <blockquote>If Atlas Mind disappeared tomorrow, <span class="grad">your mind would still open</span> in any text editor.</blockquote>
-  <p class="cap">It's just a folder of files in your own private git repository. You are never holding someone else's format hostage.</p>
+  <div class="kicker center" style="text-align:center"><span lang="en">The whole point</span><span lang="fr">Tout l’enjeu</span></div>
+  <blockquote><span lang="en">If Atlas Mind disappeared tomorrow, <span class="grad">your mind would still open</span> in any text editor.</span><span lang="fr">Si Atlas Mind disparaissait demain, <span class="grad">ton esprit s’ouvrirait encore</span> dans n’importe quel éditeur de texte.</span></blockquote>
+  <p class="cap"><span lang="en">It's just a folder of files in your own private git repository. You are never holding someone else's format hostage.</span><span lang="fr">Ce n’est qu’un dossier de fichiers dans ton propre dépôt git privé. Aucun format venu d’ailleurs ne te tient en otage.</span></p>
 </div></section>
 
 <section id="how" class="center"><div class="wrap">
-  <div class="kicker">How it works</div>
-  <h2>The engine and your mind,<br>kept deliberately apart.</h2>
-  <p class="sub">Point the engine at a mind and it serves a fast single-page app. Upgrading the engine never touches your content; syncing content never touches the engine.</p>
+  <div class="kicker"><span lang="en">How it works</span><span lang="fr">Comment ça marche</span></div>
+  <h2><span lang="en">The engine and your mind,<br>kept deliberately apart.</span><span lang="fr">Le moteur et ton esprit,<br>volontairement séparés.</span></h2>
+  <p class="sub"><span lang="en">Point the engine at a mind and it serves a fast single-page app. Upgrading the engine never touches your content; syncing content never touches the engine.</span><span lang="fr">Pointe le moteur sur un Atlas et il sert une application rapide d’une seule page. Mettre le moteur à jour ne touche jamais ton contenu ; synchroniser ton contenu ne touche jamais le moteur.</span></p>
   <div class="split">
     <div class="half">
-      <div class="lbl">The engine</div>
-      <h3>Code you can throw away</h3>
-      <p>This repository: the Python server, the build step, and the single-page viewer. Read it line by line. Replace it. Your notes don't care.</p>
-      <div class="files"><span>atlas serve ~/my-mind</span>Python · stdlib only · MCP + REST</div>
+      <div class="lbl"><span lang="en">The engine</span><span lang="fr">Le moteur</span></div>
+      <h3><span lang="en">Code you can throw away</span><span lang="fr">Du code que tu peux jeter</span></h3>
+      <p><span lang="en">This repository: the Python server, the build step, and the single-page viewer. Read it line by line. Replace it. Your notes don't care.</span><span lang="fr">Ce dépôt : le serveur Python, l’étape de build et le viewer. Lis-le ligne à ligne. Remplace-le. Tes notes s’en moquent.</span></p>
+      <div class="files"><span>atlas serve ~/my-mind</span><span lang="en">Python · stdlib only · MCP + REST</span><span lang="fr">Python · stdlib seulement · MCP + REST</span></div>
     </div>
     <div class="half">
-      <div class="lbl">A mind</div>
-      <h3>Content you own</h3>
-      <p>Your notes, in their own private git repository: a <code>content/</code> folder plus a small <code>atlas.toml</code>. State lives in a local <code>.atlas/</code> — plain JSON, no database.</p>
+      <div class="lbl"><span lang="en">A mind</span><span lang="fr">Un Atlas</span></div>
+      <h3><span lang="en">Content you own</span><span lang="fr">Du contenu à toi</span></h3>
+      <p><span lang="en">Your notes, in their own private git repository: a <code>content/</code> folder plus a small <code>atlas.toml</code>. State lives in a local <code>.atlas/</code> — plain JSON, no database.</span><span lang="fr">Tes notes, dans leur propre dépôt git privé : un dossier <code>content/</code> et un petit <code>atlas.toml</code>. L’état vit dans un <code>.atlas/</code> local : du JSON, sans base de données.</span></p>
       <div class="files"><span>content/ · atlas.toml</span>Markdown · HTML · PDF · DOCX · images · JSON</div>
     </div>
   </div>
-  <p class="seam">A wikilink <b>[[graph]]</b>, full-text search, backlinks, tags, and a force-directed <b>mind palace</b> — everything a Zettelkasten, digital garden or PKM needs, built from your files.</p>
+  <p class="seam"><span lang="en">A wikilink <b>[[graph]]</b>, full-text search, backlinks, tags, and a force-directed <b>mind palace</b> — everything a Zettelkasten, digital garden or PKM needs, built from your files.</span><span lang="fr">Un <b>[[graphe]]</b> de liens, la recherche plein texte, les liens entrants, les étiquettes et un <b>palais mental</b> qui s’organise tout seul : tout ce qu’il faut à un Zettelkasten, un jardin numérique ou un PKM, bâti à partir de tes fichiers.</span></p>
 </div></section>
 
 <section id="hive" class="hive center"><div class="wrap">
   <div class="kicker">Hive Mind</div>
-  <h2>Your mind, but not an island.</h2>
-  <p class="sub" style="margin:14px auto 0">Two Atlas instances can share a slice of their content and form a <b>Hive Mind</b> — a personal memory <em>with sharing</em>, not a real-time collaborative editor. It's pull-asymmetric: only the publisher needs to be reachable, the subscriber just pulls.</p>
+  <h2><span lang="en">Your mind, but not an island.</span><span lang="fr">Ton esprit, mais pas une île.</span></h2>
+  <p class="sub" style="margin:14px auto 0"><span lang="en">Two Atlas instances can share a slice of their content and form a <b>Hive Mind</b> — a personal memory <em>with sharing</em>, not a real-time collaborative editor. It's pull-asymmetric: only the publisher needs to be reachable, the subscriber just pulls.</span><span lang="fr">Deux instances Atlas peuvent partager une part de leur contenu et former une <b>Hive Mind</b> : une mémoire personnelle <em>qui se partage</em>, pas un éditeur collaboratif en temps réel. C’est asymétrique : seul celui qui publie doit être joignable, l’abonné ne fait que récupérer.</span></p>
   <div class="hive-steps">
     <div class="step">
       <div class="n">1</div>
-      <h3>Publish a node</h3>
-      <p>Pick a folder or a single document and publish it. You get a one-time <code>atlas-node:…</code> link carrying the origin URL and a read-only token (stored hashed, re-issue to rotate).</p>
+      <h3><span lang="en">Publish a node</span><span lang="fr">Publier un nœud</span></h3>
+      <p><span lang="en">Pick a folder or a single document and publish it. You get a one-time <code>atlas-node:…</code> link carrying the origin URL and a read-only token (stored hashed, re-issue to rotate).</span><span lang="fr">Choisis un dossier ou un seul document et publie-le. Tu obtiens un lien <code>atlas-node:…</code>, affiché une fois, qui porte l’adresse d’origine et un jeton en lecture seule (gardé haché, à réémettre pour le changer).</span></p>
     </div>
     <div class="step">
       <div class="n">2</div>
-      <h3>Subscribe</h3>
-      <p>Paste the link on another instance. Atlas downloads the documents and keeps a <b>read-only mirror</b> under <code>remotes/</code>, re-syncing by SHA-256 diff on every pull.</p>
+      <h3><span lang="en">Subscribe</span><span lang="fr">S’abonner</span></h3>
+      <p><span lang="en">Paste the link on another instance. Atlas downloads the documents and keeps a <b>read-only mirror</b> under <code>remotes/</code>, re-syncing by SHA-256 diff on every pull.</span><span lang="fr">Colle le lien sur une autre instance. Atlas télécharge les documents et garde un <b>miroir en lecture seule</b> sous <code>remotes/</code>, resynchronisé par différence SHA-256 à chaque récupération.</span></p>
     </div>
     <div class="step">
       <div class="n">3</div>
-      <h3>Browse it like your own</h3>
-      <p>Mirrored docs appear in the tree and as their own <b>teal regions</b> in The Mind. “Appropriate” forks an editable copy — and your AI reads them like any other note.</p>
+      <h3><span lang="en">Browse it like your own</span><span lang="fr">Le parcourir comme le tien</span></h3>
+      <p><span lang="en">Mirrored docs appear in the tree and as their own <b>teal regions</b> in The Mind. “Appropriate” forks an editable copy — and your AI reads them like any other note.</span><span lang="fr">Les documents miroirs apparaissent dans l’arbre et comme <b>régions turquoise</b> dans The Mind. « S’approprier » en fait une copie modifiable, et ton IA les lit comme n’importe quelle note.</span></p>
     </div>
   </div>
-  <p class="hive-note">Tokens are scoped to the published path and <b>revocable at any time</b>. Nothing on your side is ever overwritten without a sync you control.</p>
+  <p class="hive-note"><span lang="en">Tokens are scoped to the published path and <b>revocable at any time</b>. Nothing on your side is ever overwritten without a sync you control.</span><span lang="fr">Les jetons sont limités au chemin publié et <b>révocables à tout moment</b>. Rien chez toi n’est jamais écrasé sans une synchro que tu contrôles.</span></p>
   <div class="cta-row" style="margin-top:30px">
-    <a class="btn btn-ghost" href="./demo/#guides%2Fhive-mind.md">▸ Read the Hive Mind tutorial</a>
+    <a class="btn btn-ghost" href="./demo/#guides%2Fhive-mind.md"><span lang="en">Read the Hive Mind tutorial →</span><span lang="fr">Lire le tutoriel Hive Mind →</span></a>
   </div>
 </div></section>
 
 <section id="start" class="final"><div class="wrap">
-  <div class="kicker">Get started</div>
-  <h2>Two commands to your own mind.</h2>
-  <p class="sub" style="margin:14px auto 0">Installs a self-contained <code>atlas</code> command — the viewer ships inside the package, no separate download.</p>
-  <div class="codeblock">
+  <div class="kicker"><span lang="en">Get started</span><span lang="fr">Démarrer</span></div>
+  <h2><span lang="en">Two commands to your own mind.</span><span lang="fr">Deux commandes jusqu’à ton propre Atlas.</span></h2>
+  <p class="sub" style="margin:14px auto 0"><span lang="en">Installs a self-contained <code>atlas</code> command — the viewer ships inside the package, no separate download.</span><span lang="fr">Installe une commande <code>atlas</code> autonome : le viewer est dans le paquet, rien d’autre à télécharger.</span></p>
+  <div class="codeblock" lang="en">
     <div class="top"><span>bash</span><span>uv · pipx · pip</span></div>
 <pre><span class="c"># install (uv fetches Python for you) — or: pipx install atlas-mind</span>
 <span class="p">uv</span> tool install atlas-mind
@@ -658,19 +565,35 @@
 <span class="c"># …or try it once, no install</span>
 <span class="p">uvx</span> atlas-mind serve ~/my-mind</pre>
   </div>
+  <div class="codeblock" lang="fr">
+    <div class="top"><span>bash</span><span>uv · pipx · pip</span></div>
+<pre><span class="c"># installer (uv récupère Python pour toi), ou : pipx install atlas-mind</span>
+<span class="p">uv</span> tool install atlas-mind
+
+<span class="c"># créer un nouvel Atlas et le servir en local</span>
+<span class="p">atlas</span> init ~/my-mind
+<span class="p">atlas</span> serve ~/my-mind
+
+<span class="c"># le tenir à jour : la commande, ou un déploiement</span>
+<span class="p">uv</span> tool upgrade atlas-mind
+<span class="p">atlas</span> update --target &lt;fly|compose|systemd&gt;
+
+<span class="c"># …ou l’essayer une fois, sans rien installer</span>
+<span class="p">uvx</span> atlas-mind serve ~/my-mind</pre>
+  </div>
   <div class="cta-row" style="margin-top:34px">
-    <a class="btn btn-gold" href="./demo/">▶ Explore the live demo</a>
-    <a class="btn btn-ghost" href="https://github.com/Anakior/atlas-mind">View the source</a>
+    <a class="btn btn-primary" href="./demo/"><span lang="en">Explore the live demo</span><span lang="fr">Voir la démo en direct</span></a>
+    <a class="btn btn-ghost" href="https://github.com/Anakior/atlas-mind"><span lang="en">View the source</span><span lang="fr">Voir le code</span></a>
   </div>
   <div class="badges">
-    <span>Python 3.11+</span><span>Standard library only</span><span>No database</span><span>AGPL-3.0</span>
+    <span>Python 3.11+</span><span><span lang="en">Standard library only</span><span lang="fr">Bibliothèque standard seulement</span></span><span><span lang="en">No database</span><span lang="fr">Sans base de données</span></span><span>AGPL-3.0</span>
   </div>
 </div></section>
 
 <footer><div class="wrap">
-  <span>Atlas Mind — own the data, own the engine, own the mind.</span>
+  <span><span lang="en">Atlas Mind — own the data, own the engine, own the mind.</span><span lang="fr">Atlas Mind — tes données, ton moteur, ton esprit.</span></span>
   <span>
-    <a href="./demo/">Live demo</a> ·
+    <a href="./demo/"><span lang="en">Live demo</span><span lang="fr">Démo</span></a> ·
     <a href="https://github.com/Anakior/atlas-mind">GitHub</a> ·
     <a href="https://github.com/Anakior/atlas-mind/blob/main/LICENSE">AGPL-3.0</a>
   </span>
@@ -700,5 +623,6 @@
     }
   })();
 </script>
+<script src="/assets/site.js"></script>
 </body>
 </html>

@@ -7,6 +7,11 @@ import { mdCount, otherCount, setMdCount, setOtherCount } from './state';
 
 export const fileMap: Record<string, FileNode> = {};
 
+// What a doc is called on screen: the title it gives itself, else its file name.
+export function docLabel(f: FileNode): string {
+  return f.title || f.name;
+}
+
 export function index(node: TreeNode): void {
   const children = node.type === 'dir' ? node.children : [];
 

@@ -13,7 +13,7 @@
 
 import { LANG, t } from '../../core/i18n';
 import { currentFile } from '../../core/state';
-import { escapeHtml } from '../../core/utils';
+import { escapeHtml, isLoopback } from '../../core/utils';
 import { fileMap } from '../../core/tree';
 import { Dialogs } from '../../modals/dialogs';
 
@@ -66,7 +66,6 @@ export async function refreshShareList(): Promise<void> {
     shareExistingCount.textContent = t('nLinks', items.length);
     shareExistingList.innerHTML = items
       .map((item) => {
-        const url = location.origin + '/s/' + item.token;
         const exp = item.expires_at
           ? t('expiresShort', shareFormatDate(item.expires_at))
           : t('noExpiry');
@@ -74,25 +73,11 @@ export async function refreshShareList(): Promise<void> {
 
         return (
           '<li class="bg-navy-900 border subtle-border rounded p-2 flex items-center gap-2 text-xs">' +
-          '<div class="flex-1 min-w-0">' +
-          '<div class="text-ink-300 font-mono truncate" title="' +
-          escapeHtml(url) +
-          '">' +
-          escapeHtml(url) +
-          '</div>' +
-          '<div class="text-ink-500 text-[10px] mt-0.5">' +
+          '<div class="flex-1 min-w-0 text-ink-300">' +
           created +
           ' &middot; ' +
           exp +
           '</div>' +
-          '</div>' +
-          '<button class="share-existing-copy px-2 py-1 text-[11px] bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-url="' +
-          escapeHtml(url) +
-          '" title="' +
-          escapeHtml(t('copy')) +
-          '">' +
-          t('copy') +
-          '</button>' +
           '<button class="share-existing-del px-2 py-1 text-[11px] bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded" data-id="' +
           escapeHtml(item.id) +
           '" title="' +
@@ -110,6 +95,13 @@ export function openShareModal(): void {
 
   if (!file || window.__viewerMode) return;
   sharePath!.textContent = file.path;
+  // On this computer a link opens nowhere else: the note goes as a file instead.
+  document.getElementById('share-local')!.classList.toggle('hidden', !isLoopback());
+  document.getElementById('share-link-part')!.classList.toggle('hidden', isLoopback());
+  const asFile = document.getElementById('share-file') as HTMLAnchorElement;
+
+  asFile.href = '/api/export/page?path=' + encodeURIComponent(file.path);
+  asFile.classList.toggle('share-file-main', isLoopback());
   shareStep1!.classList.remove('hidden');
   shareStep2!.classList.add('hidden');
   shareError!.classList.add('hidden');
@@ -122,18 +114,6 @@ export function closeShareModal(): void {
 }
 
 shareExistingList!.addEventListener('click', async (e) => {
-  const copyBtn = (e.target as HTMLElement).closest<HTMLElement>('.share-existing-copy');
-
-  if (copyBtn) {
-    try {
-      await navigator.clipboard.writeText(copyBtn.dataset.url || '');
-      copyBtn.textContent = t('copied');
-      setTimeout(() => (copyBtn.textContent = t('copy')), 1200);
-    } catch (e) {}
-
-    return;
-  }
-
   const delBtn = (e.target as HTMLElement).closest<HTMLElement>('.share-existing-del');
 
   if (delBtn) {
@@ -234,8 +214,11 @@ export function settingsHttpMessage(status: number): string {
   return t('settingsErrGeneric');
 }
 
+export type SettingsError = Error & { status?: number; code?: string; detail?: string };
+
 // Shared JSON fetch for admin mutations: adds Content-Type, parses the body and raises a readable
-// message (not the server detail) on failure. Imported by modals/reset-password.ts and admin/totp/*.
+// message on failure; the server's error code and detail ride along for a tab that explains them.
+// Imported by modals/reset-password.ts and admin/totp/*.
 export async function settingsFetch<T = any>(url: string, options?: RequestInit): Promise<T> {
   const opts: RequestInit = { ...options };
   const headers: Record<string, string> = { ...(opts.headers as Record<string, string> | undefined) };
@@ -254,9 +237,11 @@ export async function settingsFetch<T = any>(url: string, options?: RequestInit)
       payload && payload.error === 'cannot delete the last admin'
         ? t('settingsLastAdmin')
         : settingsHttpMessage(res.status);
-    const err = new Error(human) as Error & { status?: number };
+    const err: SettingsError = new Error(human);
 
     err.status = res.status;
+    err.code = payload?.error;
+    err.detail = payload?.detail;
     throw err;
   }
 
@@ -289,6 +274,12 @@ export function remoteNodeInfo(path: string): { name: string; sourceRel: string;
 }
 
 // Imported by content/notes/notes-store.ts (copies its own text).
+// A value to copy: monospace box + Copy button (`attr` marks the button for copyOn).
+export function copyBox(value: string, attr: string): string {
+  return `<div class="gh-key mt-2"><code>${escapeHtml(value)}</code>
+    <button type="button" class="px-3 py-1.5 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded-lg font-medium flex-shrink-0" ${attr}>${t('copy')}</button></div>`;
+}
+
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -325,6 +316,14 @@ export class SettingsContext {
       btn.textContent = t('copy');
       btn.classList.remove('is-copied');
     }, 1200);
+  }
+
+  // A copyBox's button (`selector` inside `box`) copies `value()` and flashes.
+  copyOn(box: HTMLElement, selector: string, value: () => string): void {
+    box.querySelector(selector)?.addEventListener('click', async (e) => {
+      await copyToClipboard(value());
+      this.flashCopied(e.currentTarget as HTMLElement);
+    });
   }
 
   // Copy an input's value to the clipboard (with execCommand fallback) and flash the button.

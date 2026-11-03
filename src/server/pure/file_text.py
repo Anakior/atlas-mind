@@ -1,0 +1,171 @@
+"""The text inside a file that is not a note, for an AI to read and for search to find, with
+the stdlib: .docx, .xlsx and .pptx (Office Open XML) and their OpenDocument cousins are zips of
+XML; a PDF goes through server.pure.pdf_text. Headings come out as `#` lines (a PDF's pages as
+`## Page N`), so a part can be asked for by name like a note's section; a sheet's rows come out
+as `a | b | c`. Read-only: the file itself is never rewritten."""
+import re
+import zipfile
+import xml.etree.ElementTree as ET
+from functools import lru_cache
+from posixpath import dirname, join, normpath
+
+from server.pure import pdf_text
+
+EXTS = (".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".pdf")
+MAX_CHARS = 1_000_000
+_MAX_PART = 50 << 20
+
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+_P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+_R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+_REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+_MC_FALLBACK = "{http://schemas.openxmlformats.org/markup-compatibility/2006}Fallback"
+_T = "{urn:oasis:names:tc:opendocument:xmlns:text:1.0}"
+_TB = "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}"
+_D = "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}"
+
+
+def extract(path):
+    """The file's text, or None when it is not one of EXTS or cannot be read."""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return _extract(str(path), st.st_mtime_ns, st.st_size)
+
+
+@lru_cache(maxsize=32)
+def _extract(path, _mtime, size):
+    if path.lower().endswith(".pdf"):
+        return _pdf(path, size)
+    reader = _READERS.get(path[path.rfind("."):].lower())
+    if reader is None:
+        return None
+    try:
+        with zipfile.ZipFile(path) as zf:
+            text = "\n".join(line for line in reader(zf) if line.strip())
+    except (zipfile.BadZipFile, KeyError, IndexError, ET.ParseError, OSError, ValueError):
+        return None
+    return text[:MAX_CHARS]
+
+
+def _pdf(path, size):
+    if size > pdf_text.MAX_BYTES:
+        return None
+    try:
+        with open(path, "rb") as f:
+            text = pdf_text.extract(f.read())
+    except Exception:  # a damaged or unusual file never breaks a read or a search
+        return None
+    return text[:MAX_CHARS] if text else None
+
+
+def _xml(zf, name):
+    info = zf.getinfo(name)
+    if info.file_size > _MAX_PART:
+        raise ValueError("part too large")
+    data = zf.read(info)
+    if b"<!DOCTYPE" in data[:4096]:  # never in these formats: entity tricks only
+        raise ValueError("doctype")
+    root = ET.fromstring(data)
+    for parent in root.iter():  # a text box is written twice, once as a fallback drawing
+        for child in [c for c in parent if c.tag == _MC_FALLBACK]:
+            parent.remove(child)
+    return root
+
+
+def _targets(zf, part):
+    """{relationship id: part name} of an OOXML part."""
+    rels = join(dirname(part), "_rels", part.rsplit("/", 1)[-1] + ".rels")
+    return {r.get("Id"): normpath(join(dirname(part), r.get("Target", "")))
+            for r in _xml(zf, rels).iter(_REL + "Relationship")}
+
+
+_W_BREAKS = {_W + "tab": "\t", _W + "br": "\n", _W + "cr": "\n"}
+
+
+def _docx(zf):
+    for p in _xml(zf, "word/document.xml").iter(_W + "p"):
+        text = "".join((n.text or "") if n.tag == _W + "t" else _W_BREAKS[n.tag]
+                       for n in p.iter() if n.tag == _W + "t" or n.tag in _W_BREAKS)
+        style = p.find(f"{_W}pPr/{_W}pStyle")
+        style = (style.get(_W + "val") or "") if style is not None else ""
+        m = re.match(r"(?i)(?:heading|titre)\s*(\d)$", style)
+        if m or style.lower() in ("title", "titre"):
+            yield "#" * int(m.group(1) if m else 1) + " " + text
+        elif p.find(f"{_W}pPr/{_W}numPr") is not None:
+            yield "- " + text
+        else:
+            yield text
+
+
+def _pptx(zf):
+    deck = "ppt/presentation.xml"
+    targets = _targets(zf, deck)
+    for n, sld in enumerate(_xml(zf, deck).iter(_P + "sldId"), 1):
+        yield f"## Slide {n}"
+        for p in _xml(zf, targets[sld.get(_R + "id")]).iter(_A + "p"):
+            yield "".join(t.text or "" for t in p.iter(_A + "t"))
+
+
+def _xlsx(zf):
+    book = "xl/workbook.xml"
+    shared = []
+    if "xl/sharedStrings.xml" in zf.namelist():
+        shared = ["".join(t.text or "" for t in si.iter(_S + "t"))
+                  for si in _xml(zf, "xl/sharedStrings.xml").iter(_S + "si")]
+    targets = _targets(zf, book)
+    for sheet in _xml(zf, book).iter(_S + "sheet"):
+        yield "## " + (sheet.get("name") or "")
+        for row in _xml(zf, targets[sheet.get(_R + "id")]).iter(_S + "row"):
+            cells = []
+            for c in row.iter(_S + "c"):
+                v = c.find(_S + "v")
+                if c.get("t") == "s" and v is not None:
+                    cells.append(shared[int(v.text)])
+                elif c.get("t") == "inlineStr":
+                    cells.append("".join(t.text or "" for t in c.iter(_S + "t")))
+                else:
+                    cells.append((v.text or "") if v is not None else "")
+            yield " | ".join(cells).rstrip(" |")
+
+
+def _odf_text(el):
+    parts = [el.text or ""]
+    for c in el:
+        if c.tag == _T + "s":
+            parts.append(" " * int(c.get(_T + "c", "1")))
+        elif c.tag == _T + "tab":
+            parts.append("\t")
+        elif c.tag == _T + "line-break":
+            parts.append("\n")
+        else:
+            parts.append(_odf_text(c))
+        parts.append(c.tail or "")
+    return "".join(parts)
+
+
+def _odf_lines(el, sheets):
+    for c in el:
+        if c.tag == _T + "h":
+            yield "#" * int(c.get(_T + "outline-level", "1")) + " " + _odf_text(c)
+        elif c.tag == _T + "p":
+            yield _odf_text(c)
+        elif c.tag == _TB + "table-row":
+            yield " | ".join(_odf_text(cell).strip() for cell in c).rstrip(" |")
+        else:
+            if (c.tag == _TB + "table" and sheets) or c.tag == _D + "page":
+                yield "## " + (c.get(_TB + "name") or c.get(_D + "name") or "")
+            yield from _odf_lines(c, sheets)
+
+
+_READERS = {
+    ".docx": _docx,
+    ".pptx": _pptx,
+    ".xlsx": _xlsx,
+    ".odt": lambda zf: _odf_lines(_xml(zf, "content.xml"), False),
+    ".odp": lambda zf: _odf_lines(_xml(zf, "content.xml"), False),
+    ".ods": lambda zf: _odf_lines(_xml(zf, "content.xml"), True),
+}

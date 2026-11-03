@@ -13,7 +13,8 @@ export class SettingsShares {
     this.list.addEventListener('click', (e) => this.onClick(e));
   }
 
-  async load(): Promise<void> {
+  // The number of share links listed (the Shares tab shows only while there are some).
+  async load(): Promise<number> {
 
     try {
       const shares = await this.ctx.fetch<any[]>('/api/share/list');
@@ -22,7 +23,7 @@ export class SettingsShares {
         this.list.innerHTML =
           '<li class="text-sm text-ink-500">' + t('settingsNoShares') + '</li>';
 
-        return;
+        return 0;
       }
 
       this.list.innerHTML = shares
@@ -33,24 +34,6 @@ export class SettingsShares {
           const created = item.created_at ? t('createdShort', shareFormatDate(item.created_at)) : '';
           const pathEsc = escapeHtml(item.path || '');
           const broken = item.file_exists === false;
-          const url = item.token ? location.origin + '/s/' + item.token : '';
-          const urlEsc = escapeHtml(url);
-          const urlLine = url
-            ? '<div class="text-ink-300 font-mono text-xs truncate mt-0.5" title="' +
-              urlEsc +
-              '">' +
-              urlEsc +
-              '</div>'
-            : '';
-          const copyBtn = url
-            ? '<button class="settings-share-copy px-3 py-1.5 text-sm bg-navy-700 hover:bg-navy-600 text-ink-200 rounded" data-url="' +
-              urlEsc +
-              '" title="' +
-              escapeHtml(t('copy')) +
-              '">' +
-              t('copy') +
-              '</button>'
-            : '';
 
           return (
             '<li class="admin-row bg-navy-900 border subtle-border rounded p-2.5 text-sm">' +
@@ -63,7 +46,6 @@ export class SettingsShares {
               ? ' <span class="text-rose-300 text-xs font-normal">' + t('shareBroken') + '</span>'
               : '') +
             '</div>' +
-            urlLine +
             '<div class="text-ink-500 text-xs mt-0.5">' +
             escapeHtml(created) +
             ' &middot; ' +
@@ -71,7 +53,6 @@ export class SettingsShares {
             '</div>' +
             '</div>' +
             '<div class="admin-row__actions">' +
-            copyBtn +
             (broken
               ? '<button class="settings-share-reactivate px-3 py-1.5 text-sm bg-navy-700 hover:bg-emerald-500/30 hover:text-emerald-300 text-ink-200 rounded" data-id="' +
                 escapeHtml(item.id || '') +
@@ -93,24 +74,16 @@ export class SettingsShares {
           );
         })
         .join('');
+
+      return shares.length;
     } catch (e) {
       this.ctx.showError((e as Error).message);
+
+      return 0;
     }
   }
 
   private async onClick(e: Event): Promise<void> {
-    const copyBtn = this.ctx.hit(e, '.settings-share-copy');
-
-    if (copyBtn) {
-      try {
-        await navigator.clipboard.writeText(copyBtn.dataset.url || '');
-        copyBtn.textContent = t('copied');
-        setTimeout(() => (copyBtn.textContent = t('copy')), 1200);
-      } catch (_) {}
-
-      return;
-    }
-
     const reactivateBtn = this.ctx.hit(e, '.settings-share-reactivate');
 
     if (reactivateBtn) {

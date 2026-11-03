@@ -27,6 +27,9 @@ import { fileMap } from '../core/tree';
 import { renameBackdrop, renameModal } from './dialogs';
 import { shareBackdrop, closeShareModal } from '../admin/settings/settings-shared';
 import { settingsPanel } from '../admin/settings/settings-panel';
+import { sendToFolder } from '../content/file-drop';
+import { docRenderer } from '../content/doc-renderer';
+import { editor } from '../editor/editor';
 
 // Cross-file refs read by boot/bootstrap.ts; HTMLElement | null, so consumers assert with `!`.
 export const newFileBtn = document.getElementById('new-file-btn');
@@ -62,7 +65,12 @@ export async function refreshTreeOrReload(): Promise<void> {
 export class NewFileModal extends Modal {
   private readonly form = document.getElementById('new-file-form') as HTMLFormElement;
   private readonly dir = document.getElementById('new-file-dir') as HTMLInputElement;
+  // The title: the file is named after it.
   private readonly name = document.getElementById('new-file-name') as HTMLInputElement;
+  private readonly pathEl = document.getElementById('new-file-path') as HTMLElement;
+  private readonly cards = document.getElementById('new-file-cards') as HTMLElement;
+  private readonly uploadBtn = document.getElementById('new-file-upload') as HTMLElement;
+  private readonly uploadInput = document.getElementById('new-file-upload-input') as HTMLInputElement;
   private readonly template = document.getElementById('new-file-template') as HTMLSelectElement;
   private readonly visibility = document.getElementById('new-file-visibility') as HTMLSelectElement | null;
   private readonly error = document.getElementById('new-file-error') as HTMLElement;
@@ -89,7 +97,21 @@ export class NewFileModal extends Modal {
     newFileBtn!.addEventListener('click', () => this.open());
     this.cancel.addEventListener('click', () => this.close());
     document.getElementById('new-file-close')?.addEventListener('click', () => this.close());
-    this.template.addEventListener('change', () => this.registry.updateExtras());
+    this.template.addEventListener('change', () => {
+      this.registry.updateExtras();
+      this.renderCards();
+    });
+    this.name.addEventListener('input', () => this.showPath());
+    this.dir.addEventListener('input', () => this.showPath());
+    this.uploadBtn.addEventListener('click', () => this.uploadInput.click());
+    this.uploadInput.addEventListener('change', () => {
+      const files = Array.from(this.uploadInput.files || []);
+
+      this.uploadInput.value = '';
+      if (!files.length) return;
+      this.close();
+      sendToFolder(files, this.folder() ? this.folder() + '/' : '');
+    });
     this.modeDocBtn.addEventListener('click', () => { this.setMode('doc'); this.dir.focus(); });
     this.modeCaptureBtn.addEventListener('click', () => { this.setMode('capture'); this.captureTitle.focus(); });
     this.form.addEventListener('submit', (e) => this.submit(e));
@@ -105,6 +127,7 @@ export class NewFileModal extends Modal {
     this.modeCaptureBtn.classList.toggle('active', capture);
     this.docFields.classList.toggle('hidden', capture);
     this.captureFields.classList.toggle('hidden', !capture);
+    this.uploadBtn.classList.toggle('hidden', capture);
     this.titleEl.textContent = capture ? t('quickCaptureTitle') : t('newDocHeader');
     this.submitBtn.textContent = capture ? t('save') : t('create');
     this.error.classList.add('hidden');
@@ -118,7 +141,10 @@ export class NewFileModal extends Modal {
   open(presetDir?: string): void {
     if (window.__viewerMode) return;
     this.error.classList.add('hidden');
-    this.dir.value = presetDir || '';
+    // Where you are: the open doc's folder, unless it is a mirror of another atlas (read-only).
+    const here = currentFile && !currentFile.path.startsWith('remotes/') ? currentFile.path : '';
+
+    this.dir.value = presetDir ?? here.slice(0, Math.max(here.lastIndexOf('/'), 0));
     this.name.value = '';
     this.template.value = 'blank';
     this.captureTitle.value = '';
@@ -134,8 +160,66 @@ export class NewFileModal extends Modal {
 
     this.registry.runOpenHooks();
     this.registry.updateExtras();
+    this.renderCards();
+    this.showPath();
     this.reveal();
-    setTimeout(() => (presetDir ? this.name : this.dir).focus(), 50);
+    setTimeout(() => this.name.focus(), 50);
+  }
+
+  private folder(): string {
+    return this.dir.value.trim().replace(/^\/+|\/+$/g, '');
+  }
+
+  // The path the title gives, numbered when it is taken ("idee-2.md").
+  private pathFor(title: string): string {
+    const base = (this.folder() ? this.folder() + '/' : '') + (slugify(title) || 'note');
+    let path = base + '.md';
+
+    for (let n = 2; fileMap[path]; n++) path = base + '-' + n + '.md';
+
+    return path;
+  }
+
+  private showPath(): void {
+    const title = this.name.value.trim();
+
+    this.pathEl.textContent = title ? this.pathFor(title) : '';
+  }
+
+  // One card per option of the template <select> (extensions add theirs to it).
+  private renderCards(): void {
+    this.cards.replaceChildren(
+      ...Array.from(this.template.options).map((opt) => {
+        const card = document.createElement('button');
+        const key = 'tpl_' + opt.value;
+        const label = opt.value === 'blank' ? t('tplBlank') : t(key) !== key ? t(key) : opt.textContent || opt.value;
+        const active = opt.value === this.template.value;
+
+        card.type = 'button';
+        card.className = 'nf-card' + (active ? ' active' : '');
+        card.setAttribute('role', 'radio');
+        card.setAttribute('aria-checked', String(active));
+        card.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+        card.addEventListener('click', () => {
+          this.template.value = opt.value;
+          this.template.dispatchEvent(new Event('change'));
+          this.name.focus();
+        });
+
+        return card;
+      }),
+    );
+  }
+
+  // Something shared from another app: its first line as the title, the rest as the body.
+  openCapture(text: string): void {
+    const [first, ...rest] = text.trim().split('\n');
+
+    this.open();
+    this.setMode('capture');
+    this.captureTitle.value = first.slice(0, 120);
+    this.captureBody.value = first.length > 120 ? text : rest.join('\n').trim();
+    setTimeout(() => this.captureTitle.focus(), 60);
   }
 
   private showError(msg: string): void {
@@ -181,8 +265,7 @@ export class NewFileModal extends Modal {
 
     if (this.mode === 'capture') return this.submitCapture();
 
-    const dir = this.dir.value.trim().replace(/^\/+|\/+$/g, '');
-    let name = this.name.value.trim();
+    let title = this.name.value.trim();
     const provider = this.registry.activeProvider();
     let content!: string; // assigned in both the provider and the !provider branch below
 
@@ -193,29 +276,16 @@ export class NewFileModal extends Modal {
 
         content = built.content;
 
-        if (!name) name = (built.slug || '').trim();
+        if (!title) title = (built.slug || '').trim();
       } catch (err) {
         return this.showError((err as Error).message);
       }
     }
 
-    if (!name) return this.showError(t('nameRequired'));
+    if (!title) return this.showError(t('titleRequired'));
+    const path = this.pathFor(title);
 
-    if (/[\\\/]/.test(name)) return this.showError(t('noSlashes'));
-
-    if (!name.endsWith('.md')) name += '.md';
-    const path = dir ? dir + '/' + name : name;
-
-    if (fileMap[path]) return this.showError(t('fileExists'));
-
-    if (!provider) {
-      const title = name
-        .replace(/\.md$/, '')
-        .replace(/[-_]/g, ' ')
-        .replace(/(?:^|\s)\S/g, (c) => c.toUpperCase());
-
-      content = TemplateRegistry.buildContent(this.template.value, title);
-    }
+    if (!provider) content = TemplateRegistry.buildContent(this.template.value, title);
 
     const visibility = this.visibility ? this.visibility.value : 'private';
 
@@ -237,6 +307,11 @@ export class NewFileModal extends Modal {
       location.hash = '#' + encodeURIComponent(path);
       setStatus((provider && provider.successMessage) || t('docCreated'), 'ok');
       await refreshTreeOrReload();
+      // Straight to writing it: the title was the second and last gesture.
+      if (fileMap[path]) {
+        await docRenderer.show(fileMap[path]);
+        editor.enterEditMode();
+      }
     } catch (err) {
       this.showError(t('errSp', (err as Error).message));
     }

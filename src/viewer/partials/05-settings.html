@@ -1,6 +1,7 @@
-<!-- Settings panel (admin + cloud mode only). Full screen on mobile,
-     centered on desktop. Three tabs: Users, Tokens, Shares. Everything
-     goes through fetch() on the /api/admin/* and /api/share/* endpoints. -->
+<!-- Settings panel (cloud mode). Full screen on mobile, centered on desktop. Sections: Me (name,
+     sign-in, sessions), My Atlas (the phone, then its copies), AI assistants (their access), Hive
+     (published nodes and subscriptions, the showcase site's Hive Mind), Shares (only while there are
+     share links), Team, Appearance (the admin's). A section stacks its panes below (settings-panel.ts). -->
 <div id="settings-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
   <div id="settings-panel" class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[46rem] max-w-[90vw] max-h-[82vh] rounded-xl flex flex-col overflow-hidden">
     <div class="px-5 py-4 flex items-center justify-between gap-3 flex-shrink-0">
@@ -10,16 +11,16 @@
       </button>
     </div>
     <div id="settings-tabs" class="px-3 pt-3 flex gap-1 border-b subtle-border flex-shrink-0 flex-wrap">
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="security" data-i18n="settingsTabProfile">Profil</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="tokens" data-i18n="settingsTabTokens">Tokens</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="users" data-i18n="settingsTabUsers">Utilisateurs</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="groups" data-i18n="settingsTabGroups">Groupes</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="me" data-i18n="settingsTabMe">Moi</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="atlas" data-i18n="settingsTabAtlas">Mon Atlas</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="ai" data-i18n="settingsTabTokens">Assistants IA</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="hive" data-i18n="settingsTabHive">Hive</button>
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="shares" data-i18n="settingsTabShares">Partages</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="nodes" data-i18n="settingsTabNodes">N&oelig;uds</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="team" data-i18n="settingsTabTeam">&Eacute;quipe</button>
       <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="appearance" data-i18n="settingsTabAppearance">Apparence</button>
     </div>
     <div id="settings-body" class="flex-1 overflow-y-auto scrollbar-thin p-5">
-      <div id="settings-content">
+      <div id="settings-content" class="flex flex-col">
       <div id="settings-error" class="hidden mb-3 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded px-3 py-2"></div>
       <!-- Update-available banner (admin only): shown when a newer atlas-mind is on PyPI. -->
       <a id="settings-update-banner" class="hidden mb-3 block text-xs text-accent bg-accent/10 border border-accent/25 rounded px-3 py-2 hover:bg-accent/15 transition" target="_blank" rel="noopener"></a>
@@ -80,15 +81,23 @@
       <section id="settings-pane-tokens" class="settings-pane hidden">
         <!-- OAuth first: the assistant signs the person in and asks what it may do. The token
              form below is the fallback for clients without OAuth. -->
-        <div class="mb-5 rounded-lg border subtle-border bg-navy-900 p-3">
+        <div id="settings-oauth" class="mb-5 rounded-lg border subtle-border bg-navy-900 p-3">
           <p class="text-sm text-ink-100 font-medium" data-i18n="settingsOauthTitle">Connecter un assistant</p>
           <p class="text-xs text-ink-400 mt-1 mb-3" data-i18n="settingsOauthHint">Colle cette adresse dans ton assistant&nbsp;: il te demandera de te connecter et de choisir ce qu&rsquo;il peut faire.</p>
           <div class="flex gap-2">
             <input id="settings-oauth-url" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-sm font-mono focus:outline-none">
             <button type="button" id="settings-oauth-copy" class="px-3 py-2 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded flex-shrink-0" data-i18n="copy">Copier</button>
+            <a id="settings-oauth-claude" target="_blank" rel="noopener" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded flex-shrink-0 font-medium no-underline" data-i18n="connectClaude">Ajouter &agrave; Claude</a>
           </div>
         </div>
-        <p class="text-xs text-ink-500 mb-2" data-i18n="settingsTokenManualHint">Pour un client sans OAuth, cr&eacute;e plut&ocirc;t un token&nbsp;: son URL contient le secret.</p>
+        <!-- On a mind on this computer (tokens-tab.ts): an access for Claude Code / Desktop. -->
+        <div id="settings-local-connect" class="mb-5 rounded-lg border subtle-border bg-navy-900 p-3">
+          <p class="text-sm text-ink-100 font-medium" data-i18n="settingsTokenLocalTitle">Brancher Claude sur cet ordinateur</p>
+          <p class="text-xs text-ink-400 mt-1" data-i18n="settingsTokenLocalHint">Ton Atlas tourne sur cet ordinateur&nbsp;: claude.ai ne peut pas le joindre, Claude Code et Claude Desktop si.</p>
+          <button type="button" id="settings-local-make" class="mt-3 px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="settingsTokenLocalMake">Cr&eacute;er l&rsquo;acc&egrave;s de Claude</button>
+          <div id="settings-local-snippets"></div>
+        </div>
+        <p id="settings-token-manual-hint" class="text-xs text-ink-500 mb-2" data-i18n="settingsTokenManualHint">Pour un client sans OAuth, cr&eacute;e plut&ocirc;t un token&nbsp;: son URL contient le secret.</p>
         <form id="settings-token-form" class="mb-5 flex flex-col sm:flex-row gap-2 sm:items-end">
           <div class="flex-1 min-w-0">
             <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenLabel">Libell&eacute;</label>
@@ -265,6 +274,21 @@
           <button id="security-logout-all" class="mt-3 px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded font-medium" data-i18n="securityLogoutAll">D&eacute;connecter toutes mes sessions</button>
         </div>
       </section>
+
+      <!-- On a phone: the address as a QR code, then "add to home screen" (phone-pane.ts). -->
+      <section id="settings-pane-phone" class="settings-pane hidden">
+        <h4 class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-2" data-i18n="phoneTitle">Sur ton t&eacute;l&eacute;phone</h4>
+        <div class="bg-navy-900 border subtle-border rounded-lg p-4 flex items-start gap-4">
+          <div id="phone-qr" class="phone-qr flex-shrink-0"></div>
+          <div class="min-w-0">
+            <p id="phone-hint" class="text-xs text-ink-500 leading-snug"></p>
+            <p id="phone-url" class="text-xs text-ink-300 font-mono mt-2 truncate"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Copies (admin): filled by copies-tab.ts (GitHub, then the computer). -->
+      <section id="settings-pane-copies" class="settings-pane hidden"></section>
 
       <!-- Apparence (admin): the instance accent and the prefix, the same for every account. -->
       <section id="settings-pane-appearance" class="settings-pane hidden">

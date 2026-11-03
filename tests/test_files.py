@@ -140,14 +140,15 @@ class TestDeleteFile(unittest.TestCase):
     def tearDownClass(cls):
         cls.srv.stop()
 
-    def test_delete_removes_md(self):
+    def test_delete_moves_md_to_trash(self):
         target = self.srv.path("projets/beta.md")
         self.assertTrue(target.exists())
         resp = self.srv.delete("/api/file",
                                json_body={"path": "projets/beta.md"})
         self.assertEqual(resp.status, 200)
-        self.assertEqual(resp.json(), {"ok": True})
+        self.assertEqual(resp.json(), {"ok": True, "trashed": ".trash/projets/beta.md"})
         self.assertFalse(target.exists())
+        self.assertTrue(self.srv.path(".trash/projets/beta.md").exists())
 
     def test_delete_missing_doc_404(self):
         resp = self.srv.delete("/api/file", json_body={"path": "fantome.md"})

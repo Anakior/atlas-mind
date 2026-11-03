@@ -1,6 +1,7 @@
-  /* Read-only demo banner — floating pill, only shown on the static/offline build.
-     `display` lives in :not(.hidden) so the `hidden` toggle still wins. */
-  #demo-banner {
+  /* Floating pill banners: the read-only demo notice (static/offline build) and the
+     sync warning (live server) — never both. `display` lives in :not(.hidden) so the
+     `hidden` toggle still wins. */
+  .pill-banner {
     position: fixed; top: .75rem; left: 50%; transform: translateX(-50%); z-index: 60;
     align-items: center; gap: .55rem;
     max-width: calc(100vw - 1.5rem);
@@ -12,19 +13,23 @@
     border: 1px solid rgba(251, 198, 120, .3); border-radius: 999px;
     box-shadow: 0 12px 34px -10px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06);
   }
-  #demo-banner:not(.hidden) { display: flex; }
-  #demo-banner svg { width: 1rem; height: 1rem; color: #fbc678; flex-shrink: 0; }
-  #demo-banner strong { color: #fbc678; font-weight: 700; }
-  #demo-banner #demo-banner-cta { color: #5db5e8; font-weight: 600; text-decoration: none; white-space: nowrap; }
-  #demo-banner #demo-banner-cta:hover { text-decoration: underline; }
-  #demo-banner #demo-banner-close {
+  .pill-banner:not(.hidden) { display: flex; }
+  .pill-banner svg { width: 1rem; height: 1rem; color: #fbc678; flex-shrink: 0; }
+  .pill-banner strong { color: #fbc678; font-weight: 700; }
+  .pill-banner .pill-banner-action {
+    color: #5db5e8; font: inherit; font-weight: 600; text-decoration: none; white-space: nowrap;
+    background: none; border: 0; padding: 0; cursor: pointer;
+  }
+  .pill-banner .pill-banner-action:hover { text-decoration: underline; }
+  .pill-banner .pill-banner-action:disabled { opacity: .5; cursor: default; text-decoration: none; }
+  .pill-banner .pill-banner-close {
     flex-shrink: 0; width: 1.45rem; height: 1.45rem; line-height: 1; font-size: 1.05rem;
     color: rgb(var(--ink-400)); background: rgb(var(--ink-100) / .06); border: 0; border-radius: 999px; cursor: pointer;
     transition: color .12s, background .12s;
   }
-  #demo-banner #demo-banner-close:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / .13); }
+  .pill-banner .pill-banner-close:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / .13); }
   @media (max-width: 767px) {
-    #demo-banner { left: .75rem; right: .75rem; transform: none; max-width: none; border-radius: 13px; font-size: .74rem; }
+    .pill-banner { left: .75rem; right: .75rem; transform: none; max-width: none; border-radius: 13px; font-size: .74rem; }
   }
   .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--ink-100) / 0.1); border-radius: 3px; }

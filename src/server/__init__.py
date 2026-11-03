@@ -7,14 +7,16 @@ Local mode (default):
     No auth, serves files from the repo directory directly.
 
 Cloud mode (when KB_AUTH_ENABLED=1):
-    Required env vars: GITHUB_REPO_URL (with PAT embedded) and SESSION_SECRET.
+    Required env var: SESSION_SECRET. GITHUB_REPO_URL (with credentials embedded)
+    is cloned at first boot; without it a new mind is started on the disk.
     The identity/share registry is a FileStore: users + share links in JSON
     under ROOT/.atlas/ (no database). See src/store.py.
     ATLAS_STORE_DIR relocates the registry, default ROOT/.atlas.
     The registry is NEVER committed/pushed with the content repo (it holds
     password/token hashes): point ATLAS_STORE_DIR at a persistent volume in
     cloud, otherwise users/shares are lost when the ephemeral rootfs is rebuilt.
-    The repo is cloned at startup into KB_REPO_PATH (default /app/repo).
+    The repo is cloned (or started) at first boot into KB_REPO_PATH (default
+    /app/repo); ATLAS_LANG (en/fr) picks a new mind's language.
     A background thread pulls the repo every GIT_PULL_INTERVAL seconds (default 30).
     All routes require a signed session cookie; /login renders an HTML form.
 
@@ -77,6 +79,7 @@ from server.services.rate_limit import _evict_stale_buckets  # noqa: F401
 from server.services.update_check import _is_newer  # noqa: F401
 
 from server.context import AppContext, AtlasHTTPServer
+from server.services.git_sync import mask_url
 from server.pure import docs  # document-domain logic (path validation / traversal / move)
 
 # The single server config object. Built in run() AFTER the possible cloud clone
@@ -287,7 +290,7 @@ from server.pure.contradictions import (  # noqa: F401  13c same-subject pair ge
     find_contradictions, find_doc_neighbors, schedule_warm,
 )
 from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
-    _soft_delete, _mcp_call_tool, _mcp_jsonrpc, _mcp_http_status, _needed_scope, _span_hash,
+    _soft_delete, trash_doc, _mcp_call_tool, _mcp_jsonrpc, _mcp_http_status, _needed_scope, _span_hash,
     run_of, undo_run,
 )
 from server.extensions import load_server_extensions  # noqa: F401
@@ -424,8 +427,16 @@ def git(*args, cwd=None, check=False, timeout=60):
     return _CTX.git_sync.run(*args, cwd=cwd, check=check, timeout=timeout)
 
 
-def _mask_url(s: str) -> str:
-    return re.sub(r"://[^@\s]+@", "://***@", s or "")
+def sync_health() -> dict:
+    """Where the mind stands against its remote. Delegates to GitSync."""
+    return _CTX.git_sync.health()
+
+
+def whole_mind_owner():
+    """The email of the mind's only account, whose mind it is whole (every file, the
+    whole history: the export's bundle, a git copy); None once it is shared."""
+    humans = [u for u in get_store().list_users() if u.get("role") != API_ROLE]
+    return humans[0].get("email") if len(humans) == 1 else None
 
 
 # ─── Update check (admin Settings banner) ──────────────────────────────────────
@@ -456,17 +467,33 @@ def latest_pypi_version():
     return _CTX.update_checker.latest()
 
 
-def ensure_repo_cloned(root: Path) -> bool:
-    """Clone the repo into `root` if not present. Cloud mode only.
+def _start_new_mind(root: Path) -> bool:
+    """First boot with nothing to clone: scaffold the mind on the persistent disk, with
+    its first commit. Never over files it doesn't know: a non-empty folder that isn't
+    a repo stops the boot."""
+    if root.exists() and any(root.iterdir()):
+        sys.exit(f"FATAL: {root} holds files but no git repo, and GITHUB_REPO_URL is not "
+                 "set: refusing to start a new mind over them.")
+    from cli import init_mind
+    lang = os.environ.get("ATLAS_LANG", "en")
+    done = init_mind(root, lang if lang in ("en", "fr") else "en")
+    print(f"[boot] no remote to clone: new mind created in {root} ({done['commit'].rstrip('.')}). "
+          "Connect a remote later to keep a copy elsewhere.", flush=True)
+    return True
 
-    Reads GITHUB_REPO_URL from the env (not CONFIG: atlas.toml lives INSIDE the
-    not-yet-existing clone). Returns True on a fresh clone — run() then sets the
-    git identity."""
+
+def ensure_repo_cloned(root: Path) -> bool:
+    """Clone the repo into `root` if not present — or, with no GITHUB_REPO_URL, start
+    a new mind there (a remote can be connected later). Cloud mode only.
+
+    Reads GITHUB_REPO_URL and ATLAS_LANG from the env (not CONFIG: atlas.toml lives
+    INSIDE the not-yet-existing mind). Returns True on a fresh clone or a new mind —
+    run() then sets the git identity."""
     if (root / ".git").exists():
         return False
     repo_url = os.environ.get("GITHUB_REPO_URL")
     if not repo_url:
-        sys.exit("FATAL: GITHUB_REPO_URL missing to clone the mind (cloud mode)")
+        return _start_new_mind(root)
     root.parent.mkdir(parents=True, exist_ok=True)
     try:
         result = subprocess.run(
@@ -482,7 +509,7 @@ def ensure_repo_cloned(root: Path) -> bool:
     if result.returncode != 0:
         print(
             f"git clone failed (exit {result.returncode}):\n"
-            f"{_mask_url(result.stderr)}",
+            f"{mask_url(result.stderr)}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -621,10 +648,11 @@ def _validate_doc_path(rel: str):
     return docs.validate_doc_path(rel, CONFIG.content_root)
 
 
-def _iter_doc_files():
-    """Yields (relative_path, Path) for each doc tracked by the viewer (.md + .html).
-    Injects the content root + build exclusions into docs.iter_doc_files."""
-    return docs.iter_doc_files(CONFIG.content_root, _import_build().EXCLUDED_NAMES)
+def _iter_doc_files(suffixes=(".md", ".html")):
+    """Yields (relative_path, Path) for each doc tracked by the viewer (.md + .html), or
+    each file with one of `suffixes`. Injects the content root + build exclusions into
+    docs.iter_doc_files."""
+    return docs.iter_doc_files(CONFIG.content_root, _import_build().EXCLUDED_NAMES, suffixes)
 
 
 # ─── Subscriptions: read-only mirror of remote nodes (hive, #10 B) ───────
@@ -771,7 +799,8 @@ def run() -> None:
     bind = CONFIG.bind_host or (
         "0.0.0.0" if (CONFIG.auth_enabled and not CONFIG.dev_mode) else "127.0.0.1")
     mode = "dev sandbox" if CONFIG.dev_mode else ("cloud" if CONFIG.auth_enabled else "local")
-    print(f"{CONFIG.site_name} ({mode}) : http://{bind}:{CONFIG.port}")
+    shown = f"[{bind}]" if ":" in bind else bind
+    print(f"{CONFIG.site_name} ({mode}) : http://{shown}:{CONFIG.port}")
     if not CONFIG.auth_enabled:
         # Only local mode uses the single git-versioned todo file; cloud/dev store
         # todos per-account in .atlas/todos.json, so there is no single file to show.

@@ -139,6 +139,13 @@ class TestCliInit(CliMindTest):
             ["git", "-C", str(self.mind), "symbolic-ref", "--short", "HEAD"],
             capture_output=True, text=True, env=clean_env())
         self.assertEqual(branch.stdout.strip(), "main")
+        # A first commit, so the server's path-scoped commits have a HEAD to build on.
+        log = subprocess.run(["git", "-C", str(self.mind), "log", "--format=%s"],
+                             capture_output=True, text=True, env=clean_env())
+        self.assertEqual(log.stdout.strip(), "chore: new mind")
+        status = subprocess.run(["git", "-C", str(self.mind), "status", "--porcelain"],
+                                capture_output=True, text=True, env=clean_env())
+        self.assertEqual(status.stdout.strip(), "")
 
     def test_init_atlas_toml_is_valid_and_uses_file_store(self):
         self.init_mind()
@@ -383,6 +390,17 @@ class TestCliUser(CliMindTest):
         self.assertTrue(store.verify_password(PASSWORD, record["password_hash"]))
         self.assertFalse(store.verify_password("mauvais-mot-de-passe",
                                                record["password_hash"]))
+
+    def test_user_add_reads_the_password_from_stdin(self):
+        # `--password -` keeps the password out of the process list (shared hosts).
+        self.init_mind()
+        result = subprocess.run(
+            [sys.executable, str(CLI), "user", "add", str(self.mind),
+             "--email", "admin@test.local", "--password", "-"],
+            input=PASSWORD + "\n", capture_output=True, text=True, timeout=60,
+            env=clean_env())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(store.verify_password(PASSWORD, self.users_json()[0]["password_hash"]))
 
     def test_user_add_viewer_role(self):
         self.init_mind()

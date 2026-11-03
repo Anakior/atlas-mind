@@ -21,6 +21,8 @@ const PRECACHE = [
   '/',
   '/manifest.json',
   '/icon.svg',
+  '/icon-192.png',
+  '/apple-touch-icon.png',
   // Libs vendorées (chargées par le shell — voir web/viewer.html). tailwind.css porte
   // la version dans son URL, comme dans le shell.
   '/vendor/tailwind.css?v=__ENGINE_VERSION__',
@@ -48,7 +50,7 @@ const PRECACHE = [
 ];
 
 // Préfixes same-origin jamais cachés (dynamique, auth-sensible, ou streaming SSE).
-const BYPASS = ['/api/', '/login', '/logout', '/s/', '/mcp/', '/webhook/', '/.well-known/'];
+const BYPASS = ['/api/', '/login', '/logout', '/s/', '/f/', '/git/', '/mcp/', '/webhook/', '/.well-known/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -81,6 +83,21 @@ function putInCache(request, response) {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+
+  // Partage Android vers l'app installée (share_target du manifest) : ce qui est partagé
+  // ouvre une capture rapide. Passé dans le fragment d'URL, il n'atteint jamais le serveur
+  // ni ses journaux.
+  if (req.method === 'POST' && new URL(req.url).pathname === '/share-target') {
+    event.respondWith(
+      req.formData().then((form) => {
+        const shared = ['title', 'text', 'url'].map((k) => form.get(k) || '').filter(Boolean).join('\n');
+
+        return Response.redirect('/#capture=' + encodeURIComponent(shared), 303);
+      }),
+    );
+
+    return;
+  }
 
   if (req.method !== 'GET') return; // on ne touche qu'aux GET
   const url = new URL(req.url);

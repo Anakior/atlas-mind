@@ -3,6 +3,7 @@ service objects, built once at boot and CARRIED BY the HTTP server so handlers
 reach app state via `self.server.context` — the idiomatic http.server way, which
 lets us kill the module-level globals one concern at a time. See plan-appcontext.
 """
+import socket
 from dataclasses import dataclass
 from http.server import ThreadingHTTPServer
 
@@ -50,4 +51,7 @@ class AtlasHTTPServer(ThreadingHTTPServer):
 
     def __init__(self, server_address, context, handler_class):
         self.context = context  # set BEFORE super().__init__ binds the socket
+        # Some hosts (alwaysdata) hand out only an IPv6 address to listen on.
+        if ":" in server_address[0]:
+            self.address_family = socket.AF_INET6
         super().__init__(server_address, handler_class)

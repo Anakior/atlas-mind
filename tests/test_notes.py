@@ -171,10 +171,18 @@ class TestNotesCreate(unittest.TestCase):
         )
         self.assertEqual(resp.status, 404)
 
-    def test_create_non_json_body_is_invalid_path(self):
-        # _read_json() swallows invalid bodies into {} → empty path → 400
-        # "invalid path" (not a parsing error).
+    def test_create_non_json_body_is_refused(self):
+        # A body that isn't declared JSON is what a cross-site <form> sends: refused
+        # before the route, local mode included (it has no session token).
         resp = SRV.post("/api/notes", data=b"pas du json")
+        self.assertEqual(resp.status, 415)
+        self.assertEqual(resp.json(), {"error": "Content-Type must be application/json"})
+
+    def test_create_unparsable_json_is_invalid_path(self):
+        # _read_json() swallows a declared-JSON body it can't parse into {} → empty
+        # path → 400 "invalid path" (not a parsing error).
+        resp = SRV.post("/api/notes", data=b"pas du json",
+                        headers={"Content-Type": "application/json"})
         self.assertEqual(resp.status, 400)
         self.assertEqual(resp.json(), {"error": "invalid path"})
 

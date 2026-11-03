@@ -24,7 +24,7 @@
    button. */
 @media (min-width: 768px) { body:has(#content > .home) #breadcrumb { display: none; } }
 /* The demo's read-only banner floats where that bar was: the home starts below it while it shows. */
-body:has(#demo-banner:not(.hidden)) .home { margin-top: 52px; }
+body:has(.pill-banner:not(.hidden)) .home { margin-top: 52px; }
 
 /* The week's highlights (filled by admin/activity/activity-card.ts), a liquid-glass strip (.glass,
    12-shell.css) over the hero's glow: the busiest folder in its head line, then a bar per day (the
@@ -80,6 +80,41 @@ body:has(#demo-banner:not(.hidden)) .home { margin-top: 52px; }
 .home-row-t b { overflow: hidden; color: rgb(var(--ink-100)); font-size: 13.5px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
 .home-row-t em { color: rgb(var(--ink-500)); font-size: 12px; font-style: normal; }
 .home-row-w { color: rgb(var(--ink-500)); font-size: 12px; white-space: nowrap; }
+/* "Connect your AI" (home/connect-card.ts): until an assistant has read the mind, then its proof. */
+.home-connect { position: relative; display: flex; gap: 28px; align-items: flex-start; padding: 20px 48px 20px 24px; border-radius: 14px; border: 1px solid rgb(var(--brand) / .35);
+  background: radial-gradient(ellipse 60% 140% at 0% 0%, rgb(var(--brand) / .08), transparent 70%), rgb(var(--surface)); }
+.home-connect.is-on { border-color: rgb(var(--ai) / .35);
+  background: radial-gradient(ellipse 60% 140% at 0% 0%, rgb(var(--ai) / .08), transparent 70%), rgb(var(--surface)); }
+.home-connect-main { flex: 1; min-width: 0; }
+.home-connect h2 { margin: 0 0 6px; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: rgb(var(--ink-100)); }
+.home-connect p { margin: 0; font-size: 13px; line-height: 1.5; color: rgb(var(--ink-300)); }
+.home-connect-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 14px 0 10px; }
+.home-connect-cta { display: inline-flex; align-items: center; padding: 8px 16px; border-radius: 9px; background: rgb(var(--brand)); color: rgb(var(--on-brand)); font-size: 13.5px; font-weight: 700; text-decoration: none; }
+.home-connect-cta:hover { filter: brightness(1.08); }
+.home-connect-wait { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgb(var(--ink-400)); }
+.home-connect-wait i { width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--brand)); animation: home-connect-pulse 1.6s ease-in-out infinite; }
+@keyframes home-connect-pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+.home-connect p.home-connect-note { font-size: 12px; color: rgb(var(--ink-400)); }
+.home-connect-side { width: 21rem; flex-shrink: 0; padding-left: 24px; border-left: 1px solid rgb(var(--line) / var(--line-a)); }
+.home-connect-side p { margin-bottom: 8px; font-size: 12.5px; }
+.home-connect-url { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border-radius: 8px; background: rgb(var(--ink-100) / .05); }
+.home-connect-url code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; background: none; font-size: 12px; color: rgb(var(--ink-200)); }
+.home-connect [data-copy] { flex-shrink: 0; padding: 4px 10px; border: 0; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: rgb(var(--ink-200)); background: rgb(var(--ink-100) / .08); }
+.home-connect [data-copy]:hover { background: rgb(var(--ink-100) / .14); }
+.home-connect-ok { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgb(var(--ai) / .18); color: rgb(var(--ai)); font-size: 13px; }
+.home-connect-try { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.home-connect-try li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 12px; border-radius: 8px; background: rgb(var(--ink-100) / .04); font-size: 13px; color: rgb(var(--ink-200)); }
+.home-connect-close { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border: 0; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1; color: rgb(var(--ink-400)); background: transparent; }
+.home-connect-close:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / .08); }
+@media (max-width: 900px) {
+  .home-connect { flex-direction: column; gap: 16px; }
+  .home-connect-side { width: auto; padding-left: 0; border-left: 0; }
+}
+/* The trash panel's rows: not links, each with its Restaurer button. */
+.home-row:has(.trash-restore) { align-items: center; cursor: default; }
+.trash-restore { flex-shrink: 0; padding: 4px 10px; border: 0; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: rgb(var(--brand)); background: rgb(var(--brand) / .1); }
+.trash-restore:hover { background: rgb(var(--brand) / .18); }
+.trash-restore:disabled { opacity: .5; cursor: default; }
 /* A doc name reads the same across the home (Journal, recent, longest, health): underlined when
    pointed at. */
 .act-journal .act-title:hover, .home-row:hover b, .home-bar-doc:hover .home-bar-k, .home .act-doclink:hover {

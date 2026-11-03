@@ -6,6 +6,14 @@
   }
   .tree-item:hover:not(.active) { background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-100)); }
   .tree-item { transition: background 0.08s ease, color 0.08s ease, box-shadow 0.08s ease; }
+  /* A folder under files being dragged: they will land in it. */
+  .tree-item.drop-into { background: rgb(var(--accent) / 0.22); box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.7); }
+  .file-drop-hint {
+    position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); z-index: 60;
+    padding: 0.5rem 0.9rem; border-radius: 999px; pointer-events: none;
+    background: rgb(var(--accent)); color: #fff; font-size: 0.8rem; font-weight: 600;
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+  }
   /* remotes/ : mirrors of remote nodes (read-only) — slightly indented
      to distinguish them from own content, folder renaming hidden. */
   .tree-item.tree-remote { font-style: italic; opacity: 0.82; }

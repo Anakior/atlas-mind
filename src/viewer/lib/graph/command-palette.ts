@@ -6,7 +6,7 @@
 import { t } from '../core/i18n';
 import { currentFile, editMode } from '../core/state';
 import { searchEl } from '../core/dom-refs';
-import { fileMap } from '../core/tree';
+import { fileMap, docLabel } from '../core/tree';
 import { escapeHtml } from '../core/utils';
 import { homeView } from '../home/home-view';
 import { layoutChrome } from '../home/layout-chrome';
@@ -145,8 +145,8 @@ export class CommandPalette {
     for (const f of Object.values(fileMap)) {
       if (f.ext !== '.md') continue;
 
-      if (!q || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q)) {
-        nav.push({ kind: 'file', label: f.name, hint: f.path, file: f, query: rawQuery });
+      if (!q || docLabel(f).toLowerCase().includes(q) || f.path.toLowerCase().includes(q)) {
+        nav.push({ kind: 'file', label: docLabel(f), hint: f.path, file: f, query: rawQuery });
         seen.add(f.path);
       }
     }
@@ -177,7 +177,7 @@ export class CommandPalette {
           if (seen.has(hit.path)) continue;
           const f = fileMap[hit.path];
 
-          if (f) extra.push({ kind: 'file', label: f.name, hint: f.path, file: f, snippet: hit.snippet, query: rawQuery });
+          if (f) extra.push({ kind: 'file', label: docLabel(f), hint: f.path, file: f, snippet: hit.snippet, query: rawQuery });
         }
 
         this.content = extra;

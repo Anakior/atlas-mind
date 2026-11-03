@@ -375,11 +375,11 @@ def _public_api_identity(user: dict) -> dict:
 
 def _normalize_share(record: dict) -> dict:
     """Output shape of list_shares — exactly the keys the /api/share/list
-    endpoint returned when it mapped the registry documents itself."""
+    endpoint returned when it mapped the registry documents itself. No token: the
+    registry keeps only its SHA256, a link is shown once, when it is made."""
     return {
         "id": record.get("id"),
         "path": record.get("path"),
-        "token": record.get("token"),
         "expires_at": record.get("expires_at", 0),
         "created_at": record.get("created_at", 0),
         "created_by": record.get("created_by"),
@@ -431,6 +431,10 @@ class FileStore:
     TODOS_FILE = "todos.json"    # per-member todos (private, not git): {email: [items]}
     OAUTH_CLIENTS_FILE = "oauth_clients.json"  # OAuth clients registered via DCR
     SETTINGS_FILE = "settings.json"  # instance-wide viewer settings: {appearance: {brand, show_prefix, show_tagline}}
+    # What outlives a restart and isn't in git: a full backup carries these (not the volatile
+    # state, nor the lock).
+    DURABLE_FILES = (USERS_FILE, SHARES_FILE, NODES_FILE, REMOTES_FILE, ACL_FILE, GROUPS_FILE,
+                     TODOS_FILE, OAUTH_CLIENTS_FILE, SETTINGS_FILE)
 
     def __init__(self, base_dir):
         self.base = Path(base_dir)
@@ -448,6 +452,26 @@ class FileStore:
         }
         self._cache: dict = {}  # name -> (mtime_ns, data)
         self._ensure_gitignore()
+        self._forget_share_tokens()
+
+    def _forget_share_tokens(self) -> None:
+        """Share links made before only their SHA256 was kept: drop the cleartext token
+        (a leaked or backed-up registry must not hand out live links). The links keep
+        working; they just can't be copied again."""
+        if not (self.base / self.SHARES_FILE).exists():
+            return
+        with self._rmw(self.SHARES_FILE):
+            try:
+                shares = [dict(s) for s in self._load(self.SHARES_FILE)]
+            except ValueError:
+                return  # unreadable: each share lookup refuses it (fail-closed), not the whole store
+            if not any("token" in s for s in shares):
+                return
+            for share in shares:
+                token = share.pop("token", None)
+                if token and not share.get("token_sha256"):
+                    share["token_sha256"] = hash_share_token(token)
+            self._write(self.SHARES_FILE, shares)
 
     def _ensure_gitignore(self) -> None:
         """Write <base>/.gitignore = "*": when the registry lives INSIDE the
@@ -976,9 +1000,9 @@ class FileStore:
 
     def insert_share(self, share: dict) -> str:
         record = dict(share)
-        # The cleartext token is KEPT (capability URL, re-copyable by the admin);
-        # token_sha256 is the constant-time lookup index used on each share hit.
-        token = record.get("token")
+        # Only the SHA256 is kept (the constant-time lookup index of each share hit):
+        # the link itself is handed out once, by the request that made it.
+        token = record.pop("token", None)
         record["token_sha256"] = hash_share_token(token or "")
         record["id"] = str(uuid.uuid4())
         with self._rmw(self.SHARES_FILE):
@@ -1005,7 +1029,6 @@ class FileStore:
         if not include_revoked:
             shares = [s for s in shares if not s.get("revoked", False)]
         shares.sort(key=lambda s: -(s.get("created_at") or 0))
-        # The cleartext token is returned so the admin UI shows a copyable link.
         return [_normalize_share(s) for s in shares[:limit]]
 
     def list_shares_for_path(self, path: str) -> list:

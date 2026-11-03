@@ -1,20 +1,29 @@
-"""Document routes: file write/delete/move, directory rename, revert, and the
-read-only git history / revision / diff endpoints, plus tree + search.
+"""Document routes: file write/delete/move, the trash (list + restore), the notes
+export, directory rename, revert, and the read-only git history / revision / diff
+endpoints, plus tree + search.
 
 All mutating routes are guarded ADMIN_CSRF (PUT/DELETE keep the guard at the verb
 level, so the functions here are pure bodies); the read endpoints are AUTH.
 """
 import posixpath
 import re
+import shutil
 import sys
+import tempfile
 import time
+from pathlib import Path, PurePosixPath
+from urllib.parse import quote
 
 import server as _s
+import store
+from server.pure import export
+from server.pure.docs import move_file
+from server.render import share_page
 
 
 def file_put(handler):
-    """PUT /api/file — write a .md/.html doc (admin + CSRF enforced at the verb
-    level in do_PUT)."""
+    """PUT /api/file — write a .md/.html doc (CSRF enforced at the verb level in
+    do_PUT, per-document rights below). 409 when `base_content` no longer matches."""
     data = handler._read_json()
     rel = (data.get("path") or "").strip()
     content = data.get("content", "")
@@ -49,6 +58,15 @@ def file_put(handler):
                 return
         elif not _s.can_create(rel, ctx):
             handler._send_json(403, {"error": "insufficient permission to create at this location"})
+            return
+    # The editor sends the text it started from: if the doc moved on meanwhile (an AI
+    # edit, another tab), refuse rather than silently overwrite it. read_text already
+    # turns CRLF into LF, the browser's copy may not have.
+    base = data.get("base_content")
+    if existed and isinstance(base, str):
+        current = target.read_text(encoding="utf-8")
+        if base.replace("\r\n", "\n") != current:
+            handler._send_json(409, {"error": "changed since it was opened", "current": current})
             return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
@@ -432,8 +450,8 @@ def revert(handler):
 
 
 def move(handler):
-    """POST /api/file/move — move a doc AND rewrite the incoming wikilinks
-    (shared with the MCP move_doc tool)."""
+    """POST /api/file/move — move a doc AND rewrite the incoming wikilinks (shared with
+    the MCP move_doc tool), or any other file of the mind as it is."""
     data = handler._read_json()
     src_rel = (data.get("from") or "").strip()
     dst_rel = (data.get("to") or "").strip()
@@ -454,7 +472,10 @@ def move(handler):
     # Canonicalize the source to its on-disk spelling so the ACL/share repoint below
     # keys by the same path the entry was stored under (case-insensitive FS).
     src_rel = _s._canonical_rel(src_rel)
-    status, payload = _s._move_md_with_relink(src_rel, dst_rel)
+    if _s._validate_doc_path(src_rel):
+        status, payload = _s._move_md_with_relink(src_rel, dst_rel)
+    else:  # a PDF, an image: nothing to relink
+        status, payload = move_file(src_rel, dst_rel, _s.CONFIG.content_root)
     if status != "ok":
         code = {"invalid": 400, "not_found": 404, "exists": 409}.get(status, 500)
         handler._send_json(code, {"error": payload})
@@ -549,8 +570,8 @@ def dir_rename(handler):
 
 
 def delete(handler):
-    """DELETE /api/file — delete a .md/.html doc (admin + CSRF already enforced
-    by the verb-level guard in do_DELETE)."""
+    """DELETE /api/file — move a .md/.html doc to .trash/, restorable (CSRF enforced
+    by the verb-level guard in do_DELETE, owner right checked here)."""
     data = handler._read_json()
     rel = (data.get("path") or "").strip()
     if not rel or ".." in rel.split("/") or rel.startswith("/"):
@@ -576,17 +597,140 @@ def delete(handler):
         if not _s.can_write(rel, ctx, "owner"):
             handler._send_json(403, {"error": "insufficient permission (need owner to delete this document)"})
             return
-    target.unlink()
-    # Drop the freed path's ACL entry AND revoke its share links, so a future doc
-    # created there can't inherit a stale owner/grants or anonymous access
-    # (best-effort: a registry hiccup must not fail the delete). The resolved target
-    # gives the on-disk spelling, so the keys match on a case-insensitive FS.
-    crel = target.relative_to(_s.CONFIG.content_root).as_posix()
+    handler._send_json(200, {"ok": True, "trashed": _s.trash_doc(target, ctx)})
+
+
+def export_notes(handler):
+    """GET /api/export — "leave with your notes": a zip of every file this person may
+    read; the whole history too when the mind is entirely theirs (local mode, or the
+    only account) — a shared mind's history holds the others' private docs."""
+    ctx = handler._viewer_ctx()
+    root = _s.CONFIG.content_root
+    rels = export.exportable(root, (lambda rel: True) if ctx.superuser
+                             else (lambda rel: _s.can_read(rel, ctx)))
+    owner = _s.whole_mind_owner()
+    whole = ctx.superuser or (owner is not None and ctx.primary == "user:" + owner)
+    _send_export(handler, f"{_s.CONFIG.site_slug}-notes.zip", rels, _s.CONFIG.root if whole else None)
+
+
+def backup(handler):
+    """POST /api/admin/backup {password, code} — the whole Atlas in one zip: the notes and
+    their history, and its registry (the account and its 2FA, the AI accesses, the Claude
+    connection, the rights, the tasks, the settings, the GitHub key). Those are secrets: the
+    password, and the 2FA code when on, are asked again, so an open session alone can't take
+    them away; a wrong one counts like a failed sign-in. For the owner of a mind that is
+    theirs alone: a shared mind's registry and history hold the others' private notes."""
+    me = (handler._session() or {}).get("email")
+    if not me or _s.whole_mind_owner() != me:
+        handler._send_json(403, {"error": "shared"})
+        return
+    data = handler._read_json()
+    ip = handler._client_ip()
+    if not _s.login_rate_limit_ok(ip) or _s.account_lock_remaining(me) > 0:
+        handler._send_json(429, {"error": "locked"})
+        return
+    user = _s.authenticate_user(me, data.get("password") or "")
+    code = (data.get("code") or "").strip()
+    if user and user.get("totp_enabled") and not code:
+        handler._send_json(401, {"error": "code_required"})
+        return
+    if not user or (user.get("totp_enabled") and not handler._verify_second_factor(
+            user, code if code.isdigit() else "", "" if code.isdigit() else code)):
+        _s.register_login_failure(me, ip)
+        handler._send_json(401, {"error": "bad_code" if user else "bad_password"})
+        return
+    _s.reset_login_failures(me)
+    root = _s.CONFIG.content_root
+    _send_export(handler, f"{_s.CONFIG.site_slug}-backup.zip", export.exportable(root, lambda rel: True),
+                 _s.CONFIG.root, registry=Path(_s.CONFIG.store_dir))
+
+
+def _send_export(handler, name, rels, repo_root, registry=None):
+    with tempfile.SpooledTemporaryFile(max_size=32 << 20) as buf:
+        export.write_export(buf, _s.CONFIG.content_root, rels, _s.CONFIG.site_slug, _s.CONFIG.lang,
+                            repo_root, registry)
+        size = buf.tell()
+        buf.seek(0)
+        handler.send_response(200)
+        handler.send_header("Content-Type", "application/zip")
+        handler.send_header("Content-Disposition", f'attachment; filename="{name}"')
+        handler.send_header("Content-Length", str(size))
+        handler.send_header("Cache-Control", "no-store")
+        handler.end_headers()
+        shutil.copyfileobj(buf, handler.wfile)
+
+
+def export_page(handler):
+    """GET /api/export/page?path= — one note as a page to send: a file that opens anywhere,
+    with no Atlas to reach (what a mind on this computer offers instead of a share link). A
+    page (.html) is already one and goes as it is."""
+    rel = (handler._query().get("path") or [""])[0]
+    target = _s._validate_doc_path(rel)
+    ctx = handler._viewer_ctx()
+    if target is None or not target.is_file() or not (ctx.superuser or _s.can_read(rel, ctx)):
+        handler._send_json(404, {"error": "not found"})
+        return
+    body = target.read_bytes() if target.suffix == ".html" else share_page.render(rel, target, sender=ctx)
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Content-Disposition",
+                        f"attachment; filename*=UTF-8''{quote(target.stem)}.html")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+_TRASH = ".trash/"
+_TRASH_SHOWN = 200
+
+
+def trash_list(handler):
+    """GET /api/trash — the trashed docs this person may restore, newest deletion first."""
+    ctx = handler._viewer_ctx()
+    root = _s.CONFIG.content_root / ".trash"
+    items = []
+    for path in root.rglob("*") if root.is_dir() else ():
+        if path.suffix.lower() not in (".md", ".html") or not path.is_file():
+            continue
+        rel = path.relative_to(_s.CONFIG.content_root).as_posix()
+        if not ctx.superuser and not _s.can_write(rel, ctx, "owner"):
+            continue
+        repo_rel = path.relative_to(_s.CONFIG.root).as_posix()
+        stamp = _s.git("log", "-1", "--format=%ct", "--", repo_rel).stdout.strip()
+        items.append({"path": rel, "original": rel[len(_TRASH):], "name": path.name,
+                      "deleted_at": int(stamp) if stamp.isdigit() else int(path.stat().st_mtime)})
+    items.sort(key=lambda i: i["deleted_at"], reverse=True)
+    handler._send_json(200, {"items": items[:_TRASH_SHOWN], "total": len(items)})
+
+
+def trash_restore(handler):
+    """POST /api/trash/restore {path: ".trash/…"} — put a trashed doc back where it was
+    (beside it, renamed, when that place is taken again), its ACL with it. Needs the
+    same right as the delete: owner."""
+    rel = posixpath.normpath((handler._read_json().get("path") or "").strip())
+    target = (_s.CONFIG.content_root / rel).resolve()
+    trash_root = (_s.CONFIG.content_root / ".trash").resolve()
+    if (not rel.startswith(_TRASH) or trash_root not in target.parents
+            or target.suffix.lower() not in (".md", ".html") or not target.is_file()):
+        handler._send_json(404, {"error": "not in the trash"})
+        return
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser and not _s.can_write(rel, ctx, "owner"):
+        handler._send_json(404, {"error": "not in the trash"})
+        return
+    original = PurePosixPath(rel[len(_TRASH):])
+    dest = _s.CONFIG.content_root / original
+    n = 1
+    while dest.exists():
+        dest = dest.with_name(f"{original.stem}-restored{'' if n == 1 else f'-{n}'}{original.suffix}")
+        n += 1
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    target.replace(dest)
+    restored = dest.relative_to(_s.CONFIG.content_root).as_posix()
     try:
-        store = _s.get_store()
-        store.delete_acl(crel)
-        store.delete_shares_for_path(crel)
+        _s.get_store().repoint_acl_by_path(rel, restored)
     except Exception as e:
-        print(f"[delete cleanup] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"deleted: {target.stem}", target)
-    handler._send_json(200, {"ok": True})
+        print(f"[restore acl] {e}", file=sys.stderr)
+    _s.commit_change(ctx, f"restored: {dest.stem}", target, dest)
+    handler._send_json(200, {"ok": True, "path": restored})

@@ -2,7 +2,7 @@
 legacy /mcp/<token> (token in the path)."""
 import json
 import server as _s
-from server.pure import oauth
+from server.pure import mcp_call, oauth
 
 
 def _bearer_token(handler) -> str:
@@ -32,6 +32,7 @@ def handle(handler):
     token = _bearer_token(handler) if bearer else parts[1]
     identity = _s.resolve_mcp_identity(token)
     base = handler._public_url()
+    mcp_call.request_base.set(base)
     resource = (identity or {}).get("resource")
     # An OAuth token is bound to this endpoint (its audience) and never rides in a URL.
     if resource and (not bearer or not oauth.same_resource(resource, oauth.resource_url(base))):

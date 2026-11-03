@@ -3,10 +3,10 @@
 // enterEditMode, while the doc renderer (content/doc-renderer.ts) and tag browser
 // (content/tag-browse.ts) call exitEditMode when leaving a doc.
 //
-// Editor owns the markdown toolbar and the split-view edit mode (textarea + live preview). The split
-// UI is built imperatively and the debounced preview rewrite touches ONLY #md-preview — the
-// #md-editor textarea is never recreated, so caret / focus survive (golden E). Kept imperative on
-// purpose: no vDOM reconciliation here. The [[wikilink]] autocomplete is composed in from
+// Editor owns the markdown toolbar and the split-view edit mode (textarea + live preview, one at a
+// time on a phone). The split UI is built imperatively and the debounced preview rewrite touches
+// ONLY #md-preview — the #md-editor textarea is never recreated, so caret / focus survive
+// (golden E). Kept imperative on purpose: no vDOM reconciliation here. The [[wikilink]] autocomplete is composed in from
 // WikilinkAutocomplete (./wikilink-autocomplete); full-text search is its own concern in ./search.
 
 import { t } from '../core/i18n';
@@ -20,6 +20,7 @@ import {
   currentFile,
   isServerMode,
 } from '../core/state';
+import { fileMap } from '../core/tree';
 import { mdInsertWrap, mdInsertLineStart, mdInsertAtCursor } from '../content/tags';
 import { loadContent, contentCache } from '../content/content-tree';
 import { Dialogs } from '../modals/dialogs';
@@ -94,12 +95,58 @@ export class Editor {
   // The split-view live-preview debounce timer, cleared on exit. The [[wikilink]] popup, its caret
   // measurement, and its own timers/listeners live in the composed WikilinkAutocomplete.
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
+  private draftTimer: ReturnType<typeof setTimeout> | null = null;
   private wikilink = new WikilinkAutocomplete();
+  // The text the session started from: sent with the save so the server refuses (409) to overwrite
+  // a doc that changed meanwhile, and compared with the textarea to know if anything would be lost.
+  private editBase = '';
 
   constructor() {
     btnEdit.addEventListener('click', () => this.enterEditMode());
     btnSave.addEventListener('click', () => this.saveEdit());
-    btnCancel.addEventListener('click', () => this.exitEditMode(false));
+    btnCancel.addEventListener('click', () => this.cancelEdit());
+    window.addEventListener('beforeunload', (e) => {
+      if (this.hasUnsavedChanges()) e.preventDefault();
+    });
+  }
+
+  private hasUnsavedChanges(): boolean {
+    return editMode && editTextarea !== null && editTextarea.value !== this.editBase;
+  }
+
+  // ---- local draft: an unsaved edit survives a closed tab, a crash or a click elsewhere ----
+  private static readonly DRAFT_KEY = 'atlas-draft:';
+
+  private static readDraft(path: string): string | null {
+    try {
+      return localStorage.getItem(Editor.DRAFT_KEY + path);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  private static writeDraft(path: string, text: string | null): void {
+    try {
+      if (text === null) localStorage.removeItem(Editor.DRAFT_KEY + path);
+      else localStorage.setItem(Editor.DRAFT_KEY + path, text);
+    } catch (e) {
+      /* storage blocked or full: the beforeunload guard still protects the open tab */
+    }
+  }
+
+  private async cancelEdit(): Promise<void> {
+    if (
+      this.hasUnsavedChanges() &&
+      !(await Dialogs.confirm({
+        title: t('discardTitle'),
+        message: t('discardMessage'),
+        confirmLabel: t('discardConfirm'),
+        destructive: true,
+      }))
+    )
+      return;
+    if (currentFile) Editor.writeDraft(currentFile.path, null);
+    this.exitEditMode(false);
   }
 
   private mdHandleAction(action: string): void {
@@ -171,14 +218,37 @@ export class Editor {
       return;
     }
 
+    const path = currentFile.path;
+    const draft = Editor.readDraft(path);
+
+    this.editBase = content;
+    if (draft !== null && draft !== content) {
+      const restore = await Dialogs.confirm({
+        title: t('draftRestoreTitle'),
+        message: t('draftRestoreMessage'),
+        confirmLabel: t('draftRestore'),
+        cancelLabel: t('draftDiscard'),
+      });
+
+      if (restore) content = draft;
+      else Editor.writeDraft(path, null);
+    }
+
     setEditMode(true);
     contentEl.classList.remove('max-w-4xl', 'px-10', 'py-10', 'prose', 'prose-invert');
     contentEl.classList.add('max-w-none', 'px-4', 'py-4');
 
     const wrap = document.createElement('div');
 
-    wrap.className = 'flex flex-col';
-    wrap.style.height = 'calc(100vh - 11rem)';
+    wrap.className = 'md-edit flex flex-col';
+
+    // On a phone the two panes don't fit side by side: one at a time, Write or Preview.
+    const modes = document.createElement('div');
+
+    modes.className = 'md-modes nf-seg';
+    modes.innerHTML =
+      '<button type="button" class="nf-seg-btn active" data-pane="write">' + t('editWrite') + '</button>' +
+      '<button type="button" class="nf-seg-btn" data-pane="preview">' + t('editPreview') + '</button>';
 
     const toolbar = document.createElement('div');
 
@@ -189,7 +259,7 @@ export class Editor {
     const splitWrap = document.createElement('div');
 
     splitWrap.className =
-      'flex flex-1 min-h-0 border-l border-r border-b subtle-border rounded-b-md overflow-hidden bg-navy-900';
+      'md-split flex flex-1 min-h-0 border-l border-r border-b subtle-border rounded-b-md overflow-hidden bg-navy-900';
 
     const ta = document.createElement('textarea');
 
@@ -205,18 +275,19 @@ export class Editor {
 
     divider.className = 'w-px bg-[#2a2a32] flex-shrink-0';
 
-    const preview = document.createElement('article');
+    const previewEl = document.createElement('article');
 
-    preview.id = 'md-preview';
-    preview.className =
+    previewEl.id = 'md-preview';
+    previewEl.className =
       'min-w-0 px-8 py-6 overflow-y-auto scrollbar-thin prose prose-sm prose-invert max-w-none';
-    preview.style.flex = '1 1 0';
-    preview.innerHTML = markdown.render(content);
+    previewEl.style.flex = '1 1 0';
+    previewEl.innerHTML = markdown.render(content, path);
 
     splitWrap.appendChild(ta);
     splitWrap.appendChild(divider);
-    splitWrap.appendChild(preview);
+    splitWrap.appendChild(previewEl);
 
+    wrap.appendChild(modes);
     wrap.appendChild(toolbar);
     wrap.appendChild(splitWrap);
 
@@ -228,6 +299,16 @@ export class Editor {
 
       if (btn) this.mdHandleAction((btn as HTMLElement).dataset.md as string);
     });
+    modes.addEventListener('click', (e) => {
+      const btn = (e.target as Element).closest('[data-pane]') as HTMLElement | null;
+
+      if (!btn) return;
+      const preview = btn.dataset.pane === 'preview';
+
+      if (preview) previewEl.innerHTML = markdown.render(ta.value, path);
+      splitWrap.classList.toggle('show-preview', preview);
+      modes.querySelectorAll('[data-pane]').forEach((b) => b.classList.toggle('active', b === btn));
+    });
 
     this.wikilink.resetCandidates(); // candidates recompute on the 1st keystroke (catches new docs)
 
@@ -235,8 +316,12 @@ export class Editor {
       this.wikilink.update();
       if (this.previewTimer) clearTimeout(this.previewTimer);
       this.previewTimer = setTimeout(() => {
-        preview.innerHTML = markdown.render(ta.value);
+        previewEl.innerHTML = markdown.render(ta.value, path);
       }, 150);
+      if (this.draftTimer) clearTimeout(this.draftTimer);
+      this.draftTimer = setTimeout(() => {
+        Editor.writeDraft(path, ta.value === this.editBase ? null : ta.value);
+      }, 400);
     });
     ta.addEventListener('blur', () => {
       this.wikilink.scheduleClose();
@@ -306,16 +391,19 @@ export class Editor {
     btnSave.textContent = t('saving');
 
     try {
-      const body: FilePutBody = { path: file.path, content: newContent };
-      const res = await fetch('/api/file', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await Editor.put({ path: file.path, content: newContent, base_content: this.editBase });
 
+      if (res.status === 409) {
+        const { current } = (await res.json()) as { current?: string };
+
+        await this.keepBoth(file, newContent, current ?? '');
+
+        return;
+      }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = (await res.json()) as { mtime?: number };
 
+      Editor.writeDraft(file.path, null);
       file.content = newContent;
       contentCache.set(file.path, newContent);
       file.mtime = data.mtime || Math.floor(Date.now() / 1000);
@@ -329,6 +417,50 @@ export class Editor {
     } finally {
       (btnSave as HTMLButtonElement).disabled = false;
       btnSave.textContent = t('saveBtn');
+    }
+  }
+
+  private static put(body: FilePutBody): Promise<Response> {
+    return fetch('/api/file', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  // The doc changed since the session opened it (an AI edit, another tab): never overwrite it.
+  // Keep both — this version goes next to it as a new doc — or go back to editing.
+  private async keepBoth(file: FileNode, mine: string, current: string): Promise<void> {
+    const copy = Editor.copyPath(file.path);
+    const copyName = copy.slice(copy.lastIndexOf('/') + 1);
+    const keep = await Dialogs.confirm({
+      title: t('conflictTitle'),
+      message: t('conflictMessage', copyName),
+      confirmLabel: t('conflictKeepBoth'),
+      cancelLabel: t('conflictKeepEditing'),
+    });
+
+    if (!keep) return;
+    const res = await Editor.put({ path: copy, content: mine });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    Editor.writeDraft(file.path, null);
+    file.content = current;
+    contentCache.set(file.path, current);
+    this.exitEditMode(true);
+    Dialogs.alert({ title: t('conflictTitle'), message: t('conflictSavedAs', copyName) });
+  }
+
+  // "notes/x.md" → "notes/x (my version).md", numbered when that name is already taken.
+  private static copyPath(path: string): string {
+    const dot = path.lastIndexOf('.');
+    const stem = path.slice(0, dot);
+    const ext = path.slice(dot);
+
+    for (let n = 1; ; n++) {
+      const candidate = stem + ' (' + t('myVersionSuffix') + (n > 1 ? ' ' + n : '') + ')' + ext;
+
+      if (!fileMap[candidate]) return candidate;
     }
   }
 
@@ -348,7 +480,7 @@ export class Editor {
       const cached =
         currentFile.content != null ? currentFile.content : contentCache.get(currentFile.path);
 
-      contentEl.innerHTML = markdown.render(cached || '');
+      contentEl.innerHTML = markdown.render(cached || '', currentFile.path);
       attachCopyButtons();
       taskCheckboxes.wireTaskCheckboxes(currentFile, cached || '');
       renderBacklinksFor(currentFile);
@@ -368,6 +500,11 @@ export class Editor {
     if (this.previewTimer) {
       clearTimeout(this.previewTimer);
       this.previewTimer = null;
+    }
+    // Dropped, not flushed: after a save or a discard the draft is already gone and must stay so.
+    if (this.draftTimer) {
+      clearTimeout(this.draftTimer);
+      this.draftTimer = null;
     }
   }
 }

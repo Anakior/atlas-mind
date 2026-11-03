@@ -5,10 +5,40 @@
 // folder panel, the avatar the account card (the glass foot, shown as a popover).
 
 import { IS_OFFLINE_BUILD } from '../core/data-csrf';
+import { t } from '../core/i18n';
+import { avatarSeed, constellationSvg } from '../ui/avatar';
 import { homeView } from './home-view';
 import { layoutChrome } from './layout-chrome';
 import { sidePanels, type SidePanel } from './side-panels';
 import { commandPalette } from '../graph/command-palette';
+
+// The account card at the menu's foot, and the folded menu's avatar: who is signed in. Shown at
+// boot, and again when the person changes their name.
+export function showAccount(me: MeAuthenticated): void {
+  const face = constellationSvg(avatarSeed(me.first_name, me.last_name, me.email), 30);
+  const role = t(me.role === 'admin' ? 'settingsRoleAdmin' : 'settingsRoleViewer');
+
+  document.getElementById('user-email')!.textContent = me.name || me.email;
+  document.getElementById('user-sub')!.textContent = me.name ? role + ' · ' + me.email : role;
+  const avatar = document.getElementById('user-avatar');
+
+  if (avatar) avatar.innerHTML = face;
+  document.getElementById('side-me-btn')!.innerHTML = face;
+  document.getElementById('user-bar')!.classList.remove('hidden');
+}
+
+// On a mind on this computer there is no account: the card says where it runs and keeps the gear
+// (Settings) and the export; no sign-out.
+export function showLocal(): void {
+  const face = constellationSvg(avatarSeed('', '', location.host), 30);
+
+  document.body.classList.add('local-mode');
+  document.getElementById('user-email')!.textContent = t('localName');
+  document.getElementById('user-sub')!.textContent = t('localSub');
+  document.getElementById('user-avatar')!.innerHTML = face;
+  document.getElementById('side-me-btn')!.innerHTML = face;
+  document.getElementById('user-bar')!.classList.remove('hidden');
+}
 
 class SideNav {
   private readonly links = Array.from(document.querySelectorAll<HTMLElement>('.side-link[data-nav]'));

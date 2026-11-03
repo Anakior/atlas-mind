@@ -112,7 +112,7 @@ _KNOWN_TOML_KEYS = {
     "server": frozenset({"port", "auth_enabled", "session_secret",
                          "session_max_age", "git_pull_interval",
                          "github_webhook_secret", "trusted_ip_header",
-                         "allow_private_remotes", "update_check"}),
+                         "allow_private_remotes", "update_check", "public_url"}),
     "store": frozenset({"kind", "dir"}),
     "git": frozenset({"author_name", "author_email", "repo_url"}),
     "todo": frozenset({"file", "categories"}),
@@ -373,6 +373,26 @@ class AtlasConfig:
                              or _toml_str(server, "server",
                                           "trusted_ip_header", ""))
         self.trusted_ip_header = trusted_ip_header.strip() or None
+
+        # The address people reach the instance at, for when a proxy or tunnel in
+        # front of it rewrites Host: OAuth metadata, MCP and share links are built
+        # from it instead of the request's Host. Scheme + host only.
+        public_url = (env.get("ATLAS_PUBLIC_URL")
+                      or _toml_str(server, "server", "public_url", "")).strip().rstrip("/")
+        if public_url and not re.fullmatch(r"https?://[^/\s?#]+", public_url):
+            raise AtlasConfigError(
+                f"server.public_url must be a scheme and a host, like "
+                f"https://atlas.example.com (got {public_url!r})")
+        self.public_url = public_url or None
+
+        # SHA-256 of a setup code handed out with the /setup#code=… link: whoever
+        # holds the link creates the first admin, no shell needed. Only the hash
+        # lives on the server, so a leaked env never gives the code away.
+        setup_hash = env.get("ATLAS_SETUP_CODE_SHA256", "").strip().lower()
+        if setup_hash and not re.fullmatch(r"[0-9a-f]{64}", setup_hash):
+            raise AtlasConfigError("ATLAS_SETUP_CODE_SHA256 must be a SHA-256 in hex "
+                                   "(64 characters): `atlas setup-code` prints one")
+        self.setup_code_sha256 = setup_hash or None
 
         # Hive SSRF guard: by default a pasted node link may only point at a
         # PUBLIC host (subscribe refuses loopback/private/link-local/reserved —

@@ -4,8 +4,11 @@ maybe_init() generates a one-time token (printed to stderr) when no admin exists
 the window stays open (is_open()) until the first admin is created. consume() does
 the LOCKED read-modify-write (has_admin re-check + create + close the window) that
 defeats a concurrent double-POST creating a second "first" admin. The token never
-leaves stderr.
+leaves stderr. accepts() also takes the setup code of a /setup#code=… link, when its
+SHA-256 is configured (ATLAS_SETUP_CODE_SHA256): the admin is created without a shell.
 """
+import hashlib
+import hmac
 import secrets
 import sys
 import threading
@@ -54,6 +57,16 @@ class SetupToken:
             return not self._store.has_admin()
         except Exception:
             return False
+
+    def accepts(self, provided: str) -> bool:
+        """The token printed at boot, or the setup code of the /setup#code=… link
+        (checked against its configured SHA-256). Constant-time either way."""
+        provided = str(provided or "")
+        if self._token and hmac.compare_digest(provided, self._token):
+            return True
+        expected = self._config.setup_code_sha256
+        return bool(expected and provided and hmac.compare_digest(
+            hashlib.sha256(provided.encode("utf-8")).hexdigest(), expected))
 
     def consume(self, create_admin) -> bool:
         """Atomically claim the window: under the lock, lose the race (→ False) if

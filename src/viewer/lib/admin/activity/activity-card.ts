@@ -14,7 +14,7 @@
 import { EMBED_ACTIVITY, IS_OFFLINE_BUILD } from '../../core/data-csrf';
 import { LANG, t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
-import { fileMap } from '../../core/tree';
+import { fileMap, docLabel } from '../../core/tree';
 import { avatarSeed, constellationSvg } from '../../ui/avatar';
 import { historyPanel } from '../../content/history-panel';
 import { docRenderer } from '../../content/doc-renderer';
@@ -88,7 +88,9 @@ export class ActivityCard {
   }
 
   private docTitle(p: string): string {
-    return ((p || '').split('/').pop() || p).replace(/\.(md|html)$/i, '');
+    const f = fileMap[p];
+
+    return f ? docLabel(f) : ((p || '').split('/').pop() || p).replace(/\.(md|html)$/i, '');
   }
 
   private iconSvg(type: string, size: number): string {
@@ -161,7 +163,9 @@ export class ActivityCard {
 
     const f = fileMap[path];
 
-    if (f) historyPanel.open(f);
+    // A file other than a note (a PDF dropped in) has no text history: it opens instead.
+    if (f && historyPanel.available(f)) historyPanel.open(f);
+    else if (f) this.openDoc(path);
   }
 
   // Go straight to the doc a change touched, the way the tree opens it.

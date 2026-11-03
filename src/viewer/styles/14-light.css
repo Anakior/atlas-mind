@@ -66,10 +66,10 @@
 :root[data-theme="light"] .nf-seg-btn { color: rgb(var(--ink-400)); }
 :root[data-theme="light"] .nf-seg-btn:hover { color: rgb(var(--ink-100)); }
 :root[data-theme="light"] #sidebar-backdrop { background: rgba(30, 25, 10, .3); }
-:root[data-theme="light"] #demo-banner { box-shadow: 0 12px 34px -12px rgba(30, 25, 10, .3); }
-:root[data-theme="light"] #demo-banner svg,
-:root[data-theme="light"] #demo-banner strong { color: #b4650a; }
-:root[data-theme="light"] #demo-banner #demo-banner-cta { color: #0f6f9e; }
+:root[data-theme="light"] .pill-banner { box-shadow: 0 12px 34px -12px rgba(30, 25, 10, .3); }
+:root[data-theme="light"] .pill-banner svg,
+:root[data-theme="light"] .pill-banner strong { color: #b4650a; }
+:root[data-theme="light"] .pill-banner .pill-banner-action { color: #0f6f9e; }
 
 /* Settings and account messages */
 :root[data-theme="light"] #reset-pw-error,

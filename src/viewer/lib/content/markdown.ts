@@ -7,21 +7,44 @@ import { t } from '../core/i18n';
 import { wlMaps, WL_TARGET_EXTS } from './content-tree';
 
 export class Markdown {
+  // The doc being rendered: a relative image or link in it points beside it, as on GitHub.
+  private docPath: string | null = null;
+
   constructor() {
-    marked.use({ extensions: [this.wikilinkExtension()] });
+    marked.use({
+      extensions: [this.wikilinkExtension()],
+      walkTokens: (token: { type: string; href?: string }) => {
+        if ((token.type === 'image' || token.type === 'link') && token.href) token.href = this.besideDoc(token.href);
+      },
+    });
   }
 
   // marked leaves raw HTML intact — a doc with <script>/<img onerror> would run in the innerHTML.
   // The output goes through DOMPurify (vendored, inlined in the offline build); if it is missing
   // that is a build bug, so show an error and NEVER render unsanitised HTML.
-  render(md: string): string {
+  render(md: string, docPath: string | null = null): string {
     if (typeof DOMPurify === 'undefined') {
       console.error('DOMPurify absent : asset /vendor/purify.min.js manquant (bug de build).');
 
       return '<p class="text-red-400 font-sans">' + escapeHtml(t('sanitizerMissing')) + '</p>';
     }
 
-    return DOMPurify.sanitize(marked.parse(md || ''));
+    this.docPath = docPath;
+    try {
+      return DOMPurify.sanitize(marked.parse(md || ''));
+    } finally {
+      this.docPath = null;
+    }
+  }
+
+  // "photo.png" in "projets/note.md" → "/projets/photo.png". A URL, an absolute path or an anchor
+  // stays as written.
+  private besideDoc(href: string): string {
+    if (this.docPath === null || /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(href)) return href;
+    const dir = this.docPath.split('/').slice(0, -1).map(encodeURIComponent).join('/');
+    const url = new URL(href, location.origin + '/' + (dir ? dir + '/' : ''));
+
+    return url.pathname + url.search + url.hash;
   }
 
   // [[target]] / [[target|text]] → a navigable link (.broken when unresolved). Inline token, so it

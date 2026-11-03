@@ -5,14 +5,29 @@
 // with it) and gives it back.
 
 import { t, LANG } from '../core/i18n';
-import { fileMap } from '../core/tree';
+import { fileMap, docLabel } from '../core/tree';
+import { api, setStatus } from '../core/net';
 import { escapeHtml, relativeDate } from '../core/utils';
 import { docRenderer } from '../content/doc-renderer';
 import { activityCard } from '../admin/activity/activity-boot';
+import { refreshTreeOrReload } from '../modals/new-file-modal';
 
-export type SidePanel = 'inbox' | 'journal' | 'recent' | 'folders';
+export type SidePanel = 'inbox' | 'journal' | 'recent' | 'folders' | 'trash';
 
-const TITLES: Record<SidePanel, string> = { inbox: 'actInbox', journal: 'actJournal', recent: 'recentHeader', folders: 'treeContentHeader' };
+interface TrashItem {
+  path: string;
+  original: string;
+  name: string;
+  deleted_at: number;
+}
+
+const TITLES: Record<SidePanel, string> = {
+  inbox: 'actInbox',
+  journal: 'actJournal',
+  recent: 'recentHeader',
+  folders: 'treeContentHeader',
+  trash: 'trashHeader',
+};
 const BORROWED = ['pinned-section', 'shared-section', 'tree-header', 'tree']; // the menu's folder parts
 const RECENT_SHOWN = 40;
 const OPENED_WITHIN_MS = 5000; // a doc rendered this soon after a click in the panel was opened from it
@@ -30,6 +45,14 @@ class SidePanels {
     document.getElementById('side-panel-close')!.addEventListener('click', () => this.close());
     this.body.addEventListener('click', (e) => {
       this.clickedAt = Date.now();
+      const restore = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-restore]');
+
+      if (restore) {
+        e.preventDefault();
+        void this.restore(restore);
+
+        return;
+      }
       const row = (e.target as HTMLElement).closest<HTMLElement>('[data-recent-doc]');
       const f = row ? fileMap[row.dataset.recentDoc!] : undefined;
 
@@ -62,8 +85,47 @@ class SidePanels {
       activityCard.openJournal(this.body);
     } else if (panel === 'folders') {
       this.borrowTree();
+    } else if (panel === 'trash') {
+      void this.renderTrash();
     } else {
       this.renderRecent();
+    }
+  }
+
+  // Deleted docs, newest deletion first, each a click from coming back.
+  private async renderTrash(): Promise<void> {
+    let items: TrashItem[];
+
+    try {
+      items = (await api<{ items: TrashItem[] }>('GET', '/api/trash')).items;
+    } catch (e) {
+      this.body.innerHTML = `<p class="home-empty">${escapeHtml((e as Error).message)}</p>`;
+
+      return;
+    }
+    this.sub.textContent = t('trashPanelSub', items.length);
+    this.body.innerHTML =
+      items
+        .map((i) => {
+          const dir = i.original.split('/').slice(0, -1).join('/') || t('rootLabel');
+
+          return `<div class="home-row"><span class="home-row-t"><b>${escapeHtml(i.name)}</b><em>${escapeHtml(dir)} · ${relativeDate(i.deleted_at)}</em></span><button type="button" class="trash-restore" data-restore="${escapeHtml(i.path)}">${t('trashRestore')}</button></div>`;
+        })
+        .join('') || `<p class="home-empty">${t('trashEmpty')}</p>`;
+    refreshTrashLink(items.length);
+  }
+
+  private async restore(btn: HTMLButtonElement): Promise<void> {
+    btn.disabled = true;
+    try {
+      const { path } = await api<{ path: string }>('POST', '/api/trash/restore', { path: btn.dataset.restore });
+
+      setStatus(t('docRestored', path), 'ok');
+      await refreshTreeOrReload();
+      await this.renderTrash();
+    } catch (e) {
+      btn.disabled = false;
+      setStatus((e as Error).message, 'err');
     }
   }
 
@@ -126,10 +188,25 @@ class SidePanels {
         const head = k === day ? '' : `<div class="panel-day">${escapeHtml((day = k))}</div>`;
         const dir = f.path.split('/').slice(0, -1).join('/') || t('rootLabel');
 
-        return head + `<a href="#" class="home-row" data-recent-doc="${escapeHtml(f.path)}"><span class="home-row-t"><b>${escapeHtml(f.name)}</b><em>${escapeHtml(dir)}</em></span><span class="home-row-w">${relativeDate(f.mtime)}</span></a>`;
+        return head + `<a href="#" class="home-row" data-recent-doc="${escapeHtml(f.path)}"><span class="home-row-t"><b>${escapeHtml(docLabel(f))}</b><em>${escapeHtml(dir)}</em></span><span class="home-row-w">${relativeDate(f.mtime)}</span></a>`;
       })
       .join('') || `<p class="home-empty">${t('noRecentDocs')}</p>`;
   }
 }
 
 export const sidePanels = new SidePanels();
+
+// The menu's Corbeille link exists only while something is in the trash. Given the count when the
+// caller already has it, asks the server otherwise.
+export async function refreshTrashLink(count?: number): Promise<void> {
+  let n = count;
+
+  if (n === undefined) {
+    try {
+      n = (await api<{ total: number }>('GET', '/api/trash')).total;
+    } catch (e) {
+      return;
+    }
+  }
+  document.getElementById('side-trash-link')?.classList.toggle('hidden', n === 0);
+}

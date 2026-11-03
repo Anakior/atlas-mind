@@ -1,4 +1,4 @@
-import { fileMap } from '../core/tree';
+import { fileMap, docLabel } from '../core/tree';
 import { escapeHtml, relativeDate } from '../core/utils';
 import { sharedSection, sharedList, contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, tocPanel } from '../core/dom-refs';
 import { IS_OFFLINE_BUILD, SITE_PREFIX, TAGLINE } from '../core/data-csrf';
@@ -8,6 +8,7 @@ import { todos, loadContent } from '../content/content-tree';
 import { docRenderer, isViewable } from '../content/doc-renderer';
 import { tagBrowsePage } from '../content/tag-browse';
 import { Dialogs } from '../modals/dialogs';
+import { newFileModal } from '../modals/new-file-modal';
 import { tocShow } from './layout-chrome';
 
 // Home dashboard + the viewer's hash router. The home view stays imperative innerHTML, NOT the keyed
@@ -104,6 +105,14 @@ export class HomeView {
 
       return;
     }
+    // Something shared to the installed app (sw.js share target): a quick capture to keep.
+    if (hash.startsWith('capture=')) {
+      history.replaceState(null, '', location.pathname);
+      this.showWelcome();
+      newFileModal.openCapture(hash.slice('capture='.length));
+
+      return;
+    }
 
     const f = fileMap[hash];
 
@@ -164,7 +173,7 @@ export class HomeView {
       .map((f) => {
         const dir = f.path.split('/').slice(0, -1).join('/') || t('rootLabel');
 
-        return `<a data-recent-path="${escapeHtml(f.path)}" class="home-row"><span class="home-row-t"><b>${escapeHtml(f.name)}</b><em>${escapeHtml(dir)}</em></span><span class="home-row-w">${relativeDate(f.mtime)}</span></a>`;
+        return `<a data-recent-path="${escapeHtml(f.path)}" class="home-row"><span class="home-row-t"><b>${escapeHtml(docLabel(f))}</b><em>${escapeHtml(dir)}</em></span><span class="home-row-w">${relativeDate(f.mtime)}</span></a>`;
       })
       .join('');
 
@@ -177,7 +186,7 @@ export class HomeView {
       .map((f) => {
         const words = f.words ?? 0;
 
-        return `<a data-recent-path="${escapeHtml(f.path)}" class="home-bar home-bar-doc"><span class="home-bar-k">${escapeHtml(f.name)}</span><span class="home-bar-t"><i style="width:${Math.max(4, Math.round((100 * words) / maxWords))}%"></i></span><span class="home-bar-n">${words.toLocaleString(LANG)}</span></a>`;
+        return `<a data-recent-path="${escapeHtml(f.path)}" class="home-bar home-bar-doc"><span class="home-bar-k">${escapeHtml(docLabel(f))}</span><span class="home-bar-t"><i style="width:${Math.max(4, Math.round((100 * words) / maxWords))}%"></i></span><span class="home-bar-n">${words.toLocaleString(LANG)}</span></a>`;
       })
       .join('');
 
@@ -212,6 +221,8 @@ export class HomeView {
         </div>
         <div id="activity-highlights" class="home-hero-r glass"></div>
       </section>
+
+      <div id="home-connect" class="hidden"></div>
 
       <section id="home-activity-card" class="home-week">
         <div class="home-sec">

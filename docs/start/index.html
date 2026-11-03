@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en" data-title-fr="Créer ton Atlas — Atlas Mind">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a12">
+<title>Create your Atlas — Atlas Mind</title>
+<meta name="description" content="Your own Atlas in ten minutes: free, no card, no terminal. Your notes stay plain files that belong to you, and Claude remembers what you tell it.">
+<meta property="og:title" content="Create your Atlas — Atlas Mind">
+<meta property="og:description" content="Your own Atlas in ten minutes: free, no card, no terminal.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://atlas-mind.anakior.app/start/">
+<meta property="og:image" content="https://atlas-mind.anakior.app/assets/og-card.jpg">
+<link rel="canonical" href="https://atlas-mind.anakior.app/start/">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;color:var(--gold);
+    background:var(--gold-soft);padding:1px 6px;border-radius:5px}
+
+  header{padding:84px 0 40px;text-align:center}
+  h1{font-size:clamp(36px,6vw,62px);line-height:1.05;font-weight:760;letter-spacing:-1.3px}
+  h1 .grad{background:linear-gradient(120deg,#fff 10%,var(--gold) 60%,#f0a93f);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{max-width:640px;margin:22px auto 0;font-size:clamp(16.5px,2vw,19px);color:var(--muted)}
+
+  /* the two ways */
+  .paths{display:grid;grid-template-columns:1.15fr 1fr;gap:20px;margin-top:44px;text-align:left}
+  .path{display:block;border:1px solid var(--glass-line);border-radius:16px;padding:26px 24px;background:var(--glass);
+    backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);box-shadow:var(--glass-sh);transition:.2s}
+  .path:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.2)}
+  .path.main{border-color:rgba(251,198,120,.35);background:linear-gradient(180deg,var(--gold-soft),var(--glass) 70%)}
+  .path .lbl{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--gold);font-weight:700}
+  .path h3{font-size:21px;font-weight:680;margin-top:8px}
+  .path p{color:var(--muted);font-size:15px;margin-top:8px}
+  .path .go{margin-top:14px;font-size:14px;color:var(--ink);font-weight:600}
+  @media(max-width:760px){.paths{grid-template-columns:1fr}}
+
+  /* the journey, step by step */
+  .journey{list-style:none;counter-reset:step;margin:40px auto 0;max-width:760px;display:grid;gap:16px;text-align:left}
+  .journey li{counter-increment:step;position:relative;border:1px solid var(--glass-line);border-radius:16px;
+    padding:22px 24px 22px 74px;background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);box-shadow:var(--glass-sh)}
+  .journey li::before{content:counter(step);position:absolute;left:22px;top:22px;width:32px;height:32px;border-radius:10px;
+    display:grid;place-items:center;font-weight:700;font-size:14px;color:var(--gold);background:var(--gold-soft);border:1px solid rgba(251,198,120,.3)}
+  .journey h3{font-size:18px;font-weight:660}
+  .journey p{color:var(--muted);font-size:15px;margin-top:8px}
+  .journey p b{color:var(--ink);font-weight:600}
+  .journey .btn{margin-top:14px;padding:10px 18px;font-size:14.5px}
+  .journey .note{font-size:13.5px;color:var(--muted-2)}
+  @media(max-width:560px){.journey li{padding:68px 20px 20px}.journey li::before{left:20px;top:20px}}
+
+  .dev .codeblock{max-width:760px}
+  .faq{max-width:760px;margin:36px auto 0;display:grid;gap:14px;text-align:left}
+  .faq div{border-top:1px solid var(--line);padding-top:14px}
+  .faq h3{font-size:16px;font-weight:650}
+  .faq p{color:var(--muted);font-size:15px;margin-top:6px}
+  .faq p b{color:var(--ink);font-weight:600}
+  .dev{border-top:1px solid var(--line)}
+  .dev .codeblock{text-align:left}
+</style>
+</head>
+<body>
+<div class="sky"></div><div class="stars"></div>
+
+<nav><div class="wrap">
+  <a class="brand" href="/">
+    <img src="/assets/favicon.svg" alt="" width="28" height="28">
+    <span class="brand-wm"><span class="brand-atlas">Atlas</span><span class="nebula-pill">Mind</span></span>
+  </a>
+  <div class="nav-links">
+    <a class="hide-md" href="/#why"><span lang="en">Why</span><span lang="fr">Pourquoi</span></a>
+    <a class="hide-md" href="/#superpowers"><span lang="en">Superpowers</span><span lang="fr">Super-pouvoirs</span></a>
+    <a class="hide-md" href="/#hive">Hive Mind</a>
+    <a class="hide-sm" href="/demo/"><span lang="en">Demo</span><span lang="fr">Démo</span></a>
+    <a class="nav-icon hide-sm" href="https://github.com/Anakior/atlas-mind" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 16 16" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    <span class="lang-switch" role="group" aria-label="Language / Langue">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="fr" aria-pressed="false">FR</button>
+    </span>
+    <a class="nav-cta" href="#alwaysdata"><span lang="en">Create your Atlas</span><span lang="fr">Créer ton Atlas</span></a>
+  </div>
+</div></nav>
+
+<header><div class="wrap">
+  <div class="kicker"><span lang="en">Create your Atlas</span><span lang="fr">Créer ton Atlas</span></div>
+  <h1 lang="en">Your own Atlas, <span class="grad">in ten minutes.</span></h1>
+  <h1 lang="fr">Ton Atlas à toi, <span class="grad">en dix minutes.</span></h1>
+  <p class="lede" lang="en">Free, no card, no terminal. Your notes stay plain files that belong to you, and Claude remembers what you tell it.</p>
+  <p class="lede" lang="fr">Gratuit, sans carte bancaire, sans terminal. Tes notes restent des fichiers ordinaires qui t’appartiennent, et Claude se souvient de ce que tu lui dis.</p>
+
+  <div class="paths">
+    <a class="path main" href="#alwaysdata">
+      <div class="lbl"><span lang="en">For everyone</span><span lang="fr">Pour tout le monde</span></div>
+      <h3><span lang="en">A button and a form</span><span lang="fr">Un bouton et un formulaire</span></h3>
+      <p lang="en">On alwaysdata’s free plan: no card, hosted in France, nothing to install.</p>
+      <p lang="fr">Sur l’offre gratuite d’alwaysdata : sans carte, hébergé en France, rien à installer.</p>
+      <div class="go"><span lang="en">Follow the steps ↓</span><span lang="fr">Suivre les étapes ↓</span></div>
+    </a>
+    <a class="path" href="#dev">
+      <div class="lbl"><span lang="en">For developers</span><span lang="fr">Pour les développeurs</span></div>
+      <h3><span lang="en">Your terminal, your servers</span><span lang="fr">Ton terminal, tes serveurs</span></h3>
+      <p lang="en">On your computer, on Fly.io, with Docker or systemd. One Python package, no database.</p>
+      <p lang="fr">Sur ton ordinateur, sur Fly.io, avec Docker ou systemd. Un paquet Python, pas de base de données.</p>
+      <div class="go"><span lang="en">The commands ↓</span><span lang="fr">Les commandes ↓</span></div>
+    </a>
+  </div>
+</div></header>
+
+<section id="alwaysdata" class="center"><div class="wrap">
+  <div class="kicker"><span lang="en">For everyone</span><span lang="fr">Pour tout le monde</span></div>
+  <h2><span lang="en">Six steps, no terminal.</span><span lang="fr">Six étapes, sans terminal.</span></h2>
+  <ol class="journey">
+    <li>
+      <h3><span lang="en">Create a free alwaysdata account</span><span lang="fr">Crée un compte alwaysdata gratuit</span></h3>
+      <p lang="en"><b>Choose your own name:</b> it becomes your Atlas’s address, like <code>camille.alwaysdata.net</code>. Common names such as “atlas” are already taken: your first name or a nickname works best.</p>
+      <p lang="fr"><b>Choisis ton propre nom :</b> il devient l’adresse de ton Atlas, comme <code>camille.alwaysdata.net</code>. Les noms courants comme « atlas » sont déjà pris : ton prénom ou un surnom, c’est le mieux.</p>
+      <a class="btn btn-primary" lang="en" href="https://www.alwaysdata.com/en/register/" target="_blank" rel="noopener">Create the account ↗</a>
+      <a class="btn btn-primary" lang="fr" href="https://www.alwaysdata.com/fr/inscription/" target="_blank" rel="noopener">Créer le compte ↗</a>
+      <p class="note" lang="en">The free plan is for personal use: 1 GB, no card. Sign in to alwaysdata at least every 120 days the first year (then every six months), or the account is suspended.</p>
+      <p class="note" lang="fr">L’offre gratuite est pour un usage personnel : 1 Go, sans carte. Connecte-toi à alwaysdata au moins tous les 120 jours la première année (puis tous les six mois), sinon le compte est suspendu.</p>
+    </li>
+    <li>
+      <h3><span lang="en">Install Atlas</span><span lang="fr">Installe Atlas</span></h3>
+      <p lang="en">alwaysdata opens a form: your language, your email, and a password of 8 characters or more. For the address, keep <code>your-name.alwaysdata.net</code>, with nothing after it.</p>
+      <p lang="fr">alwaysdata ouvre un formulaire : ta langue, ton email, et un mot de passe de 8 caractères ou plus. Pour l’adresse, garde <code>ton-nom.alwaysdata.net</code>, sans rien après.</p>
+      <a class="btn btn-primary" href="https://admin.alwaysdata.com/site/add/?application=583" target="_blank" rel="noopener"><span lang="en">Create my Atlas ↗</span><span lang="fr">Créer mon Atlas ↗</span></a>
+    </li>
+    <li>
+      <h3><span lang="en">Open it</span><span lang="fr">Ouvre-le</span></h3>
+      <p lang="en">About a minute later, go to <code>your-name.alwaysdata.net</code> and sign in with that email and password. Your Atlas is ready, with a first note to get you going.</p>
+      <p lang="fr">Une minute plus tard environ, va sur <code>ton-nom.alwaysdata.net</code> et connecte-toi avec cet email et ce mot de passe. Ton Atlas est prêt, avec une première note pour démarrer.</p>
+    </li>
+    <li>
+      <h3><span lang="en">Connect Claude</span><span lang="fr">Branche Claude</span></h3>
+      <p lang="en">On the home page, <b>Add to Claude</b> opens claude.ai with your Atlas filled in. Accept, and Claude reads and writes your notes, in every conversation. Claude’s free plan allows one connector: Atlas will be that one.</p>
+      <p lang="fr">Sur l’accueil, <b>Ajouter à Claude</b> ouvre claude.ai avec ton Atlas déjà rempli. Accepte, et Claude lit et écrit tes notes, dans toutes tes conversations. L’offre gratuite de Claude permet un connecteur : Atlas sera celui-là.</p>
+    </li>
+    <li>
+      <h3><span lang="en">Keep a copy that is yours</span><span lang="fr">Garde une copie à toi</span></h3>
+      <p lang="en">In <b>Settings › My Atlas</b>: a copy on your own GitHub, updated by itself at every change; a copy on your computer; and a full backup to download. If the instance is ever lost, <b>Restore</b> brings everything back on a new one.</p>
+      <p lang="fr">Dans <b>Paramètres › Mon Atlas</b> : une copie sur ton propre GitHub, mise à jour toute seule à chaque modification ; une copie sur ton ordinateur ; et une sauvegarde complète à télécharger. Si l’instance se perd un jour, <b>Restaurer</b> remet tout en place sur une nouvelle.</p>
+    </li>
+    <li>
+      <h3><span lang="en">Put it on your phone</span><span lang="fr">Mets-le sur ton téléphone</span></h3>
+      <p lang="en"><b>Settings › My Atlas › On your phone</b>: point your phone’s camera at the code, then “Add to Home screen”. Atlas opens like an app, and on Android you can share a link from any app straight into it.</p>
+      <p lang="fr"><b>Paramètres › Mon Atlas › Sur ton téléphone</b> : vise le code avec l’appareil photo, puis « Ajouter à l’écran d’accueil ». Atlas s’ouvre comme une application, et sur Android tu peux y partager un lien depuis n’importe quelle appli.</p>
+    </li>
+  </ol>
+
+  <div class="faq">
+    <div>
+      <h3><span lang="en">Who can read my notes?</span><span lang="fr">Qui peut lire mes notes ?</span></h3>
+      <p lang="en">You, and the people you invite: a new note is private by default. Like any hosted service, whoever runs the server (here alwaysdata) technically has access to its disk. Your copy on GitHub or on your computer is yours alone.</p>
+      <p lang="fr">Toi, et les personnes que tu invites : une nouvelle note est privée par défaut. Comme pour tout service hébergé, qui fait tourner le serveur (ici alwaysdata) a techniquement accès à son disque. Ta copie sur GitHub ou sur ton ordinateur n’appartient qu’à toi.</p>
+    </div>
+    <div>
+      <h3><span lang="en">What if I want to leave?</span><span lang="fr">Et si je veux partir ?</span></h3>
+      <p lang="en"><b>Download my notes</b> gives you a zip of ordinary files, readable in any text editor, Obsidian or VS Code, with their whole history.</p>
+      <p lang="fr"><b>Télécharger mes notes</b> te donne un zip de fichiers ordinaires, lisibles dans n’importe quel éditeur de texte, Obsidian ou VS Code, avec tout leur historique.</p>
+    </div>
+    <div>
+      <h3><span lang="en">Does it cost anything?</span><span lang="fr">Ça coûte quelque chose ?</span></h3>
+      <p lang="en">No. Atlas is free and open source, alwaysdata’s free plan asks for no card, and Claude’s free plan is enough to connect it.</p>
+      <p lang="fr">Non. Atlas est libre et gratuit, l’offre gratuite d’alwaysdata ne demande pas de carte, et l’offre gratuite de Claude suffit pour le brancher.</p>
+    </div>
+  </div>
+</div></section>
+
+<section id="dev" class="center dev"><div class="wrap">
+  <div class="kicker"><span lang="en">For developers</span><span lang="fr">Pour les développeurs</span></div>
+  <h2><span lang="en">The same Atlas, from a terminal.</span><span lang="fr">Le même Atlas, depuis un terminal.</span></h2>
+  <p class="sub" lang="en">One Python package, standard library only: the viewer ships inside it.</p>
+  <p class="sub" lang="fr">Un paquet Python, bibliothèque standard seulement : le viewer est dedans.</p>
+  <div class="codeblock" lang="en">
+    <div class="top"><span>bash</span><span>uv · pipx · pip</span></div>
+<pre><span class="c"># try it once on your computer, nothing installed</span>
+<span class="p">uvx</span> atlas-mind serve ~/my-mind
+
+<span class="c"># or install it, make a mind and serve it locally</span>
+<span class="p">uv</span> tool install atlas-mind
+<span class="p">atlas</span> init ~/my-mind
+<span class="p">atlas</span> serve ~/my-mind
+
+<span class="c"># put it online: Fly.io end to end (a card is needed there), or Docker / systemd</span>
+<span class="p">atlas</span> deploy ~/my-mind --target fly --wizard
+<span class="p">atlas</span> deploy ~/my-mind --target compose
+<span class="p">atlas</span> update --target fly
+
+<span class="c"># a copy of an online Atlas on this computer, kept in step</span>
+<span class="p">atlas</span> sync https://your-atlas.example
+
+<span class="c"># Claude Code, for every project</span>
+<span class="p">claude</span> mcp add --transport http --scope user atlas https://your-atlas.example/mcp</pre>
+  </div>
+  <div class="codeblock" lang="fr">
+    <div class="top"><span>bash</span><span>uv · pipx · pip</span></div>
+<pre><span class="c"># l’essayer une fois sur ton ordinateur, sans rien installer</span>
+<span class="p">uvx</span> atlas-mind serve ~/my-mind
+
+<span class="c"># ou l’installer, créer un mind et le servir en local</span>
+<span class="p">uv</span> tool install atlas-mind
+<span class="p">atlas</span> init ~/my-mind
+<span class="p">atlas</span> serve ~/my-mind
+
+<span class="c"># le mettre en ligne : Fly.io de bout en bout (une carte y est demandée), ou Docker / systemd</span>
+<span class="p">atlas</span> deploy ~/my-mind --target fly --wizard
+<span class="p">atlas</span> deploy ~/my-mind --target compose
+<span class="p">atlas</span> update --target fly
+
+<span class="c"># une copie d’un Atlas en ligne sur cet ordinateur, tenue à jour</span>
+<span class="p">atlas</span> sync https://ton-atlas.example
+
+<span class="c"># Claude Code, pour tous les projets</span>
+<span class="p">claude</span> mcp add --transport http --scope user atlas https://ton-atlas.example/mcp</pre>
+  </div>
+  <div class="cta-row" style="margin-top:34px">
+    <a class="btn btn-primary" href="/demo/"><span lang="en">Explore the live demo</span><span lang="fr">Voir la démo</span></a>
+    <a class="btn btn-ghost" href="https://github.com/Anakior/atlas-mind"><span lang="en">Read the source</span><span lang="fr">Lire le code</span></a>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span lang="en">Atlas Mind — own the data, own the engine, own the mind.</span>
+  <span lang="fr">Atlas Mind — tes données, ton moteur, ton esprit.</span>
+  <span>
+    <a href="/demo/"><span lang="en">Live demo</span><span lang="fr">Démo</span></a> ·
+    <a href="https://github.com/Anakior/atlas-mind">GitHub</a> ·
+    <a href="https://github.com/Anakior/atlas-mind/blob/main/LICENSE">AGPL-3.0</a>
+  </span>
+</div></footer>
+
+<script src="/assets/site.js"></script>
+</body>
+</html>

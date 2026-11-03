@@ -1,8 +1,8 @@
 // ── Settings panel (admin + cloud mode) ──────────────────────────────────────
-// Thin shell over the eight per-tab controllers (./*-tab.ts): owns the user-bar gear, open/close, and
-// the tab switch. Each tab's lists/forms/fetches live in its own controller; the shell just builds
-// the shared SettingsContext, constructs the controllers, and dispatches open() → selectTab() →
-// the active tab's load().
+// Thin shell over the per-pane controllers (./*-tab.ts): owns the user-bar gear, open/close, and the
+// sections (SECTIONS), each stacking its panes. Each pane's lists/forms/fetches live in its own
+// controller; the shell builds the shared SettingsContext, constructs the controllers, and dispatches
+// open() → selectTab() → the section's loads, revealed together.
 //
 // Every per-tab controller class is imported above, so all are in scope when `new SettingsPanel()`
 // constructs them (the single instance is created at the bottom of this module).
@@ -18,12 +18,26 @@ import { SettingsRemotes } from './remotes-tab';
 import { SettingsGroups } from './groups-tab';
 import { SettingsProfile } from './profile-tab';
 import { SettingsAppearance } from './appearance-tab';
+import { SettingsCopies } from './copies-tab';
+import { SettingsPhone } from './phone-pane';
 
 // A tab slower than this shows the loading placeholder; faster ones swap straight in. Once shown,
 // the placeholder stays long enough to read as a state rather than a flicker.
 const PLACEHOLDER_DELAY_MS = 300;
 const PLACEHOLDER_MIN_MS = 300;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The sections and the panes each stacks, in order; a stacked pane without its own heading wears one.
+const SECTIONS: Record<string, string[]> = {
+  me: ['security'],
+  atlas: ['phone', 'copies'],
+  ai: ['tokens'],
+  hive: ['nodes'],
+  shares: ['shares'],
+  team: ['users', 'groups'],
+  appearance: ['appearance'],
+};
+const PANE_TITLES: Record<string, string> = { users: 'settingsTabUsers', groups: 'settingsTabGroups' };
 
 export class SettingsPanel {
   private readonly settingsBtn = document.getElementById('settings-btn')!;
@@ -48,6 +62,8 @@ export class SettingsPanel {
   private readonly groups = new SettingsGroups(this.ctx);
   private readonly profile = new SettingsProfile(this.ctx);
   private readonly appearance = new SettingsAppearance(this.ctx);
+  private readonly copies = new SettingsCopies(this.ctx);
+  private readonly phone = new SettingsPhone();
 
   constructor() {
     this.settingsBtn.addEventListener('click', () => this.open());
@@ -58,6 +74,9 @@ export class SettingsPanel {
     document.querySelectorAll<HTMLElement>('.settings-tab').forEach((tab) => {
       tab.addEventListener('click', () => this.selectTab(tab.dataset.tab!));
     });
+    for (const [pane, key] of Object.entries(PANE_TITLES)) {
+      document.getElementById('settings-pane-' + pane)!.dataset.title = t(key);
+    }
     new ResizeObserver(() => this.followContentHeight()).observe(this.content);
   }
 
@@ -106,12 +125,19 @@ export class SettingsPanel {
     this.tokens.hideResult();
     // Nothing stale: the dialog appears with its first tab loaded, or with the placeholder.
     this.showPane(null);
-    // Everyone lands on Profile (the per-account tab, first in the bar); admin-only tabs are one
-    // click away. The update check rides along with the first reveal when it answers quickly.
-    const isAdmin = document.body.classList.contains('admin-cloud');
+    // Everyone lands on Me (the per-account section, first in the bar); admin-only sections are
+    // one click away. The update check rides along with the first reveal when it answers quickly.
+    const local = document.body.classList.contains('local-mode');
+    const isAdmin = local || document.body.classList.contains('admin-cloud');
     const banner = isAdmin ? this.refreshUpdateBanner() : Promise.resolve();
 
-    this.selectTab('security', Promise.race([banner, wait(600)]));
+    // Shares is a tab only while share links exist (and a link from this computer opens nowhere).
+    if (isAdmin && !local) {
+      void this.shares.load().then((count) =>
+        document.querySelector('.settings-tab[data-tab="shares"]')!.classList.toggle('hidden', !count));
+    }
+
+    this.selectTab(local ? 'ai' : 'me', Promise.race([banner, wait(600)]));
   }
 
   close(): void {
@@ -121,11 +147,11 @@ export class SettingsPanel {
     this.panel.style.height = '';
   }
 
-  // Opens Settings → Nodes with the path pre-filled (from the tree button). Called from the tree's
+  // Opens Settings → Hive with the path pre-filled (from the tree button). Called from the tree's
   // "share as node" button in content/content-tree.ts via settingsPanel.openPublish().
   openPublish(path: string): void {
     this.open();
-    this.selectTab('nodes');
+    this.selectTab('hive');
     this.nodes.prefill(path);
   }
 
@@ -157,23 +183,41 @@ export class SettingsPanel {
   }
 
   private loadTab(name: string): Promise<unknown> {
-    if (name === 'users') return this.users.load();
-    if (name === 'tokens') return this.tokens.load();
+    if (name === 'atlas') {
+      this.phone.load();
+
+      return this.copies.load();
+    }
+    if (name === 'ai') return this.tokens.load();
+    if (name === 'hive') return Promise.all([this.nodes.load(), this.remotes.load()]);
     if (name === 'shares') return this.shares.load();
-    if (name === 'nodes') return Promise.all([this.nodes.load(), this.remotes.load()]);
-    if (name === 'groups') return this.groups.load();
     if (name === 'appearance') return this.appearance.load();
+    if (name === 'team') {
+      // Groups are for sorting several people: alone on the Atlas, only the invitation shows.
+      return Promise.all([this.users.load(), this.groups.load()]).then(([count]) =>
+        document.getElementById('settings-pane-groups')!.toggleAttribute('data-solo', count < 2));
+    }
     securityPane.refreshState();
 
     return this.profile.load();
   }
 
-  /** Shows one pane, or none, and the dialog along with it. */
+  /** Shows a section's panes (or the loading placeholder, or nothing), and the dialog with them. */
   private showPane(name: string | null): void {
-    document.querySelectorAll('.settings-pane').forEach((pane) => pane.classList.add('hidden'));
+    document.querySelectorAll<HTMLElement>('.settings-pane').forEach((pane) =>
+      pane.classList.add('hidden'));
 
     if (!name) return;
-    document.getElementById('settings-pane-' + name)!.classList.remove('hidden');
+    const panes = SECTIONS[name] || [name];
+
+    panes.forEach((id, i) => {
+      const pane = document.getElementById('settings-pane-' + id)!;
+
+      pane.classList.toggle('hidden', pane.hasAttribute('data-solo'));
+      pane.classList.toggle('stacked', panes.length > 1);
+      pane.classList.toggle('stacked-next', i > 0);
+      pane.style.order = String(i + 1);
+    });
     this.settingsBackdrop.classList.remove('hidden');
   }
 

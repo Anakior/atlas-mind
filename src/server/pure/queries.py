@@ -6,7 +6,7 @@ import re
 import time
 
 import server as _s
-from server.pure import attestations
+from server.pure import attestations, file_text
 
 
 def _visible(rel, ctx):
@@ -49,10 +49,11 @@ def _tags_for(build, rel: str, text: str) -> list:
     return tags
 
 
-def _history_path_included(content_rel: str, excluded) -> bool:
+def _history_path_included(content_rel: str, excluded, docs_only=True) -> bool:
     """Apply the iter_doc_files visibility rules to a HISTORICAL path (a string from
     git, not a current file): skip dot-folders/.trash, skip skill/tools/__pycache__,
-    skip excluded basenames, keep only .md/.html. iter_doc_files itself can't be used
+    skip excluded basenames, keep only .md/.html (any file with docs_only=False: the
+    activity feed shows a PDF dropped in too). iter_doc_files itself can't be used
     here — its set is current-files-only, so deleted/trashed docs in history are absent."""
     parts = content_rel.split("/")
     if any(p == ".git" or p.startswith(".") for p in parts):
@@ -61,7 +62,7 @@ def _history_path_included(content_rel: str, excluded) -> bool:
         return False
     if parts[-1] in excluded:
         return False
-    return content_rel.endswith((".md", ".html"))
+    return not docs_only or content_rel.endswith((".md", ".html"))
 
 
 def _strip_content(p: str):
@@ -124,6 +125,17 @@ def _locate(content: str, content_n: str, tokens) -> dict:
     return out
 
 
+# The files search reads: the docs, and the text inside office, PDF and plain-text files.
+SEARCHED = (".md", ".html", ".txt", ".csv", *file_text.EXTS)
+
+
+def warm_search():
+    """Every searched file read into the search cache, so the first search after a boot or a
+    change doesn't read the PDFs and office files itself (seconds on a small instance)."""
+    for rel, path in _s._iter_doc_files(SEARCHED):
+        _s._doc_entry(rel, path)
+
+
 def _api_search(q: str, limit: int, ctx=None, only=None) -> list:
     """BM25 ranking (an occurrence in the filename weighs three in the body), with typo
     tolerance (a token that can't be found is corrected to the closest word in the
@@ -135,7 +147,7 @@ def _api_search(q: str, limit: int, ctx=None, only=None) -> list:
     if not tokens:
         return []
     entries = []
-    for rel, path in _s._iter_doc_files():
+    for rel, path in _s._iter_doc_files(SEARCHED):
         if not _visible(rel, ctx) or (only is not None and rel not in only):
             continue
         e = _s._doc_entry(rel, path)
@@ -384,13 +396,13 @@ def _activity_events(days, limit, author, type_filter, ctx):
                 old_rel = _strip_content(tokens[i + 1])
                 # A soft-delete is a rename INTO .trash (excluded); keep the visible side
                 # so the event isn't dropped — its "deleted:" subject still types it.
-                rel = new_rel if (new_rel and _history_path_included(new_rel, excluded)) else old_rel
-                if rel is not None and _history_path_included(rel, excluded):
+                rel = new_rel if (new_rel and _history_path_included(new_rel, excluded, False)) else old_rel
+                if rel is not None and _history_path_included(rel, excluded, False):
                     files.append({"status": status[:1], "path": rel})
                 i += 3
             else:
                 rel = _strip_content(tokens[i + 1]) if i + 1 < len(tokens) else None
-                if rel is not None and _history_path_included(rel, excluded):
+                if rel is not None and _history_path_included(rel, excluded, False):
                     files.append({"status": status[:1] or "?", "path": rel})
                 i += 2
         files = [f for f in files if _visible(f["path"], ctx)]

@@ -11,8 +11,17 @@
     body.sidebar-open #sidebar { transform: translateX(0); }
     body.sidebar-open #sidebar-backdrop { display: block; }
     #sidebar-show-inline { display: inline-flex !important; }
-    /* Editing not possible on mobile: the app is for reading + managing todos */
-    #btn-edit, #btn-save, #btn-cancel, #btn-download { display: none !important; }
+    #btn-download { display: none !important; }
+    /* Writing on a phone: one pane at a time (Write / Preview), the toolbar scrolls sideways. */
+    .md-edit { height: calc(100vh - 6.5rem); height: calc(100dvh - 6.5rem); }
+    .md-modes { display: grid; }
+    .md-edit > .flex-wrap { flex-wrap: nowrap; overflow-x: auto; }
+    .md-edit .md-tb-btn { white-space: nowrap; flex-shrink: 0; }
+    .md-split > div { display: none; }
+    .md-split > #md-preview { display: none; padding: 1rem 1.25rem; }
+    .md-split.show-preview > #md-editor { display: none; }
+    .md-split.show-preview > #md-preview { display: block; }
+    #md-editor { padding: 1rem; font-size: 16px; }
     /* Todo widget: full width when expanded, pill when collapsed */
     #todo-widget { width: calc(100vw - 1.5rem); max-width: 400px; bottom: 0.75rem; right: 0.75rem; }
     #todo-body { max-height: 65vh !important; }

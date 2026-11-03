@@ -3,7 +3,6 @@
 Both routes self-handle their own setup-token / first-boot-window logic (409 when
 the window is closed, 403 on a bad token); they are NOT table-guarded.
 """
-import hmac
 import sys
 import time
 import store
@@ -13,7 +12,7 @@ import server as _s
 def submit(handler):
     """POST /api/setup {email, password, setup_token}: creates the FIRST
     admin and opens the session. Refuses outside the first-boot window (409),
-    on a bad token (403, constant-time comparison), invalid email/password
+    on a bad token or setup code (403, constant-time comparison), invalid email/password
     (400). Once the admin is created, the window closes for good
     (setup_is_open() becomes False)."""
     # Always read the body (keep-alive), even if we're going to refuse.
@@ -26,8 +25,7 @@ def submit(handler):
     if not _s.setup_is_open():
         handler._send_json(409, {"error": "setup already completed"})
         return
-    provided = (data.get("setup_token") or "")
-    if not hmac.compare_digest(str(provided), _s._CTX.setup_token.token or ""):
+    if not _s._CTX.setup_token.accepts(data.get("setup_token")):
         handler._send_json(403, {"error": _s._t("setup_bad_token")})
         return
     email = (data.get("email") or "").strip().lower()
