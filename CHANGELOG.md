@@ -6,7 +6,14 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
-## [Unreleased]
+## [2.2.0] - 2026-11-04
+
+An Atlas installed from the alwaysdata marketplace now updates itself from Settings › About, and
+its owner picks the name before "Atlas" and the line under the logo without a terminal. Saving no
+longer waits on GitHub, and a GitHub having a bad day no longer raises the "not saved online yet"
+banner. The MCP tools are unchanged: no need to refresh the connector. An Atlas on 2.1.x moves to
+2.2.0 once by hand (`pip install --upgrade atlas-mind` in its environment, then a restart); from
+then on, the Update button does it.
 
 ### Added
 - **Settings › About.** The running version, how to report a problem (a GitHub issue that opens with
