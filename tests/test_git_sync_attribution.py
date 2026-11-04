@@ -102,7 +102,7 @@ class TestCommitChange(unittest.TestCase):
 
     def test_pull_and_rebuild_pushes_unpushed_commits(self):
         # A commit already on disk (e.g. an inline commit whose push failed) must be
-        # pushed by the backstop even though it commits nothing itself (push_if_ahead).
+        # pushed by the backstop even though it commits nothing itself.
         self._write("C.md", "gamma\n")
         _git(self.repo, "add", "-A")
         _git(self.repo, "commit", "-q", "-m", "docs: C")

@@ -118,3 +118,7 @@
 .gh-steps > li.gh-go::before { content: none; }
 .gh-key { display: flex; gap: .5rem; align-items: flex-start; }
 .gh-key code { flex: 1; min-width: 0; padding: .45rem .6rem; border-radius: .5rem; background: rgb(var(--raise)); border: 1px solid rgb(var(--line) / var(--line-a)); font-size: .7rem; line-height: 1.45; word-break: break-all; white-space: pre-wrap; color: rgb(var(--ink-200)); }
+
+/* A newer version is out (settings-panel.ts checkUpdate): a dot on the gear. */
+#settings-btn.has-update { position: relative; }
+#settings-btn.has-update::after { content: ''; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--accent)); box-shadow: 0 0 0 2px rgb(var(--side)); }

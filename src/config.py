@@ -59,6 +59,7 @@ atlas.toml format (all keys optional):
 """
 from pathlib import Path
 import difflib
+import json
 import os
 import re
 import sys
@@ -134,6 +135,35 @@ def _slugify(value: str) -> str:
     'atlas')."""
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug or "atlas"
+
+
+def toml_string(value: str) -> str:
+    """A TOML basic string: JSON's escapes are TOML's, except DEL, which TOML wants escaped."""
+    return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
+
+
+def set_toml_root_keys(text: str, values: dict) -> str:
+    """atlas.toml with the root keys `values` set to these strings. Each replaces the line
+    that holds its key (a live one first, else a commented-out example), or goes just before
+    the first [table]. Every other line stays as it was."""
+    lines = text.splitlines()
+    end = next((i for i, ln in enumerate(lines) if ln.lstrip().startswith("[")), len(lines))
+    for key, value in values.items():
+        live = re.compile(rf"^\s*{re.escape(key)}\s*=")
+        commented = re.compile(rf"^\s*#\s*{re.escape(key)}\s*=")
+        at = next((i for i in range(end) if live.match(lines[i])), None)
+        if at is None:
+            at = next((i for i in range(end) if commented.match(lines[i])), None)
+        line = f"{key} = {toml_string(value)}"
+        if at is not None:
+            lines[at] = line
+            continue
+        at = end
+        while at > 0 and not lines[at - 1].strip():
+            at -= 1
+        lines.insert(at, line)
+        end += 1
+    return "\n".join(lines) + "\n"
 
 
 def _warn_unknown_toml_keys(data: dict) -> None:
@@ -509,6 +539,15 @@ class AtlasConfig:
         if not self.prefix:
             return SITE_WORDMARK
         return f"{self.prefix} {SITE_WORDMARK}"
+
+    def set_identity(self, *, prefix=None, tagline=None) -> None:
+        """Take a new prefix and/or tagline live, once Settings › Apparence wrote them to
+        atlas.toml (the next boot reads them there)."""
+        if prefix is not None:
+            self.prefix = prefix.strip()
+        if tagline is not None:
+            self.tagline = tagline.strip() or DEFAULT_TAGLINE
+        self.site_slug = _slugify(self.site_name)
 
     @property
     def site_short_name(self) -> str:

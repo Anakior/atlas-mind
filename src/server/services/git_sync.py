@@ -1,13 +1,16 @@
 """Local content-repo git sync (cloud mode).
 
-One lock serializes every git op on the mind's repo. An interactive edit commits
-INLINE (commit_change — attributed, path-scoped) then wakes a single coalescing
-worker that pulls --rebase, rebuilds and pushes in the background, so the request
-never waits on the network. pull_and_rebuild() (periodic + SIGTERM) and trigger_sync()
+One lock serializes the git ops that change the repo (commit, rebase) and the rebuild;
+fetch and push run outside it, under their own, so a slow or failing remote never holds
+up a save. An interactive edit commits INLINE (commit_change — attributed, path-scoped)
+then wakes a single coalescing worker that rebuilds and pushes in the background,
+pulling only when the remote has moved, and retrying a failed push a few times before
+the periodic loop takes over. pull_and_rebuild() (periodic + SIGTERM) and trigger_sync()
 are the anonymous add -A backstops. run() never blocks on a credential prompt
 (GIT_TERMINAL_PROMPT=0) and bounds every call with a timeout. Without an upstream (a
 mind started with no remote) pull/push are skipped. Every commit/pull/push outcome is
-recorded and health() reports it. Built once by AppContext.
+recorded; health() reports a refused commit at once, a failing pull/push once it lasts.
+Built once by AppContext.
 """
 import os
 import re
@@ -36,6 +39,14 @@ _ERROR_KINDS = (
 # `git commit` exits 1 when there is simply nothing to commit: not a failure.
 _NOTHING_TO_COMMIT = ("nothing to commit", "nothing added to commit",
                       "no changes added to commit")
+# A push refused because the remote has commits the mind lacks: pull, then push again.
+_REMOTE_AHEAD = ("fetch first", "non-fast-forward")
+# After a failed push the worker tries again after these delays (a newer save at once),
+# then leaves it to the periodic loop.
+_RETRY_S = (15, 45, 120)
+# A remote that fails now and then (GitHub having a bad day) is no news: a pull/push
+# failure is reported once it has lasted this long with changes waiting.
+_ERROR_GRACE_S = 120
 
 
 def mask_url(s: str) -> str:
@@ -54,10 +65,14 @@ def classify_git_error(text: str) -> str:
 class GitSync:
     def __init__(self, *, config):
         self._config = config
-        self._lock = threading.Lock()        # serializes every git op on the repo
+        self._lock = threading.Lock()        # serializes the git ops that change the repo
+        self._remote_lock = threading.Lock() # serializes fetch/push, apart from _lock
         self._push_lock = threading.Lock()   # guards the coalescing-push flag + handle
         self._push_pending = False
         self._pusher = None
+        self._push_wake = threading.Event()  # a new save cuts a retry wait short
+        self._retry_s = _RETRY_S
+        self._error_grace = _ERROR_GRACE_S
         self._dev_lock = threading.Lock()    # coalesces the dev live-rebuild (single-flight)
         self._dev_building = False
         self._dev_dirty = False
@@ -218,40 +233,78 @@ class GitSync:
         return changes
 
     def _request_push(self) -> None:
-        """Wake a single background worker to pull/rebuild/push; coalesces a burst."""
+        """Wake a single background worker to rebuild and push; coalesces a burst."""
         with self._push_lock:
             self._push_pending = True
+            self._push_wake.set()
             if self._pusher is None or not self._pusher.is_alive():
                 self._pusher = threading.Thread(target=self._push_loop, daemon=True)
                 self._pusher.start()
 
     def _push_loop(self) -> None:
+        retries = iter(self._retry_s)
         while True:
             with self._push_lock:
                 if not self._push_pending:
                     self._pusher = None
                     return
                 self._push_pending = False
-            self._sync_remote()
+                self._push_wake.clear()
+            if self._sync_remote():
+                retries = iter(self._retry_s)
+                continue
+            delay = next(retries, None)
+            if delay is not None:
+                self._push_wake.wait(delay)
+                with self._push_lock:
+                    self._push_pending = True
 
-    def _sync_remote(self) -> None:
-        """pull --rebase, rebuild, push if ahead. Serialized with every git op."""
-        with self._lock:
-            try:
-                upstream = self._has_upstream()
-                if upstream:
-                    self._remote("pull", "pull", "--rebase", "--autostash", "--quiet")
+    def _sync_remote(self) -> bool:
+        """Rebuild, then push; pull only when the remote has moved. True once nothing
+        is left to push (or there is no remote)."""
+        try:
+            with self._lock:
                 self.build()
-                if upstream:
-                    self._push_if_ahead()
-            except Exception as e:
-                print(f"[sync_remote] {e}", file=sys.stderr, flush=True)
+            if not self._has_upstream():
+                return True
+            outcome = self._push()
+            if outcome == "behind" and self._pull():
+                outcome = self._push()
+            return outcome == "ok"
+        except Exception as e:
+            print(f"[sync_remote] {e}", file=sys.stderr, flush=True)
+            return False
 
-    def _push_if_ahead(self) -> None:
-        """Push when HEAD has commits the upstream lacks — covers inline commits (or
-        commits rebased in by the webhook / pull loop) that no self-commit pushed."""
-        if self._unpushed()[0]:
-            self._remote("push", "push", "--quiet")
+    def _push(self) -> str:
+        """Push the commits the upstream lacks — inline ones, or ones rebased in by the
+        webhook / pull loop. "ok" when none is left, "behind" when the remote has commits
+        the mind lacks (not a failure: pull, then push again), else "failed"."""
+        if not self._unpushed()[0]:
+            return "ok"
+        result = self._net("push", "--quiet")
+        out = f"{result.stderr or ''}\n{result.stdout or ''}".lower()
+        if result.returncode and any(n in out for n in _REMOTE_AHEAD):
+            return "behind"
+        return "ok" if self._note("push", result) else "failed"
+
+    def _pull(self, *, build=True) -> bool:
+        """Fetch outside the repo lock, then rebase onto the upstream under it, and
+        rebuild when that brought something. A rebase that cannot apply is undone: the
+        mind stays as it was. True when the mind now holds the remote's commits."""
+        fetched = self._net("fetch", "--quiet")
+        if fetched.returncode:
+            self._note("pull", fetched)
+            return False
+        with self._lock:
+            before = self.run("rev-parse", "HEAD").stdout
+            result = self.run("rebase", "--autostash", "--quiet")
+            if result.returncode:
+                self.run("rebase", "--abort")
+            if not self._note("pull", result):
+                return False
+            if build and self.run("rev-parse", "HEAD").stdout != before:
+                self.build()
+        return True
 
     # --- sync health -------------------------------------------------------
 
@@ -264,13 +317,15 @@ class GitSync:
         stamps = self.run("log", "@{u}..HEAD", "--format=%ct").stdout.split()
         return len(stamps), (int(stamps[-1]) if stamps else None)
 
-    def _remote(self, op, *args) -> bool:
-        """A pull or push, bounded in time; a timeout counts as a network failure."""
-        try:
-            result = self.run(*args, timeout=30)
-        except subprocess.TimeoutExpired:
-            result = subprocess.CompletedProcess(args, 1, "", f"git {op} timed out")
-        return self._note(op, result)
+    def _net(self, *args) -> subprocess.CompletedProcess:
+        """A fetch or push: under the remote lock only (git takes its own ref locks, so
+        a save can commit meanwhile), bounded in time; a timeout reads as a network
+        failure."""
+        with self._remote_lock:
+            try:
+                return self.run(*args, timeout=30)
+            except subprocess.TimeoutExpired:
+                return subprocess.CompletedProcess(args, 1, "", f"git {args[0]} timed out")
 
     def _note(self, op, result) -> bool:
         """Record a git op's outcome for health(); True when it succeeded. A success
@@ -284,9 +339,12 @@ class GitSync:
                     self._error = None
             return True
         first = next((ln.strip() for ln in out.splitlines() if ln.strip()), "git failed")
+        now = time.time()
         error = {"op": op, "kind": classify_git_error(out),
-                 "message": mask_url(first)[:300], "at": time.time()}
+                 "message": mask_url(first)[:300], "at": now, "since": now}
         with self._health_lock:
+            if self._error and self._error["op"] == op:  # the same failure, still standing
+                error["since"] = self._error["since"]
             self._error = error
         print(f"[git {op}] FAILED ({error['kind']}): {mask_url(out.strip())[:500]}",
               file=sys.stderr, flush=True)
@@ -303,7 +361,9 @@ class GitSync:
         with self._health_lock:
             error = dict(self._error) if self._error else None
             last_push = self._last_ok.get("push")
-        status = ("error" if error else "local" if not upstream
+        lasting = bool(error) and (error["op"] == "commit" or (
+            count > 0 and time.time() - error["since"] >= self._error_grace))
+        status = ("error" if lasting else "local" if not upstream
                   else "pending" if count else "ok")
         return {"status": status, "remote": upstream, "unpushed": count,
                 "oldest_unpushed_at": oldest, "last_push_at": last_push, "error": error}
@@ -360,6 +420,9 @@ class GitSync:
     def _forget_remote(self) -> None:
         self.run("remote", "remove", "origin")
         self.run("config", "--unset", "core.sshCommand")
+        with self._health_lock:  # no remote, so no pull/push failure left to report
+            if self._error and self._error["op"] != "commit":
+                self._error = None
 
     def _commit_stray(self) -> None:
         """Record tracked changes not yet committed (lock held)."""
@@ -392,21 +455,22 @@ class GitSync:
                 self.build()
             return
         print("[pull_and_rebuild] start", flush=True)
-        with self._lock:
-            try:
+        try:
+            with self._lock:
                 self.run("add", "-A")
                 self._note("commit", self.run("commit", "-m", "docs: update via viewer", "--quiet"))
-                upstream = self._has_upstream()
-                if upstream:
-                    self._remote("pull", "pull", "--rebase", "--autostash", "--quiet")
+            upstream = self._has_upstream()
+            if upstream:
+                self._pull(build=False)
+            with self._lock:
                 b = self.build(text=True)
-                if b.returncode != 0:
-                    print(f"[pull_and_rebuild] build failed: {b.stderr.strip()!r}",
-                          file=sys.stderr, flush=True)
-                if upstream:
-                    self._push_if_ahead()
-            except Exception as e:
-                print(f"[pull_and_rebuild] ERROR {e}", file=sys.stderr, flush=True)
+            if b.returncode != 0:
+                print(f"[pull_and_rebuild] build failed: {b.stderr.strip()!r}",
+                      file=sys.stderr, flush=True)
+            if upstream:
+                self._push()
+        except Exception as e:
+            print(f"[pull_and_rebuild] ERROR {e}", file=sys.stderr, flush=True)
 
     def trigger_sync(self) -> None:
         """Anonymous commit + push for sites not (yet) attributed (todos local-only,
@@ -416,17 +480,17 @@ class GitSync:
             return
 
         def _sync():
-            with self._lock:
-                try:
-                    upstream = self._has_upstream()
-                    if upstream:
-                        self._remote("pull", "pull", "--rebase", "--autostash", "--quiet")
+            try:
+                upstream = self._has_upstream()
+                if upstream:
+                    self._pull(build=False)
+                with self._lock:
                     self.build()
                     self.run("add", "-A")
                     self._note("commit", self.run("commit", "-m", "docs: update via viewer", "--quiet"))
-                    if upstream:
-                        self._push_if_ahead()
-                except Exception as e:
-                    print(f"[trigger_sync] {e}", file=sys.stderr)
+                if upstream:
+                    self._push()
+            except Exception as e:
+                print(f"[trigger_sync] {e}", file=sys.stderr)
 
         threading.Thread(target=_sync, daemon=True).start()

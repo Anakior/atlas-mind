@@ -18,7 +18,7 @@
 .side-brand { display: flex; align-items: center; gap: 6px; padding: 2px 2px 4px 4px; }
 .side-home { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
 .side-prefix { font-size: 26px; margin: -2px 0 2px; }
-.side-prefix:empty { display: none; }
+.wm-prefix:empty { display: none; }
 .side-name { margin: 0; display: flex; align-items: center; gap: .4em; line-height: 1; font-size: 15px; }
 .side-name .wm-atlas { font-size: 21px; }
 .side-name .nebula-pill { font-size: 9.5px; }

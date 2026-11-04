@@ -211,7 +211,7 @@ export class HomeView {
     <div class="home not-prose">
       <section class="home-hero">
         <div class="home-hero-l">
-          <h1 class="home-mark">${SITE_PREFIX ? `<span class="wm-prefix">${escapeHtml(SITE_PREFIX)}</span>` : ''}<span class="wm-atlas">Atlas</span><span class="nebula-pill">Mind</span></h1>
+          <h1 class="home-mark"><span class="wm-prefix">${escapeHtml(SITE_PREFIX)}</span><span class="wm-atlas">Atlas</span><span class="nebula-pill">Mind</span></h1>
           <p class="home-tag">${escapeHtml(TAGLINE)}</p>
           <div class="home-stats">
             <div class="home-stat"><b>${mdCount}</b><span>${t('statDocs')}</span></div>

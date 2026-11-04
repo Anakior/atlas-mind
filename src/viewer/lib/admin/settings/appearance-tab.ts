@@ -1,5 +1,6 @@
-// Settings › Apparence tab (admin): the instance accent and whether the site prefix and the tagline
-// show, the same for every account. A pick applies at once and is saved; a refused save puts the previous look back.
+// Settings › Apparence tab (admin): the instance accent, the name before "Atlas" and the line under the
+// logo, and whether those two show, the same for every account. A pick applies at once and is saved
+// (the name and the line go to atlas.toml); a refused save puts the previous look back.
 
 import { t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
@@ -11,11 +12,11 @@ const DEFAULT_BRAND = '#e8941c';
 const PRESETS = ['#e5624b', '#d9488f', '#8b5cf6', '#3b82f6', '#0ea5c6', '#10b981', '#84cc16'];
 
 // What a save sends: a null brand puts Atlas gold back.
-type Change = { brand?: string | null; show_prefix?: boolean; show_tagline?: boolean };
-// The texts an admin may hide, each with its switch (#appearance-<id>) in 05-settings.html.
-const SWITCHES = [
-  { id: 'prefix', field: 'show_prefix', text: SITE_PREFIX },
-  { id: 'tagline', field: 'show_tagline', text: TAGLINE },
+type Change = { brand?: string | null; show_prefix?: boolean; show_tagline?: boolean; prefix?: string; tagline?: string };
+// The two texts, each with its field (#appearance-<id>-text) and its switch (#appearance-<id>).
+const TEXTS = [
+  { id: 'prefix', show: 'show_prefix' },
+  { id: 'tagline', show: 'show_tagline' },
 ] as const;
 
 export class SettingsAppearance {
@@ -32,15 +33,18 @@ export class SettingsAppearance {
         if (sw) this.save({ brand: sw.dataset.brand || null });
       });
       swatches.addEventListener('change', (e) => this.save({ brand: (e.target as HTMLInputElement).value }));
-      for (const sw of SWITCHES) {
-        const btn = document.getElementById('appearance-' + sw.id)!;
+      for (const text of TEXTS) {
+        const btn = document.getElementById('appearance-' + text.id)!;
+        const field = document.getElementById(`appearance-${text.id}-text`) as HTMLInputElement;
 
-        btn.addEventListener('click', () => this.save({ [sw.field]: btn.getAttribute('aria-checked') !== 'true' }));
+        btn.addEventListener('click', () => this.save({ [text.show]: btn.getAttribute('aria-checked') !== 'true' }));
+        // Saved on Enter or on leaving the field, once it differs from what is saved.
+        // An emptied line goes back to what it was: hiding it is the switch's job.
+        field.addEventListener('change', () => {
+          if (text.id === 'tagline' && !field.value.trim()) this.render();
+          else if (field.value.trim() !== this.text(text.id)) this.save({ [text.id]: field.value });
+        });
       }
-    }
-    for (const sw of SWITCHES) {
-      document.getElementById(`appearance-${sw.id}-card`)!.classList.toggle('hidden', !sw.text);
-      document.getElementById(`appearance-${sw.id}-title`)!.textContent = t('appearanceShow', sw.text);
     }
 
     try {
@@ -49,6 +53,10 @@ export class SettingsAppearance {
       this.ctx.showError((e as Error).message);
     }
     this.render();
+  }
+
+  private text(id: 'prefix' | 'tagline'): string {
+    return appearance.current[id] ?? (id === 'prefix' ? SITE_PREFIX : TAGLINE);
   }
 
   private render(): void {
@@ -61,8 +69,12 @@ export class SettingsAppearance {
       swatch(DEFAULT_BRAND, t('appearanceDefault'), '') +
       PRESETS.map((hex) => swatch(hex, hex)).join('') +
       `<label class="appearance-swatch appearance-custom${custom ? ' is-on' : ''}" data-tip="${escapeHtml(t('appearanceCustom'))}"${custom ? ` style="--sw:${custom}"` : ''}><input type="color" value="${custom || DEFAULT_BRAND}"></label>`;
-    for (const sw of SWITCHES) {
-      document.getElementById('appearance-' + sw.id)!.setAttribute('aria-checked', String(appearance.current[sw.field] !== false));
+    for (const text of TEXTS) {
+      const btn = document.getElementById('appearance-' + text.id) as HTMLButtonElement;
+
+      (document.getElementById(`appearance-${text.id}-text`) as HTMLInputElement).value = this.text(text.id);
+      btn.setAttribute('aria-checked', String(appearance.current[text.show] !== false));
+      btn.disabled = !this.text(text.id); // no name: nothing to show or hide
     }
   }
 
@@ -74,7 +86,10 @@ export class SettingsAppearance {
       if (fields.brand) next.brand = fields.brand;
       else delete next.brand;
     }
-    for (const sw of SWITCHES) if (sw.field in fields) next[sw.field] = fields[sw.field];
+    for (const text of TEXTS) {
+      if (text.show in fields) next[text.show] = fields[text.show];
+      if (text.id in fields) next[text.id] = fields[text.id]!.trim();
+    }
     this.ctx.clearError();
     appearance.apply(next);
     this.render();

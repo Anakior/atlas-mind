@@ -55,7 +55,7 @@ if str(ENGINE_SRC) not in sys.path:
     sys.path.insert(0, str(ENGINE_SRC))
 
 import store  # noqa: E402
-from config import AtlasConfig, AtlasConfigError, DEFAULT_PORT  # noqa: E402
+from config import AtlasConfig, AtlasConfigError, DEFAULT_PORT, toml_string  # noqa: E402
 
 MIN_PASSWORD_LENGTH = 8
 DEFAULT_TOKEN_LABEL = "claude"
@@ -133,7 +133,7 @@ ATLAS_TOML_TEMPLATE = """\
 # name feeds <title>, the PWA manifest, the OpenAPI spec and the MCP server.
 {prefix_line}
 # Tagline shown under the title on the viewer's home page.
-tagline = "{tagline}"
+tagline = {tagline}
 # Interface language: "en" or "fr" (also set on <html lang>).
 lang = "{lang}"
 
@@ -199,9 +199,10 @@ dist/
 
 
 def _render_atlas_toml(prefix: str, tagline: str, lang: str) -> str:
-    prefix_line = (f'prefix = "{prefix}"' if prefix else '# prefix = "Acme"')
+    # Typed in a form, a name may hold a quote: escaped, it cannot break the file.
+    prefix_line = (f"prefix = {toml_string(prefix)}" if prefix else '# prefix = "Acme"')
     return ATLAS_TOML_TEMPLATE.format(
-        prefix_line=prefix_line, tagline=tagline, lang=lang)
+        prefix_line=prefix_line, tagline=toml_string(tagline), lang=lang)
 
 
 # ── Scaffolded documents (English default, French variant via --lang fr) ───────

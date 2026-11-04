@@ -55,7 +55,7 @@ GET_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/remotes", admin.remotes_get, _G.ADMIN),
     router.Route(_RK.EXACT, "/api/admin/github", github.get, _G.ADMIN),
     router.Route(_RK.EXACT, "/api/admin/groups", acl.groups_get, _G.ADMIN),
-    router.Route(_RK.EXACT, "/api/admin/update-check", admin.update_check, _G.ADMIN),
+    router.Route(_RK.EXACT_NOQUERY, "/api/admin/update-check", admin.update_check, _G.ADMIN),
     router.Route(_RK.EXACT, "/api/appearance", admin.appearance_get, _G.AUTH),
     router.Route(_RK.EXACT, "/api/todos", todos.list_todos, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.list_notes, _G.AUTH),
@@ -114,6 +114,7 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/github/restore", github.adopt, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/restore", restore.from_backup, _G.ADMIN_UPLOAD),
     router.Route(_RK.EXACT, "/api/admin/backup", docs.backup, _G.ADMIN_CSRF),        # owner, password (+ 2FA) again
+    router.Route(_RK.EXACT, "/api/admin/update", admin.update_run, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/remotes/sync", admin.remotes_sync, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/remotes/appropriate", admin.remotes_appropriate, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/account/profile", account.profile_post, _G.CSRF_BASE),

@@ -9,6 +9,7 @@ import sys
 import time
 import store
 from server import _is_newer, PROJECT_URL
+from server.services import updater
 import server as _s
 
 
@@ -206,19 +207,29 @@ def tokens_delete(handler):
 _HEX_COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
+# The name before "Atlas" and the line under the logo, as typed in Settings › Apparence.
+_IDENTITY_LIMITS = {"prefix": 40, "tagline": 160}
+
+
+def _with_identity(appearance: dict) -> dict:
+    return {**appearance, "prefix": _s.CONFIG.prefix, "tagline": _s.CONFIG.tagline}
+
+
 def appearance_get(handler):
-    """GET /api/appearance — the instance's accent and prefix setting (any account)."""
+    """GET /api/appearance — the instance's accent, its prefix and tagline and whether they
+    show (any account)."""
     try:
         appearance = _s.get_store().get_appearance()
     except Exception as e:
         _s.registry_503(handler, "[admin] read appearance", e)
         return
-    handler._send_json(200, appearance)
+    handler._send_json(200, _with_identity(appearance))
 
 
 def appearance_post(handler):
-    """POST /api/appearance {brand?: "#rrggbb" | null, show_prefix?: bool, show_tagline?: bool} —
-    null puts the accent back to Atlas gold. Only the fields sent change."""
+    """POST /api/appearance {brand?: "#rrggbb" | null, show_prefix?: bool, show_tagline?: bool,
+    prefix?: str, tagline?: str} — null puts the accent back to Atlas gold; the prefix and the
+    tagline go to atlas.toml (an empty prefix is "Atlas" alone). Only the fields sent change."""
     data = handler._read_json()
     data = data if isinstance(data, dict) else {}
     fields = {}
@@ -235,31 +246,70 @@ def appearance_post(handler):
             handler._send_json(400, {"error": f"{key} must be a boolean"})
             return
         fields[key] = data[key]
-    if not fields:
+    identity = {}
+    for key, limit in _IDENTITY_LIMITS.items():
+        if key not in data:
+            continue
+        value = data[key]
+        if not isinstance(value, str) or len(value) > limit or any(ord(c) < 32 or ord(c) == 127 for c in value):
+            handler._send_json(400, {"error": f"{key} must be one line of at most {limit} characters"})
+            return
+        if key == "tagline" and not value.strip():
+            handler._send_json(400, {"error": "the tagline cannot be empty (hide it instead)"})
+            return
+        identity[key] = value.strip()
+    if not fields and not identity:
         handler._send_json(400, {"error": "nothing to set"})
         return
     try:
-        appearance = _s.get_store().set_appearance(fields)
+        store = _s.get_store()
+        appearance = store.set_appearance(fields) if fields else store.get_appearance()
     except Exception as e:
         _s.registry_503(handler, "[admin] save appearance", e)
         return
-    handler._send_json(200, appearance)
+    if identity:
+        _s.set_identity(identity, handler._viewer_ctx())
+    handler._send_json(200, _with_identity(appearance))
 
 
-# ── Atlas nodes — administration (hive) ────────────────────────────
 def update_check(handler):
+    """The running version against PyPI's. Asked by the About tab (`?now=1`, the person
+    looking), it checks even when the automatic check is off. `install` is how this engine
+    updates (updater.install_kind)."""
     current = _s.current_version()
-    if not _s.CONFIG.update_check:
-        handler._send_json(200, {"current": current, "latest": None,
+    install = updater.install_kind()
+    if not _s.CONFIG.update_check and not handler._query().get("now"):
+        handler._send_json(200, {"current": current, "latest": None, "install": install,
                                  "update_available": False, "disabled": True})
         return
     latest = _s.latest_pypi_version()
     handler._send_json(200, {
         "current": current,
         "latest": latest,
+        "install": install,
         "update_available": _is_newer(latest, current),
         "url": PROJECT_URL,
     })
+
+
+def update_run(handler):
+    """Settings › About › Update: install the latest release in place, then restart on it."""
+    if updater.install_kind() != "button":
+        handler._send_json(409, {"error": "this install updates its own way"})
+        return
+    current, latest = _s.current_version(), _s.latest_pypi_version()
+    if not _is_newer(latest, current):
+        handler._send_json(409, {"error": "already up to date"})
+        return
+    ok, why = updater.update(latest, current)
+    if not ok:
+        handler._send_json(500, {"error": why})
+        return
+    handler._send_json(200, {"version": latest})
+    updater.restart(_s._CTX.git_sync.pull_and_rebuild)
+
+
+# ── Atlas nodes — administration (hive) ────────────────────────────
 
 
 def nodes_get(handler):

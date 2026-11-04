@@ -803,10 +803,10 @@ class TestAdminUiPanel(unittest.TestCase):
         self.assertIn('id="settings-backdrop"', self.index)
         self.assertIn('id="settings-panel"', self.index)
         self.assertIn('id="settings-btn"', self.index)
-        for tab in ("me", "atlas", "ai", "hive", "shares", "team", "appearance"):
+        for tab in ("me", "atlas", "ai", "hive", "shares", "team", "appearance", "about"):
             self.assertIn(f'data-tab="{tab}"', self.index)
         # The panes the sections stack.
-        for pane in ("users", "tokens", "shares", "security", "phone", "copies", "appearance", "nodes", "groups"):
+        for pane in ("users", "tokens", "shares", "security", "phone", "copies", "appearance", "nodes", "groups", "about"):
             self.assertIn(f'id="settings-pane-{pane}"', self.index)
 
     def test_settings_token_one_time_display_present(self):

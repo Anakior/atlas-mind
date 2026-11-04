@@ -17,7 +17,7 @@ Cloud mode (when KB_AUTH_ENABLED=1):
     cloud, otherwise users/shares are lost when the ephemeral rootfs is rebuilt.
     The repo is cloned (or started) at first boot into KB_REPO_PATH (default
     /app/repo); ATLAS_LANG (en/fr) picks a new mind's language.
-    A background thread pulls the repo every GIT_PULL_INTERVAL seconds (default 30).
+    A background thread pulls the repo every GIT_PULL_INTERVAL seconds (default 300).
     All routes require a signed session cookie; /login renders an HTML form.
 
 API:
@@ -460,6 +460,18 @@ def current_version():
         return version("atlas-mind")
     except Exception:
         return None
+
+
+def set_identity(values: dict, ctx) -> None:
+    """Settings › Apparence: the prefix and/or tagline written into atlas.toml, committed like
+    any edit (the push worker then rebuilds the viewer), and live at once for the pages the
+    server renders itself."""
+    from config import set_toml_root_keys
+    toml = CONFIG.root / "atlas.toml"
+    text = toml.read_text(encoding="utf-8") if toml.exists() else ""
+    toml.write_text(set_toml_root_keys(text, values), encoding="utf-8")
+    CONFIG.set_identity(**values)
+    commit_change(ctx, "appearance: " + ", ".join(sorted(values)), toml)
 
 
 def latest_pypi_version():

@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -63,6 +64,8 @@ class TestHealth(unittest.TestCase):
         _git(self.repo, "commit", "-q", "-m", "init")
         self.gs = GitSync(config=SimpleNamespace(root=self.repo, dev_mode=False))
         self.gs.build = lambda **k: SimpleNamespace(returncode=0, stderr="")
+        self.gs._retry_s = ()      # no retry unless a test asks for one
+        self.gs._error_grace = 0   # a pull/push failure counts at once unless a test says
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -150,6 +153,84 @@ class TestHealth(unittest.TestCase):
     def test_nothing_to_commit_is_not_an_error(self):
         self.gs.pull_and_rebuild()  # the backstop commit finds nothing to commit
         self.assertIsNone(self.gs.health()["error"])
+
+    def test_a_short_failure_is_not_yet_an_error(self):
+        # GitHub failing now and then must not raise the banner: pending, not error.
+        self._add_remote()
+        self.gs._error_grace = 120
+        _git(self.repo, "remote", "set-url", "origin", str(self.tmp / "missing.git"))
+        self._write("A.md", "alpha\n")
+        self.gs.commit_change("created: A", ["A.md"])
+        _wait_push_idle(self.gs)
+        health = self.gs.health()
+        self.assertEqual(health["status"], "pending")
+        self.assertEqual(health["error"]["op"], "push")  # still told to doctor and the API
+
+    def test_failed_push_is_retried_without_a_new_save(self):
+        remote = self._add_remote()
+        self.gs._retry_s = (1.0,)
+        _git(self.repo, "remote", "set-url", "origin", str(self.tmp / "missing.git"))
+        self._write("A.md", "alpha\n")
+        self.gs.commit_change("created: A", ["A.md"])
+        deadline = time.time() + 10
+        while self.gs.health()["error"] is None and time.time() < deadline:
+            time.sleep(0.05)
+        _git(self.repo, "remote", "set-url", "origin", str(remote))  # back before the retry
+        self.assertIsNone(self._wait_status("ok")["error"])
+
+    def test_push_behind_the_remote_pulls_then_pushes(self):
+        # The remote moved (another computer): the refused push is no error.
+        remote = self._add_remote()
+        other = self.tmp / "other"
+        _git(self.tmp, "clone", "-q", str(remote), str(other))
+        (other / "B.md").write_text("beta\n", encoding="utf-8")
+        _git(other, "add", "-A")
+        _git(other, "-c", "user.name=O", "-c", "user.email=o@example.com", "commit", "-q", "-m", "B")
+        _git(other, "push", "-q")
+        self._write("A.md", "alpha\n")
+        self.gs.commit_change("created: A", ["A.md"])
+        _wait_push_idle(self.gs)
+        health = self.gs.health()
+        self.assertEqual(health["status"], "ok")
+        self.assertIsNone(health["error"])
+        self.assertTrue((self.repo / "B.md").exists())
+        self.assertIn("created: A", _git(remote, "log", "--format=%s"))
+
+    def test_a_rebase_that_cannot_apply_is_undone(self):
+        remote = self._add_remote()
+        other = self.tmp / "other"
+        _git(self.tmp, "clone", "-q", str(remote), str(other))
+        (other / "README.md").write_text("theirs\n", encoding="utf-8")
+        _git(other, "-c", "user.name=O", "-c", "user.email=o@example.com", "commit", "-qam", "theirs")
+        _git(other, "push", "-q")
+        self._write("README.md", "ours\n")
+        self.gs.commit_change("edited: README", ["README.md"])
+        _wait_push_idle(self.gs)
+        health = self.gs.health()
+        self.assertEqual((health["error"]["op"], health["error"]["kind"]), ("pull", "conflict"))
+        self.assertFalse((self.repo / ".git" / "rebase-merge").exists())
+        self.assertEqual((self.repo / "README.md").read_text(encoding="utf-8"), "ours\n")
+
+    def test_a_save_does_not_wait_for_the_network(self):
+        # A slow remote (a fetch hanging on GitHub) must not hold the repo while it waits.
+        self._add_remote()
+        fetching, real_net = threading.Event(), self.gs._net
+
+        def slow_net(*args):
+            fetching.set()
+            time.sleep(3)
+            return real_net(*args)
+
+        self.gs._net = slow_net
+        backstop = threading.Thread(target=self.gs.pull_and_rebuild)
+        backstop.start()
+        self.assertTrue(fetching.wait(5))
+        self._write("A.md", "alpha\n")
+        start = time.time()
+        self.gs.commit_change("created: A", ["A.md"])
+        self.assertLess(time.time() - start, 1.5)
+        backstop.join()
+        _wait_push_idle(self.gs)
 
 
 if __name__ == "__main__":

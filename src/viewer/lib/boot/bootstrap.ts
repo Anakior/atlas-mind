@@ -24,6 +24,7 @@ import { todoList, todoInput, todoForm } from '../graph/todo-surface';
 import { newFileBtn, newFileBackdrop, dirRenameBackdrop } from '../modals/new-file-modal';
 import { shareBackdrop } from '../admin/settings/settings-shared';
 import { securityPane } from '../admin/totp/security-pane';
+import { settingsPanel } from '../admin/settings/settings-panel';
 
 export class Boot {
   private swReloading = false;
@@ -72,6 +73,7 @@ export class Boot {
           if (data.role && data.role !== 'admin') document.body.classList.add('viewer-mode');
           // Settings gear: cloud admins only.
           if (data.cloud && data.role === 'admin') document.body.classList.add('admin-cloud');
+          if (!data.cloud || data.role === 'admin') void settingsPanel.checkUpdate();
           // Security tab (2FA + sessions): any authenticated cloud account.
           if (data.cloud) {
             document.body.classList.add('cloud-authed');

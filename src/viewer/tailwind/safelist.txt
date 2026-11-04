@@ -8,6 +8,15 @@ a[data-path]
 abonnement.
 abonner
 about
+about-mail
+about-report
+about-update
+about-version
+aboutReportBody
+aboutRestartSlow
+aboutRestarting
+aboutUpdateFailed
+aboutUpdating
 above).
 absent
 absolute
@@ -102,6 +111,7 @@ activity-inbox
 activity.
 actuel
 actuelle
+actuelle.
 add
 addTag
 addTodoIn
@@ -123,6 +133,7 @@ again.
 agents
 ago
 ai
+aider
 ajoute
 ajouter
 ajouter,
@@ -157,7 +168,6 @@ appearance
 appearance-
 appearance-swatches
 appearanceDefault
-appearanceShow
 application
 application.
 application/json
@@ -168,6 +178,7 @@ appris.
 appropriateDestPlaceholder
 archive
 are
+are.
 aria-checked
 aria-current
 aria-expanded
@@ -222,6 +233,7 @@ autre
 autres
 aux
 available
+available.
 available:
 avant
 avec
@@ -301,6 +313,7 @@ borderTopWidth
 borrows
 both
 bottom
+bougent
 bouton
 boutons,
 box
@@ -314,6 +327,7 @@ break-word
 brings
 brokenLink
 brought
+browser
 btn-access
 btn-cancel
 btn-download
@@ -329,6 +343,7 @@ btn-pin
 btn-pin-icon
 btn-save
 btn-share
+bug,
 build
 build).
 build.
@@ -417,6 +432,7 @@ clipboard
 clock
 clone
 close
+cloud
 cloud-authed
 cluster
 clusters
@@ -425,6 +441,7 @@ cocher
 code
 code)
 code.
+code:
 code_required
 codeblock
 codes
@@ -487,6 +504,7 @@ connector:
 connexion
 const
 cont
+container
 container)
 content
 content.
@@ -517,6 +535,7 @@ corbeille
 corps
 correspond
 corrupt
+could
 couleur
 count
 coup
@@ -610,13 +629,14 @@ dir-share-btn
 disable
 disabled
 disabled.
+disabled:opacity-60
 discardConfirm
 discardMessage
 discardTitle
 discussed
 display
 display:none
-disponible
+disponible.
 distinguer
 dit
 div
@@ -698,6 +718,7 @@ elle
 elles
 else
 email
+email,
 emails)
 emplacement
 emporterait
@@ -719,6 +740,7 @@ ensuite
 ensuite.
 entier
 entier.
+environ.
 envoi
 envoient
 equipe/onboarding
@@ -795,6 +817,7 @@ fileSize
 filed
 files
 fill
+filled
 filters.
 filtres.
 find
@@ -897,6 +920,7 @@ go
 go.
 goes
 going):
+going:
 grab
 grant
 granted
@@ -913,6 +937,7 @@ graph-tags-toggle
 graph-tooltip
 graphStats
 graphe
+gratuit.
 gratuite
 group
 group-hover:opacity-100
@@ -930,12 +955,14 @@ h2
 h2,
 h3
 has
+has-update
 haute
 have
 health
 healthTabCont
 healthTabStale
 healthValueConflict
+help
 here
 here).
 here.
@@ -1016,7 +1043,7 @@ http
 http:
 http://www.w3.org/2000/svg
 https:
-https://pypi.org/project/atlas-mind/
+https://github.com/Anakior/atlas-mind
 human
 iPhone)
 iPhone):
@@ -1085,6 +1112,7 @@ immediately.
 impossible
 in
 in,
+in.
 inFence
 inbox
 inbox-badge
@@ -1126,7 +1154,11 @@ input
 input,
 inscrire
 inside
+install
+installe
 installed,
+installed:
+installs
 instance
 instance.
 instant.
@@ -1153,6 +1185,7 @@ is-rail
 is-real
 isServerMode
 isolated
+issue
 it
 it,
 it.
@@ -1212,6 +1245,7 @@ last
 lastUsedShort
 later
 later.
+latest
 le
 lead
 leading-none
@@ -1231,6 +1265,7 @@ leur
 leurs
 level
 li
+libre
 licence
 licence.
 license.
@@ -1249,7 +1284,6 @@ ligne,
 lignes
 like
 like.
-line
 line-through
 lineHeight
 lines
@@ -1282,7 +1316,7 @@ localSub
 localhost
 location
 locked
-logo,
+logo
 long
 longer
 longs
@@ -1303,6 +1337,8 @@ ma
 made
 made.
 made.token
+mail
+mail,
 main
 maintenant
 maintenant,
@@ -1311,6 +1347,7 @@ make
 make_commons
 manage
 manquant
+manual
 manually.
 manuellement.
 many
@@ -1358,6 +1395,8 @@ mentaux
 menu
 mes
 message
+met
+mets-la
 middle
 min
 min-h-0
@@ -1367,11 +1406,14 @@ minAgo
 mind
 mine
 minimum.
+minute
+minute.
 minutes.
 miroir
 mirror
 mis
 mise
+mises
 mismatch
 missing
 ml-3
@@ -1440,6 +1482,7 @@ nameRequired
 names
 narrow
 navigate
+navigateur
 navigation)
 naviguer
 ne
@@ -1539,6 +1582,7 @@ nouveaux
 nouvelle
 now
 now,
+now.
 now:
 nowrap
 npx
@@ -1648,6 +1692,7 @@ pas.
 passage
 passe
 passe.
+passer
 password
 password.
 passwords
@@ -1687,7 +1732,6 @@ phoneHint
 phoneLocal
 photo
 photo.png
-phrase
 pick
 pin
 pinned-list
@@ -1719,6 +1763,7 @@ presse-papier
 preview
 previewOfflineHint
 private
+problem
 proches.
 profileSaved
 projets
@@ -1729,11 +1774,13 @@ prompt-input
 prompt-message
 prompt-ok
 prompt-title
+propos
 propre
 prose
 prose-invert
 prose-sm
 pt-6
+pu
 public
 publics
 published
@@ -1761,6 +1808,7 @@ py-6
 quand
 que
 quelques
+question
 questions,
 qui
 quickCaptureTitle
@@ -1794,6 +1842,7 @@ reconnecte-toi
 reconnecter.
 recorded
 recovery
+redeploy
 ref
 ref(null)
 referencedBy
@@ -1804,6 +1853,7 @@ register
 relDaysAgo
 relJustNow
 relYesterday
+relance
 related
 relative
 reload
@@ -1819,6 +1869,7 @@ removed
 removes
 remplace
 remplacera
+remplis.
 rename
 rename-backdrop
 rename-cancel
@@ -1875,9 +1926,13 @@ reset-pw-success
 reset-pw-toggle
 resize
 resize-none
+restart
+restart.
+restarts,
 restauration
 restauration.
 restaurer.
+reste
 restent
 rester
 restera
@@ -1919,6 +1974,7 @@ rgba(56,189,248,.85)
 rgba(89,208,207,0.18)
 rien
 rien,
+right
 right-2
 rights
 role
@@ -2117,6 +2173,7 @@ settingsTabUsers
 settingsTokenLocalLabel
 settingsUpdateAvailable
 seul
+seul.
 seule
 seule.
 seulement
@@ -2180,6 +2237,7 @@ side-panel-sub
 side-panel-title
 side-search-btn
 side-trash-link
+side.
 sidebar
 sidebar-backdrop
 sidebar-collapsed
@@ -2193,6 +2251,7 @@ signed
 since
 single
 sinon,
+site
 sk:
 skel
 skip
@@ -2208,12 +2267,15 @@ somewhere
 sommaire
 son
 sont
+souci
 source
+source.
 sous
 space-y-0.5
 span
 span:not(.side-badge)
 spinning
+sponsor
 sse
 stacked
 stacked-next
@@ -2292,6 +2354,7 @@ tags.
 tags:
 take
 takes
+taking
 tant
 tape
 targeting
@@ -2329,6 +2392,7 @@ team-guide
 team.
 team/onboarding
 tells
+temps
 terminal
 tes
 text
@@ -2367,6 +2431,7 @@ textTransform
 textarea
 textarea,
 texte
+than
 that
 the
 their
@@ -2384,6 +2449,7 @@ this.ctx.aiBadge(e.ai)
 this.what(d)
 thoughts
 tick
+ticket
 tienne
 tiennes.
 time.
@@ -2544,8 +2610,10 @@ upAdded
 upErr_
 upSending
 upSkipped
+update
 updated
 updated.
+updates
 uppercase
 usage
 used
@@ -2557,6 +2625,7 @@ user-sub
 user:
 users
 users.
+usual
 utilisateur
 utilisateur.
 valeur
@@ -2567,8 +2636,12 @@ var
 vers
 version
 version).md
+version,
+version.
+version:
 versions
 versions,
+veux
 veux.
 via
 vide
@@ -2588,6 +2661,7 @@ visShared
 visent
 visibilitychange
 visible
+vivre
 voir
 vous
 vs
@@ -2627,7 +2701,6 @@ window.frames
 with
 without
 wl-autocomplete
-wm-prefix
 wordSpacing
 words
 words)
@@ -2643,7 +2716,6 @@ write:
 writer
 writes
 writes.
-written
 wrong.
 wrote
 year)

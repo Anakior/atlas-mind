@@ -1,5 +1,5 @@
 // Admin/cloud Settings — foundation layer: the standalone share-link modal, the shared admin/share
-// JSON fetch, a few pure helpers, and the SettingsContext handed to every tab controller. The seven
+// JSON fetch, a few pure helpers, and the SettingsContext handed to every tab controller. The
 // per-tab controllers live in ./*-tab.ts and the orchestrating SettingsPanel shell in
 // ./settings-panel.ts (which imports and constructs every controller class).
 //
@@ -292,7 +292,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 
 // ── Shared tab context ────────────────────────────────────────────────────────
 // The services every tab controller needs: the admin JSON fetch, the panel's single error banner,
-// and the copy-button helpers. The shell builds ONE and hands it to each of the seven controllers,
+// and the copy-button helpers. The shell builds ONE and hands it to each of the tab controllers,
 // so none of them re-implements the banner or the clipboard flash.
 export class SettingsContext {
   private readonly errorEl = document.getElementById('settings-error')!;

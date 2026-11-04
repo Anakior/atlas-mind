@@ -6,6 +6,39 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
+## [Unreleased]
+
+### Added
+- **Settings › About.** The running version, how to report a problem (a GitHub issue that opens with
+  the version, the mode and the browser filled in), how to support Atlas (GitHub Sponsors), and the
+  links to the site, the code and the licence. Every account sees it.
+- **Update from Atlas itself.** For an admin, About says whether a newer version is out, with a link
+  to what changed. Where Atlas runs from a Python environment it may write to, installed from PyPI
+  (the alwaysdata marketplace install), an **Update** button installs it in place, checks that the
+  new version starts (otherwise the current one goes back), then restarts Atlas on it; the page
+  reloads by itself. A container, a source checkout or a hand install says how to update instead.
+  With the automatic check on (`ATLAS_UPDATE_CHECK`, now on for alwaysdata installs), a dot on the
+  gear and a line atop Settings say a new version is out. About checks when it opens, even with the
+  automatic check off.
+- **The name before "Atlas" and the line under the logo, chosen without a terminal.** Settings ›
+  Apparence has a field for each: saved on Enter, written into `atlas.toml` (committed like any
+  edit), live at once in the menu and on the home. The alwaysdata install form asks for both too
+  (optional). A quote or a backslash in either no longer breaks `atlas.toml` at `atlas init`.
+
+### Fixed
+- **A slow or failing GitHub no longer slows Atlas down.** Fetching and pushing run outside the
+  lock that saves take, so a save never waits on the network. After a save, Atlas pushes right
+  away and only pulls when GitHub has moved (before, every save pulled first). A failed push is
+  tried again after 15 s, 45 s and 2 min instead of waiting for the next save or the five-minute
+  loop, and a rebase that cannot apply is undone instead of leaving the mind mid-rebase.
+- **The "not saved online yet" banner waits for a real problem.** A push or pull failing now and
+  then (GitHub having a bad day) no longer raises it: it shows once the failure has lasted two
+  minutes with changes waiting. A refused commit still shows at once. `/api/sync` and
+  `atlas doctor --sync` still report every failure.
+- **The alwaysdata script refuses a sub-path.** Atlas serves from the root of its address: an
+  install under `name.alwaysdata.net/atlas` now stops at once with a clear message instead of
+  installing an Atlas that cannot load.
+
 ## [2.1.1] - 2026-11-03
 
 ### Fixed

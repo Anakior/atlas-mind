@@ -1,12 +1,12 @@
 // The instance's look, picked by an admin in Settings › Apparence and the same for every account:
-// the accent (the --brand token, Atlas gold by default) and whether the site prefix and the tagline
-// show. The head
+// the accent (the --brand token, Atlas gold by default), the site prefix and the tagline, and whether
+// they show. The head
 // script of viewer.html replays the cached copy before the first paint; this module fetches the
 // instance's own on boot and applies a change live.
 
-import { IS_OFFLINE_BUILD } from '../core/data-csrf';
+import { IS_OFFLINE_BUILD, setIdentity } from '../core/data-csrf';
 
-export interface Appearance { brand?: string; show_prefix?: boolean; show_tagline?: boolean }
+export interface Appearance { brand?: string; show_prefix?: boolean; show_tagline?: boolean; prefix?: string; tagline?: string }
 
 const KEY = 'atlas:appearance';
 const VARS = ['--brand-dark', '--brand-light', '--on-brand-dark', '--on-brand-light'];
@@ -68,6 +68,11 @@ class AppearanceSettings {
     else delete root.dataset.prefix;
     if (a.show_tagline === false) root.dataset.tagline = 'off';
     else delete root.dataset.tagline;
+    if (typeof a.prefix === 'string' && typeof a.tagline === 'string') {
+      setIdentity(a.prefix, a.tagline);
+      document.querySelectorAll('.wm-prefix').forEach((el) => { el.textContent = a.prefix!; });
+      document.querySelectorAll('.home-tag').forEach((el) => { el.textContent = a.tagline!; });
+    }
 
     try {
       localStorage.setItem(KEY, JSON.stringify({ vars, showPrefix: a.show_prefix !== false, showTagline: a.show_tagline !== false }));

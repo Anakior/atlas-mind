@@ -20,6 +20,7 @@ import { SettingsProfile } from './profile-tab';
 import { SettingsAppearance } from './appearance-tab';
 import { SettingsCopies } from './copies-tab';
 import { SettingsPhone } from './phone-pane';
+import { SettingsAbout } from './about-tab';
 
 // A tab slower than this shows the loading placeholder; faster ones swap straight in. Once shown,
 // the placeholder stays long enough to read as a state rather than a flicker.
@@ -36,6 +37,7 @@ const SECTIONS: Record<string, string[]> = {
   shares: ['shares'],
   team: ['users', 'groups'],
   appearance: ['appearance'],
+  about: ['about'],
 };
 const PANE_TITLES: Record<string, string> = { users: 'settingsTabUsers', groups: 'settingsTabGroups' };
 
@@ -49,9 +51,10 @@ export class SettingsPanel {
   // The height the panel is pinned at; 0 while closed, so opening snaps instead of gliding.
   private pinnedHeight = 0;
   private activeTab = '';
+  private updateLatest = ''; // a newer version on PyPI (checkUpdate), '' when none
   private loading = false;
 
-  // Shared services + the seven tab controllers. ctx is declared first so the controller field
+  // Shared services + the tab controllers. ctx is declared first so the controller field
   // initializers below can read it.
   private readonly ctx = new SettingsContext();
   private readonly users = new SettingsUsers(this.ctx);
@@ -64,10 +67,12 @@ export class SettingsPanel {
   private readonly appearance = new SettingsAppearance(this.ctx);
   private readonly copies = new SettingsCopies(this.ctx);
   private readonly phone = new SettingsPhone();
+  private readonly about = new SettingsAbout(this.ctx);
 
   constructor() {
     this.settingsBtn.addEventListener('click', () => this.open());
     this.settingsClose.addEventListener('click', () => this.close());
+    document.getElementById('settings-update-banner')!.addEventListener('click', () => this.selectTab('about'));
     this.settingsBackdrop.addEventListener('click', (e) => {
       if (e.target === this.settingsBackdrop) this.close();
     });
@@ -129,7 +134,7 @@ export class SettingsPanel {
     // one click away. The update check rides along with the first reveal when it answers quickly.
     const local = document.body.classList.contains('local-mode');
     const isAdmin = local || document.body.classList.contains('admin-cloud');
-    const banner = isAdmin ? this.refreshUpdateBanner() : Promise.resolve();
+    const banner = isAdmin ? this.checkUpdate() : Promise.resolve();
 
     // Shares is a tab only while share links exist (and a link from this computer opens nowhere).
     if (isAdmin && !local) {
@@ -164,6 +169,7 @@ export class SettingsPanel {
     document.querySelectorAll<HTMLElement>('.settings-tab').forEach((tab) => {
       tab.classList.toggle('is-active', tab.dataset.tab === name);
     });
+    this.showUpdateBanner();
     this.ctx.clearError();
     let placeholderShownAt = 0;
     const placeholder = setTimeout(() => {
@@ -192,6 +198,7 @@ export class SettingsPanel {
     if (name === 'hive') return Promise.all([this.nodes.load(), this.remotes.load()]);
     if (name === 'shares') return this.shares.load();
     if (name === 'appearance') return this.appearance.load();
+    if (name === 'about') return this.about.load();
     if (name === 'team') {
       // Groups are for sorting several people: alone on the Atlas, only the invitation shows.
       return Promise.all([this.users.load(), this.groups.load()]).then(([count]) =>
@@ -221,26 +228,29 @@ export class SettingsPanel {
     this.settingsBackdrop.classList.remove('hidden');
   }
 
-  // Admin-only, best-effort: never block Settings if the check fails/offline.
-  private async refreshUpdateBanner(): Promise<void> {
-    const banner = document.getElementById('settings-update-banner') as HTMLAnchorElement | null;
-
-    if (!banner) return;
-    banner.classList.add('hidden');
+  // Admin-only, best-effort (never blocks Settings): a newer version on PyPI puts a dot on the gear
+  // and a line atop Settings, both leading to About. Silent while the automatic check is off.
+  async checkUpdate(): Promise<void> {
+    let latest = '';
 
     try {
       const data = await this.ctx.fetch<any>('/api/admin/update-check');
 
-      if (data && data.update_available && data.latest) {
-        banner.textContent = t('settingsUpdateAvailable')
-          .replace('{latest}', data.latest)
-          .replace('{current}', data.current || '?');
-        banner.href = data.url || 'https://pypi.org/project/atlas-mind/';
-        banner.classList.remove('hidden');
-      }
+      if (data?.update_available && data.latest) latest = data.latest;
     } catch (_) {
       /* best-effort */
     }
+    this.updateLatest = latest;
+    this.settingsBtn.classList.toggle('has-update', !!latest);
+    this.showUpdateBanner();
+  }
+
+  // The line leads to About, so About itself goes without it.
+  private showUpdateBanner(): void {
+    const banner = document.getElementById('settings-update-banner')!;
+
+    banner.textContent = this.updateLatest ? t('settingsUpdateAvailable', this.updateLatest) : '';
+    banner.classList.toggle('hidden', !this.updateLatest || this.activeTab === 'about');
   }
 }
 

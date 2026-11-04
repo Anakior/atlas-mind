@@ -30,9 +30,14 @@ export const IS_OFFLINE_BUILD = EMBED_CONTENT !== null;
 // decoded by the parser, so re-escape via escapeHtml when displaying.
 export const SITE_NAME = document.title;
 // Injected as JSON constants, not raw text placeholders: a backtick or ${…} in
-// atlas.toml must neither break the script nor evaluate code.
-export const TAGLINE = __TAGLINE_JSON__;
-export const SITE_PREFIX = __SITE_PREFIX_JSON__;
+// atlas.toml must neither break the script nor evaluate code. Settings › Apparence changes
+// them live (setIdentity).
+export let TAGLINE: string = __TAGLINE_JSON__;
+export let SITE_PREFIX: string = __SITE_PREFIX_JSON__;
+export function setIdentity(prefix: string, tagline: string): void {
+  SITE_PREFIX = prefix;
+  TAGLINE = tagline;
+}
 
 // ─── CSRF synchronizer ───────────────────────────────────────────────────────
 // In cloud mode every authenticated MUTATING request needs the X-CSRF-Token
