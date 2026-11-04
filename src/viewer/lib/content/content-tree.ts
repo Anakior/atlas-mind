@@ -13,7 +13,7 @@ import { currentFile } from '../core/state';
 import { h, raw, render } from '../runtime/atlas-dom';
 import { renameModal } from '../modals/dialogs';
 import { dirRenameModal, newFileModal, deleteEmptyFolder } from '../modals/new-file-modal';
-import { settingsPanel } from '../admin/settings/settings-panel';
+import { settingsPage } from '../admin/settings/settings-page';
 import { docRenderer, isViewable, IMAGE_EXTS } from './doc-renderer';
 import { decorateTreeBadges } from './notes/notes-index';
 import { startMove, startMoveFolder } from './file-drop';
@@ -230,7 +230,7 @@ export class ContentTree {
     );
     if (!isRemote) {
       btnChildren.push(
-        h('span', { class: 'dir-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.stopPropagation(); settingsPanel.openPublish(childPath); } }, raw(ContentTree.LINK_ICON)),
+        h('span', { class: 'dir-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.stopPropagation(); settingsPage.openPublish(childPath); } }, raw(ContentTree.LINK_ICON)),
       );
     }
     if (child.keep && !child.children.length) {
@@ -268,7 +268,7 @@ export class ContentTree {
       aChildren.push(
         h('span', { class: 'file-access-btn tree-action-btn', title: t('aclBtnTitle'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); if (window.openAccessFor) window.openAccessFor(child.path); } }, raw(ContentTree.ACL_ICON)),
         h('span', { class: 'file-rename-btn tree-action-btn', title: t('renameFile'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); docRenderer.show(child); renameModal.open('rename'); } }, raw(ContentTree.PENCIL_ICON)),
-        h('span', { class: 'file-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); settingsPanel.openPublish(child.path); } }, raw(ContentTree.LINK_ICON)),
+        h('span', { class: 'file-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); settingsPage.openPublish(child.path); } }, raw(ContentTree.LINK_ICON)),
       );
     }
 

@@ -272,7 +272,7 @@
       <button type="button" data-lang="en" aria-pressed="true">EN</button>
       <button type="button" data-lang="fr" aria-pressed="false">FR</button>
     </span>
-    <a class="nav-cta" href="./demo/"><span lang="en">Live demo</span><span lang="fr">Voir la démo</span></a>
+    <a class="nav-cta" href="/start/"><span lang="en">Create your Atlas</span><span lang="fr">Créer ton Atlas</span></a>
   </div>
 </div></nav>
 
@@ -281,8 +281,8 @@
   <h1><span lang="en">It's <span class="grad">your mind</span>,<br>not someone else's.</span><span lang="fr">C’est <span class="grad">ton esprit</span>,<br>pas celui d’un autre.</span></h1>
   <p class="lede"><span lang="en">Atlas Mind is a self-hosted, git-native knowledge base where your notes stay <b>plain files in your own private git repository</b>, served by an engine you can read line by line — and an <b>external brain you share with your AI</b> over an open protocol. Own the data. Own the engine. Own the mind.</span><span lang="fr">Atlas Mind est une base de connaissances auto-hébergée, bâtie sur git : tes notes restent <b>des fichiers ordinaires dans ton propre dépôt git privé</b>, servies par un moteur que tu peux lire ligne à ligne, et deviennent <b>un cerveau externe que tu partages avec ton IA</b> par un protocole ouvert. Tes données. Ton moteur. Ton esprit.</span></p>
   <div class="cta-row">
-    <a class="btn btn-primary" href="./demo/"><span lang="en">Explore the live demo</span><span lang="fr">Voir la démo en direct</span></a>
-    <a class="btn btn-ghost" href="#start"><span lang="en">Get started</span><span lang="fr">Démarrer</span></a>
+    <a class="btn btn-primary" href="/start/"><span lang="en">Create your Atlas</span><span lang="fr">Créer ton Atlas</span></a>
+    <a class="btn btn-ghost" href="./demo/"><span lang="en">Explore the live demo</span><span lang="fr">Voir la démo en direct</span></a>
   </div>
   <p class="micro"><span lang="en">No account. No upload. The demo is the real viewer, running entirely in your browser.</span><span lang="fr">Sans compte, sans envoi : la démo est le vrai viewer, qui tourne entièrement dans ton navigateur.</span></p>
 
@@ -546,44 +546,11 @@
 </div></section>
 
 <section id="start" class="final"><div class="wrap">
-  <div class="kicker"><span lang="en">Get started</span><span lang="fr">Démarrer</span></div>
-  <h2><span lang="en">Two commands to your own mind.</span><span lang="fr">Deux commandes jusqu’à ton propre Atlas.</span></h2>
-  <p class="sub" style="margin:14px auto 0"><span lang="en">Installs a self-contained <code>atlas</code> command — the viewer ships inside the package, no separate download.</span><span lang="fr">Installe une commande <code>atlas</code> autonome : le viewer est dans le paquet, rien d’autre à télécharger.</span></p>
-  <div class="codeblock" lang="en">
-    <div class="top"><span>bash</span><span>uv · pipx · pip</span></div>
-<pre><span class="c"># install (uv fetches Python for you) — or: pipx install atlas-mind</span>
-<span class="p">uv</span> tool install atlas-mind
-
-<span class="c"># scaffold a new mind and serve it locally</span>
-<span class="p">atlas</span> init ~/my-mind
-<span class="p">atlas</span> serve ~/my-mind
-
-<span class="c"># keep it current — upgrade the CLI, or update a deployment</span>
-<span class="p">uv</span> tool upgrade atlas-mind
-<span class="p">atlas</span> update --target &lt;fly|compose|systemd&gt;
-
-<span class="c"># …or try it once, no install</span>
-<span class="p">uvx</span> atlas-mind serve ~/my-mind</pre>
-  </div>
-  <div class="codeblock" lang="fr">
-    <div class="top"><span>bash</span><span>uv · pipx · pip</span></div>
-<pre><span class="c"># installer (uv récupère Python pour toi), ou : pipx install atlas-mind</span>
-<span class="p">uv</span> tool install atlas-mind
-
-<span class="c"># créer un nouvel Atlas et le servir en local</span>
-<span class="p">atlas</span> init ~/my-mind
-<span class="p">atlas</span> serve ~/my-mind
-
-<span class="c"># le tenir à jour : la commande, ou un déploiement</span>
-<span class="p">uv</span> tool upgrade atlas-mind
-<span class="p">atlas</span> update --target &lt;fly|compose|systemd&gt;
-
-<span class="c"># …ou l’essayer une fois, sans rien installer</span>
-<span class="p">uvx</span> atlas-mind serve ~/my-mind</pre>
-  </div>
+  <h2><span lang="en">Your own Atlas, in ten minutes.</span><span lang="fr">Ton Atlas à toi, en dix minutes.</span></h2>
+  <p class="sub" style="margin:14px auto 0"><span lang="en">Free and with no terminal on alwaysdata, or from your terminal on your own servers.</span><span lang="fr">Gratuit et sans terminal sur alwaysdata, ou depuis ton terminal sur tes propres serveurs.</span></p>
   <div class="cta-row" style="margin-top:34px">
-    <a class="btn btn-primary" href="./demo/"><span lang="en">Explore the live demo</span><span lang="fr">Voir la démo en direct</span></a>
-    <a class="btn btn-ghost" href="https://github.com/Anakior/atlas-mind"><span lang="en">View the source</span><span lang="fr">Voir le code</span></a>
+    <a class="btn btn-primary" href="/start/"><span lang="en">Create your Atlas</span><span lang="fr">Créer ton Atlas</span></a>
+    <a class="btn btn-ghost" href="./demo/"><span lang="en">Explore the live demo</span><span lang="fr">Voir la démo en direct</span></a>
   </div>
   <div class="badges">
     <span>Python 3.11+</span><span><span lang="en">Standard library only</span><span lang="fr">Bibliothèque standard seulement</span></span><span><span lang="en">No database</span><span lang="fr">Sans base de données</span></span><span>AGPL-3.0</span>

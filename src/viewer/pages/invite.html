@@ -5,9 +5,9 @@
 <meta name="theme-color" content="#0e0d12">
 <meta name="robots" content="noindex, nofollow">
 <title>__SITE_NAME__ — Invitation</title>
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/icon.svg">
-<link rel="stylesheet" href="/vendor/fonts.css">
+<link rel="icon" href="__BASE__/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="__BASE__/icon.svg">
+<link rel="stylesheet" href="__BASE__/vendor/fonts.css">
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
@@ -59,7 +59,7 @@ button:active{transform:scale(0.98)}
 </style></head><body>
 <div class="card">
   <div class="logo-wrap">
-    <img src="/icon.svg" alt="Atlas" width="64" height="64">
+    <img src="__BASE__/icon.svg" alt="Atlas" width="64" height="64">
   </div>
   <h1><span class="brand">__SITE_PREFIX__</span> <span class="wordmark"><span class="atlas">Atlas</span><span class="mind">Mind</span></span></h1>
   <p class="subtitle">__INVITE_SUBTITLE__</p>
@@ -97,12 +97,12 @@ document.getElementById('invite-form').addEventListener('submit', async function
     last_name: form.last_name.value,
     password: form.password.value,
   };
-  const resp = await fetch('/api/invite', {
+  const resp = await fetch('__BASE__/api/invite', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (resp.ok) { window.location = '/'; return; }
+  if (resp.ok) { window.location = '__BASE__/'; return; }
   let message = 'Error';
   try { message = (await resp.json()).error || message; } catch (_) {}
   let box = form.querySelector('.err');

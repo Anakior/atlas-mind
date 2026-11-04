@@ -25,7 +25,7 @@ interface SyncState {
 }
 
 const REPO = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/;
-const CARD = 'bg-navy-900 border subtle-border rounded-lg p-4';
+const CARD = 'settings-card';
 // What a copy is called, on GitHub and on the computer: the notes of this Atlas, never the
 // product's own name (a developer already has an `atlas-mind` repository and folder).
 const COPY_NAME = (slugify(SITE_NAME) || 'atlas') + '-notes';
@@ -64,15 +64,14 @@ export class SettingsCopies {
         this.ctx.fetch<SyncState>('/api/sync').catch(() => null),
       ]);
 
-      this.pane.innerHTML = `
-        <h3 class="${HEADING}">${t('copiesOnGithub')}</h3>
-        <div data-copies-github></div>
-        <h3 class="${HEADING} mt-8 pt-6 border-t subtle-border">${t('copiesOnComputer')}</h3>
-        <div data-copies-computer></div>
-        <h3 class="${HEADING} mt-8 pt-6 border-t subtle-border">${t('bkTitle')}</h3>
-        <div data-copies-backup></div>
-        <h3 class="${HEADING} mt-8 pt-6 border-t subtle-border">${t('copiesRestore')}</h3>
-        <div data-copies-restore></div>`;
+      const block = (title: string, name: string) =>
+        `<div class="settings-block s-6"><h3 class="${HEADING}">${title}</h3><div data-copies-${name}></div></div>`;
+
+      this.pane.innerHTML =
+        block(t('copiesOnGithub'), 'github') +
+        block(t('copiesOnComputer'), 'computer') +
+        block(t('bkTitle'), 'backup') +
+        block(t('copiesRestore'), 'restore');
       this.owner = state.owner;
       if (state.remote) this.renderConnected(state.remote, sync);
       else this.renderSteps(state.key);

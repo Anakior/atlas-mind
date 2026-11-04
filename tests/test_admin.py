@@ -798,15 +798,15 @@ class TestAdminUiPanel(unittest.TestCase):
         # softReload still rebuilds fileMap from the FILTERED /api/tree.
         self.assertRegex(self.index, r"await fetch\([\"']/api/tree[\"']\)")  # quote-agnostic: esbuild re-quotes the .ts literal
 
-    def test_settings_panel_markup_present(self):
-        # Panel container + its four sections + the gear entry point.
-        self.assertIn('id="settings-backdrop"', self.index)
-        self.assertIn('id="settings-panel"', self.index)
+    def test_settings_page_markup_present(self):
+        # The page, its sections (each its own #settings/<section> address) and the gear.
+        self.assertIn('id="settings-page"', self.index)
         self.assertIn('id="settings-btn"', self.index)
-        for tab in ("me", "atlas", "ai", "hive", "shares", "team", "appearance", "about"):
+        for tab in ("account", "atlas", "ai", "hive", "shares", "team", "appearance", "about"):
             self.assertIn(f'data-tab="{tab}"', self.index)
+            self.assertIn(f'href="#settings/{tab}"', self.index)
         # The panes the sections stack.
-        for pane in ("users", "tokens", "shares", "security", "phone", "copies", "appearance", "nodes", "groups", "about"):
+        for pane in ("profile", "users", "tokens", "shares", "security", "phone", "copies", "appearance", "nodes", "groups", "about"):
             self.assertIn(f'id="settings-pane-{pane}"', self.index)
 
     def test_settings_token_one_time_display_present(self):
@@ -856,7 +856,8 @@ class TestAdminUiPanel(unittest.TestCase):
                 self.index)
         self.assertIn('body:not(.admin-cloud) #settings-pane-copies', self.index)
         # AI assistants (the tokens) is per-account (a member manages their own) → gated on
-        # cloud-auth, not admin, like Me; on this computer, the operator's.
+        # cloud-auth, not admin, like the account; on this computer, the operator's.
+        self.assertIn('body:not(.cloud-authed) .settings-tab[data-tab="account"]', self.index)
         self.assertIn(
             'body:not(.cloud-authed):not(.local-mode) .settings-tab[data-tab="ai"]', self.index)
 
@@ -875,12 +876,10 @@ class TestAdminUiPanel(unittest.TestCase):
         self.assertIn("/api/tokens", self.index)
         self.assertIn("/api/share/list", self.index)
 
-    def test_settings_panel_is_mobile_responsive(self):
-        # Fullscreen on mobile: the media query rule targets #settings-panel.
-        self.assertIn("#settings-panel {", self.index)
-        # Only one mobile media query in the viewer; the fullscreen rule lives there.
-        mobile_block = self.index.split("@media (max-width: 767px)", 1)[1]
-        self.assertIn("#settings-panel", mobile_block)
+    def test_settings_page_is_responsive(self):
+        # The tabs scroll sideways when they don't fit, and a narrow page stacks the cards.
+        self.assertIn(".settings-tabs { display: flex; gap: 2px; margin: 20px -10px 0; overflow-x: auto;", self.index)
+        self.assertRegex(self.index, r"@container \(max-width: 760px\) \{\s*\.settings-main \.s-7, \.settings-main \.s-6")
 
     def test_no_native_prompt_in_admin_viewer(self):
         # Anti-regression guard from the UX batch: password reset used to go
@@ -940,9 +939,9 @@ class TestSecurityUi(unittest.TestCase):
         cls.srv.stop()
 
     def test_security_pane_and_actions_present(self):
-        # Me section + its security pane, 2FA status, enable/disable buttons, sign out
+        # Account section + its security pane, 2FA status, enable/disable buttons, sign out
         # of all sessions.
-        self.assertIn('data-tab="me"', self.index)
+        self.assertIn('data-tab="account"', self.index)
         self.assertIn('id="settings-pane-security"', self.index)
         self.assertIn('id="security-totp-status"', self.index)
         self.assertIn('id="security-totp-enable"', self.index)
@@ -995,12 +994,12 @@ class TestSecurityUi(unittest.TestCase):
         self.assertIn('Dialogs.confirm(', self.index)
 
     def test_security_i18n_keys_in_both_languages(self):
-        for fr_value in ("settingsTabMe: 'Moi'",
+        for fr_value in ("settingsTabAccount: 'Compte'",
                          "securityTotpEnable: 'Activer le 2FA'",
                          "securityLogoutAll: 'Déconnecter toutes mes sessions'",
                          "totpRecoveryWarn:"):
             _assert_i18n(self, self.index, fr_value)
-        for en_value in ("settingsTabMe: 'Me'",
+        for en_value in ("settingsTabAccount: 'Account'",
                          "securityTotpEnable: 'Enable 2FA'",
                          "securityLogoutAll: 'Sign out all my sessions'",
                          "totpRecoveryWarn:"):

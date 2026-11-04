@@ -125,7 +125,8 @@ def render_template(*, tree: dict, embed_content: dict | None,
                     todo_categories: list | None = None,
                     doc_templates: dict | None = None,
                     extensions_css: str = "",
-                    extensions_js: str = "") -> str:
+                    extensions_js: str = "",
+                    base_path: str = "") -> str:
     template = (template_path or TEMPLATE).read_text(encoding="utf-8")
     # Phase 1 — inline the split viewer sources (trusted CSS/HTML/JS fragments)
     # back into the shell BEFORE the placeholder pass, so their own placeholders
@@ -149,6 +150,8 @@ def render_template(*, tree: dict, embed_content: dict | None,
                            site_url=site_url, og_image=og_image, lang=lang)
     replacements = {
         "__BUILD_TS__": build_ts,
+        "__BASE_PATH_JSON__": _enc(base_path),
+        "__BASE__": _html.escape(base_path, quote=True),
         "__VERSION__": _html.escape(_engine_version(), quote=True),
         "__SITE_NAME__": _html.escape(site_name, quote=True),
         "__SITE_SHORT_NAME__": _html.escape(SITE_WORDMARK, quote=True),
@@ -192,7 +195,8 @@ def render_template(*, tree: dict, embed_content: dict | None,
 
 def render_manifest(*, site_prefix: str = DEFAULT_SITE_PREFIX,
                     tagline: str = DEFAULT_TAGLINE,
-                    lang: str = DEFAULT_LANG) -> dict:
+                    lang: str = DEFAULT_LANG,
+                    base_path: str = "") -> dict:
     """PWA manifest generated from the config (no more static manifest in
     viewer/): name = derived "<prefix> Atlas", short_name = the brand alone."""
     return {
@@ -200,19 +204,19 @@ def render_manifest(*, site_prefix: str = DEFAULT_SITE_PREFIX,
         "short_name": SITE_WORDMARK,
         "description": tagline,
         "lang": lang,
-        "start_url": "/",
-        "scope": "/",
+        "start_url": base_path + "/",
+        "scope": base_path + "/",
         "display": "standalone",
         "background_color": "#0f0e14",
         "theme_color": "#23222a",
         "icons": [
-            {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
-            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": base_path + "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+            {"src": base_path + "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": base_path + "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
         ],
         # Android's share sheet → the installed app: sw.js turns it into a quick capture.
         "share_target": {
-            "action": "/share-target",
+            "action": base_path + "/share-target",
             "method": "POST",
             "enctype": "application/x-www-form-urlencoded",
             "params": {"title": "title", "text": "text", "url": "url"},

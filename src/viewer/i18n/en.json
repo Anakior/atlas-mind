@@ -289,5 +289,16 @@
   "app_montage_sent": "Sent",
   "app_montage_error": "Error: {message}",
   "app_montage_loading": "Reading the history…",
-  "app_montage_cancelled": "Cancelled."
+  "app_montage_cancelled": "Cancelled.",
+  "recover_too_short": "The new password needs 8 characters or more.",
+  "recover_bad_code": "This recovery code is not valid for this account.",
+  "recover_done": "Password changed: sign in with the new one.",
+  "login_forgot": "Forgot your password?",
+  "login_forgot_subtitle": "New password",
+  "login_forgot_intro": "Enter one of your password's recovery codes (Settings › Me). Without a code, ask the admin of your Atlas to reset it.",
+  "login_forgot_code": "Recovery code",
+  "login_forgot_new": "New password",
+  "login_forgot_again": "Once more",
+  "login_forgot_submit": "Change password",
+  "login_forgot_mismatch": "The two passwords differ."
 }

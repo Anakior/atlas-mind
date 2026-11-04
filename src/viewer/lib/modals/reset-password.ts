@@ -8,7 +8,7 @@
 // ── Reset password modal ─────────────────────────────────────────────────────
 import { t } from '../core/i18n';
 import { settingsFetch } from '../admin/settings/settings-shared';
-import { settingsPanel } from '../admin/settings/settings-panel';
+import { settingsPage } from '../admin/settings/settings-page';
 
 export const RESET_PW_MIN = 8;
 export const resetPwBackdrop = document.getElementById('reset-pw-backdrop');
@@ -133,7 +133,7 @@ export class ResetPwModal {
         method: 'POST',
         body: JSON.stringify({ email, password: (resetPwInput as HTMLInputElement).value }),
       });
-      settingsPanel.clearError();
+      settingsPage.clearError();
       resetPwSuccess!.classList.remove('hidden');
       this.closeTimer = setTimeout(() => this.close(), 1200);
     } catch (err) {

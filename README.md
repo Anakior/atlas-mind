@@ -1,126 +1,117 @@
 # Atlas Mind
 
-[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://atlas-mind.anakior.app/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
+[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://atlas-mind.anakior.app/demo/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
 
 <!-- mcp-name: app.anakior/atlas-mind -->
 
 > **It's your mind, not someone else's.**
 
-Notion, and every hosted notes app, ask you to pour your thinking into *their* structure, on *their* servers, in *their* format. You rent the space; they hold the keys. Atlas Mind inverts that: your knowledge is **plain files in your own git repository**, served by an **engine you can read line by line** and throw away without losing a single note. Your AI comes to *your* library through an open protocol; it never pulls your brain into its own.
-
-Own the data. Own the engine. Own the mind.
+Atlas Mind is the memory you share with your AI. Your notes stay **plain files in your own git repository**, served by an engine you can read line by line; your assistant reads and writes them over **MCP**, and every change says who made it, you or the AI, so you can see it, rewind it or undo it.
 
 <p align="center">
-  <img alt="Atlas Mind viewer" width="900" src="https://github.com/user-attachments/assets/726ab344-b024-425f-a5ee-f56d97a886c7" />
+  <img alt="The Atlas Mind home: the week at a glance, the journal of who changed what, the constellation of contributors" width="900" src="https://atlas-mind.anakior.app/assets/viewer-home.jpg" />
 </p>
 
-> 🔗 **[Try the live demo →](https://atlas-mind.anakior.app/demo/)** (offline build, some features missing) · **[What is Atlas Mind?](https://atlas-mind.anakior.app/)**
+**[Create your Atlas →](https://atlas-mind.anakior.app/start/)** free, no card, no terminal · **[Live demo →](https://atlas-mind.anakior.app/demo/)** the real viewer, in your browser · **[What is Atlas Mind?](https://atlas-mind.anakior.app/)**
 
-**Atlas Mind** is a self-hostable wiki / knowledge base engine, and an external brain you share with your AI. It serves a single-page viewer from a folder of documents (a *mind*), keeping the **engine** (the code) cleanly decoupled from your **content** (your notes, in their own git repository). Built on three ideas:
+## Why Atlas
 
-- **Multi-format, not just Markdown.** Markdown is first-class (rendered, linked, searched). Standalone **HTML** decks and dashboards, **PDFs**, **Word `.docx`**, **images** and **JSON** are previewed inline, rendered in your browser, nothing uploaded anywhere.
-- **AI-native.** It exposes an **MCP** endpoint (thirty-four tools to read, write, triage, map, rewind and audit your mind), and `atlas init` scaffolds the conventions (`AGENTS.md`, `agents/`, `ai-sessions/`) so an assistant knows how to use your mind.
-- **Lightweight & self-contained.** A single Python HTTP server on the **standard library**: **no database**, accounts and share links live as plain JSON on disk, frontend libraries and fonts are vendored. A running instance **never sends your content anywhere**: your mind never leaves your disk, and nothing you write trains anyone's model. Its only outbound request by default is reading an MCP client's public metadata when you connect that client over OAuth (switchable off).
+- **Your files.** Markdown with no syntax of its own, next to the PDFs, Word documents, HTML decks, images and JSON you already have, read as they are. All of it in a git repository that is yours: leave with a zip, open it anywhere.
+- **Your AI's memory.** One address to give your assistant (Claude, ChatGPT, Claude Code, any MCP client): it signs you in over OAuth, asks for what it may do, then searches, reads, writes and files into your mind in every conversation.
+- **A memory you can trust.** Every change is attributed, a person's or an AI's. See what an agent wrote and undo it in one click, ask what the mind said on a topic six months ago, find the notes nobody has looked at in a year and the ones that contradict each other.
+- **Yours from end to end.** One Python program on the standard library: no database, no build step to run, nothing sent anywhere. Your notes never leave your server, and nothing you write trains anyone's model.
 
-It is not a multi-tenant SaaS, a real-time collaborative editor, or a plugin marketplace. One focused mind per instance, fully yours.
+It is not a multi-tenant SaaS or a real-time collaborative editor: one focused mind per instance, fully yours, that can share slices with other Atlases.
 
-## Install
+## Get started
 
-Installing puts a self-contained `atlas` command on your PATH (the viewer assets ship inside the package, no separate download).
+**Without a terminal**, on [alwaysdata](https://www.alwaysdata.com/)'s free plan (no card, hosted in France): [seven steps, a few forms](https://atlas-mind.anakior.app/start/). From then on, Atlas updates from **Settings › About**.
 
-```bash
-# Easy way: uv or pipx (isolated env, no virtualenv to manage)
-uv tool install atlas-mind        # or: pipx install atlas-mind
-atlas serve ~/my-mind
-
-# Run once without installing, straight from PyPI
-uvx atlas-mind serve ~/my-mind    # or: pipx run atlas-mind serve ~/my-mind
-
-# With pip (a virtualenv is recommended)
-pip install atlas-mind
-```
-
-Requires **Python >= 3.11** and a **git repository for your content**.
-
-## Quick start
+**On your computer**:
 
 ```bash
-atlas init ~/my-mind     # scaffold a mind: atlas.toml, example docs, AGENTS.md, git init
-atlas serve ~/my-mind    # build once if needed, then serve on http://127.0.0.1:8765
+uvx atlas-mind serve ~/my-mind     # try it once, nothing installed
+
+uv tool install atlas-mind         # or: pipx install atlas-mind
+atlas init ~/my-mind               # a new mind: atlas.toml, starter notes, AGENTS.md, git init
+atlas serve ~/my-mind              # http://127.0.0.1:8765
 ```
 
-`init` is never destructive (it refuses a non-empty directory without `--force` and keeps any file already present). `serve` listens on `127.0.0.1:8765` with authentication off by default. To produce the static viewer without serving: `atlas build ~/my-mind [--offline]`.
+**On your server**: `atlas deploy ~/my-mind --target compose|systemd|fly` writes the files and prints the guide (`--target fly --wizard` goes all the way). Atlas runs at the root of its address or under any sub-path (`base_path = "/notes"`).
 
-See `atlas --help` for all commands (`user`, `token`, `share`, `deploy`, `hook`).
+Requires **Python 3.11+** and **git**. `init` never overwrites: it refuses a non-empty folder without `--force` and keeps the files already there.
 
-## Use it with your AI (MCP)
+## Connect your AI
 
-Atlas Mind is designed to be the external memory your assistant reads and writes. On a deployed instance, point your assistant at **`https://<your-atlas>/mcp`** and it connects over **OAuth**: you sign in to your Atlas (2FA included), review what the assistant asks for (read, inbox, write — untick what you don't want to grant) and allow it. The connection shows up in **Settings → Tokens**, where you can revoke it; it renews itself silently, and only asks again after 30 days unused.
+- **claude.ai**: on your Atlas's home, **Add to Claude** opens claude.ai with your Atlas filled in. Claude's free plan allows one connector: Atlas can be that one.
+- **Claude Code**, for every project:
 
-Clients either register themselves (dynamic client registration) or identify by the URL of a public metadata document, which Atlas fetches when you connect them; `[oauth] client_metadata_fetch = false` in `atlas.toml` turns that fetch off.
+  ```bash
+  claude mcp add --transport http --scope user atlas https://<your-atlas>/mcp
+  ```
 
-You can also mint a token yourself, from the web UI — **Settings → Tokens**, bound to your account — which prints a URL with the token in it. Locally (or to script it), the CLI does the same:
+  then `/mcp`, pick `atlas` and sign in. Prompts read `/atlas:weekly-review`, a document attaches as `@atlas:doc://notes/x.md`. `atlas init` also installs a git hook so the commits Claude Code makes in a clone count as Claude's.
+- **Any other MCP client**: give it `https://<your-atlas>/mcp`. Clients that can't do OAuth take a token instead, from **Settings › AI assistants** or `atlas token create ~/my-mind --label my-agent`.
 
-```bash
-atlas token create ~/my-mind --label claude
-# → prints the MCP URL: https://<your-atlas>/mcp/<token>
-```
+Every access shows in **Settings › AI assistants**, with when it was last used, and can be revoked. An access can be limited to `read`, `inbox` and/or `write`: an agent that reads your mail never needs to edit a note. Your `AGENTS.md` reaches every client as its instructions, so an assistant follows your conventions the moment it connects.
 
-The MCP endpoint exposes **thirty-four tools** in six groups:
+## What your AI can do
 
-- **read**: `brief` (a context pack on a topic: the best sections, within a token budget), `search_docs` (ranked, each hit with its section and how far to trust it: last editor, AI or human, stale, contested), `grep_docs` (exact lines), `read_doc` (whole doc, a line range or one section), `list_tree` (the folders, and what waits in your inbox), `recent_docs`, `changes_since` (what changed since a cursor the agent keeps), `resume_session` (pick up a saved work session: its resume command, the open points and how long each has been carried, what changed since)
-- **write**: `create_doc`, `edit_doc` (returns the diff; `dry_run`, and a `base_version` guard so a concurrent change is never overwritten), `move_doc` (fixes incoming `[[backlinks]]`), `delete_doc` (soft-delete to `.trash/`)
-- **graph**: `get_links`, `get_backlinks`, `list_by_tag`, `get_mind_topology`
-- **time-travel** (your mind is a git repo): `doc_history`, `doc_at`, `doc_diff`, `search_history`, `then_and_now` + `show_shift` (what the mind said on a topic at a past date next to what it says now, claim by claim, every quote checked word for word against the version it cites), `changelog`, `doc_blame`, `doc_revert`
-- **activity** (the attribution layer's read side): `activity` (who changed what, with AI-author detection), `agent_runs` + `undo_run` (work sessions, an agent's or a person's, undone in one commit: whole, from a given commit on, or for some docs only), `mind_weather` (the mind folder by folder: activity, what is being forgotten, contradictions, the AI's share, and the periodic reports gone missing), `stale` (docs nobody has looked at for months: obsolescence), `confirm_doc` (a doc reviewed still holds, or is outdated: it leaves the audit, for longer each time), `contradictions` (same-topic doc pairs to review), `judge_contradiction` (record a verdict on a pair)
-- **inbox**: `create_inbox_item` (an agent stages a ready-to-file item in your inbox for triage)
+Thirty-four tools, in six groups:
 
-It also serves **prompts** you start by name (a `/` command in Claude Code): built-ins computed live — `weekly-review` (the mind's weather: what moved, what is being forgotten, the reports running late, the contradictions to settle), `triage-contradictions`, `new-doc` (from one of your templates), `resume` (pick up a saved work session where it stopped) — and your own, one Markdown file each under `content/agents/prompts/`, editable from the viewer, with `{{arguments}}` and `{{include path/doc.md}}`. And every document is a **resource**, `doc://<path>`, that you can attach to the conversation (`@atlas:doc://notes/x.md` in Claude Code); search hits link to theirs.
+| Group | Tools | For |
+| --- | --- | --- |
+| **Read** | `brief` · `search_docs` · `grep_docs` · `read_doc` · `list_tree` · `recent_docs` · `changes_since` · `resume_session` | A context pack on a topic within a token budget; ranked search where each hit says how far to trust it (last editor, AI or human, stale, contested); picking up a saved work session. |
+| **Write** | `create_doc` · `edit_doc` · `move_doc` · `delete_doc` | Edits return their diff and can refuse to overwrite a concurrent change; moves rewrite the `[[links]]` that point at a note. |
+| **Graph** | `get_links` · `get_backlinks` · `list_by_tag` · `get_mind_topology` | Walking the mind by its links and tags. |
+| **Time travel** | `doc_history` · `doc_at` · `doc_diff` · `search_history` · `then_and_now` · `show_shift` · `changelog` · `doc_blame` · `doc_revert` | Your mind is a git repo: what a note said on any date, and what you thought then next to what you think now, claim by claim, each quote checked against the version it cites. |
+| **Activity** | `activity` · `agent_runs` · `undo_run` · `mind_weather` · `stale` · `confirm_doc` · `contradictions` · `judge_contradiction` | Who changed what, an agent's work undone in one commit (whole or for some notes), the folders being forgotten, the contradictions to settle. |
+| **Inbox** | `create_inbox_item` | An agent drops a ready-to-file item for you to keep, snooze or bin. |
 
-In a host that renders **MCP Apps** (Claude on the web and desktop, ChatGPT, VS Code with Copilot…), `resume_session` also comes as an interactive view in the conversation: your recent work, one line per piece of it, to filter and open; then a save's open points to tick, the docs that moved with their diffs, the other saves of the same work, the resume command to copy for the machine, and a button that continues in the conversation with the points you kept. `mind_weather`, which the weekly review starts with, ranks your folders by what is being forgotten, by activity, by contradictions or by the AI's share, a bar and a number each; open a folder, see its subfolders ranked the same way and clear their fog one document at a time (still true, needs an update, to the trash: each verdict recorded in your name), see the periodic reports gone missing and hand them to Claude to prepare. `show_shift` sets what you thought then beside what you think now: each claim paired with its counterpart and badged reversed, refined, held, dropped or new, the days the topic moved on a line, the docs still saying the old, and a button that asks Claude why you thought so back then, from what the mind said on that date only. `agent_runs` lays out what was written lately as runs, an AI's or a person's, grouped by day; open one and play it back commit by commit with each commit's diffs, discard from a commit on or remove a single doc (each cut shown first, then made in one commit in your name), and ask Claude for the save of what is left. Hosts without apps, Claude Code among them, get the same answer as text.
+It also serves **prompts** you start by name (`weekly-review`, `triage-contradictions`, `new-doc`, `resume`, and your own, one Markdown file each), and every note is a **resource** (`doc://<path>`) to attach to a conversation.
 
-### In Claude Code
+In hosts that show **MCP Apps** (Claude on the web and desktop, ChatGPT, VS Code), four answers come as views you work in: your recent work sessions to resume, the mind's weather folder by folder, what you thought then beside what you think now, and an agent's runs to play back commit by commit and cut. Other hosts get the same answer as text.
 
-Add your Atlas once, for every project, under a short name: the name becomes the prefix of its prompts and resources.
+<p align="center">
+  <img alt="The mind's weather as an MCP App: folders ranked by what is being forgotten" width="420" src="https://atlas-mind.anakior.app/assets/apps-weather-1x.webp" />
+  <img alt="Then and now as an MCP App: each claim badged reversed, refined, held, dropped or new" width="420" src="https://atlas-mind.anakior.app/assets/apps-shift-1x.webp" />
+</p>
 
-```bash
-claude mcp add --transport http --scope user atlas https://<your-atlas>/mcp
-```
+There is also a **REST API v1** (Bearer tokens) with a published **OpenAPI 3.1** spec.
 
-Then run `/mcp` in Claude Code, pick `atlas` and authenticate: the OAuth sign-in opens in your browser. From then on the prompts read `/atlas:weekly-review`, `/atlas:new-doc decision "Pricing"`, `/atlas:resume auth`, and a document attaches as `@atlas:doc://notes/x.md`.
+## In the viewer
 
-If you also connected your Atlas on claude.ai, Claude Code picks that connector up too, under its long name: turn that one off in `/mcp`, so the tools are not listed twice.
+<p align="center">
+  <img alt="The Mind: a real mind of some 460 notes, each folder a region, links between them" width="900" src="https://atlas-mind.anakior.app/assets/the-mind.jpg" />
+</p>
 
-Claude Code may also edit a clone of your mind and commit itself, with no MCP call to say an AI wrote it. `atlas init` installs a git hook for that: a commit made from Claude Code gets the `X-Atlas-Author: ai/claude` trailer the activity, the weather and `agent_runs` read. In a clone made before, run `atlas hook ~/my-mind` once.
+- **Read**: GitHub-flavoured Markdown with a table of contents and `[[wikilinks]]`, and PDF, `.docx`, HTML decks, images and JSON previewed inline. Full-text search, a command palette (Ctrl-K), backlinks, tags, pinned notes.
+- **The Mind**: every note and tag a node, every folder a region, recent notes glowing, orphans dimmed. Above: a real mind, some 460 notes.
+- **Write and organise**: create, edit, rename and move notes and whole folders (links follow), templates, drag and drop from your computer, a bin you can restore from or empty, a mind-wide task list.
+- **History and activity**: every note versioned, with clean diffs and restore; a home with the week at a glance, a journal of who changed what with the AI's share, and an undo for what one writer did in one go.
+- **Inbox**: what your agents staged, one card at a time: keep, snooze or bin, by click or keyboard.
+- **Team and sharing**: accounts, groups, per-note access (private, shared, common), and public share links that can expire.
+- **Hive Mind**: publish a folder as a node; another Atlas subscribes and keeps a read-only mirror, which its AI reads like any other note.
+- **Copies**: a copy on your own GitHub, updated at every change; a copy on your computer (`atlas sync`); a full backup to download, and **Restore** on a new instance.
+- **Everywhere**: an installable app on your phone (scan the code in Settings), offline reading, light and dark themes.
+- **Settings**: a page with your account (name, password, recovery codes, 2FA, sessions), your AI's accesses, the team, the look (language, accent, the name and line under the logo) and About, with the update button.
 
-`atlas init` scaffolds `AGENTS.md` + `content/agents/` + `content/ai-sessions/`, and the endpoint hands your `AGENTS.md` to every client as its server instructions, so any assistant follows your conventions the moment it connects. Tools carry read-only / destructive hints (clients can run reads without asking), a token can be limited to `read`, `inbox` and/or `write` (an agent fed untrusted mail never needs to edit), text written outside the mind (remote mirrors, inbox drops) reaches an agent fenced as untrusted data, and the endpoint speaks both the stateless MCP `2026-07-28` revision and the earlier `initialize`-based ones. There is also a **REST API v1** (Bearer tokens, create-only writes) with a published **OpenAPI 3.1** spec.
+## Run it
 
-## Features
-
-- **Reading**: GitHub-flavoured Markdown (TOC, syntax highlighting, reading time, tag bar), inline preview of standalone HTML decks/dashboards, PDF, `.docx` (converted in-browser, read-only), images (fitted to the pane, click for full size) and `.json` (pretty-printed and highlighted). Download any file as its original.
-- **Navigation**: a menu with Home, Inbox, Journal, The Mind, Tasks and Recent (Inbox, Journal and Recent open as panels over any page) that folds to a column of icons (Ctrl-B), a collapsible tree, full-text search (server-side online, fuzzy MiniSearch offline), `[[wikilinks]]` + backlinks + "same subject", folder/frontmatter tags, mind-wide task rollup, command palette (Ctrl-K), pinned docs.
-- **The Mind**: a force-directed mind palace where every document and tag is a navigable node, colour-grouped by folder, recent nodes glowing, orphans dimmed.
-- **Editing**: create / edit / rename / move / delete from the viewer (moving rewrites the wikilinks pointing at a doc), document templates, interactive task checkboxes, a categorised todos widget.
-- **History**: every document git-versioned, with a revision list, clean diffs, view/restore of past versions (restore is a new commit), renames and moves followed.
-- **Activity**: the home page over the attributed git history — the week at a glance (changes per day, the AI's share, the busiest folder), a journal of who-changed-what (with AI-author detection, a per-doc history peek, and an undo for the run each change belongs to: what one writer did in one go, undone whole or for the docs you pick, in one commit in your name; also a panel from the menu, on any page), a constellation of contributors, and a Health view that surfaces stale documents (obsolescence) and same-topic contradiction candidates for your AI to review.
-- **Inbox**: a per-person triage lane, on the home and as a panel from the menu, for the items your agents staged via MCP. One focused card at a time; keep (filed to a suggested folder and tags), trash or snooze, by click or keyboard (K / X / S / J).
-- **Annotations**: notes anchored to a text selection, re-anchored on later visits, with one-click copy-all-notes as Markdown.
-- **Sharing**: per-document access in cloud mode (private / shared with people or groups / common to the team), plus HMAC-signed public share links with optional expiry.
-- **Offline & PWA**: a self-contained `index-offline.html` that works from `file://`, an installable PWA via service worker, live reload over SSE.
-- **Look**: light and dark themes (or the system's), an accent colour per instance and whether the site prefix and tagline show, set by an admin in Settings › Appearance; re-skinnable via a CSS extension.
-- **i18n**: French and English.
-
-## Self-hosting
-
-- **Cloud mode**: accounts and login (admin / member roles), per-document access control, cookie sessions, optional **TOTP 2FA** with recovery codes, per-account lockout and per-IP login rate limiting, full CSRF defence.
-- **Deployment**: `atlas deploy ~/my-mind --target compose|systemd|fly`; `fly --wizard` deploys end-to-end.
-- **Configuration**: a small `atlas.toml` (brand prefix, port, auth, content paths).
-- **Updating**: engine and content update independently, and upgrading the engine never touches your notes.
+- **Security**: admin and member accounts, per-note access, optional TOTP 2FA, recovery codes for a forgotten password, per-account lockout and per-IP rate limits, full CSRF defence.
+- **Network**: by default Atlas only reaches out to read an MCP client's public metadata when you connect that client over OAuth (`[oauth] client_metadata_fetch = false` turns it off), and to ask PyPI for the latest version when an admin opens About.
+- **Configuration**: one small `atlas.toml`: the name and line under the logo, the language, the port, accounts, the sub-path.
+- **Updates**: from **Settings › About** on a pip install (alwaysdata), `atlas update --target …` for a deployment, `uv tool upgrade atlas-mind` on your computer. The engine and your notes update separately: upgrading never touches a note.
+- **Commands**: `atlas --help` lists them: `init`, `serve`, `build`, `deploy`, `update`, `user`, `token`, `share`, `inbox`, `import`, `export`, `sync`, `backup`, `restore`, `hook`, `doctor`.
 
 ## Documentation
 
-The documentation is itself an Atlas mind — **[browse it in the live demo →](https://atlas-mind.anakior.app/demo/)** (the `guides/` and `features/` sections).
+The documentation is itself an Atlas mind: **[browse it in the live demo →](https://atlas-mind.anakior.app/demo/)** (the `guides/` and `features/` folders).
+
+## Support
+
+Atlas is free and open source. To help keep it going: **[sponsor it on GitHub](https://github.com/sponsors/Anakior)**. Bugs and ideas go to the [issues](https://github.com/Anakior/atlas-mind/issues).
 
 ## Licence
 
-AGPL v3, see [LICENSE](LICENSE). The "Atlas" + "Mind" branding in the viewer and login page is a fixed part of the project.
+AGPL v3, see [LICENSE](LICENSE). The "Atlas" + "Mind" branding in the viewer and on the sign-in page is a fixed part of the project.

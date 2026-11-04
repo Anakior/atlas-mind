@@ -565,21 +565,8 @@ def backup(handler):
         handler._send_json(403, {"error": "shared"})
         return
     data = handler._read_json()
-    ip = handler._client_ip()
-    if not _s.login_rate_limit_ok(ip) or _s.account_lock_remaining(me) > 0:
-        handler._send_json(429, {"error": "locked"})
+    if not handler._reauthenticate(me, data.get("password"), data.get("code")):
         return
-    user = _s.authenticate_user(me, data.get("password") or "")
-    code = (data.get("code") or "").strip()
-    if user and user.get("totp_enabled") and not code:
-        handler._send_json(401, {"error": "code_required"})
-        return
-    if not user or (user.get("totp_enabled") and not handler._verify_second_factor(
-            user, code if code.isdigit() else "", "" if code.isdigit() else code)):
-        _s.register_login_failure(me, ip)
-        handler._send_json(401, {"error": "bad_code" if user else "bad_password"})
-        return
-    _s.reset_login_failures(me)
     root = _s.CONFIG.content_root
     _send_export(handler, f"{_s.CONFIG.site_slug}-backup.zip", export.exportable(root, lambda rel: True),
                  _s.CONFIG.root, registry=Path(_s.CONFIG.store_dir))

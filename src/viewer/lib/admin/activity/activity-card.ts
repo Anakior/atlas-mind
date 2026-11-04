@@ -11,7 +11,7 @@
 // never diverge between views. The single instance is constructed in ./activity-boot; the imports above
 // guarantee every class is defined before `new ActivityCard()` runs.
 
-import { EMBED_ACTIVITY, IS_OFFLINE_BUILD } from '../../core/data-csrf';
+import { EMBED_ACTIVITY, IS_OFFLINE_BUILD, url } from '../../core/data-csrf';
 import { LANG, t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
 import { fileMap, docLabel } from '../../core/tree';
@@ -105,7 +105,7 @@ export class ActivityCard {
 
   // Atlas Bot (the app's own automated writes) shows the application logo itself.
   private botAvatar(size: number): string {
-    return `<img src="/icon.svg" width="${size}" height="${size}" alt="Atlas" style="display:block">`;
+    return `<img src="${url('/icon.svg')}" width="${size}" height="${size}" alt="Atlas" style="display:block">`;
   }
 
   private avatar(e: ActivityItem, size: number): string {

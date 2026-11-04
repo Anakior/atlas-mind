@@ -289,5 +289,16 @@
   "app_montage_sent": "Envoyé",
   "app_montage_error": "Erreur : {message}",
   "app_montage_loading": "Lecture de l'historique…",
-  "app_montage_cancelled": "Annulé."
+  "app_montage_cancelled": "Annulé.",
+  "recover_too_short": "Le nouveau mot de passe doit faire 8 caractères ou plus.",
+  "recover_bad_code": "Ce code de secours n'est pas valable pour ce compte.",
+  "recover_done": "Mot de passe changé : connecte-toi avec le nouveau.",
+  "login_forgot": "Mot de passe oublié ?",
+  "login_forgot_subtitle": "Nouveau mot de passe",
+  "login_forgot_intro": "Saisis l'un des codes de secours de ton mot de passe (Réglages › Moi). Sans code, demande à l'admin de ton Atlas de le réinitialiser.",
+  "login_forgot_code": "Code de secours",
+  "login_forgot_new": "Nouveau mot de passe",
+  "login_forgot_again": "Encore une fois",
+  "login_forgot_submit": "Changer le mot de passe",
+  "login_forgot_mismatch": "Les deux mots de passe ne sont pas pareils."
 }

@@ -113,7 +113,8 @@ _KNOWN_TOML_KEYS = {
     "server": frozenset({"port", "auth_enabled", "session_secret",
                          "session_max_age", "git_pull_interval",
                          "github_webhook_secret", "trusted_ip_header",
-                         "allow_private_remotes", "update_check", "public_url"}),
+                         "allow_private_remotes", "update_check", "public_url",
+                         "base_path"}),
     "store": frozenset({"kind", "dir"}),
     "git": frozenset({"author_name", "author_email", "repo_url"}),
     "todo": frozenset({"file", "categories"}),
@@ -414,6 +415,15 @@ class AtlasConfig:
                 f"server.public_url must be a scheme and a host, like "
                 f"https://atlas.example.com (got {public_url!r})")
         self.public_url = public_url or None
+        # Served under a sub-path of its address (https://host/notes/atlas): every URL Atlas
+        # makes starts with it, and a request arriving with it has it taken off.
+        base_path = (env.get("ATLAS_BASE_PATH")
+                     or _toml_str(server, "server", "base_path", "")).strip().strip("/")
+        if base_path and not re.fullmatch(r"[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*", base_path) \
+                or any(part in (".", "..") for part in base_path.split("/")):
+            raise AtlasConfigError(
+                f"server.base_path must be a path like /notes or /tools/atlas (got {base_path!r})")
+        self.base_path = "/" + base_path if base_path else ""
 
         # SHA-256 of a setup code handed out with the /setup#code=… link: whoever
         # holds the link creates the first admin, no shell needed. Only the hash
@@ -540,9 +550,11 @@ class AtlasConfig:
             return SITE_WORDMARK
         return f"{self.prefix} {SITE_WORDMARK}"
 
-    def set_identity(self, *, prefix=None, tagline=None) -> None:
-        """Take a new prefix and/or tagline live, once Settings › Apparence wrote them to
-        atlas.toml (the next boot reads them there)."""
+    def set_identity(self, *, prefix=None, tagline=None, lang=None) -> None:
+        """Take a new prefix, tagline and/or language live, once Settings › Apparence wrote
+        them to atlas.toml (the next boot reads them there)."""
+        if lang is not None:
+            self.lang = lang
         if prefix is not None:
             self.prefix = prefix.strip()
         if tagline is not None:

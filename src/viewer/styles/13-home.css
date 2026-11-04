@@ -3,7 +3,7 @@
    tags. Colours come from 00-tokens.css, so it follows the theme and the instance accent. */
 .home { display: flex; flex-direction: column; gap: 18px; }
 
-.home-hero { position: relative; display: flex; align-items: stretch; overflow: hidden; border-radius: 18px; border: 1px solid rgb(var(--line) / var(--line-a));
+.home-hero, .settings-hero { position: relative; display: flex; align-items: stretch; overflow: hidden; border-radius: 18px; border: 1px solid rgb(var(--line) / var(--line-a));
   background:
     radial-gradient(ellipse 55% 110% at 80% 30%, rgb(var(--ai) / var(--glow-a)), transparent 70%),
     radial-gradient(ellipse 45% 80% at 4% 110%, rgb(var(--brand) / .1), transparent 70%),
@@ -80,13 +80,26 @@ body:has(.pill-banner:not(.hidden)) .home { margin-top: 52px; }
 .home-row-t b { overflow: hidden; color: rgb(var(--ink-100)); font-size: 13.5px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
 .home-row-t em { color: rgb(var(--ink-500)); font-size: 12px; font-style: normal; }
 .home-row-w { color: rgb(var(--ink-500)); font-size: 12px; white-space: nowrap; }
-/* "Connect your AI" (home/connect-card.ts): until an assistant has read the mind, then its proof. */
+/* "First steps" (home/first-steps.ts). */
 .home-connect { position: relative; display: flex; gap: 28px; align-items: flex-start; padding: 20px 48px 20px 24px; border-radius: 14px; border: 1px solid rgb(var(--brand) / .35);
   background: radial-gradient(ellipse 60% 140% at 0% 0%, rgb(var(--brand) / .08), transparent 70%), rgb(var(--surface)); }
 .home-connect.is-on { border-color: rgb(var(--ai) / .35);
   background: radial-gradient(ellipse 60% 140% at 0% 0%, rgb(var(--ai) / .08), transparent 70%), rgb(var(--surface)); }
-.home-connect.is-backup { border-color: rgb(var(--line) / .14); background: rgb(var(--surface)); }
-.home-connect.is-backup .home-connect-actions { margin-bottom: 0; }
+.home-steps { display: block; }
+.home-steps-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+.home-steps-head h2 { margin: 0; }
+.home-steps-head span { font-size: 12px; font-weight: 600; color: rgb(var(--ink-400)); }
+.home-steps-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
+.home-step { display: flex; gap: 14px; align-items: flex-start; }
+.home-step-mark { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: rgb(var(--brand)); border: 1.5px solid rgb(var(--brand) / .55); }
+.home-step.is-done .home-step-mark { color: rgb(var(--ai)); border-color: transparent; background: rgb(var(--ai) / .18); }
+.home-step-body { flex: 1; min-width: 0; }
+.home-step-body h3 { margin: 2px 0 4px; font-size: 14.5px; font-weight: 700; color: rgb(var(--ink-100)); }
+.home-step.is-done h3 { color: rgb(var(--ink-300)); }
+.home-step .home-connect-actions { margin: 10px 0 8px; }
+.home-step .home-connect-url { max-width: 32rem; margin-top: 6px; }
+.home-step-cta.is-quiet { display: inline-flex; align-items: center; padding: 7px 14px; border-radius: 9px; border: 1px solid rgb(var(--brand) / .5); background: transparent; color: rgb(var(--brand)); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.home-step-cta.is-quiet:hover { background: rgb(var(--brand) / .1); }
 .home-connect-main { flex: 1; min-width: 0; }
 .home-connect h2 { margin: 0 0 6px; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: rgb(var(--ink-100)); }
 .home-connect p { margin: 0; font-size: 13px; line-height: 1.5; color: rgb(var(--ink-300)); }

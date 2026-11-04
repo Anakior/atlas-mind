@@ -1,6 +1,7 @@
 """Served HTML page templates (web/pages/<name>.html, marker substitution) + the
 share page's extension assets. Both caches are module-level (read once; the pages
 ship with the package, the extension assets only change on a redeploy)."""
+import html
 import re
 import sys
 
@@ -34,8 +35,8 @@ def fill(template: str, **fields) -> str:
 
 
 def render_page(name: str, **fields) -> str:
-    """Fill web/pages/<name>.html (see fill)."""
-    return fill(_load_page(name), **fields)
+    """Fill web/pages/<name>.html (see fill); __BASE__ is the base path its URLs start with."""
+    return fill(_load_page(name), base=html.escape(_s.CONFIG.base_path, quote=True), **fields)
 
 
 def share_extension_assets():

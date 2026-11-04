@@ -13,6 +13,7 @@ declare const __EMBED_ACTIVITY__: any;
 declare const __TEMPLATES__: Record<string, string>;
 declare const __TAGLINE_JSON__: string;
 declare const __SITE_PREFIX_JSON__: string;
+declare const __BASE_PATH_JSON__: string;
 
 export const TREE = __DATA__;
 export const EMBED_CONTENT = __EMBED_CONTENT__;
@@ -34,6 +35,10 @@ export const SITE_NAME = document.title;
 // them live (setIdentity).
 export let TAGLINE: string = __TAGLINE_JSON__;
 export let SITE_PREFIX: string = __SITE_PREFIX_JSON__;
+// The path Atlas is served under ("" at the root of its address, "/notes/atlas" below it): every
+// URL the page makes starts with it. Relative fetches get it from the wrapper below; the rest call url().
+export const BASE: string = IS_OFFLINE_BUILD ? '' : __BASE_PATH_JSON__;
+export const url = (path: string): string => BASE + path;
 export function setIdentity(prefix: string, tagline: string): void {
   SITE_PREFIX = prefix;
   TAGLINE = tagline;
@@ -98,6 +103,10 @@ export function currentCsrfToken(): string | null {
         init = Object.assign({}, init, { headers });
       }
     }
+
+    // A path from the root of the address ("/api/…") is Atlas's own: under its base path (once).
+    if (typeof input === 'string' && input.startsWith('/') && !input.startsWith('//')
+        && !(BASE && (input === BASE || input.startsWith(BASE + '/')))) input = BASE + input;
 
     return nativeFetch(input, init);
   };

@@ -1,6 +1,8 @@
 """Settings › About › Update (server/services/updater.py): the release is installed in place and
 checked before the restart, a failed one puts the running release back, and an install that is
 not a PyPI virtualenv never gets the button."""
+import io
+import json
 import subprocess
 import sys
 import unittest
@@ -62,6 +64,45 @@ class TestUpdate(unittest.TestCase):
 
     def test_a_source_run_has_no_button(self):
         self.assertNotEqual(updater.install_kind(), "button")  # the tests run the engine from src/
+
+
+class TestUpdateCheckCache(unittest.TestCase):
+    """The About tab asks for a recent answer; the gear's check keeps the day's."""
+
+    def setUp(self):
+        from server.services import update_check
+        self.mod = update_check
+        self.real = update_check.urllib.request.urlopen
+        self.calls = 0
+        self.answers = []
+
+        def fake(url, timeout=None):
+            self.calls += 1
+            answer = self.answers.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return io.BytesIO(json.dumps({"info": {"version": answer}}).encode())
+
+        update_check.urllib.request.urlopen = fake
+
+    def tearDown(self):
+        self.mod.urllib.request.urlopen = self.real
+
+    def test_a_recent_answer_when_asked(self):
+        self.answers = ["2.2.0", "2.3.0"]
+        checker = self.mod.UpdateChecker()
+        self.assertEqual(checker.latest(), "2.2.0")
+        self.assertEqual(checker.latest(), "2.2.0")  # the day's cache
+        self.assertEqual(checker.latest(max_age=0), "2.3.0")
+        self.assertEqual(self.calls, 2)
+
+    def test_a_failed_lookup_keeps_the_last_version_and_waits(self):
+        self.answers = ["2.2.0", OSError("offline")]
+        checker = self.mod.UpdateChecker()
+        checker.latest()
+        self.assertEqual(checker.latest(max_age=0), "2.2.0")
+        self.assertEqual(checker.latest(max_age=0), "2.2.0")  # no new lookup within the minute
+        self.assertEqual(self.calls, 2)
 
 
 class TestRoutes(unittest.TestCase):

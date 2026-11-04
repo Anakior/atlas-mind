@@ -255,7 +255,7 @@ def main() -> int:
     # PWA manifest generated from the config, written in both modes.
     manifest_path.write_text(
         json.dumps(render_manifest(site_prefix=site_prefix, tagline=tagline,
-                                   lang=lang),
+                                   lang=lang, base_path=cfg.base_path),
                    ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8")
 
@@ -334,6 +334,7 @@ def main() -> int:
         doc_templates=doc_templates,
         extensions_css=extensions_css,
         extensions_js=extensions_js,
+        base_path=cfg.base_path,
     )
     out_online.write_text(html, encoding="utf-8")
 

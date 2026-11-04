@@ -40,17 +40,21 @@ class UpdateChecker:
         self._ttl = ttl
         self._pypi_url = pypi_url
         self._lock = threading.Lock()
-        self._cache = {"checked_at": 0, "latest": None}
+        self._cache = {"checked_at": 0, "latest": None, "failed": False}
 
-    def latest(self):
+    def latest(self, max_age=None):
+        """`max_age`: how old a cached answer may be (the About tab asks for a recent one);
+        default the day's cache. A failed lookup waits an hour before the next (a minute
+        when asked with a max_age), and falls back to the last version seen."""
         now = int(time.time())
+        ttl = self._ttl if max_age is None else max_age
         with self._lock:
-            if self._cache["latest"] is not None and \
-                    now - self._cache["checked_at"] < self._ttl:
+            age = now - self._cache["checked_at"]
+            if self._cache["latest"] is not None and age < ttl:
                 return self._cache["latest"]
-            fresh = now - self._cache["checked_at"] < 3600  # back off after a failure
-            if self._cache["latest"] is None and fresh and self._cache["checked_at"]:
-                return None
+            backoff = 3600 if max_age is None else 60
+            if self._cache["failed"] and age < backoff:
+                return self._cache["latest"]
         latest = None
         try:
             with urllib.request.urlopen(self._pypi_url, timeout=4) as resp:
@@ -60,6 +64,7 @@ class UpdateChecker:
             print(f"[update-check] PyPI lookup failed: {e}", file=sys.stderr)
         with self._lock:
             self._cache["checked_at"] = now
+            self._cache["failed"] = latest is None
             if latest is not None:
                 self._cache["latest"] = latest
-        return latest
+            return self._cache["latest"]

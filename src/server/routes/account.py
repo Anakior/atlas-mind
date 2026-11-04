@@ -1,6 +1,8 @@
-"""Account routes: bulk logout and TOTP (2FA) enrollment / enable / disable."""
+"""Account routes: your own password, bulk logout and TOTP (2FA) enrollment / enable / disable."""
 import sys
 import server as _s
+import store
+from server.pure.auth import PASSWORD_CODES
 
 
 def profile_get(handler):
@@ -12,6 +14,7 @@ def profile_get(handler):
         "email": email,
         "first_name": user.get("first_name") or "",
         "last_name": user.get("last_name") or "",
+        "recovery_codes": len(user.get(PASSWORD_CODES) or []),
     })
 
 
@@ -35,6 +38,50 @@ def profile_post(handler):
         _s.registry_503(handler, "[account] profile", e)
         return
     handler._send_json(200, {"ok": True})
+
+
+def password_change(handler):
+    """POST /api/account/password {current, password, code?} — your own password. The
+    current one (and the 2FA code when on) is asked again; every other session ends, this
+    one stays open."""
+    email = handler._session().get("email")
+    data = handler._read_json()
+    password = data.get("password") or ""
+    if len(password) < 8:
+        handler._send_json(400, {"error": "password too short (8 chars minimum)"})
+        return
+    user = handler._reauthenticate(email, data.get("current"), data.get("code"))
+    if not user:
+        return
+    epoch = int(user.get("session_epoch") or 0) + 1
+    try:
+        _s.get_store().upsert_user(email, {"password_hash": store.hash_password(password),
+                                           "session_epoch": epoch})
+    except Exception as e:
+        _s.registry_503(handler, "[account] password", e)
+        return
+    handler.send_response(200)
+    for cookie in handler._session_cookie_pair(email, user.get("role"), epoch):
+        handler.send_header("Set-Cookie", cookie)
+    handler.send_header("Cache-Control", "no-store")
+    handler._send_json_after_cookie({"ok": True})
+
+
+def password_codes(handler):
+    """POST /api/account/recovery-codes {password, code?} — new recovery codes for your
+    password (the old ones stop working), shown once. Asked with the password, so an open
+    session alone can't plant a way back in."""
+    email = handler._session().get("email")
+    data = handler._read_json()
+    if not handler._reauthenticate(email, data.get("password"), data.get("code")):
+        return
+    codes, hashes = _s.generate_recovery_codes()
+    try:
+        _s.get_store().upsert_user(email, {PASSWORD_CODES: hashes})
+    except Exception as e:
+        _s.registry_503(handler, "[account] recovery codes", e)
+        return
+    handler._send_json(200, {"codes": codes})
 
 
 def logout_all(handler):

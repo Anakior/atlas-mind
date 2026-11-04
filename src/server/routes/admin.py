@@ -8,6 +8,8 @@ import re
 import sys
 import time
 import store
+from cli import DEFAULT_TAGLINE_EN, DEFAULT_TAGLINE_FR
+from config import VALID_LANGS
 from server import _is_newer, PROJECT_URL
 from server.services import updater
 import server as _s
@@ -212,7 +214,7 @@ _IDENTITY_LIMITS = {"prefix": 40, "tagline": 160}
 
 
 def _with_identity(appearance: dict) -> dict:
-    return {**appearance, "prefix": _s.CONFIG.prefix, "tagline": _s.CONFIG.tagline}
+    return {**appearance, "prefix": _s.CONFIG.prefix, "tagline": _s.CONFIG.tagline, "lang": _s.CONFIG.lang}
 
 
 def appearance_get(handler):
@@ -228,8 +230,9 @@ def appearance_get(handler):
 
 def appearance_post(handler):
     """POST /api/appearance {brand?: "#rrggbb" | null, show_prefix?: bool, show_tagline?: bool,
-    prefix?: str, tagline?: str} — null puts the accent back to Atlas gold; the prefix and the
-    tagline go to atlas.toml (an empty prefix is "Atlas" alone). Only the fields sent change."""
+    prefix?: str, tagline?: str, lang?: "fr" | "en"} — null puts the accent back to Atlas gold;
+    the prefix, the tagline and the language go to atlas.toml (an empty prefix is "Atlas" alone).
+    Only the fields sent change."""
     data = handler._read_json()
     data = data if isinstance(data, dict) else {}
     fields = {}
@@ -258,6 +261,15 @@ def appearance_post(handler):
             handler._send_json(400, {"error": "the tagline cannot be empty (hide it instead)"})
             return
         identity[key] = value.strip()
+    if "lang" in data:
+        if data["lang"] not in VALID_LANGS:
+            handler._send_json(400, {"error": "lang must be " + " or ".join(VALID_LANGS)})
+            return
+        identity["lang"] = data["lang"]
+        # The default line under the logo speaks the old language: it follows the new one.
+        defaults = {"en": DEFAULT_TAGLINE_EN, "fr": DEFAULT_TAGLINE_FR}
+        if "tagline" not in identity and _s.CONFIG.tagline == defaults.get(_s.CONFIG.lang):
+            identity["tagline"] = defaults[data["lang"]]
     if not fields and not identity:
         handler._send_json(400, {"error": "nothing to set"})
         return
@@ -272,17 +284,22 @@ def appearance_post(handler):
     handler._send_json(200, _with_identity(appearance))
 
 
+# Someone looking at About gets PyPI's answer of the last few minutes, not of the day.
+_ABOUT_MAX_AGE_S = 300
+
+
 def update_check(handler):
     """The running version against PyPI's. Asked by the About tab (`?now=1`, the person
     looking), it checks even when the automatic check is off. `install` is how this engine
     updates (updater.install_kind)."""
     current = _s.current_version()
     install = updater.install_kind()
-    if not _s.CONFIG.update_check and not handler._query().get("now"):
+    asked = bool(handler._query().get("now"))
+    if not _s.CONFIG.update_check and not asked:
         handler._send_json(200, {"current": current, "latest": None, "install": install,
                                  "update_available": False, "disabled": True})
         return
-    latest = _s.latest_pypi_version()
+    latest = _s.latest_pypi_version(_ABOUT_MAX_AGE_S if asked else None)
     handler._send_json(200, {
         "current": current,
         "latest": latest,

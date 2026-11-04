@@ -161,7 +161,7 @@ def _consent_page(handler, req: dict, email: str):
     content = (
         f'<p class="intro">{_s._t("oauth_intro").format(client=who)}</p>'
         f'<p class="note">{_s._t("oauth_redirect").format(host=back_to)}</p>'
-        f'<form method="post" action="/oauth/authorize">{hidden}'
+        f'<form method="post" action="{_s.CONFIG.base_path}/oauth/authorize">{hidden}'
         f'<input type="hidden" name="csrf_token" value="{html.escape(csrf, quote=True)}">'
         f'<p class="hint">{html.escape(_s._t("oauth_scopes_hint"))}</p>'
         f'<ul class="scopes">{scopes}</ul>'

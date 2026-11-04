@@ -188,18 +188,22 @@ def verify_csrf_token(email: str, epoch: int, provided: str) -> bool:
     return hmac.compare_digest(expected, provided)
 
 
-def consume_recovery_code(email: str, code: str) -> bool:
+# The password's own recovery codes: a set apart from the 2FA's, so that neither replaces the other.
+PASSWORD_CODES = "password_recovery_hashes"
+
+
+def consume_recovery_code(email: str, code: str, field: str = "totp_recovery_hashes") -> bool:
     """Consumes a SINGLE-USE recovery code (removes it from the stored list).
 
     Removal goes through the ATOMIC store.consume_recovery_hash (presence + removal
     in one critical section), so two concurrent logins with the SAME code can't
     consume it twice (the old read-then-write released the lock in between).
     Returns False if no code matches (including already consumed)."""
-    code = (code or "").strip()
+    code = (code or "").strip().lower()
     if not code:
         return False
     target = hashlib.sha256(code.encode()).hexdigest()
-    return _s.get_store().consume_recovery_hash(email, target)
+    return _s.get_store().consume_recovery_hash(email, target, field)
 
 
 def _hash_api_token(token: str) -> str:

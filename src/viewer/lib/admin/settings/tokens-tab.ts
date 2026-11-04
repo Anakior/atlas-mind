@@ -3,8 +3,9 @@
 // hides it via hideResult().
 
 import { LANG, t } from '../../core/i18n';
+import { url as withBase } from '../../core/data-csrf';
 import { escapeHtml, relativeDate } from '../../core/utils';
-import { claudeInstallUrl, mcpUrl } from '../../home/connect-card';
+import { claudeInstallUrl, mcpUrl } from '../../home/first-steps';
 import { Dialogs } from '../../modals/dialogs';
 import { SettingsContext, copyBox, shareFormatDate } from './settings-shared';
 
@@ -60,7 +61,7 @@ export class SettingsTokens {
         method: 'POST',
         body: JSON.stringify({ label: t('settingsTokenLocalLabel') + ' · ' + when }),
       });
-      const url = location.origin + '/mcp/' + made.token;
+      const url = location.origin + withBase('/mcp/' + made.token);
       const code = `claude mcp add --transport http --scope user atlas ${url}`;
       const desktop = JSON.stringify({ atlas: { command: 'npx', args: ['-y', 'mcp-remote', url] } }, null, 2);
       const slot = document.getElementById('settings-local-snippets')!;

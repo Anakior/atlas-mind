@@ -157,6 +157,9 @@ lang = "{lang}"
 # (loopback/private/LAN addresses are refused — SSRF guard). Set true to also
 # allow localhost/LAN remotes (home-lab hive between instances).
 # allow_private_remotes = false
+# Served under a sub-path of its address (https://example.com/notes): any depth. Behind a
+# proxy that keeps the path or one that takes it off, the same setting works.
+# base_path = "/notes"
 
 [store]
 # Registry of accounts, API tokens and share links.

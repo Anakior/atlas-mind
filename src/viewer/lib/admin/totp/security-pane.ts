@@ -1,16 +1,16 @@
 // The Settings → Security pane: the 2FA status badge, the enable / disable buttons and "sign out all
 // sessions". State only — the enrollment / verify / disable UI lives in the modal (./totp-enroll-modal),
 // which the enable and disable buttons open. refreshState reflects the totpEnabled flag (owned
-// by core/data-csrf.ts) and is called by the Settings Security tab (admin/settings/settings-panel.ts)
+// by core/data-csrf.ts) and is called by the Settings Security tab (admin/settings/settings-page.ts)
 // and boot/bootstrap.ts (/api/me boot). Mutating requests go through settingsFetch
 // (../settings/settings-shared). totpModal is imported from ./totp-enroll-modal, so it is available when
 // the enable / disable buttons are wired below.
 
-import { totpEnabled } from '../../core/data-csrf';
+import { totpEnabled, url } from '../../core/data-csrf';
 import { t } from '../../core/i18n';
 import { Dialogs } from '../../modals/dialogs';
 import { settingsFetch } from '../settings/settings-shared';
-import { settingsPanel } from '../settings/settings-panel';
+import { settingsPage } from '../settings/settings-page';
 import { totpModal } from './totp-enroll-modal';
 
 export class SecurityPane {
@@ -61,9 +61,9 @@ export class SecurityPane {
     try {
       await settingsFetch('/api/account/logout-all', { method: 'POST', body: JSON.stringify({}) });
       // Epoch changed: the current session is revoked (cookie cleared server-side) → /login.
-      window.location.href = '/login';
+      window.location.href = url('/login');
     } catch (err) {
-      settingsPanel.showError((err as Error).message || t('settingsErrGeneric'));
+      settingsPage.showError((err as Error).message || t('settingsErrGeneric'));
       this.logoutAllBtn.disabled = false;
     }
   }

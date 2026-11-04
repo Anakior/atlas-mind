@@ -738,7 +738,8 @@ class FileStore:
                 return {"email": user.get("email"), "role": user.get("role")}
         return None
 
-    def consume_recovery_hash(self, email: str, target_hash: str) -> bool:
+    def consume_recovery_hash(self, email: str, target_hash: str,
+                              field: str = "totp_recovery_hashes") -> bool:
         """ATOMICALLY remove a single-use recovery-code hash.
 
         Read/check/remove/write in a SINGLE critical section under USERS_FILE: no
@@ -752,15 +753,14 @@ class FileStore:
             target = next((u for u in users if u.get("email") == email), None)
             if target is None:
                 return False
-            stored = list(target.get("totp_recovery_hashes") or [])
+            stored = list(target.get(field) or [])
             matched_index = -1
             for index, candidate in enumerate(stored):
                 if hmac.compare_digest(candidate, target_hash):
                     matched_index = index
             if matched_index < 0:
                 return False
-            target["totp_recovery_hashes"] = [
-                h for i, h in enumerate(stored) if i != matched_index]
+            target[field] = [h for i, h in enumerate(stored) if i != matched_index]
             self._write(self.USERS_FILE, users)
             return True
 

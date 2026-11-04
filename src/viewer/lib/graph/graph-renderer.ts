@@ -1,10 +1,20 @@
 // Connections-graph render passes: the per-frame canvas draw (scaffold → link arcs → firing synapses
-// → node glow → cores → labels) plus the two scaffold variants (organic zone blobs, structured map
+// → node glow → cores → labels → region names) plus the two scaffold variants (organic zone blobs, structured map
 // rings). Owns the 2D context off the injected canvas and reads family colors from the injected
 // GraphPalette; it never mutates the state, only paints it — the rAF loop and all physics live
 // elsewhere (controller + GraphLayout).
 
 import { GraphPalette } from './graph-palette';
+
+// The share of a family's notes its zone is drawn around; the farthest few are left out.
+const ZONE_CORE = 0.85;
+
+interface ZoneLabel {
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+}
 
 export class GraphRenderer {
   constructor(
@@ -12,11 +22,12 @@ export class GraphRenderer {
     private readonly palette: GraphPalette,
   ) {}
 
-  // Organic mode: a translucent radial blob + label per top-level folder, drawn at the centroid/hull
-  // of wherever that family's nodes settled.
-  private drawOrganicZones(ctx: CanvasRenderingContext2D, st: MindGraphState): void {
+  // Organic mode: a translucent radial blob per top-level folder, drawn at the centroid/hull of
+  // wherever that family's nodes settled; its name goes on top of the nodes, at the end of the frame.
+  private drawOrganicZones(ctx: CanvasRenderingContext2D, st: MindGraphState): ZoneLabel[] {
     const { cam, nodes } = st;
     const regions: Record<string, MindNode[]> = {};
+    const labels: ZoneLabel[] = [];
 
     for (const n of nodes) {
       if (n.kind !== 'doc' || !n.region) continue;
@@ -35,9 +46,10 @@ export class GraphRenderer {
 
       cx /= rn.length;
       cy /= rn.length;
-      let rad = 70;
-
-      for (const n of rn) rad = Math.max(rad, Math.hypot(n.x - cx, n.y - cy) + 46);
+      // The bulk of the family sets the glow and where its name sits: the odd note that drifted far
+      // off (an orphan, a lone link) would carry the name away from the group.
+      const reach = rn.map((n) => Math.hypot(n.x - cx, n.y - cy)).sort((a, b) => a - b);
+      const rad = Math.max(70, reach[Math.floor((reach.length - 1) * ZONE_CORE)] + 46);
       const scx = cx * cam.scale + cam.ox,
         scy = cy * cam.scale + cam.oy,
         sr = rad * cam.scale;
@@ -65,12 +77,27 @@ export class GraphRenderer {
         ctx.restore();
       }
 
-      ctx.font = '600 13px Manrope, system-ui, sans-serif';
-      ctx.fillStyle = col + (isRemoteRegion ? 'ff' : 'dd');
-      ctx.textAlign = 'center';
-      ctx.fillText(name, scx, scy - sr + 16);
-      ctx.textAlign = 'left';
+      labels.push({ text: name, x: scx, y: scy - sr + 16, color: col + (isRemoteRegion ? 'ff' : 'dd') });
     }
+
+    return labels;
+  }
+
+  // Region names over the nodes, haloed in the night sky's colour so a dense family's edge never
+  // hides its own name.
+  private drawZoneLabels(ctx: CanvasRenderingContext2D, labels: ZoneLabel[]): void {
+    ctx.font = '600 13px Manrope, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(14, 13, 18, 0.85)';
+    for (const l of labels) {
+      ctx.strokeText(l.text, l.x, l.y);
+      ctx.fillStyle = l.color;
+      ctx.fillText(l.text, l.x, l.y);
+    }
+    ctx.textAlign = 'left';
   }
 
   // Structured "map" mode: a soft labeled container per family, with a thin ring + label per subfolder
@@ -136,10 +163,12 @@ export class GraphRenderer {
       SY = (n: MindNode) => n.y * cam.scale + cam.oy;
     // Scaffold UNDER the nodes: structured "map" mode → tidy folder boxes + subfolder rings; organic
     // mode → translucent zone blobs per top-level folder.
+    let zoneLabels: ZoneLabel[] = [];
+
     if (st.mode === 'structured') {
       this.drawStructuredScaffold(ctx, st);
     } else {
-      this.drawOrganicZones(ctx, st);
+      zoneLabels = this.drawOrganicZones(ctx, st);
     }
 
     // ── Render pass: link arcs + node glow ──
@@ -282,5 +311,6 @@ export class GraphRenderer {
         hover && n !== hover && !n._adj ? 'rgba(150,150,160,0.5)' : n.kind === 'tag' ? n.color : '#e5e6e8';
       ctx.fillText(n.name, SX(n) + Math.max(2, n.r * cam.scale) + 4, SY(n));
     }
+    this.drawZoneLabels(ctx, zoneLabels);
   }
 }

@@ -1,7 +1,7 @@
 import { fileMap, docLabel } from '../core/tree';
 import { escapeHtml, relativeDate } from '../core/utils';
 import { sharedSection, sharedList, contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, tocPanel } from '../core/dom-refs';
-import { IS_OFFLINE_BUILD, SITE_PREFIX, TAGLINE } from '../core/data-csrf';
+import { IS_OFFLINE_BUILD, SITE_PREFIX, TAGLINE, url as withBase } from '../core/data-csrf';
 import { t, LANG } from '../core/i18n';
 import { currentFile, setCurrentFile, mdCount } from '../core/state';
 import { todos, loadContent } from '../content/content-tree';
@@ -10,6 +10,7 @@ import { tagBrowsePage } from '../content/tag-browse';
 import { Dialogs } from '../modals/dialogs';
 import { newFileModal } from '../modals/new-file-modal';
 import { tocShow } from './layout-chrome';
+import { settingsPage } from '../admin/settings/settings-page';
 
 // Home dashboard + the viewer's hash router. The home view stays imperative innerHTML, NOT the keyed
 // runtime: contentEl is co-owned by other content renderers (showMarkdown, renderHtmlFrame,
@@ -100,6 +101,7 @@ export class HomeView {
     // Route from the URL hash once fileMap reflects the viewer's accessible docs.
     const hash = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
 
+    if (!fileMap[hash] && settingsPage.route(hash)) return;
     if (!hash || hash === 'mind') {
       this.showWelcome();
 
@@ -223,7 +225,6 @@ export class HomeView {
       </section>
 
       <div id="home-connect" class="hidden"></div>
-      <div id="home-backup" class="hidden"></div>
 
       <section id="home-activity-card" class="home-week">
         <div class="home-sec">
@@ -308,6 +309,8 @@ export const homeView = new HomeView();
 
 homeView.renderSharedWithMe();
 
+window.addEventListener('atlas:route', () => homeView.routeFromHash());
+
 document.getElementById('home-link')!.addEventListener('click', () => {
   homeView.showWelcome();
   history.replaceState(null, '', location.pathname);
@@ -323,7 +326,7 @@ document.getElementById('btn-download')!.addEventListener('click', async () => {
   // Non-.md: download the ORIGINAL served as-is — loadContent would return text and corrupt a
   // binary .pdf/.docx.
   if (file.ext !== '.md') {
-    const fileUrl = '/' + file.path.split('/').map(encodeURIComponent).join('/');
+    const fileUrl = withBase('/' + file.path.split('/').map(encodeURIComponent).join('/'));
     const a = document.createElement('a');
 
     a.href = fileUrl;

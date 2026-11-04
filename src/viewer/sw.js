@@ -17,6 +17,8 @@
  * peut pas marier la nouvelle page à l'ancien CSS.
  */
 const CACHE_VERSION = 'atlas-cache-__ENGINE_VERSION__';
+// Le chemin de base d'Atlas (« » à la racine de son adresse) : celui d'où ce worker est servi.
+const BASE = new URL(self.registration.scope).pathname.replace(/\/$/, '');
 const PRECACHE = [
   '/',
   '/manifest.json',
@@ -56,7 +58,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_VERSION)
-      .then((c) => c.addAll(PRECACHE))
+      .then((c) => c.addAll(PRECACHE.map((p) => BASE + p)))
       .then(() => self.skipWaiting())
       .catch(() => self.skipWaiting()), // un asset de precache absent ne doit pas bloquer l'install
   );
@@ -87,12 +89,12 @@ self.addEventListener('fetch', (event) => {
   // Partage Android vers l'app installée (share_target du manifest) : ce qui est partagé
   // ouvre une capture rapide. Passé dans le fragment d'URL, il n'atteint jamais le serveur
   // ni ses journaux.
-  if (req.method === 'POST' && new URL(req.url).pathname === '/share-target') {
+  if (req.method === 'POST' && new URL(req.url).pathname === BASE + '/share-target') {
     event.respondWith(
       req.formData().then((form) => {
         const shared = ['title', 'text', 'url'].map((k) => form.get(k) || '').filter(Boolean).join('\n');
 
-        return Response.redirect('/#capture=' + encodeURIComponent(shared), 303);
+        return Response.redirect(BASE + '/#capture=' + encodeURIComponent(shared), 303);
       }),
     );
 
@@ -104,7 +106,7 @@ self.addEventListener('fetch', (event) => {
   const sameOrigin = url.origin === self.location.origin;
 
   // 1. Routes dynamiques / auth / streaming : laisser passer au réseau, sans cache.
-  if (sameOrigin && BYPASS.some((p) => url.pathname.startsWith(p))) return;
+  if (sameOrigin && BYPASS.some((p) => url.pathname.startsWith(BASE + p))) return;
 
   // 2. Navigations (chargement du shell) : network-first.
   if (req.mode === 'navigate') {
@@ -112,11 +114,11 @@ self.addEventListener('fetch', (event) => {
       fetch(req)
         .then((res) => {
           // Ne pas cacher une redirection vers /login comme si c'était le shell.
-          if (res.ok && !res.redirected) putInCache('/', res);
+          if (res.ok && !res.redirected) putInCache(BASE + '/', res);
 
           return res;
         })
-        .catch(() => caches.match('/')),
+        .catch(() => caches.match(BASE + '/')),
     );
 
     return;
@@ -126,7 +128,7 @@ self.addEventListener('fetch', (event) => {
   // stale-while-revalidate le SW resservait la copie périmée (la tâche réapparaît
   // non cochée à la réouverture de la vue), d'où network-first : frais en ligne,
   // fallback cache hors-ligne.
-  if (sameOrigin && url.pathname === '/_tasks-index.json') {
+  if (sameOrigin && url.pathname === BASE + '/_tasks-index.json') {
     event.respondWith(
       fetch(req)
         .then((res) => {

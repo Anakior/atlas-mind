@@ -9,7 +9,7 @@
 import { searchEl, searchResultsEl, treeEl } from '../core/dom-refs';
 import { t } from '../core/i18n';
 import { fileMap, docLabel } from '../core/tree';
-import { EMBED_CONTENT, IS_OFFLINE_BUILD } from '../core/data-csrf';
+import { EMBED_CONTENT, IS_OFFLINE_BUILD, url } from '../core/data-csrf';
 import { escapeHtml } from '../core/utils';
 import { docRenderer } from '../content/doc-renderer';
 
@@ -46,7 +46,7 @@ export class Search {
     await new Promise<void>((resolve, reject) => {
       const s = document.createElement('script');
 
-      s.src = '/vendor/minisearch.min.js';
+      s.src = url('/vendor/minisearch.min.js');
       s.onload = () => resolve();
       s.onerror = () => reject(new Error(t('cdnFailMiniSearch')));
       document.head.appendChild(s);

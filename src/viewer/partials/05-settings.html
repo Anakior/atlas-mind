@@ -1,32 +1,35 @@
-<!-- Settings panel (cloud mode). Full screen on mobile, centered on desktop. Sections: Me (name,
-     sign-in, sessions), My Atlas (the phone, then its copies), AI assistants (their access), Hive
-     (published nodes and subscriptions, the showcase site's Hive Mind), Shares (only while there are
-     share links), Team, Appearance (the admin's), About. A section stacks its panes below (settings-panel.ts). -->
-<div id="settings-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
-  <div id="settings-panel" class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[46rem] max-w-[90vw] max-h-[82vh] rounded-xl flex flex-col overflow-hidden">
-    <div class="px-5 py-4 flex items-center justify-between gap-3 flex-shrink-0">
-      <h3 class="text-lg font-semibold text-ink-100" data-i18n="settingsTitle">Param&egrave;tres</h3>
-      <button id="settings-close" class="p-1.5 text-ink-400 hover:text-ink-100 rounded hover:bg-ink-100/10" title="Fermer (Esc)" data-i18n-title="closeEsc">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
+<!-- Settings: a page of the viewer (#settings/<section>), shown in place of the content
+     (settings-page.ts), at the home's width: a hero with the sections as tabs, then the section's
+     cards on a 12-column grid (s-N: the columns a card spans; a narrow page stacks them). Sections:
+     Account (the name, then password, codes, 2FA, sessions), My Atlas (the phone, then its copies),
+     AI assistants, Hive, Shares (only while there are share links), Team, Appearance (the admin's),
+     About. A section shows its panes' cards on one grid. -->
+<div id="settings-page" class="settings-page hidden">
+  <header class="settings-hero">
+    <div class="settings-hero-top">
+      <div class="min-w-0">
+        <h1 class="settings-title" data-i18n="settingsTitle">Param&egrave;tres</h1>
+        <p class="settings-sub" data-i18n="settingsSub">Ton compte, ton Atlas et ce qui s&rsquo;y branche.</p>
+      </div>
+      <div id="settings-who" class="settings-who"></div>
     </div>
-    <div id="settings-tabs" class="px-3 pt-3 flex gap-1 border-b subtle-border flex-shrink-0 flex-wrap">
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="me" data-i18n="settingsTabMe">Moi</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="atlas" data-i18n="settingsTabAtlas">Mon Atlas</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="ai" data-i18n="settingsTabTokens">Assistants IA</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="hive" data-i18n="settingsTabHive">Hive</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="shares" data-i18n="settingsTabShares">Partages</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="team" data-i18n="settingsTabTeam">&Eacute;quipe</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="appearance" data-i18n="settingsTabAppearance">Apparence</button>
-      <button class="settings-tab px-3 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-ink-400 hover:text-ink-100" data-tab="about" data-i18n="settingsTabAbout">&Agrave; propos</button>
-    </div>
-    <div id="settings-body" class="flex-1 overflow-y-auto scrollbar-thin p-5">
-      <div id="settings-content" class="flex flex-col">
-      <div id="settings-error" class="hidden mb-3 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded px-3 py-2"></div>
+    <nav class="settings-tabs" data-i18n-aria="settingsTitle" aria-label="Param&egrave;tres">
+      <a href="#settings/account" class="settings-tab" data-tab="account"><svg class="side-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span data-i18n="settingsTabAccount">Compte</span></a>
+      <a href="#settings/atlas" class="settings-tab" data-tab="atlas"><svg class="side-i" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><span data-i18n="settingsTabAtlas">Mon Atlas</span></a>
+      <a href="#settings/ai" class="settings-tab" data-tab="ai"><svg class="side-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3.5 12.8 8l4.7 1.8-4.7 1.8L11 16l-1.8-4.4L4.5 9.8 9.2 8z"/><path d="m18.5 14 .9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg><span data-i18n="settingsTabTokens">Assistants IA</span></a>
+      <a href="#settings/hive" class="settings-tab" data-tab="hive"><svg class="side-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20.2 7.2v9.6L12 21.5l-8.2-4.7V7.2z"/></svg><span data-i18n="settingsTabHive">Hive</span></a>
+      <a href="#settings/shares" class="settings-tab" data-tab="shares"><svg class="side-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span data-i18n="settingsTabShares">Partages</span></a>
+      <a href="#settings/team" class="settings-tab" data-tab="team"><svg class="side-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.3c2.1.8 3.5 2.9 3.5 5.7"/></svg><span data-i18n="settingsTabTeam">&Eacute;quipe</span></a>
+      <a href="#settings/appearance" class="settings-tab" data-tab="appearance"><svg class="side-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg><span data-i18n="settingsTabAppearance">Apparence</span></a>
+      <a href="#settings/about" class="settings-tab" data-tab="about"><svg class="side-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg><span data-i18n="settingsTabAbout">&Agrave; propos</span></a>
+    </nav>
+  </header>
+  <div id="settings-content" class="settings-main">
+      <div id="settings-error" class="hidden text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded px-3 py-2"></div>
       <!-- Update-available banner (admin only): a newer atlas-mind is on PyPI; opens About. -->
-      <button id="settings-update-banner" type="button" class="hidden mb-3 block w-full text-left text-xs text-accent bg-accent/10 border border-accent/25 rounded px-3 py-2 hover:bg-accent/15 transition"></button>
+      <button id="settings-update-banner" type="button" class="hidden block w-full text-left text-xs text-accent bg-accent/10 border border-accent/25 rounded px-3 py-2 hover:bg-accent/15 transition"></button>
 
-      <!-- Placeholder for a tab that is slow to load (settings-panel.ts reveals a tab whole). -->
+      <!-- Placeholder for a tab that is slow to load (settings-page.ts reveals a section whole). -->
       <section id="settings-pane-loading" class="settings-pane hidden" aria-busy="true">
         <ul class="space-y-1.5" aria-hidden="true">
           <li class="admin-row settings-skeleton bg-navy-900 border subtle-border rounded p-2.5"><div class="flex-1 min-w-0"><div class="skeleton sk-title"></div><div class="skeleton sk-meta"></div></div><div class="skeleton sk-action"></div></li>
@@ -36,7 +39,9 @@
       </section>
 
       <!-- ── Users tab ─────────────────────────────────────────── -->
-      <section id="settings-pane-users" class="settings-pane">
+      <section id="settings-pane-users" class="settings-pane hidden">
+        <div class="settings-card s-7">
+        <h4 class="settings-card-title" data-i18n="settingsTabUsers">Utilisateurs</h4>
         <form id="settings-user-form" class="mb-3 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
           <div class="min-w-0">
             <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsEmailLabel">Email</label>
@@ -76,13 +81,14 @@
           </div>
         </div>
         <ul id="settings-users-list" class="space-y-1.5"></ul>
+        </div>
       </section>
 
       <!-- ── Tokens tab ───────────────────────────────────────────────── -->
       <section id="settings-pane-tokens" class="settings-pane hidden">
         <!-- OAuth first: the assistant signs the person in and asks what it may do. The token
              form below is the fallback for clients without OAuth. -->
-        <div id="settings-oauth" class="mb-5 rounded-lg border subtle-border bg-navy-900 p-3">
+        <div id="settings-oauth" class="settings-card s-6">
           <p class="text-sm text-ink-100 font-medium" data-i18n="settingsOauthTitle">Connecter un assistant</p>
           <p class="text-xs text-ink-400 mt-1 mb-3" data-i18n="settingsOauthHint">Colle cette adresse dans ton assistant&nbsp;: il te demandera de te connecter et de choisir ce qu&rsquo;il peut faire.</p>
           <div class="flex gap-2">
@@ -92,14 +98,16 @@
           </div>
         </div>
         <!-- On a mind on this computer (tokens-tab.ts): an access for Claude Code / Desktop. -->
-        <div id="settings-local-connect" class="mb-5 rounded-lg border subtle-border bg-navy-900 p-3">
+        <div id="settings-local-connect" class="settings-card s-6">
           <p class="text-sm text-ink-100 font-medium" data-i18n="settingsTokenLocalTitle">Brancher Claude sur cet ordinateur</p>
           <p class="text-xs text-ink-400 mt-1" data-i18n="settingsTokenLocalHint">Ton Atlas tourne sur cet ordinateur&nbsp;: claude.ai ne peut pas le joindre, Claude Code et Claude Desktop si.</p>
           <button type="button" id="settings-local-make" class="mt-3 px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="settingsTokenLocalMake">Cr&eacute;er l&rsquo;acc&egrave;s de Claude</button>
           <div id="settings-local-snippets"></div>
         </div>
+        <div class="settings-card s-6">
+        <h4 class="settings-card-title" data-i18n="settingsTokenTitle">Un token, pour les autres clients</h4>
         <p id="settings-token-manual-hint" class="text-xs text-ink-500 mb-2" data-i18n="settingsTokenManualHint">Pour un client sans OAuth, cr&eacute;e plut&ocirc;t un token&nbsp;: son URL contient le secret.</p>
-        <form id="settings-token-form" class="mb-5 flex flex-col sm:flex-row gap-2 sm:items-end">
+        <form id="settings-token-form" class="flex flex-col sm:flex-row gap-2 sm:items-end">
           <div class="flex-1 min-w-0">
             <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenLabel">Libell&eacute;</label>
             <input id="settings-token-label" type="text" autocomplete="off" placeholder="claude, mcp-perso&hellip;" data-i18n-placeholder="settingsTokenLabelPlaceholder"
@@ -123,7 +131,7 @@
         <!-- One-time display of the token in plain text + MCP connector URL. Strong
              warning banner (the secret NEVER reappears), Close button,
              auto-hide after copying the token, confirmation flash. -->
-        <div id="settings-token-result" class="hidden mb-5 rounded-lg overflow-hidden">
+        <div id="settings-token-result" class="hidden mt-4 rounded-lg overflow-hidden">
           <div class="token-warning-bar flex items-start gap-2.5 px-3 py-2.5">
             <svg class="token-warning-icon w-4 h-4 mt-px flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             <p class="token-warning-text flex-1 text-xs leading-snug font-semibold" data-i18n="settingsTokenOnce">Copiez-le maintenant : il ne sera plus jamais affich&eacute;</p>
@@ -144,17 +152,20 @@
             </div>
           </div>
         </div>
+        </div>
         <ul id="settings-tokens-list" class="space-y-1.5"></ul>
       </section>
 
       <!-- ── Shares tab ─────────────────────────────────────────────── -->
       <section id="settings-pane-shares" class="settings-pane hidden">
-        <p class="text-xs text-ink-500 mb-3" data-i18n="settingsSharesHint">Liens publics actifs vers des documents.</p>
+        <p class="text-xs text-ink-500" data-i18n="settingsSharesHint">Liens publics actifs vers des documents.</p>
         <ul id="settings-shares-list" class="space-y-1.5"></ul>
       </section>
 
       <!-- ── Nodes tab (hive: publish a folder/file) ───────── -->
       <section id="settings-pane-nodes" class="settings-pane hidden">
+        <div class="settings-card s-6">
+        <h4 class="settings-card-title" data-i18n="settingsNodesTitle">Publier</h4>
         <p class="text-xs text-ink-500 mb-3" data-i18n="settingsNodesHint">Publie un dossier ou un document en n&oelig;ud : un autre atlas pourra s&rsquo;y abonner en lecture seule via le lien.</p>
         <form id="settings-node-form" class="mb-5 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
           <div class="min-w-0">
@@ -186,14 +197,16 @@
             </div>
           </div>
         </div>
-        <div class="mt-8 pt-6 border-t subtle-border">
+        <div class="mt-5 pt-4 border-t subtle-border">
           <h4 class="text-sm font-semibold text-ink-100 mb-3" data-i18n="settingsNodesPublished">Mes n&oelig;uds publi&eacute;s</h4>
           <ul id="settings-nodes-list" class="space-y-2"></ul>
         </div>
 
+        </div>
+
         <!-- ── Subscriptions: remote nodes followed in read-only ──────── -->
-        <div class="mt-8 pt-6 border-t subtle-border">
-          <h4 class="text-sm font-semibold text-ink-100 mb-3" data-i18n="settingsRemotesHeader">Abonnements</h4>
+        <div class="settings-card s-6">
+          <h4 class="settings-card-title" data-i18n="settingsRemotesHeader">Abonnements</h4>
           <p class="text-xs text-ink-500 mb-3" data-i18n="settingsRemotesHint">Colle le lien d&rsquo;un n&oelig;ud partag&eacute; pour le suivre en lecture seule sous <code class="text-ink-300">remotes/</code>.</p>
           <form id="settings-remote-form" class="mb-5 flex flex-col sm:flex-row gap-2 sm:items-end">
             <div class="flex-1 min-w-0">
@@ -209,6 +222,8 @@
 
       <!-- ── Groups tab (model B: principals group:<name>) ───────── -->
       <section id="settings-pane-groups" class="settings-pane hidden">
+        <div class="settings-card s-5">
+        <h4 class="settings-card-title" data-i18n="settingsTabGroups">Groupes</h4>
         <p class="text-xs text-ink-500 mb-3" data-i18n="settingsGroupsHint">Cr&eacute;e des groupes pour partager des documents avec plusieurs personnes d&rsquo;un coup.</p>
         <form id="settings-group-form" class="mb-5 grid grid-cols-1 gap-2">
           <div class="min-w-0">
@@ -226,12 +241,12 @@
           </div>
         </form>
         <ul id="settings-groups-list" class="space-y-1.5"></ul>
+        </div>
       </section>
 
-      <!-- ── Security tab (2FA + sessions, current account) ────────────── -->
-      <section id="settings-pane-security" class="settings-pane hidden">
-        <!-- Your name (self-service profile) -->
-        <div class="bg-navy-900 border subtle-border rounded-lg p-4 mb-4">
+      <!-- Profile: the name shown in the app (profile-tab.ts). -->
+      <section id="settings-pane-profile" class="settings-pane hidden">
+        <div class="settings-card settings-profile">
           <div class="flex items-center gap-3">
             <div id="account-profile-avatar" class="flex-shrink-0 w-16 h-16"></div>
             <div class="min-w-0">
@@ -239,7 +254,7 @@
               <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="profileNameHint">Affich&eacute; dans l'application.</p>
             </div>
           </div>
-          <form id="account-profile-form" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <form id="account-profile-form" class="settings-profile-form">
             <div class="min-w-0">
               <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="profileFirstName">Pr&eacute;nom</label>
               <input id="account-profile-first" type="text" autocomplete="given-name" maxlength="100" class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
@@ -248,14 +263,64 @@
               <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="profileLastName">Nom</label>
               <input id="account-profile-last" type="text" autocomplete="family-name" maxlength="100" class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
             </div>
-            <div class="sm:col-span-2 flex justify-end items-center gap-3">
+            <div class="flex justify-end items-center gap-3">
               <span id="account-profile-status" class="text-xs text-emerald-400 hidden"></span>
               <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="profileSave">Enregistrer</button>
             </div>
           </form>
         </div>
+      </section>
+
+      <!-- Security: password, its recovery codes, 2FA, sessions (current account). -->
+      <section id="settings-pane-security" class="settings-pane hidden">
+        <!-- Your password -->
+        <div class="settings-card s-6">
+          <h4 class="text-sm font-semibold text-ink-100" data-i18n="passwordTitle">Mot de passe</h4>
+          <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="passwordHint">Tes autres sessions se ferment ; celle-ci reste ouverte.</p>
+          <form id="account-password-form" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div class="min-w-0 sm:col-span-2">
+              <label for="account-password-current" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="passwordCurrent">Mot de passe actuel</label>
+              <input id="account-password-current" type="password" autocomplete="current-password" required class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+            </div>
+            <div class="min-w-0">
+              <label for="account-password-new" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="passwordNew">Nouveau mot de passe</label>
+              <input id="account-password-new" type="password" autocomplete="new-password" required class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+            </div>
+            <div class="min-w-0">
+              <label for="account-password-confirm" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="passwordConfirm">Encore une fois</label>
+              <input id="account-password-confirm" type="password" autocomplete="new-password" required class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+            </div>
+            <div id="account-password-code-row" class="min-w-0 sm:col-span-2 hidden">
+              <label for="account-password-code" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="passwordCode">Code de ton application d&rsquo;authentification</label>
+              <input id="account-password-code" inputmode="numeric" autocomplete="one-time-code" class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+            </div>
+            <div class="sm:col-span-2 flex justify-end items-center gap-3">
+              <span id="account-password-status" class="text-xs text-emerald-400 hidden"></span>
+              <button type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium" data-i18n="passwordChange">Changer le mot de passe</button>
+            </div>
+          </form>
+        </div>
+        <!-- Your password's recovery codes -->
+        <div class="settings-card s-6">
+          <h4 class="text-sm font-semibold text-ink-100" data-i18n="codesTitle">Codes de secours</h4>
+          <p id="account-codes-state" class="text-xs text-ink-500 mt-1 leading-snug"></p>
+          <form id="account-codes-form" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div class="min-w-0">
+              <label for="account-codes-password" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="passwordCurrent">Mot de passe actuel</label>
+              <input id="account-codes-password" type="password" autocomplete="current-password" required class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+            </div>
+            <div id="account-codes-code-row" class="min-w-0 hidden">
+              <label for="account-codes-code" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="passwordCode">Code de ton application d&rsquo;authentification</label>
+              <input id="account-codes-code" inputmode="numeric" autocomplete="one-time-code" class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
+            </div>
+            <div class="sm:col-span-2 flex justify-end">
+              <button id="account-codes-submit" type="submit" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium"></button>
+            </div>
+          </form>
+          <div id="account-codes-list" class="hidden mt-3"></div>
+        </div>
         <!-- Two-factor authentication -->
-        <div class="bg-navy-900 border subtle-border rounded-lg p-4">
+        <div class="settings-card s-6">
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div class="min-w-0">
               <h4 class="text-sm font-semibold text-ink-100" data-i18n="securityTotpTitle">Authentification &agrave; deux facteurs</h4>
@@ -269,7 +334,7 @@
           </div>
         </div>
         <!-- Sessions -->
-        <div class="bg-navy-900 border subtle-border rounded-lg p-4 mt-4">
+        <div class="settings-card s-6">
           <h4 class="text-sm font-semibold text-ink-100" data-i18n="securitySessionsTitle">Sessions</h4>
           <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="securitySessionsHint">D&eacute;connecte tous les appareils o&ugrave; ce compte est connect&eacute;, y compris celui-ci.</p>
           <button id="security-logout-all" class="mt-3 px-3 py-1.5 text-sm bg-navy-700 hover:bg-rose-500/30 hover:text-rose-300 text-ink-200 rounded font-medium" data-i18n="securityLogoutAll">D&eacute;connecter toutes mes sessions</button>
@@ -278,10 +343,10 @@
 
       <!-- On a phone: the address as a QR code, then "add to home screen" (phone-pane.ts). -->
       <section id="settings-pane-phone" class="settings-pane hidden">
-        <h4 class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-2" data-i18n="phoneTitle">Sur ton t&eacute;l&eacute;phone</h4>
-        <div class="bg-navy-900 border subtle-border rounded-lg p-4 flex items-start gap-4">
+        <div class="settings-card s-12 flex items-start gap-4">
           <div id="phone-qr" class="phone-qr flex-shrink-0"></div>
           <div class="min-w-0">
+            <h4 class="settings-card-title" data-i18n="phoneTitle">Sur ton t&eacute;l&eacute;phone</h4>
             <p id="phone-hint" class="text-xs text-ink-500 leading-snug"></p>
             <p id="phone-url" class="text-xs text-ink-300 font-mono mt-2 truncate"></p>
           </div>
@@ -293,12 +358,24 @@
 
       <!-- Apparence (admin): the instance accent, the prefix and the tagline, the same for every account. -->
       <section id="settings-pane-appearance" class="settings-pane hidden">
-        <div class="bg-navy-900 border subtle-border rounded-lg p-4 mb-4">
+        <div class="settings-card s-6">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="min-w-0">
+              <h4 class="text-sm font-semibold text-ink-100" data-i18n="appearanceLangTitle">Langue</h4>
+              <p id="appearance-lang-hint" class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="appearanceLangHint">Celle des menus et des pages, pour tout le monde. Tes notes ne changent pas.</p>
+            </div>
+            <div id="appearance-lang" class="nf-seg settings-seg" role="radiogroup" data-i18n-aria="appearanceLangTitle">
+              <button type="button" class="nf-seg-btn" role="radio" data-lang="fr">Fran&ccedil;ais</button>
+              <button type="button" class="nf-seg-btn" role="radio" data-lang="en">English</button>
+            </div>
+          </div>
+        </div>
+        <div class="settings-card s-6">
           <h4 class="text-sm font-semibold text-ink-100" data-i18n="appearanceAccentTitle">Couleur d'accent</h4>
           <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="appearanceAccentHint">Les boutons, les badges, ce qui a boug&eacute; cette semaine. Une couleur par instance pour les distinguer d'un coup d'&oelig;il.</p>
           <div id="appearance-swatches" class="appearance-swatches mt-3"></div>
         </div>
-        <div id="appearance-prefix-card" class="bg-navy-900 border subtle-border rounded-lg p-4 mb-4">
+        <div id="appearance-prefix-card" class="settings-card s-6">
           <div class="flex items-center justify-between gap-3">
             <div class="min-w-0">
               <h4 class="text-sm font-semibold text-ink-100" data-i18n="appearancePrefixTitle">Nom avant &laquo;&nbsp;Atlas&nbsp;&raquo;</h4>
@@ -308,7 +385,7 @@
           </div>
           <input id="appearance-prefix-text" type="text" maxlength="40" autocomplete="off" class="mt-3 w-full px-3 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-sm focus:outline-none focus:border-accent" placeholder="Ton pr&eacute;nom, ton &eacute;quipe&hellip;" data-i18n-placeholder="appearancePrefixPlaceholder">
         </div>
-        <div id="appearance-tagline-card" class="bg-navy-900 border subtle-border rounded-lg p-4">
+        <div id="appearance-tagline-card" class="settings-card s-6">
           <div class="flex items-center justify-between gap-3">
             <div class="min-w-0">
               <h4 class="text-sm font-semibold text-ink-100" data-i18n="appearanceTaglineTitle">Phrase sous le logo</h4>
@@ -323,14 +400,14 @@
       <!-- About (everyone): the version and, for an admin, the update (about-tab.ts); then how to
            report a problem, how to support Atlas, and the links. -->
       <section id="settings-pane-about" class="settings-pane hidden">
-        <div class="bg-navy-900 border subtle-border rounded-lg p-4 mb-4">
+        <div class="settings-card s-4">
           <div class="flex items-baseline justify-between gap-3">
             <h4 class="text-sm font-semibold text-ink-100">Atlas Mind</h4>
             <span id="about-version" class="text-xs text-ink-400 font-mono">v__VERSION__</span>
           </div>
           <div id="about-update" class="hidden mt-2"></div>
         </div>
-        <div class="bg-navy-900 border subtle-border rounded-lg p-4 mb-4">
+        <div class="settings-card s-4">
           <h4 class="text-sm font-semibold text-ink-100" data-i18n="aboutReport">Signaler un souci</h4>
           <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="aboutReportHint">Un bug, une question&nbsp;? Ta version et ton navigateur sont d&eacute;j&agrave; remplis.</p>
           <div class="flex flex-wrap gap-2 mt-3">
@@ -338,7 +415,7 @@
             <a id="about-mail" class="px-3 py-1.5 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded-lg font-medium" href="mailto:anakior@gmail.com" data-i18n="aboutReportMail">Écrire un mail</a>
           </div>
         </div>
-        <div class="bg-navy-900 border subtle-border rounded-lg p-4 mb-4">
+        <div class="settings-card s-4">
           <h4 class="text-sm font-semibold text-ink-100" data-i18n="aboutSupport">Soutenir Atlas</h4>
           <p class="text-xs text-ink-500 mt-1 leading-snug" data-i18n="aboutSupportHint">Atlas est libre et gratuit. Si tu veux aider &agrave; le faire vivre&nbsp;:</p>
           <a class="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded-lg font-medium" href="https://github.com/sponsors/Anakior" target="_blank" rel="noopener">
@@ -352,8 +429,5 @@
           <a class="text-accent hover:underline" href="https://github.com/Anakior/atlas-mind/blob/main/LICENSE" target="_blank" rel="noopener" data-i18n="aboutLicence">Licence AGPL-3.0</a>
         </p>
       </section>
-      </div>
-    </div>
   </div>
 </div>
-

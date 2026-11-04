@@ -4,9 +4,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0e0d12">
 <title>__SITE_NAME__ — Login</title>
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/icon.svg">
-<link rel="stylesheet" href="/vendor/fonts.css">
+<link rel="icon" href="__BASE__/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="__BASE__/icon.svg">
+<link rel="stylesheet" href="__BASE__/vendor/fonts.css">
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
@@ -58,21 +58,24 @@ button:active{transform:scale(0.98)}
 .link-btn:hover{filter:brightness(1.15)}
 input.code{text-align:center;letter-spacing:0.35em;font-size:18px;font-variant-numeric:tabular-nums}
 input.code.recovery{letter-spacing:0.12em;font-size:15px}
+.ok{margin:0 0 14px;padding:10px 12px;border-radius:10px;font-size:13px;color:#a7f3d0;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3)}
 </style></head><body>
 <div class="card">
   <div class="logo-wrap">
-    <img src="/icon.svg" alt="Atlas" width="64" height="64">
+    <img src="__BASE__/icon.svg" alt="Atlas" width="64" height="64">
   </div>
   <h1><span class="brand">__SITE_PREFIX__</span> <span class="wordmark"><span class="atlas">Atlas</span><span class="mind">Mind</span></span></h1>
   <p class="subtitle" id="login-subtitle">__LOGIN_SUBTITLE__</p>
   <div id="login-error" class="err hidden" role="alert"></div>
+  <div id="login-ok" class="ok hidden" role="status"></div>
   __ERROR_HTML__
   <!-- Étape 1 : email + mot de passe. POST classique en repli si JS off. -->
-  <form id="login-step-credentials" method="post" action="/login">
+  <form id="login-step-credentials" method="post" action="__BASE__/login">
     <input type="hidden" name="next" value="__NEXT__">
     <input id="login-email" name="email" type="email" placeholder="__EMAIL_PLACEHOLDER__" autocomplete="username" required autofocus>
     <input id="login-password" name="password" type="password" placeholder="__PASSWORD_PLACEHOLDER__" autocomplete="current-password" required>
     <button type="submit">__SUBMIT_LABEL__</button>
+    <button type="button" class="link-btn" id="login-to-forgot">__FORGOT_LABEL__</button>
   </form>
   <!-- Étape 2 : second facteur (TOTP). Révélée par JS si le backend l'exige. -->
   <form id="login-step-totp" class="hidden">
@@ -90,10 +93,21 @@ input.code.recovery{letter-spacing:0.12em;font-size:15px}
     <button type="button" class="link-btn" id="login-to-totp">__TOTP_USE_APP__</button>
     <button type="button" class="link-btn" id="login-recovery-back">__BACK_LABEL__</button>
   </form>
+  <!-- Mot de passe oublié : un code de secours du mot de passe (Réglages › Moi). -->
+  <form id="login-step-forgot" class="hidden">
+    <p class="intro">__FORGOT_INTRO__</p>
+    <input id="forgot-email" type="email" autocomplete="username" placeholder="__EMAIL_PLACEHOLDER__" required>
+    <input id="forgot-code" type="text" autocomplete="off" class="code recovery" placeholder="__FORGOT_CODE__" required>
+    <input id="forgot-new" type="password" autocomplete="new-password" placeholder="__FORGOT_NEW__" required>
+    <input id="forgot-again" type="password" autocomplete="new-password" placeholder="__FORGOT_AGAIN__" required>
+    <button type="submit">__FORGOT_SUBMIT__</button>
+    <button type="button" class="link-btn" id="login-forgot-back">__BACK_LABEL__</button>
+  </form>
 </div>
 <script>
 (function() {
-  var STEP1 = "__LOGIN_SUBTITLE__", STEP2 = "__TOTP_SUBTITLE__";
+  var STEP1 = "__LOGIN_SUBTITLE__", STEP2 = "__TOTP_SUBTITLE__", STEP3 = "__FORGOT_SUBTITLE__";
+  var MISMATCH = "__FORGOT_MISMATCH__";
   var GENERIC = "__GENERIC_ERROR__";
   // Where a successful sign-in lands (server-vetted local path, e.g. an OAuth consent).
   var NEXT = document.querySelector('#login-step-credentials input[name=next]').value || '/';
@@ -106,14 +120,17 @@ input.code.recovery{letter-spacing:0.12em;font-size:15px}
   var pw = document.getElementById('login-password');
   var totpCode = document.getElementById('login-totp-code');
   var recCode = document.getElementById('login-recovery-code');
+  var fForgot = document.getElementById('login-step-forgot');
+  var okBox = document.getElementById('login-ok');
   function showError(msg) { errBox.textContent = msg; errBox.classList.remove('hidden'); }
-  function clearError() { errBox.classList.add('hidden'); errBox.textContent = ''; }
+  function clearError() { errBox.classList.add('hidden'); errBox.textContent = ''; okBox.classList.add('hidden'); }
   function showStep(which) {
     fCred.classList.toggle('hidden', which !== 'cred');
     fTotp.classList.toggle('hidden', which !== 'totp');
     fRec.classList.toggle('hidden', which !== 'recovery');
-    subtitle.textContent = (which === 'cred') ? STEP1 : STEP2;
-    var focusEl = which === 'cred' ? email : which === 'totp' ? totpCode : recCode;
+    fForgot.classList.toggle('hidden', which !== 'forgot');
+    subtitle.textContent = which === 'cred' ? STEP1 : which === 'forgot' ? STEP3 : STEP2;
+    var focusEl = which === 'cred' ? email : which === 'totp' ? totpCode : which === 'forgot' ? document.getElementById(email.value ? 'forgot-code' : 'forgot-email') : recCode;
     setTimeout(function() { focusEl.focus(); }, 30);
   }
   // POST JSON vers /login. Le serveur répond 303 (succès) ou JSON {error, totp_required}.
@@ -123,14 +140,14 @@ input.code.recovery{letter-spacing:0.12em;font-size:15px}
     var body = { email: email.value.trim().toLowerCase(), password: pw.value, next: NEXT };
     if (extra) { for (var k in extra) body[k] = extra[k]; }
     var sentSecondFactor = !!(extra && (extra.totp_code || extra.recovery_code));
-    return fetch('/login', {
+    return fetch('__BASE__/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       redirect: 'follow',
     }).then(function(res) {
-      if (res.redirected || res.url.indexOf('/login') === -1) { window.location = NEXT; return; }
-      if (res.status === 303 || (res.status >= 200 && res.status < 300 && res.headers.get('Set-Cookie'))) { window.location = NEXT; return; }
+      if (res.redirected || res.url.indexOf('/login') === -1) { window.location = '__BASE__' + NEXT; return; }
+      if (res.status === 303 || (res.status >= 200 && res.status < 300 && res.headers.get('Set-Cookie'))) { window.location = '__BASE__' + NEXT; return; }
       return res.json().catch(function() { return {}; }).then(function(data) {
         if (data.totp_required) {
           // Challenge initial (aucun code soumis) : on révèle juste l'étape 2,
@@ -151,6 +168,29 @@ input.code.recovery{letter-spacing:0.12em;font-size:15px}
   document.getElementById('login-to-totp').addEventListener('click', function() { clearError(); totpCode.value=''; showStep('totp'); });
   document.getElementById('login-totp-back').addEventListener('click', function() { clearError(); totpCode.value=''; pw.value=''; showStep('cred'); });
   document.getElementById('login-recovery-back').addEventListener('click', function() { clearError(); recCode.value=''; pw.value=''; showStep('cred'); });
+  var forgotEmail = document.getElementById('forgot-email');
+  document.getElementById('login-to-forgot').addEventListener('click', function() { clearError(); fForgot.reset(); forgotEmail.value = email.value; showStep('forgot'); });
+  document.getElementById('login-forgot-back').addEventListener('click', function() { clearError(); showStep('cred'); });
+  fForgot.addEventListener('submit', function(e) {
+    e.preventDefault();
+    clearError();
+    var next = document.getElementById('forgot-new').value;
+    if (next !== document.getElementById('forgot-again').value) { showError(MISMATCH); return; }
+    fetch('__BASE__/api/password/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forgotEmail.value.trim().toLowerCase(), code: document.getElementById('forgot-code').value.trim(), password: next }),
+    }).then(function(res) {
+      return res.json().catch(function() { return {}; }).then(function(data) {
+        if (!res.ok) { showError(data.error || GENERIC); return; }
+        email.value = forgotEmail.value;
+        pw.value = '';
+        showStep('cred');
+        okBox.textContent = data.message;
+        okBox.classList.remove('hidden');
+      });
+    }).catch(function() { showError(GENERIC); });
+  });
 })();
 </script>
 </body></html>

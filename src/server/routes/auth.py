@@ -4,6 +4,8 @@ import json
 import sys
 from urllib.parse import parse_qs
 import server as _s
+import store
+from server.pure.auth import PASSWORD_CODES
 
 
 def _safe_next(value) -> str:
@@ -14,6 +16,35 @@ def _safe_next(value) -> str:
             or any(ord(c) < 0x20 for c in v)):
         return "/"
     return v
+
+
+def password_recover(handler):
+    """POST /api/password/recover {email, code, password} — a forgotten password replaced
+    with one of the account's recovery codes (Settings › Me), each good once. A wrong code
+    counts like a failed sign-in; the 2FA, when on, is still asked at the next sign-in."""
+    data = handler._read_json()
+    email = (data.get("email") or "").strip().lower()
+    ip = handler._client_ip()
+    if not _s.login_rate_limit_ok(ip) or (email and _s.account_lock_remaining(email) > 0):
+        handler._send_json(429, {"error": _s._t("login_rate_limited")})
+        return
+    password = data.get("password") or ""
+    if len(password) < 8:
+        handler._send_json(400, {"error": _s._t("recover_too_short")})
+        return
+    user = _s.get_store().get_user_by_email(email) if email else None
+    if not user or not _s.consume_recovery_code(email, data.get("code"), PASSWORD_CODES):
+        _s.register_login_failure(email, ip)
+        handler._send_json(401, {"error": _s._t("recover_bad_code")})
+        return
+    try:
+        _s.get_store().upsert_user(email, {"password_hash": store.hash_password(password),
+                                           "session_epoch": int(user.get("session_epoch") or 0) + 1})
+    except Exception as e:
+        _s.registry_503(handler, "[auth] recover password", e)
+        return
+    _s.reset_login_failures(email)
+    handler._send_json(200, {"ok": True, "message": _s._t("recover_done")})
 
 
 def login_page(handler):

@@ -20,12 +20,13 @@ from test_admin import (ADMIN_EMAIL, ADMIN_PASSWORD, VIEWER_EMAIL, VIEWER_PASSWO
                         csrf_token_for, file_store_of, seed_admin_and_viewer, session_cookie)
 
 import store  # noqa: E402  (test_admin puts src/ on sys.path)
+from cli import DEFAULT_TAGLINE_EN, DEFAULT_TAGLINE_FR  # noqa: E402
 from config import set_toml_root_keys  # noqa: E402
 
 
 def _look(body: dict) -> dict:
-    """The appearance without the prefix and tagline every answer carries."""
-    return {k: v for k, v in body.items() if k not in ("prefix", "tagline")}
+    """The appearance without the prefix, tagline and language every answer carries."""
+    return {k: v for k, v in body.items() if k not in ("prefix", "tagline", "lang")}
 
 
 class TestAppearanceStore(unittest.TestCase):
@@ -102,11 +103,23 @@ class TestAppearanceApi(unittest.TestCase):
         self.assertIn("appearance: prefix, tagline", log)
         self.assertEqual(self._post({"prefix": ""}).json()["prefix"], "")  # "Atlas" alone
 
+    def test_language_goes_to_atlas_toml_and_takes_the_default_line_along(self):
+        before = self.srv.get("/api/appearance", headers={"Cookie": self.viewer_cookie}).json()
+        self.assertEqual(self._post({"lang": "en", "tagline": DEFAULT_TAGLINE_EN}).status, 200)
+        resp = self._post({"lang": "fr"}).json()
+        self.assertEqual((resp["lang"], resp["tagline"]), ("fr", DEFAULT_TAGLINE_FR))
+        toml = tomllib.loads((self.srv.root / "atlas.toml").read_text(encoding="utf-8"))
+        self.assertEqual((toml["lang"], toml["tagline"]), ("fr", DEFAULT_TAGLINE_FR))
+        # A line of one's own stays as typed.
+        self._post({"tagline": "À moi"})
+        self.assertEqual(self._post({"lang": "en"}).json()["tagline"], "À moi")
+        self._post({"lang": before["lang"], "tagline": before["tagline"]})
+
     def test_rejects_bad_values(self):
         for body in ({"brand": "red"}, {"brand": "#ff00"}, {"brand": "#ff0000; x"},
                      {"show_prefix": "no"}, {"show_tagline": 1}, {}, ["brand"],
                      {"prefix": "two\nlines"}, {"prefix": "x" * 41}, {"prefix": 3},
-                     {"tagline": "   "}):
+                     {"tagline": "   "}, {"lang": "de"}, {"lang": 1}):
             with self.subTest(body=body):
                 self.assertEqual(self._post(body).status, 400)
 

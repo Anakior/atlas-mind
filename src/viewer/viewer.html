@@ -8,11 +8,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="__SITE_SHORT_NAME__">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="__BASE__/manifest.json">
+<link rel="apple-touch-icon" href="__BASE__/apple-touch-icon.png">
 <title>__SITE_NAME__</title>
 __HEAD_META__
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="__BASE__/icon.svg" type="image/svg+xml">
 <script>
 // Appearance before the first paint: the saved theme (dark by default, or the system's in auto) and
 // the instance accent and prefix display cached from the last visit, so a reload never flashes.
@@ -41,15 +41,15 @@ __HEAD_META__
      (details in the header of web/vendor/tailwind.css)
      The version in the URL ties it to this page: the service worker and the browser
      cache can't hand a new page the previous release's classes. -->
-<link rel="stylesheet" href="/vendor/tailwind.css?v=__VERSION__">
+<link rel="stylesheet" href="__BASE__/vendor/tailwind.css?v=__VERSION__">
 <!-- Local fonts (Corinthia + Rubik 80s Fade = identity of the "Atlas" wordmark;
      Manrope/Lora/JetBrains Mono = UI/prose/code): vendored in
      /vendor/fonts/, no more requests to Google Fonts. -->
-<link rel="stylesheet" href="/vendor/fonts.css">
-<script src="/vendor/marked.min.js"></script>
-<script src="/vendor/purify.min.js"></script>
-<link rel="stylesheet" href="/vendor/highlight-github-dark.min.css">
-<script src="/vendor/highlight.min.js"></script>
+<link rel="stylesheet" href="__BASE__/vendor/fonts.css">
+<script src="__BASE__/vendor/marked.min.js"></script>
+<script src="__BASE__/vendor/purify.min.js"></script>
+<link rel="stylesheet" href="__BASE__/vendor/highlight-github-dark.min.css">
+<script src="__BASE__/vendor/highlight.min.js"></script>
 <style>
   __STYLES__
 </style>

@@ -26,7 +26,6 @@ import { contentCache } from '../content/content-tree';
 import { fileMap } from '../core/tree';
 import { renameBackdrop, renameModal } from './dialogs';
 import { shareBackdrop, closeShareModal } from '../admin/settings/settings-shared';
-import { settingsPanel } from '../admin/settings/settings-panel';
 import { sendToFolder } from '../content/file-drop';
 import { docRenderer } from '../content/doc-renderer';
 import { editor } from '../editor/editor';
@@ -402,18 +401,9 @@ window.Atlas = {
 };
 
 // One Escape-priority stack across every modal (some owned by other modules) + the `n` shortcut.
-// Order: settings → new-file → dir-rename → share → rename.
+// Order: new-file → dir-rename → share → rename.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    // settings-panel.ts keeps its backdrop private, so probe the element rather than import a ref.
-    const settingsBackdrop = document.getElementById('settings-backdrop');
-
-    if (settingsBackdrop && !settingsBackdrop.classList.contains('hidden')) {
-      settingsPanel.close();
-
-      return;
-    }
-
     if (newFileModal.isOpen()) {
       newFileModal.close();
 

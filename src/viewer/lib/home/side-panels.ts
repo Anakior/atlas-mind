@@ -63,6 +63,7 @@ class SidePanels {
       docRenderer.show(f);
       history.replaceState(null, '', '#' + encodeURIComponent(f.path));
     });
+    window.addEventListener('atlas:settings', () => this.close());
     // A doc opened from the panel (a Journal title, a recent doc) takes its place.
     document.addEventListener('atlas:doc-rendered', () => {
       if (this.current && Date.now() - this.clickedAt < OPENED_WITHIN_MS) this.close();

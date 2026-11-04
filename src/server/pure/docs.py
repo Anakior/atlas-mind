@@ -6,6 +6,7 @@ without a built config; server/__init__ wraps them with CONFIG-injecting shims).
 rest read config/git/build through the `server` facade (`_s`) and are re-exported as
 `server._*`.
 """
+import json
 import os
 import re
 import sys
@@ -95,22 +96,56 @@ def iter_doc_files(content_root, excluded, suffixes=(".md", ".html")):
         yield path.relative_to(content_root).as_posix(), path
 
 
-def _link_index(content_root, build):
-    """The docs ({path, name, body}) and the path and name indexes a [[link]] resolves
-    against. Taken BEFORE a move, while every link still resolves to its old place."""
+# A doc written this long before the backlinks index was may still be missing from it (the
+# build read it before the write): it is read like a newer one.
+_INDEX_LAG_S = 300
+
+
+def _link_index(content_root, build, index=None, moved=None):
+    """The docs ({path, name, body}) whose links may reach a doc `moved(rel)` says moves, and
+    the path and name indexes every [[link]] resolves against (names only, nothing read).
+    Taken BEFORE a move, while every link still resolves to its old place."""
+    files = list(iter_doc_files(content_root, build.EXCLUDED_NAMES))
+    by_path = {rel.lower(): rel for rel, _ in files}
+    by_stem: dict = {}
+    for rel, path in files:
+        by_stem.setdefault(re.sub(r"\.md$", "", path.name, flags=re.I).lower(), rel)
+    wanted = _linking(index, moved, files)
     md_files = []
-    for rel, path in iter_doc_files(content_root, build.EXCLUDED_NAMES):
+    for rel, path in files:
+        if wanted is not None and rel not in wanted:
+            continue
         try:
             md_files.append({"path": rel, "name": path.name,
                              "body": path.read_text(encoding="utf-8-sig")})
         except (OSError, UnicodeDecodeError):
             continue
-    by_path = {f["path"].lower(): f["path"] for f in md_files}
-    by_stem: dict = {}
-    for f in md_files:
-        stem = re.sub(r"\.md$", "", f["name"], flags=re.I).lower()
-        by_stem.setdefault(stem, f["path"])
     return md_files, by_path, by_stem
+
+
+def _linking(index, moved, files):
+    """The docs that may link to a moving doc: those the backlinks index (`index`, the
+    build's _backlinks.json) lists, plus every doc written since it was built. None (read
+    them all) without an index, or when a moving doc is newer than it."""
+    if index is None or moved is None:
+        return None
+    try:
+        since = index.stat().st_mtime - _INDEX_LAG_S
+        graph = json.loads(index.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    wanted = set()
+    for rel, path in files:
+        if moved(rel):
+            if rel not in graph:
+                return None
+            wanted.update(graph[rel].get("in", []))
+        try:
+            if path.stat().st_mtime >= since:
+                wanted.add(rel)
+        except OSError:
+            continue
+    return wanted
 
 
 def _relink(md_files, by_path, by_stem, build, moves: dict, skip=frozenset()) -> list:
@@ -150,7 +185,7 @@ def _relink(md_files, by_path, by_stem, build, moves: dict, skip=frozenset()) ->
     return pending
 
 
-def move_dir_with_relink(src, dst, content_root, build) -> list:
+def move_dir_with_relink(src, dst, content_root, build, index=None) -> list:
     """Rename the folder `src` to `dst` (absolute, both checked by the caller) and rewrite
     every [[link]] that reaches a doc inside it by its path; a link by name still resolves.
     Links are read before the rename, and each rewritten body is written where its doc
@@ -158,12 +193,13 @@ def move_dir_with_relink(src, dst, content_root, build) -> list:
     the rename fails (nothing touched)."""
     old = src.relative_to(content_root).as_posix()
     new = dst.relative_to(content_root).as_posix()
-    md_files, by_path, by_stem = _link_index(content_root, build)
 
     def moved(rel):
         return rel.lower().startswith(old.lower() + "/")
 
-    moves = {f["path"].lower(): new + f["path"][len(old):] for f in md_files if moved(f["path"])}
+    md_files, by_path, by_stem = _link_index(content_root, build, index, moved)
+
+    moves = {low: new + rel[len(old):] for low, rel in by_path.items() if moved(rel)}
     pending = _relink(md_files, by_path, by_stem, build, moves)
     dst.parent.mkdir(parents=True, exist_ok=True)
     src.rename(dst)
@@ -178,7 +214,8 @@ def move_dir_with_relink(src, dst, content_root, build) -> list:
     return rewrites
 
 
-def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run=False):
+def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run=False,
+                        index=None):
     """Move/rename a .md AND rewrite the incoming [[wikilinks]] that target it.
 
     The disk rename is the priority operation; relinking is best-effort on top.
@@ -201,8 +238,8 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run
     dst_canon = dst.relative_to(content_root).as_posix()
     # Index wikilinks BEFORE the move (the source still resolves to its old path); the
     # moved doc's own outgoing links don't change.
-    pending = _relink(*_link_index(content_root, build), build,
-                      {src_canon.lower(): dst_canon}, skip={src_canon})
+    pending = _relink(*_link_index(content_root, build, index, lambda rel: rel == src_canon),
+                      build, {src_canon.lower(): dst_canon}, skip={src_canon})
     if dry_run:
         rewrites = [{"path": rel, "count": count} for rel, _, count in pending]
         return ("ok", {"from": src_canon, "to": dst_canon, "rewrites": rewrites,

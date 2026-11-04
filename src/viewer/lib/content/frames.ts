@@ -6,7 +6,7 @@
 // markdown pipeline, no editing chrome (TOC/backlinks/notes/todos are hidden, restored by the next
 // .md doc via DocRenderer.show).
 
-import { IS_OFFLINE_BUILD, EMBED_CONTENT } from '../core/data-csrf';
+import { IS_OFFLINE_BUILD, EMBED_CONTENT, url } from '../core/data-csrf';
 import { escapeHtml } from '../core/utils';
 import { t } from '../core/i18n';
 import { contentEl, btnEdit, btnSave, btnCancel, tocList, tocLinks, tocNotes, tocPanel } from '../core/dom-refs';
@@ -20,7 +20,7 @@ export class Frames {
   private static readonly FRAME_STYLE = 'width:100%;height:calc(100vh - 150px);border:0;display:block;background:#0b0d13';
   // mammoth.js (DOCX → HTML) is ~640 KB: loaded on demand, never in the <head>, since most sessions
   // never open a .docx.
-  private static readonly MAMMOTH_URL = '/vendor/mammoth.min.js';
+  private static readonly MAMMOTH_URL = url('/vendor/mammoth.min.js');
   // Past this many characters a .json is shown unhighlighted: hljs would freeze the tab.
   private static readonly JSON_HIGHLIGHT_MAX = 512 * 1024;
 
@@ -212,7 +212,7 @@ export class Frames {
 
   // Content-relative path → an absolute, percent-encoded URL (no cache-buster).
   private encodePath(file: FileNode): string {
-    return '/' + file.path.split('/').map(encodeURIComponent).join('/');
+    return url('/' + file.path.split('/').map(encodeURIComponent).join('/'));
   }
 
   // Same, plus the mtime cache-buster used for the live fetch / iframe src.

@@ -68,7 +68,7 @@ import './admin/settings/remotes-tab';
 import './admin/settings/groups-tab';
 import './admin/settings/profile-tab';
 import './admin/settings/phone-pane';
-import './admin/settings/settings-panel';
+import './admin/settings/settings-page';
 import './ui/qr-code';
 import './admin/totp/totp-enroll-modal';
 import './admin/totp/security-pane';

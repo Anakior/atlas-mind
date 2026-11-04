@@ -46,13 +46,6 @@
 # from the form, and the start script the site runs. Nothing to type in a terminal.
 set -e
 
-# The proxy hands the program the full path (/atlas/api/…), and Atlas serves from the root.
-if [ -n "${INSTALL_URL_PATH%/}" ]; then
-    echo "Atlas must be installed at the root of its address (${INSTALL_URL_HOSTNAME}), not under ${INSTALL_URL_PATH}." >&2
-    echo "Atlas doit être installé à la racine de son adresse (${INSTALL_URL_HOSTNAME}), pas sous ${INSTALL_URL_PATH}." >&2
-    exit 1
-fi
-
 # ATLAS_PIP_SPEC lets a test install a branch (git+https://…@branch) instead of PyPI.
 ATLAS_PIP_SPEC="${ATLAS_PIP_SPEC:-atlas-mind}"
 
@@ -77,6 +70,7 @@ cat > "$INSTALL_PATH/start.sh" <<EOF
 export ATLAS_BIND="\${IP:-::}" PORT="\${PORT:-8100}"
 export KB_AUTH_ENABLED=1 KB_REPO_PATH="$INSTALL_PATH/mind" ATLAS_STORE=file
 export ATLAS_TRUSTED_IP_HEADER=X-Real-IP PYTHONUNBUFFERED=1 ATLAS_UPDATE_CHECK=1
+export ATLAS_BASE_PATH="${INSTALL_URL_PATH%/}"
 export SESSION_SECRET="\$(cat "$INSTALL_PATH/.session-secret")"
 exec "$INSTALL_PATH/venv/bin/python" -m atlas_mind.server
 EOF

@@ -1,17 +1,18 @@
 // Admin/cloud Settings — foundation layer: the standalone share-link modal, the shared admin/share
 // JSON fetch, a few pure helpers, and the SettingsContext handed to every tab controller. The
-// per-tab controllers live in ./*-tab.ts and the orchestrating SettingsPanel shell in
-// ./settings-panel.ts (which imports and constructs every controller class).
+// per-tab controllers live in ./*-tab.ts and the orchestrating SettingsPage shell in
+// ./settings-page.ts (which imports and constructs every controller class).
 //
 // settingsFetch / copyToClipboard / openShareModal / closeShareModal are exported and imported
 // cross-module by modals/reset-password.ts, admin/totp/*, modals/new-file-modal.ts and
-// content/notes/notes-store.ts. The SettingsPanel shell is reached through its imported instance
-// (settingsPanel.showError / openPublish / close), replacing the old free-function wrappers.
+// content/notes/notes-store.ts. The SettingsPage shell is reached through its imported instance
+// (settingsPage.showError / openPublish), replacing the old free-function wrappers.
 //
 // Behaviour-preserving pass: the lists still build their rows by innerHTML string-concat and mutate
 // via delegated click listeners reading data-* — the keyed-runtime port is a later pass.
 
 import { LANG, t } from '../../core/i18n';
+import { url } from '../../core/data-csrf';
 import { currentFile } from '../../core/state';
 import { escapeHtml, isLoopback } from '../../core/utils';
 import { fileMap } from '../../core/tree';
@@ -100,7 +101,7 @@ export function openShareModal(): void {
   document.getElementById('share-link-part')!.classList.toggle('hidden', isLoopback());
   const asFile = document.getElementById('share-file') as HTMLAnchorElement;
 
-  asFile.href = '/api/export/page?path=' + encodeURIComponent(file.path);
+  asFile.href = url('/api/export/page?path=' + encodeURIComponent(file.path));
   asFile.classList.toggle('share-file-main', isLoopback());
   shareStep1!.classList.remove('hidden');
   shareStep2!.classList.add('hidden');
@@ -170,7 +171,7 @@ document.querySelectorAll<HTMLButtonElement>('.share-dur').forEach((btn) => {
 
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      const fullUrl = location.origin + '/s/' + data.token;
+      const fullUrl = location.origin + url('/s/' + data.token);
 
       (shareUrl as HTMLInputElement).value = fullUrl;
       shareExpiry!.textContent = data.expires_at

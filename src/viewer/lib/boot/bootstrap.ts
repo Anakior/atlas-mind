@@ -3,7 +3,7 @@
 // the open folders (state) and the scroll offset, so no DOM-sniff / save-restore crutch is needed.
 // The content branch (open doc / home / route) stays imperative until those modules migrate.
 import { isServerMode, editMode, EMBED_MIND, currentFile, setCurrentFile, mdCount, setMdCount, otherCount, setOtherCount } from '../core/state';
-import { setCsrfToken, setMeState, setTotpEnabled, TREE } from '../core/data-csrf';
+import { setCsrfToken, setMeState, setTotpEnabled, TREE, url } from '../core/data-csrf';
 import { treeEl, contentEl, statsEl } from '../core/dom-refs';
 import { t } from '../core/i18n';
 import { setStatus } from '../core/net';
@@ -11,8 +11,7 @@ import { fileMap, index } from '../core/tree';
 import { sse } from '../core/sse-coord';
 import { startSyncBanner } from '../ui/sync-banner';
 import { refreshTrashLink } from '../home/side-panels';
-import { connectCard } from '../home/connect-card';
-import { backupCard } from '../home/backup-card';
+import { firstSteps } from '../home/first-steps';
 import { showAccount, showLocal } from '../home/side-nav';
 import { contentTree, contentCache, setWlMaps } from '../content/content-tree';
 import { decorateTreeBadges } from '../content/notes/notes-index';
@@ -25,7 +24,7 @@ import { todoList, todoInput, todoForm } from '../graph/todo-surface';
 import { newFileBtn, newFileBackdrop, dirRenameBackdrop } from '../modals/new-file-modal';
 import { shareBackdrop } from '../admin/settings/settings-shared';
 import { securityPane } from '../admin/totp/security-pane';
-import { settingsPanel } from '../admin/settings/settings-panel';
+import { settingsPage } from '../admin/settings/settings-page';
 
 export class Boot {
   private swReloading = false;
@@ -74,13 +73,12 @@ export class Boot {
           if (data.role && data.role !== 'admin') document.body.classList.add('viewer-mode');
           // Settings gear: cloud admins only.
           if (data.cloud && data.role === 'admin') document.body.classList.add('admin-cloud');
-          if (!data.cloud || data.role === 'admin') void settingsPanel.checkUpdate();
+          if (!data.cloud || data.role === 'admin') void settingsPage.checkUpdate();
           // Security tab (2FA + sessions): any authenticated cloud account.
           if (data.cloud) {
             document.body.classList.add('cloud-authed');
             securityPane.refreshState();
-            void connectCard.mount();
-            void backupCard.mount();
+            void firstSteps.mount();
           }
           startSyncBanner();
           void refreshTrashLink();
@@ -201,7 +199,7 @@ export class Boot {
 
   private setupSse(): void {
     try {
-      const es = new EventSource('/api/events');
+      const es = new EventSource(url('/api/events'));
 
       es.addEventListener('message', (e) => {
         if (e.data === 'reload') this.softReload();
@@ -230,7 +228,7 @@ export class Boot {
     });
     window.addEventListener('load', () => {
       navigator.serviceWorker
-        .register('/sw.js', { updateViaCache: 'none' })
+        .register(url('/sw.js'), { updateViaCache: 'none' })
         .then((reg) => {
           this.swReg = reg;
           reg.update();

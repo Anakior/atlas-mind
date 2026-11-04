@@ -24,6 +24,7 @@ ALLOWED_PUBLIC_POST = {
     "/login",           # credentials
     "/api/setup",       # constant-time setup token (first admin)
     "/api/invite",      # single-use invite token (C1)
+    "/api/password/recover",  # single-use recovery code, rate-limited like /login
     "/webhook/github",  # HMAC signature
     "/oauth/register",  # DCR is unauthenticated by spec: rate-limited, stores a client only
     "/oauth/token",     # the code + its PKCE verifier, or a rotating refresh token

@@ -12,7 +12,7 @@ import { setStatus } from '../../core/net';
 import { escapeHtml } from '../../core/utils';
 import { renderQrCanvas } from '../../ui/qr-code';
 import { settingsFetch } from '../settings/settings-shared';
-import { settingsPanel } from '../settings/settings-panel';
+import { settingsPage } from '../settings/settings-page';
 import { securityPane } from './security-pane';
 
 export class TotpEnrollModal {
@@ -105,7 +105,7 @@ export class TotpEnrollModal {
       this.openModal('enroll');
       setTimeout(() => this.verifyCode.focus(), 60);
     } catch (err) {
-      settingsPanel.showError((err as Error).message || t('settingsErrGeneric'));
+      settingsPage.showError((err as Error).message || t('settingsErrGeneric'));
     }
   }
 

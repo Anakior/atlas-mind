@@ -3,6 +3,7 @@
 // extension and the render behaviour. The task-checkbox source toggle lives in task-markers.ts.
 
 import { escapeHtml } from '../core/utils';
+import { BASE } from '../core/data-csrf';
 import { t } from '../core/i18n';
 import { wlMaps, WL_TARGET_EXTS } from './content-tree';
 
@@ -42,7 +43,7 @@ export class Markdown {
   private besideDoc(href: string): string {
     if (this.docPath === null || /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(href)) return href;
     const dir = this.docPath.split('/').slice(0, -1).map(encodeURIComponent).join('/');
-    const url = new URL(href, location.origin + '/' + (dir ? dir + '/' : ''));
+    const url = new URL(href, location.origin + BASE + '/' + (dir ? dir + '/' : ''));
 
     return url.pathname + url.search + url.hash;
   }

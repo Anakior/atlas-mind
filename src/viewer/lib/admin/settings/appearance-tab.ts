@@ -1,14 +1,15 @@
-// Settings › Apparence (admin): the accent, the name before "Atlas" and the line under the logo, the
-// same for every account. Applied at once; a refused save puts the previous look back.
+// Settings › Apparence (admin): the language, the accent, the name before "Atlas" and the line under
+// the logo, the same for every account. Applied at once; a refused save puts the previous look back.
 
-import { t } from '../../core/i18n';
+import { LANG, t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
-import { SITE_PREFIX, TAGLINE } from '../../core/data-csrf';
+import { SITE_PREFIX, TAGLINE, url } from '../../core/data-csrf';
 import { appearance, type Appearance } from '../../ui/appearance';
 import { SettingsContext } from './settings-shared';
 
 const DEFAULT_BRAND = '#e8941c';
 const PRESETS = ['#e5624b', '#d9488f', '#8b5cf6', '#3b82f6', '#0ea5c6', '#10b981', '#84cc16'];
+const LANG_RELOAD_MAX_MS = 45_000;
 
 // What a save sends: a null brand puts Atlas gold back.
 type Change = { brand?: string | null; show_prefix?: boolean; show_tagline?: boolean; prefix?: string; tagline?: string };
@@ -32,6 +33,11 @@ export class SettingsAppearance {
         if (sw) this.save({ brand: sw.dataset.brand || null });
       });
       swatches.addEventListener('change', (e) => this.save({ brand: (e.target as HTMLInputElement).value }));
+      document.getElementById('appearance-lang')!.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-lang]');
+
+        if (b && b.dataset.lang !== LANG) void this.switchLang(b);
+      });
       for (const text of TEXTS) {
         const btn = document.getElementById('appearance-' + text.id)!;
         const field = document.getElementById(`appearance-${text.id}-text`) as HTMLInputElement;
@@ -63,6 +69,7 @@ export class SettingsAppearance {
     const swatch = (hex: string, tip: string, value = hex) =>
       `<button type="button" class="appearance-swatch" style="--sw:${hex}" data-brand="${value}" data-tip="${escapeHtml(tip)}" aria-pressed="${brand === value}"></button>`;
 
+    this.langButtons().forEach((b) => this.markLang(b, b.dataset.lang === LANG));
     document.getElementById('appearance-swatches')!.innerHTML =
       swatch(DEFAULT_BRAND, t('appearanceDefault'), '') +
       PRESETS.map((hex) => swatch(hex, hex)).join('') +
@@ -74,6 +81,44 @@ export class SettingsAppearance {
       btn.setAttribute('aria-checked', String(appearance.current[text.show] !== false));
       btn.disabled = !this.text(text.id); // no name: nothing to show or hide
     }
+  }
+
+  private langButtons(): HTMLButtonElement[] {
+    return Array.from(document.querySelectorAll<HTMLButtonElement>('#appearance-lang [data-lang]'));
+  }
+
+  private markLang(b: HTMLButtonElement, on: boolean): void {
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', String(on));
+  }
+
+  // The viewer is built in its language: the page comes back once the server has rebuilt it.
+  private async switchLang(chosen: HTMLButtonElement): Promise<void> {
+    const buttons = this.langButtons();
+
+    this.ctx.clearError();
+    buttons.forEach((b) => {
+      this.markLang(b, b === chosen);
+      b.disabled = true;
+    });
+    try {
+      await this.ctx.fetch('/api/appearance', { method: 'POST', body: JSON.stringify({ lang: chosen.dataset.lang }) });
+    } catch (e) {
+      buttons.forEach((b) => {
+        this.markLang(b, b.dataset.lang === LANG);
+        b.disabled = false;
+      });
+      this.ctx.showError((e as Error).message);
+
+      return;
+    }
+    document.getElementById('appearance-lang-hint')!.textContent = t('appearanceLangSwitching');
+    const rebuilt = new EventSource(url('/api/events'));
+
+    rebuilt.addEventListener('message', (e) => {
+      if (e.data === 'reload') location.reload();
+    });
+    setTimeout(() => location.reload(), LANG_RELOAD_MAX_MS);
   }
 
   private async save(fields: Change): Promise<void> {

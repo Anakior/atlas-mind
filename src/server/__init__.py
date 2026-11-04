@@ -463,9 +463,9 @@ def current_version():
 
 
 def set_identity(values: dict, ctx) -> None:
-    """Settings › Apparence: the prefix and/or tagline written into atlas.toml, committed like
-    any edit (the push worker then rebuilds the viewer), and live at once for the pages the
-    server renders itself."""
+    """Settings › Apparence: the prefix, tagline and/or language written into atlas.toml,
+    committed like any edit (the push worker then rebuilds the viewer), and live at once for
+    the pages the server renders itself."""
     from config import set_toml_root_keys
     toml = CONFIG.root / "atlas.toml"
     text = toml.read_text(encoding="utf-8") if toml.exists() else ""
@@ -474,9 +474,9 @@ def set_identity(values: dict, ctx) -> None:
     commit_change(ctx, "appearance: " + ", ".join(sorted(values)), toml)
 
 
-def latest_pypi_version():
-    """Latest atlas-mind version on PyPI (cached). Delegates to the checker."""
-    return _CTX.update_checker.latest()
+def latest_pypi_version(max_age=None):
+    """Latest atlas-mind version on PyPI (cached, `max_age` seconds at most when given)."""
+    return _CTX.update_checker.latest(max_age)
 
 
 def _start_new_mind(root: Path) -> bool:
@@ -684,7 +684,7 @@ def _move_md_with_relink(src_rel: str, dst_rel: str, dry_run=False):
     """Move a .md/.html and rewrite the incoming [[wikilinks]] that target it.
     Injects the content root + build module into docs.move_md_with_relink."""
     return docs.move_md_with_relink(src_rel, dst_rel, CONFIG.content_root, _import_build(),
-                                    dry_run)
+                                    dry_run, index=CONFIG.dist_dir / "_backlinks.json")
 
 
 # ─── Folders: create, move, delete an empty one ─────────────────────────────────
@@ -784,7 +784,8 @@ def move_dir(src_rel, dst_rel, ctx, *, ai=None):
     except Exception as e:
         print(f"[folder move copy_acl] {e}", file=sys.stderr)
     try:
-        rewrites = docs.move_dir_with_relink(src, dst, CONFIG.content_root, _import_build())
+        rewrites = docs.move_dir_with_relink(src, dst, CONFIG.content_root, _import_build(),
+                                             index=CONFIG.dist_dir / "_backlinks.json")
     except OSError:
         try:
             store.drop_acl_under(dst_rel)  # roll back the speculative ACL copy

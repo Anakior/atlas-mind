@@ -47,6 +47,15 @@ _CONTENT_SANDBOX = {
 }
 
 
+def _without_base(path):
+    """A request path with the base path taken off ("/notes/api/me" -> "/api/me"); left as it
+    came when a proxy already took it off."""
+    base = _s.CONFIG.base_path
+    if base and (path == base or path.startswith((base + "/", base + "?"))):
+        return path[len(base):] or "/"
+    return path
+
+
 class Handler(SimpleHTTPRequestHandler):
     # Explicit MIME types for /vendor/: the system mimetypes table can miss
     # woff2 on some distros, and the browser then rejects mistyped fonts/CSS.
@@ -67,11 +76,30 @@ class Handler(SimpleHTTPRequestHandler):
         another site must not reach it through a name resolving to 127.0.0.1."""
         if not super().parse_request():
             return False
+        base = _s.CONFIG.base_path
+        if base and self.path.split("?", 1)[0] == base:
+            # The page's relative links need it to end with a slash.
+            self.send_response(308)
+            super().send_header("Location", base + "/" + self.path[len(base):])
+            super().send_header("Content-Length", "0")
+            self.end_headers()
+            return False
+        self.path = _without_base(self.path)
         if not _s.CONFIG.auth_enabled and not _local_host_allowed(self.headers.get("Host", "")):
             self.send_error(421, "Misdirected Request",
                             "Local mode answers to localhost or an IP address only.")
             return False
         return True
+
+    def send_header(self, keyword, value):
+        """A local redirect, and a cookie's scope, carry the base path (the routes write
+        paths as if Atlas sat at the root of its address)."""
+        base = _s.CONFIG.base_path
+        if base and keyword == "Location" and value.startswith("/") and not value.startswith("//"):
+            value = base + value
+        elif base and keyword == "Set-Cookie":
+            value = value.replace("; Path=/;", f"; Path={base};", 1)
+        super().send_header(keyword, value)
 
     def translate_path(self, path):
         clean = path.split("?", 1)[0].split("#", 1)[0]
@@ -306,6 +334,14 @@ class Handler(SimpleHTTPRequestHandler):
             recovery_intro=html.escape(_s._t("login_recovery_intro")),
             recovery_placeholder=html.escape(_s._t("login_recovery_placeholder"), quote=True),
             back_label=_s._t("login_back"),
+            forgot_label=_s._t("login_forgot"),
+            forgot_subtitle=html.escape(_s._t("login_forgot_subtitle"), quote=True),
+            forgot_intro=html.escape(_s._t("login_forgot_intro")),
+            forgot_code=html.escape(_s._t("login_forgot_code"), quote=True),
+            forgot_new=html.escape(_s._t("login_forgot_new"), quote=True),
+            forgot_again=html.escape(_s._t("login_forgot_again"), quote=True),
+            forgot_submit=_s._t("login_forgot_submit"),
+            forgot_mismatch=html.escape(_s._t("login_forgot_mismatch"), quote=True),
             generic_error=html.escape(_s._t("login_generic_error"), quote=True),
         ).encode("utf-8")
         self.send_response(status)
@@ -319,6 +355,7 @@ class Handler(SimpleHTTPRequestHandler):
         """Absolute URL for `suffix`: the configured public_url when a proxy or tunnel
         rewrites Host, else from the request Host — https in real cloud, http on
         dev/local loopback. Falls back to the relative `suffix` when there's no Host."""
+        suffix = _s.CONFIG.base_path + suffix
         if _s.CONFIG.public_url:
             return _s.CONFIG.public_url + suffix
         host = self.headers.get("Host", "")
@@ -377,6 +414,27 @@ class Handler(SimpleHTTPRequestHandler):
         for cookie in self._session_cookie_pair(email, role, epoch):
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
+
+    def _reauthenticate(self, email: str, password: str, code: str):
+        """The account again from its password (and its 2FA code when on), for what an open
+        session alone must not do; a wrong one counts like a failed sign-in. The user, or
+        None once the refusal is sent."""
+        ip = self._client_ip()
+        if not _s.login_rate_limit_ok(ip) or _s.account_lock_remaining(email) > 0:
+            self._send_json(429, {"error": "locked"})
+            return None
+        user = _s.authenticate_user(email, password or "")
+        code = (code or "").strip()
+        if user and user.get("totp_enabled") and not code:
+            self._send_json(401, {"error": "code_required"})
+            return None
+        if not user or (user.get("totp_enabled") and not self._verify_second_factor(
+                user, code if code.isdigit() else "", "" if code.isdigit() else code)):
+            _s.register_login_failure(email, ip)
+            self._send_json(401, {"error": "bad_code" if user else "bad_password"})
+            return None
+        _s.reset_login_failures(email)
+        return user
 
     def _verify_second_factor(self, user: dict, totp_code: str,
                               recovery_code: str) -> bool:

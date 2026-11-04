@@ -128,7 +128,8 @@ def _escape_closing_tag(text: str, closing_re: re.Pattern) -> str:
 
 _VENDOR_SCRIPT_RE = re.compile(r'<script src="/vendor/([^"]+)"></script>')
 _VENDOR_LINK_RE = re.compile(r'<link rel="stylesheet" href="/vendor/([^"?]+)(?:\?[^"]*)?">')
-_VENDOR_CSS_URL_RE = re.compile(r"url\((/vendor/[^)]+)\)")
+# A vendored stylesheet's url(): absolute (/vendor/…) or relative to the sheet (fonts/…), never data:.
+_VENDOR_CSS_URL_RE = re.compile(r"url\((?!data:)([^)'\"]+)\)")
 # Icon <link> (favicon + apple-touch-icon): in file:// the absolute href
 # /icon.svg would resolve to file:///icon.svg (not found) — rewritten as a data: URI.
 _ICON_LINK_RE = re.compile(r'(<link\b[^>]*href=")/icon\.svg(")')
@@ -140,7 +141,7 @@ def inline_vendor_assets(html_text: str, web_dir: Path | None = None) -> str:
     The index-offline.html monolith must work in file:// WITHOUT network or
     server: the template's <script src="/vendor/…"> and <link href="/vendor/…">
     would not resolve. So we replace each reference with its content (closing
-    tags neutralized as for the extensions), the CSS's url(/vendor/fonts/…)
+    tags neutralized as for the extensions), the CSS's url(fonts/…)
     becoming base64 data: URIs, and the icon <link>s (/icon.svg) SVG data: URIs
     (otherwise: ERR_FILE_NOT_FOUND in the file:// console). MiniSearch, lazily
     loaded by the viewer (offline search), is hard-injected before </head> —
@@ -153,7 +154,8 @@ def inline_vendor_assets(html_text: str, web_dir: Path | None = None) -> str:
         css = (vendor_dir / match.group(1)).read_text(encoding="utf-8")
 
         def _data_uri(url_match: re.Match) -> str:
-            asset = web_dir / url_match.group(1).lstrip("/")
+            ref = url_match.group(1)
+            asset = web_dir / ref.lstrip("/") if ref.startswith("/") else (vendor_dir / match.group(1)).parent / ref
             mime = "font/woff2" if asset.suffix == ".woff2" else "application/octet-stream"
             payload = base64.b64encode(asset.read_bytes()).decode("ascii")
             return f"url(data:{mime};base64,{payload})"

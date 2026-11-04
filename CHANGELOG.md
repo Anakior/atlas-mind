@@ -6,6 +6,55 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
+## [Unreleased]
+
+## [2.4.0] - 2026-11-04
+
+Atlas under any sub-path of its address, Settings as a real page, your own password changed and
+recovered with recovery codes, the interface language chosen after the install, and one "First
+steps" card on the home. No MCP tool changes. An Atlas installed from alwaysdata on 2.2.0 or later
+gets this one from Settings › About; to move one under a sub-path, install it again there.
+
+### Added
+- **Settings is a page.** It opens in place of the content at the home's width: a hero with the
+  sections as tabs, then each section's cards on the home's grid (stacked on a narrow screen). Each
+  section has its own address (`#settings/account`, `#settings/ai`…), so Back and a link both work.
+  Me becomes Account; any other page — a note, the home — takes its place. It replaces the dialog,
+  which had grown too full.
+- **The interface language in Settings › Appearance** (an admin's): French or English for the menus
+  and pages, for every account; it goes to `atlas.toml` and the page reloads once the viewer is
+  rebuilt. Notes stay as written; the default line under the logo follows the language.
+- **Atlas under a sub-path of its address**, any depth (`https://example.com/notes`,
+  `/tools/atlas`…): `[server] base_path` in `atlas.toml`, or `ATLAS_BASE_PATH`. Atlas takes it off
+  what it receives (and works the same when a proxy took it off first) and puts it on every URL it
+  makes: the viewer's calls and links, the service worker, the phone app's manifest, cookies,
+  redirects, share and file links, `git clone`, the MCP address and the OAuth endpoints. Tested with
+  claude.ai: its first guesses for the sign-in metadata sit at the host's root, outside Atlas, and it
+  then finds them under the sub-path (`/.well-known/openid-configuration`, answered there too). The
+  alwaysdata script passes the chosen sub-path instead of refusing it.
+- **First steps on the home**: one card with what makes an Atlas yours, each step checked once done —
+  connect an AI (with the address for any other assistant, and ideas to try once it has read the
+  Atlas), create recovery codes, keep a copy on GitHub (an admin's). It replaces the AI card and the
+  GitHub card, can be closed, and goes away once everything is done.
+- **Change your own password** in Settings › Account: the current one (and the 2FA code when on) is
+  asked again, a wrong one counts like a failed sign-in, and every other session ends while this
+  one stays open. Until now only an admin could reset someone else's.
+- **Recovery codes for a forgotten password.** Settings › Account makes them (the current password is
+  asked), shows them once, to copy or download; new ones replace the old. On the sign-in page,
+  "Forgot your password?" takes one of them and a new password; each code works once, and the
+  2FA, when on, is still asked at the next sign-in. Without a code, the admin resets it as before.
+
+### Fixed
+- **The Mind keeps each folder's name by its notes.** A region's glow and name were sized by its
+  farthest note, so one that drifted off carried the name far from the group; they now follow the
+  bulk of the folder, and the names are drawn over the notes, haloed, instead of under them.
+- **About asks PyPI for real.** Opening it gets an answer of the last five minutes; it used to keep
+  the version seen for a day, so a release out since went unnoticed. A failed lookup falls back to
+  the last version seen.
+- **Moving a note or a folder no longer reads every note.** The links to rewrite are found through
+  the backlinks index, plus the notes written since it was built; with no usable index, every note
+  is read as before. On a small shared machine a move went from about ten seconds to about three.
+
 ## [2.3.0] - 2026-11-04
 
 Folders you can create, keep empty, move whole and remove; a bin you can empty; any file deleted
