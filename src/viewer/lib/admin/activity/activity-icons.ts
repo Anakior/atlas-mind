@@ -1,6 +1,6 @@
 // Static registries for the home Activity card: the CDC event types (display label + tint +
 // Heroicons-v2 outline path), the per-language verb labels, the AI-family glyphs, the orrery/journal
-// caps and the easter-egg lines. Split out of ActivityCard so the icon/data tables sit apart from the
+// caps and the lines under the sun. Split out of ActivityCard so the icon/data tables sit apart from the
 // behaviour; the shell's helper cluster and the view classes (Journal / Orrery / Health) read
 // ActivityIcons.* at render time. Exported as a class the shell and view modules import.
 export class ActivityIcons {
@@ -40,8 +40,6 @@ export class ActivityIcons {
   static readonly ORRERY_CAP = 18; // aggregated entries (distinct doc-activities), not raw commits
   static readonly JOURNAL_PREVIEW = 24; // the home shows what fits its card, the rest behind "See all"
 
-  // Easter egg: flick the orrery (one full orbit) + bounce the sun on click; every 5th click, a
-  // little supernova line floats up. Pure fun; reduced-motion gets just the line.
   static readonly EGG_LINES: string[] = [
     '✨ tu as trouvé le cœur du mind',
     '🪐 Atlas porte le ciel… et ton bordel',

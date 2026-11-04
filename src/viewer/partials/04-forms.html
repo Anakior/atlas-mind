@@ -56,15 +56,16 @@
       </button>
     </div>
     <form id="new-file-form" class="flex flex-col gap-3">
-      <!-- Mode toggle: a full document (the fields below) OR a quick capture dropped into the inbox.
-           The two field groups swap on click; the submit branches on the active mode. -->
+      <!-- Mode toggle: a full document (the fields below), a folder (the same fields, without the
+           templates) OR a quick capture dropped into the inbox. The submit branches on the mode. -->
       <div id="new-file-mode" class="nf-seg">
         <button type="button" id="new-file-mode-doc" class="nf-seg-btn active" data-i18n="newDocTab">Document</button>
+        <button type="button" id="new-file-mode-folder" class="nf-seg-btn" data-i18n="newFolderTab">Dossier</button>
         <button type="button" id="new-file-mode-capture" class="nf-seg-btn" data-i18n="quickCaptureTab">Capture rapide</button>
       </div>
       <div id="new-file-doc-fields" class="flex flex-col gap-3">
         <div>
-          <label for="new-file-name" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="titleLabel">Titre</label>
+          <label id="new-file-name-label" for="new-file-name" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="titleLabel">Titre</label>
           <input id="new-file-name" placeholder="Ma nouvelle note" data-i18n-placeholder="docNamePlaceholder" autocomplete="off"
             class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm">
           <p id="new-file-path" class="text-xs text-ink-500 mt-1 font-mono truncate"></p>
@@ -75,7 +76,7 @@
           <option value="blank" data-i18n="tplBlank">Vide</option>
         </select>
         <div>
-          <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="folderLabel">Dossier</label>
+          <label id="new-file-dir-label" class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="folderLabel">Dossier</label>
           <input id="new-file-dir" placeholder="ex: notes/projets" data-i18n-placeholder="dirPlaceholder" autocomplete="off"
             class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
         </div>
@@ -92,7 +93,7 @@
         <!-- Form blocks of extension templates (Atlas.registerTemplate
              with `block`): the viewer shows only the one of the selected template. -->
         <div id="new-file-ext-area" class="flex flex-col gap-3 empty:hidden"></div>
-        <p class="text-xs text-ink-500 leading-snug" data-i18n="dropTip">Astuce : glisse des fichiers sur un dossier de l&rsquo;arbre pour les ajouter, ou une note de l&rsquo;arbre pour la d&eacute;placer.</p>
+        <p id="new-file-tip" class="text-xs text-ink-500 leading-snug" data-i18n="dropTip">Astuce : glisse des fichiers sur un dossier de l&rsquo;arbre pour les ajouter, ou une note de l&rsquo;arbre pour la d&eacute;placer.</p>
       </div>
       <div id="new-file-capture-fields" class="hidden flex flex-col gap-3">
         <p class="text-xs text-ink-500"><span data-i18n="quickCaptureHint">Cr&eacute;e une note dans</span> <code class="font-mono text-ink-400">inbox/</code></p>

@@ -99,7 +99,7 @@
 :root[data-theme="light"] .act-undo-head b,
 :root[data-theme="light"] .act-undo-close:hover { color: rgb(var(--ink-100)); }
 :root[data-theme="light"] .act-undo-error { color: #b4232c; }
-:root[data-theme="light"] .act-egg { color: rgb(var(--brand)); }
+:root[data-theme="light"] .act-egg { color: #475569; text-shadow: 0 1px 8px rgba(255, 255, 255, .95); }
 :root[data-theme="light"] .act-hpill { background: rgb(var(--line) / .06); color: rgb(var(--ink-400)); }
 :root[data-theme="light"] .act-hpill.is-high { background: rgba(22, 119, 168, .1); color: #14628c; }
 :root[data-theme="light"] .act-hpill.is-real { background: rgba(180, 35, 44, .1); color: #b4232c; }

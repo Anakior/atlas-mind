@@ -155,17 +155,13 @@ class TestDeleteFile(unittest.TestCase):
         self.assertEqual(resp.status, 404)
         self.assertEqual(resp.json(), {"error": "document not found"})
 
-    def test_delete_existing_txt_is_404_and_file_kept(self):
-        # Characterization: the extension guard is merged with the existence
-        # check (`not exists or suffix not in (.md, .html)`) → a .txt that is
-        # actually present on disk answers "document not found" and is NOT
-        # deleted. Indistinguishable from a missing file on the client side.
+    def test_delete_any_file_goes_to_the_trash(self):
         target = self.srv.path("brouillon.txt")
         target.write_text("à garder", encoding="utf-8")
         resp = self.srv.delete("/api/file", json_body={"path": "brouillon.txt"})
-        self.assertEqual(resp.status, 404)
-        self.assertEqual(resp.json(), {"error": "document not found"})
-        self.assertTrue(target.exists())
+        self.assertEqual(resp.status, 200)
+        self.assertFalse(target.exists())
+        self.assertTrue(self.srv.path(".trash/brouillon.txt").exists())
 
     def test_delete_rejects_traversal_and_absolute(self):
         resp = self.srv.delete("/api/file", json_body={"path": "../accueil.md"})
@@ -296,23 +292,22 @@ class TestDirRename(unittest.TestCase):
         self.srv.start()
         self.addCleanup(self.srv.stop)
 
-    def test_dir_rename_moves_directory_without_rewriting_wikilinks(self):
+    def test_dir_rename_moves_directory_and_rewrites_wikilinks(self):
         resp = self.srv.post("/api/dir/rename", json_body={
             "from": "projets", "to": "archives/anciens-projets"})
         self.assertEqual(resp.status, 200)
-        self.assertEqual(resp.json(), {
-            "ok": True, "from": "projets", "to": "archives/anciens-projets"})
+        self.assertEqual((resp.json()["from"], resp.json()["to"]),
+                         ("projets", "archives/anciens-projets"))
         self.assertFalse(self.srv.path("projets").exists())
         # archives/ did not exist: created (mkdir parents on dst.parent).
         self.assertTrue(
             self.srv.path("archives/anciens-projets/alpha.md").exists())
         self.assertTrue(
             self.srv.path("archives/anciens-projets/beta.md").exists())
-        # Characterization: unlike /api/file/move, the directory rename rewrites
-        # NO wikilink — [[projets/alpha]] in accueil.md now points to nothing.
-        self.assertEqual(
-            self.srv.path("accueil.md").read_text(encoding="utf-8"),
-            DEFAULT_MIND["accueil.md"])
+        # A link by path follows the folder; a link by name ([[beta|…]]) still resolves.
+        accueil = self.srv.path("accueil.md").read_text(encoding="utf-8")
+        self.assertIn("[[archives/anciens-projets/alpha]]", accueil)
+        self.assertNotIn("[[projets/alpha]]", accueil)
 
     def test_dir_rename_blocks_reserved_and_dot_dirs(self):
         # The "reserved" guard runs BEFORE the existence check: skill/ does not
@@ -370,8 +365,7 @@ class TestDirRename(unittest.TestCase):
         resp = self.srv.post("/api/dir/rename", json_body={
             "from": "/projets", "to": "renomme"})
         self.assertEqual(resp.status, 200)
-        self.assertEqual(resp.json(),
-                         {"ok": True, "from": "projets", "to": "renomme"})
+        self.assertEqual((resp.json()["from"], resp.json()["to"]), ("projets", "renomme"))
         self.assertTrue(self.srv.path("renomme/alpha.md").exists())
 
 

@@ -61,6 +61,10 @@
 .act-legend-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid rgb(var(--ink-100) / .08); border-radius: 999px; background: rgb(var(--ink-100) / .03); font-size: 11px; color: rgb(var(--ink-300)); }
 .act-sun { transform-box: view-box; transform-origin: 360px 265px; }
 .act-sun-pulse { transform-box: view-box; transform-origin: 360px 265px; }
+.act-moon-face { display: none; }
+:root[data-theme="light"] .act-sun-face { display: none; }
+:root[data-theme="light"] .act-moon-face { display: inline; }
+:root[data-theme="light"] .act-glow { fill: url(#actglowmoon); }
 .act-spin { transform-box: view-box; transform-origin: 360px 265px; }
 .act-egg { position: absolute; left: 50%; top: calc(50% + 52px); transform: translate(-50%, 0); font-size: 13px; font-weight: 600; color: #f3bd6a; opacity: 0; pointer-events: none; white-space: nowrap; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
 

@@ -113,6 +113,8 @@ actuel
 actuelle
 actuelle.
 add
+add:
+addInEmptyFolder
 addTag
 addTodoIn
 added
@@ -127,6 +129,7 @@ administrateur
 administrator
 adresse
 afficher
+afterbegin
 again
 again,
 again.
@@ -172,6 +175,7 @@ application
 application.
 application/json
 application/octet-stream
+application/x-atlas-folder
 application/x-atlas-path
 application/zip
 appris.
@@ -201,6 +205,7 @@ assistants
 assistants.
 at
 atlas
+atlas-backup-dismissed
 atlas-backup.zip
 atlas-cb-pop
 atlas-connect-dismissed
@@ -244,7 +249,6 @@ back
 back.
 back:
 background-color
-background-color:
 background:
 backup
 backup.
@@ -428,6 +432,7 @@ clic
 click
 click:
 client
+clients
 clipboard
 clock
 clone
@@ -544,6 +549,7 @@ courant
 cours
 create
 created
+created.
 createdShort
 current
 currentColor
@@ -580,6 +586,7 @@ delegates
 delete
 deleteDocMsg
 deleteDocTitle
+deleteFolder
 deleteNoteMsg
 deleteNoteTitle
 deleted
@@ -617,6 +624,8 @@ diff.
 different
 dir
 dir-access-btn
+dir-delete-btn
+dir-new-btn
 dir-rename-backdrop
 dir-rename-btn
 dir-rename-cancel
@@ -630,6 +639,7 @@ disable
 disabled
 disabled.
 disabled:opacity-60
+disappear,
 discardConfirm
 discardMessage
 discardTitle
@@ -675,8 +685,10 @@ donnent
 donneront
 dont
 dossier
+dossier.
 dossier/copie
 dossier/document.md
+dot
 download
 downloaded.
 draft
@@ -722,6 +734,7 @@ email,
 emails)
 emplacement
 emporterait
+emptied
 empty
 empty,
 empty.
@@ -754,6 +767,7 @@ escapeHtml(line)
 essayer
 est
 et
+ever
 every
 everything.
 everywhere
@@ -801,6 +815,7 @@ fichier
 fichier(s)).
 fichier.
 fichiers
+field
 file
 file(s)).
 file-access-btn
@@ -846,6 +861,18 @@ folder
 folder/copy
 folder/document.md
 folder:
+folderCreateFailed
+folderCreated
+folderDeleteFailed
+folderDeleted
+folderExists
+folderLabel
+folderMoved
+folderNameInvalid
+folderNameLabel
+folderNamePlaceholder
+folderNameRequired
+folderNotEmpty
 folderRenamed
 folderTagTitle
 folders
@@ -921,6 +948,7 @@ go.
 goes
 going):
 going:
+good
 grab
 grant
 granted
@@ -947,7 +975,6 @@ groupe.
 groupes
 groups
 guide-equipe
-h-1.5
 h-3
 h-4
 h1
@@ -1004,6 +1031,7 @@ hljs
 holds
 home
 home-activity-card
+home-backup
 home-card
 home-card-b
 home-card-h
@@ -1091,6 +1119,7 @@ ibx-zero
 ibx-zero-filtered
 ici
 ici,
+ici.
 id
 idea
 idee-2.md
@@ -1114,6 +1143,7 @@ in
 in,
 in.
 inFence
+inFolderLabel
 inbox
 inbox-badge
 inbox/
@@ -1174,6 +1204,7 @@ ira
 irreversible.
 is
 is-active
+is-anchored
 is-busy
 is-collapsed
 is-copied
@@ -1199,8 +1230,10 @@ its
 itself
 itself.
 jamais
+job,
 joindre,
 jour
+jour,
 jour.
 journal
 jours
@@ -1505,21 +1538,27 @@ new-file-capture-title
 new-file-cards
 new-file-close
 new-file-dir
+new-file-dir-label
 new-file-doc-fields
 new-file-error
 new-file-ext-area
 new-file-form
 new-file-mode-capture
 new-file-mode-doc
+new-file-mode-folder
 new-file-name
+new-file-name-label
 new-file-path
 new-file-submit
 new-file-template
+new-file-tip
 new-file-title
 new-file-upload
 new-file-upload-input
 new-file-visibility
 newDocHeader
+newFolderHeader
+newInFolder
 next
 nf-card
 nf-home
@@ -1651,6 +1690,7 @@ overflow-hidden
 overflow-y-auto
 overwriting
 own
+own.
 owner
 owner/name
 owner:
@@ -1746,15 +1786,18 @@ plus
 plus,
 plusieurs
 png
+point
 pointer
 pointer-events-none
 pop
 porte
 pos
 pose-moi
+possible
 pour
 pourra
 pourras
+pourront
 pre
 pre-wrap
 prefix
@@ -1766,6 +1809,7 @@ private
 problem
 proches.
 profileSaved
+projects
 projets
 projets/note.md
 prompt-backdrop
@@ -1857,6 +1901,7 @@ relance
 related
 relative
 reload
+reloads
 remain
 remet
 remis
@@ -1891,6 +1936,7 @@ rendered
 rendering
 rendu
 reopened
+repars
 repartir.
 repartira
 replace
@@ -1956,6 +2002,9 @@ revokeConfirmMsg
 revokeConfirmTitle
 revokeTitle
 revoked
+rgb(251,191,36)
+rgb(52,211,153)
+rgb(56,189,248)
 rgb(var(--line)
 rgba(110,110,130,0.3)
 rgba(150,130,246,0.28)
@@ -1965,12 +2014,9 @@ rgba(16,185,129,0.10)
 rgba(196,181,253,0.95)
 rgba(200,188,250,0.9)
 rgba(244,63,94,0.10)
-rgba(251,191,36,.85)
 rgba(255,255,255,0.05)
 rgba(255,255,255,0.35)
 rgba(255,255,255,0.72)
-rgba(52,211,153,.9)
-rgba(56,189,248,.85)
 rgba(89,208,207,0.18)
 rien
 rien,
@@ -1984,7 +2030,6 @@ rotate(-90deg)
 rotate(180deg)
 rounded
 rounded-b-md
-rounded-full
 rounded-lg
 rounded-md
 rounded-t-md
@@ -2281,6 +2326,7 @@ stacked
 stacked-next
 stale
 start
+start,
 state
 state,
 static
@@ -2353,6 +2399,7 @@ tags
 tags.
 tags:
 take
+takeover
 takes
 taking
 tant
@@ -2453,6 +2500,7 @@ ticket
 tienne
 tiennes.
 time.
+titleLabel
 titleRequired
 to
 to-do
@@ -2490,6 +2538,7 @@ todoStatus
 toggle
 toggleNthTaskMarker(content:
 toi
+toi.
 token
 tokens
 tokens.
@@ -2560,20 +2609,31 @@ translateY(-50%)
 transparent
 trash
 trash:
+trashEmptied
+trashEmptyAll
+trashEmptyAllMsg
+trashEmptyAllTitle
 trashHeader
 trashPanelSub
+trashPurge
+trashPurgeMsg
+trashPurgeTitle
+trashPurged
 trashed
 travel
 tree
 tree)
 tree-action-btn
 tree-action-btn--share
+tree-add
 tree-header
+tree-ico
 tree-item
 tree-remote
 tree-remote-origin
 tree-section--remotes
 tree-toggle-all
+tree-vis
 treeContentHeader
 triage
 trier
@@ -2665,7 +2725,6 @@ vivre
 voir
 vous
 vs
-w-1.5
 w-28
 w-4
 w-64

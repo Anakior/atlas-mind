@@ -1,6 +1,6 @@
 // Constellation ("orrery") view of the home Activity card: the attributed history as a spinning solar
-// system — each aggregated event is a node on one of three rings, hover/tap reveals a popover, the sun
-// carries the easter egg, and a node opens its doc's history. A render-only view over the shared feed:
+// system — each aggregated event is a node on one of three rings, hover/tap reveals a popover, and a
+// node opens its doc's history. A render-only view over the shared feed:
 // it reads through the ActivityRenderCtx the shell hands it (helpers + openDocHistory) and keeps its own
 // transient orreryItems (the list the nodes index into).
 
@@ -73,10 +73,26 @@ export class ActivityOrrery {
               <radialGradient id="actsunlimb" cx="42%" cy="38%"><stop offset="58%" stop-color="rgba(0,0,0,0)"/><stop offset="100%" stop-color="rgba(70,35,5,.6)"/></radialGradient>
               <clipPath id="actsunclip"><circle cx="${cx}" cy="${cy}" r="27"/></clipPath>
               <filter id="actsunblur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.3"/></filter>
+              <radialGradient id="actmoon" cx="40%" cy="36%"><stop offset="0" stop-color="#ffffff"/><stop offset="55%" stop-color="#e2e5ea"/><stop offset="100%" stop-color="#b3b9c4"/></radialGradient>
+              <radialGradient id="actmoonlimb" cx="42%" cy="38%"><stop offset="60%" stop-color="rgba(0,0,0,0)"/><stop offset="100%" stop-color="rgba(40,46,60,.32)"/></radialGradient>
+              <radialGradient id="actglowmoon" cx="50%" cy="50%"><stop offset="0" stop-color="rgba(110,130,170,.16)"/><stop offset="70%" stop-color="rgba(110,130,170,0)"/></radialGradient>
+              <filter id="actmoonblur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1"/></filter>
             </defs>
             <circle class="act-glow" cx="${cx}" cy="${cy}" r="120" fill="url(#actglow)"/>
             <g class="act-spin">${ringSvg}${nodes}</g>
             <g class="act-sun"><g class="act-sun-pulse">
+              <g class="act-moon-face">
+                <circle cx="${cx}" cy="${cy}" r="27" fill="url(#actmoon)"/>
+                <g clip-path="url(#actsunclip)" filter="url(#actmoonblur)" fill="#8f97a5">
+                  <circle cx="${cx - 8}" cy="${cy - 6}" r="5.6" opacity=".42"/>
+                  <circle cx="${cx + 8}" cy="${cy + 6}" r="7.2" opacity=".34"/>
+                  <circle cx="${cx + 9}" cy="${cy - 10}" r="3.2" opacity=".42"/>
+                  <circle cx="${cx - 6}" cy="${cy + 12}" r="3.6" opacity=".38"/>
+                  <circle cx="${cx - 15}" cy="${cy + 3}" r="2.3" opacity=".4"/>
+                </g>
+                <circle cx="${cx}" cy="${cy}" r="27" fill="url(#actmoonlimb)" stroke="rgba(52,58,74,.55)" stroke-width="1.3"/>
+              </g>
+              <g class="act-sun-face">
               <circle cx="${cx}" cy="${cy}" r="27" fill="url(#actcore)"/>
               <g clip-path="url(#actsunclip)" filter="url(#actsunblur)">
                 <circle cx="${cx - 7}" cy="${cy - 8}" r="6" fill="#fff1d6" opacity=".5"/>
@@ -88,6 +104,7 @@ export class ActivityOrrery {
               </g>
               <circle cx="${cx}" cy="${cy}" r="27" fill="url(#actsunlimb)"/>
               <circle cx="${cx - 7}" cy="${cy - 9}" r="4" fill="#fff7e6" opacity=".55" filter="url(#actsunblur)"/>
+              </g>
             </g></g>
           </svg>
           <div class="act-pop dialog-card hidden"></div>

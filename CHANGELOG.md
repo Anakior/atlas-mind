@@ -6,6 +6,41 @@ page (`gh release create vX.Y.Z --generate-notes` builds those from commits). Th
 format loosely follows [Keep a Changelog](https://keepachangelog.com/) — only
 highlights, not every commit — and versioning tracks the PyPI package.
 
+## [2.3.0] - 2026-11-04
+
+Folders you can create, keep empty, move whole and remove; a bin you can empty; any file deleted
+like a note; and a nudge on the home to keep a copy on GitHub. Two MCP tool descriptions change
+(`delete_doc`, `move_doc`): refresh the connector for your assistant to know it can now delete any
+file and move folders. An Atlas installed from the alwaysdata marketplace on 2.2.0 gets this one
+from Settings › About.
+
+### Added
+- **Folders.** "New" has a **Folder** tab, and each folder of the tree a "+" to create a note or a
+  sub-folder inside it. A folder made this way stays even empty (a hidden `.gitkeep` keeps it in
+  git), private to a member like a new note until it holds something others may read; an empty one
+  goes with the bin beside it.
+- **Move a whole folder.** Drag it onto another folder, or onto the tree's empty space for the top
+  level. Everything in it moves, its privacy and share links follow, and the `[[links]]` that reach
+  its notes by path are rewritten (they used to break). `move_doc` moves a folder too, and a PDF or
+  an image, as the viewer already did.
+- **Delete for good from the bin.** Each item has Delete beside Restore, and "Empty the trash" takes
+  everything this person may restore, after a confirmation. The file leaves the bin and the disk;
+  the git history still holds it.
+- An empty folder, opened in the tree, shows **"Add a file +"**, which opens New in it. While
+  something is dragged over the menu, the "Move into…" hint stays at the top of the tree, naming the
+  folder it is about, instead of at the foot of the page. Files from the computer go in through the
+  tree only (a folder, or its empty space for the top level): dropped anywhere else, nothing
+  happens, where they used to land beside the open note.
+- **A moon in the light theme.** The Constellation's sun becomes a pale moon with a darker rim on a
+  light page (the sun reads better on a dark one).
+- **"Keep a copy of your Atlas on GitHub"** on the home, for an admin whose Atlas has no copy yet:
+  it opens Settings › My Atlas, where the steps are. It can be closed, like the AI card.
+
+### Fixed
+- **Deleting a PDF, an image or an Office file.** The delete, the bin and the restore took notes
+  only (`.md`, `.html`), in the viewer as in `delete_doc`: the viewer offered the delete on a PDF
+  and then failed. Any file now goes to the bin and comes back from it.
+
 ## [2.2.0] - 2026-11-04
 
 An Atlas installed from the alwaysdata marketplace now updates itself from Settings › About, and

@@ -931,17 +931,17 @@
   },
   {
     "name": "move_doc",
-    "description": "Move or rename a document (.md or .html), rewriting the [[wikilinks]] that point at it. Refuses if the target exists. dry_run=true lists the links it would rewrite.",
+    "description": "Move or rename a document, a file (a PDF, an image) or a folder with everything in it, rewriting the [[wikilinks]] that point at what moved. Refuses if the target exists. dry_run=true lists the links a document move would rewrite.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "from": {
           "type": "string",
-          "description": "Current path, e.g. notes/draft.md."
+          "description": "Current path, e.g. notes/draft.md, or a folder, e.g. projects/old."
         },
         "to": {
           "type": "string",
-          "description": "New path (same folder, new name: a rename)."
+          "description": "New path (same folder, new name: a rename; for a folder, its new path)."
         },
         "ai": {
           "type": "string",
@@ -1130,13 +1130,13 @@
   },
   {
     "name": "delete_doc",
-    "description": "Soft-delete a document: it moves to .trash/, recoverable. Refuses on remote mirrors (remotes/). To rename, use move_doc.",
+    "description": "Soft-delete a document or any file (a PDF, an image, an Office file): it moves to .trash/, recoverable. Refuses on remote mirrors (remotes/). To rename, use move_doc.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "path": {
           "type": "string",
-          "description": "The doc to delete."
+          "description": "The doc or file to delete."
         },
         "ai": {
           "type": "string",

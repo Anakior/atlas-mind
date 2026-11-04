@@ -16,8 +16,9 @@ from urllib.parse import quote
 
 import server as _s
 import store
-from server.pure import export
+from server.pure import docs, export
 from server.pure.docs import move_file
+from server.pure.uploads import clean_path
 from server.render import share_page
 
 
@@ -491,102 +492,41 @@ def move(handler):
 
 
 def dir_rename(handler):
-    """POST /api/dir/rename — move/rename a folder (reserved/technical folders
-    blocked)."""
+    """POST /api/dir/rename {from, to} — move or rename a folder with all it holds (its
+    privacy and share links follow, [[links]] by path are rewritten)."""
     data = handler._read_json()
-    src_rel = (data.get("from") or "").strip().strip("/")
-    dst_rel = (data.get("to") or "").strip().strip("/")
-    for rel in (src_rel, dst_rel):
-        if not rel or ".." in rel.split("/") or rel.startswith("/"):
-            handler._send_json(400, {"error": "invalid path"})
-            return
-    # Reserved/technical folders (remotes/ = read-only remote mirrors, sync-managed).
-    reserved = {"skill", "tools", ".git", "__pycache__", "node_modules", _s.REMOTES_DIR}
-    for part in src_rel.split("/") + dst_rel.split("/"):
-        if part in reserved or part.startswith("."):
-            handler._send_json(403, {"error": f"protected dir: {part}"})
-            return
-    src = (_s.CONFIG.content_root / src_rel).resolve()
-    dst = (_s.CONFIG.content_root / dst_rel).resolve()
-    try:
-        src.relative_to(_s.CONFIG.content_root)
-        dst.relative_to(_s.CONFIG.content_root)
-    except ValueError:
-        handler._send_json(403, {"error": "outside root"})
-        return
-    if not src.exists() or not src.is_dir():
-        handler._send_json(404, {"error": "source dir not found"})
-        return
-    if dst.exists():
-        handler._send_json(409, {"error": "destination exists"})
-        return
-    try:
-        dst.relative_to(src)
-        handler._send_json(400, {"error": "destination is inside source"})
-        return
-    except ValueError:
-        pass
-    # Owner-or-admin of the folder may rename it (members rename folders they own).
-    ctx = handler._viewer_ctx()
-    if not ctx.superuser:
-        if not _s.can_read(src_rel, ctx):
-            handler._send_json(404, {"error": "source dir not found"})
-            return
-        if not _s.can_manage(src_rel, ctx):
-            handler._send_json(403, {"error": "insufficient permission (need owner to rename this folder)"})
-            return
-        if not _s.can_create(dst_rel, ctx):
-            handler._send_json(403, {"error": "insufficient permission for the destination"})
-            return
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    store = _s.get_store()
-    # Canonicalize the source folder to its on-disk spelling so the ACL/share keys
-    # (stored under that spelling) are found on a case-insensitive FS.
-    csrc = src.relative_to(_s.CONFIG.content_root).as_posix()
-    # Place the destination ACL BEFORE moving the folder on disk, so no doc is ever
-    # reachable at its new path without its ACL (which would read as commons — a
-    # transient privacy leak on a threaded server, the window the old order left
-    # open across the rename + git sync). Source keys dropped AFTER, then shares,
-    # then git last of all.
-    try:
-        store.copy_acl_under(csrc, dst_rel)
-    except Exception as e:
-        print(f"[dir rename copy_acl] {e}", file=sys.stderr)
-    try:
-        src.rename(dst)
-    except Exception:
-        try:
-            store.drop_acl_under(dst_rel)  # roll back the speculative ACL copy
-        except Exception:
-            pass
-        raise
-    try:
-        store.drop_acl_under(csrc)  # private docs stay private after a folder rename
-        store.repoint_shares_under(csrc, dst_rel)
-    except Exception as e:
-        print(f"[dir rename repoint] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"folder moved: {src_rel} → {dst_rel}", src, dst)
-    handler._send_json(200, {"ok": True, "from": src_rel, "to": dst_rel})
+    status, payload = _s.move_dir(data.get("from"), data.get("to"), handler._viewer_ctx())
+    handler._send_json(status, payload)
+
+
+def dir_create(handler):
+    """POST /api/dir {path, private?} — a new folder, kept even while empty."""
+    data = handler._read_json()
+    private = data.get("private")
+    status, payload = _s.create_dir(data.get("path"), handler._viewer_ctx(),
+                                    private=private if isinstance(private, bool) else None)
+    handler._send_json(status, payload)
+
+
+def dir_delete(handler):
+    """DELETE /api/dir {path} — remove a folder that holds nothing."""
+    status, payload = _s.delete_empty_dir(handler._read_json().get("path"), handler._viewer_ctx())
+    handler._send_json(status, payload)
 
 
 def delete(handler):
-    """DELETE /api/file — move a .md/.html doc to .trash/, restorable (CSRF enforced
-    by the verb-level guard in do_DELETE, owner right checked here)."""
+    """DELETE /api/file — move a doc or any file (a PDF, an image) to .trash/, restorable
+    (CSRF enforced by the verb-level guard in do_DELETE, owner right checked here)."""
     data = handler._read_json()
     rel = (data.get("path") or "").strip()
-    if not rel or ".." in rel.split("/") or rel.startswith("/"):
+    if clean_path(rel) is None:
         handler._send_json(400, {"error": "invalid path"})
         return
     if _s._is_readonly_path(rel):
         handler._send_json(403, {"error": "remote mirror is read-only"})
         return
-    target = (_s.CONFIG.content_root / rel).resolve()
-    try:
-        target.relative_to(_s.CONFIG.content_root)
-    except ValueError:
-        handler._send_json(403, {"error": "outside root"})
-        return
-    if not target.exists() or target.suffix.lower() not in (".md", ".html"):
+    target = docs.content_file(rel, _s.CONFIG.content_root)
+    if target is None:
         handler._send_json(404, {"error": "document not found"})
         return
     ctx = handler._viewer_ctx()
@@ -685,17 +625,25 @@ _TRASH = ".trash/"
 _TRASH_SHOWN = 200
 
 
-def trash_list(handler):
-    """GET /api/trash — the trashed docs this person may restore, newest deletion first."""
-    ctx = handler._viewer_ctx()
+def _trashed(ctx):
+    """The trashed files `ctx` may restore (or delete for good): [(Path, rel)]."""
     root = _s.CONFIG.content_root / ".trash"
-    items = []
+    out = []
     for path in root.rglob("*") if root.is_dir() else ():
-        if path.suffix.lower() not in (".md", ".html") or not path.is_file():
+        if not path.is_file():
             continue
         rel = path.relative_to(_s.CONFIG.content_root).as_posix()
-        if not ctx.superuser and not _s.can_write(rel, ctx, "owner"):
-            continue
+        if ctx.superuser or _s.can_write(rel, ctx, "owner"):
+            out.append((path, rel))
+    return out
+
+
+def trash_list(handler):
+    """GET /api/trash — the trashed docs and files this person may restore, newest
+    deletion first."""
+    ctx = handler._viewer_ctx()
+    items = []
+    for path, rel in _trashed(ctx):
         repo_rel = path.relative_to(_s.CONFIG.root).as_posix()
         stamp = _s.git("log", "-1", "--format=%ct", "--", repo_rel).stdout.strip()
         items.append({"path": rel, "original": rel[len(_TRASH):], "name": path.name,
@@ -704,15 +652,47 @@ def trash_list(handler):
     handler._send_json(200, {"items": items[:_TRASH_SHOWN], "total": len(items)})
 
 
+def trash_purge(handler):
+    """DELETE /api/trash {path: ".trash/…"} or {all: true} — delete for good what this person
+    may restore: it leaves the bin and the files (git history still holds it)."""
+    data = handler._read_json()
+    ctx = handler._viewer_ctx()
+    mine = _trashed(ctx)
+    if data.get("all") is True:
+        doomed = mine
+    else:
+        rel = posixpath.normpath((data.get("path") or "").strip())
+        doomed = [(p, r) for p, r in mine if r == rel]
+        if not doomed:
+            handler._send_json(404, {"error": "not in the trash"})
+            return
+    store = _s.get_store()
+    for path, rel in doomed:
+        path.unlink()
+        try:
+            store.delete_acl(rel)
+        except Exception as e:
+            print(f"[trash purge acl] {e}", file=sys.stderr)
+    trash_root = _s.CONFIG.content_root / ".trash"
+    for folder in sorted((p.parent for p, _ in doomed), key=lambda p: len(p.parts), reverse=True):
+        while folder != trash_root and folder.is_dir() and not any(folder.iterdir()):
+            folder.rmdir()
+            folder = folder.parent
+    if doomed:
+        subject = (f"purged: {doomed[0][0].stem}" if len(doomed) == 1
+                   else f"trash emptied: {len(doomed)} items")
+        _s.commit_change(ctx, subject, *(p for p, _ in doomed))
+    handler._send_json(200, {"ok": True, "deleted": len(doomed)})
+
+
 def trash_restore(handler):
-    """POST /api/trash/restore {path: ".trash/…"} — put a trashed doc back where it was
+    """POST /api/trash/restore {path: ".trash/…"} — put a trashed doc or file back where it was
     (beside it, renamed, when that place is taken again), its ACL with it. Needs the
     same right as the delete: owner."""
     rel = posixpath.normpath((handler._read_json().get("path") or "").strip())
     target = (_s.CONFIG.content_root / rel).resolve()
     trash_root = (_s.CONFIG.content_root / ".trash").resolve()
-    if (not rel.startswith(_TRASH) or trash_root not in target.parents
-            or target.suffix.lower() not in (".md", ".html") or not target.is_file()):
+    if not rel.startswith(_TRASH) or trash_root not in target.parents or not target.is_file():
         handler._send_json(404, {"error": "not in the trash"})
         return
     ctx = handler._viewer_ctx()

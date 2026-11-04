@@ -161,7 +161,12 @@ def walk(path: Path, *, content_root: Path | None = None,
                        embed_content=embed_content, _accum=_accum,
                        excluded_names=excluded_names,
                        excluded_prefixes=excluded_prefixes, keep=keep)
-            if sub["children"]:
+            # A folder made on purpose (its .gitkeep) stays even empty, carrying the keep's
+            # path: its ACL says who sees the folder when nothing in it is theirs to see.
+            keep_rel = (child / ".gitkeep").relative_to(content_root).as_posix()
+            if (child / ".gitkeep").is_file() and (keep is None or keep(keep_rel)):
+                sub["keep"] = keep_rel
+            if sub["children"] or "keep" in sub:
                 node["children"].append(sub)
             continue
         ext = child.suffix.lower()

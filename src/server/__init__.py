@@ -687,6 +687,121 @@ def _move_md_with_relink(src_rel: str, dst_rel: str, dry_run=False):
                                     dry_run)
 
 
+# ─── Folders: create, move, delete an empty one ─────────────────────────────────
+# A .gitkeep keeps an empty folder in git and carries its privacy.
+
+FOLDER_KEEP = ".gitkeep"
+_RESERVED_DIRS = {"skill", "tools", "__pycache__", "node_modules", REMOTES_DIR}
+
+
+def _folder(rel):
+    """(`rel` as a folder path open to people, None), or (None, the refusal for the route)."""
+    from server.pure.uploads import clean_path
+    rel = (rel or "").strip().strip("/")
+    parts = rel.split("/")
+    if not rel or any(p in ("", ".", "..") for p in parts):
+        return None, (400, {"error": "invalid path"})
+    hidden = next((p for p in parts if p in _RESERVED_DIRS or p.startswith(".")), None)
+    if hidden:
+        return None, (403, {"error": f"protected dir: {hidden}"})
+    if clean_path(rel) is None:
+        return None, (400, {"error": "invalid path"})
+    return rel, None
+
+
+def create_dir(rel, ctx, *, private=None):
+    """A new folder (and its parents). Returns (status, payload) for the route."""
+    rel, refused = _folder(rel)
+    if refused:
+        return refused
+    if not ctx.superuser and not can_create(rel + "/" + FOLDER_KEEP, ctx):
+        return 403, {"error": "insufficient permission for this place"}
+    target = CONFIG.content_root / rel
+    if target.exists():
+        return 409, {"error": "already exists"}
+    target.mkdir(parents=True)
+    keep = target / FOLDER_KEEP
+    keep.write_text("", encoding="utf-8")
+    try:
+        _stamp_new_doc(keep.relative_to(CONFIG.content_root).as_posix(), ctx, private=private)
+    except Exception as e:
+        print(f"[folder create acl] {e}", file=sys.stderr)
+    commit_change(ctx, f"folder created: {rel}", keep)
+    return 200, {"ok": True, "path": rel}
+
+
+def delete_empty_dir(rel, ctx):
+    """Remove a folder that holds nothing but its .gitkeep. Returns (status, payload)."""
+    rel, _ = _folder(rel)
+    target = CONFIG.content_root / rel if rel else None
+    if target is None or not target.is_dir():
+        return 404, {"error": "folder not found"}
+    keep_rel = rel + "/" + FOLDER_KEEP
+    if not ctx.superuser and not can_write(keep_rel, ctx, "owner"):
+        return 404, {"error": "folder not found"}
+    if any(p.name != FOLDER_KEEP for p in target.iterdir()):
+        return 409, {"error": "the folder is not empty"}
+    keep = target / FOLDER_KEEP
+    keep.unlink(missing_ok=True)
+    target.rmdir()
+    try:
+        get_store().delete_acl(keep_rel)
+    except Exception as e:
+        print(f"[folder delete acl] {e}", file=sys.stderr)
+    commit_change(ctx, f"folder deleted: {rel}", keep)
+    return 200, {"ok": True}
+
+
+def move_dir(src_rel, dst_rel, ctx, *, ai=None):
+    """Move or rename a folder with everything in it: its privacy and share links follow,
+    and the [[links]] that reach its docs by path are rewritten. Returns (status, payload),
+    payload {"from", "to", "rewrites", "links_updated"} on success."""
+    (src_rel, refused), (dst_rel, refused_dst) = _folder(src_rel), _folder(dst_rel)
+    if refused or refused_dst:
+        return refused or refused_dst
+    src = (CONFIG.content_root / src_rel).resolve()
+    dst = (CONFIG.content_root / dst_rel).resolve()
+    if not src.is_dir():
+        return 404, {"error": "source dir not found"}
+    if dst.exists():
+        return 409, {"error": "destination exists"}
+    if src == dst or src in dst.parents:
+        return 400, {"error": "destination is inside source"}
+    if ctx is not None and not ctx.superuser:  # MCP without an account: no ctx, no ACL
+        if not can_read(src_rel, ctx):
+            return 404, {"error": "source dir not found"}
+        if not can_manage(src_rel, ctx):
+            return 403, {"error": "insufficient permission (need owner to move this folder)"}
+        if not can_create(dst_rel, ctx):
+            return 403, {"error": "insufficient permission for the destination"}
+    store = get_store()
+    # Canonical on-disk spelling, so the ACL and share keys are found on a case-insensitive
+    # disk. The destination ACL is placed BEFORE the move: no doc is ever reachable at its
+    # new path without its privacy (it would read as commons).
+    csrc = src.relative_to(CONFIG.content_root).as_posix()
+    try:
+        store.copy_acl_under(csrc, dst_rel)
+    except Exception as e:
+        print(f"[folder move copy_acl] {e}", file=sys.stderr)
+    try:
+        rewrites = docs.move_dir_with_relink(src, dst, CONFIG.content_root, _import_build())
+    except OSError:
+        try:
+            store.drop_acl_under(dst_rel)  # roll back the speculative ACL copy
+        except Exception:
+            pass
+        return 500, {"error": "move failed"}
+    try:
+        store.drop_acl_under(csrc)
+        store.repoint_shares_under(csrc, dst_rel)
+    except Exception as e:
+        print(f"[folder move repoint] {e}", file=sys.stderr)
+    relinked = [CONFIG.content_root / r["path"] for r in rewrites]
+    commit_change(ctx, f"folder moved: {src_rel} → {dst_rel}", src, dst, *relinked, ai=ai)
+    return 200, {"ok": True, "from": src_rel, "to": dst_rel, "rewrites": rewrites,
+                 "links_updated": sum(r["count"] for r in rewrites)}
+
+
 from server.app.handler import Handler  # noqa: E402
 
 

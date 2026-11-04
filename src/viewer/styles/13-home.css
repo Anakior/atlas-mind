@@ -85,6 +85,8 @@ body:has(.pill-banner:not(.hidden)) .home { margin-top: 52px; }
   background: radial-gradient(ellipse 60% 140% at 0% 0%, rgb(var(--brand) / .08), transparent 70%), rgb(var(--surface)); }
 .home-connect.is-on { border-color: rgb(var(--ai) / .35);
   background: radial-gradient(ellipse 60% 140% at 0% 0%, rgb(var(--ai) / .08), transparent 70%), rgb(var(--surface)); }
+.home-connect.is-backup { border-color: rgb(var(--line) / .14); background: rgb(var(--surface)); }
+.home-connect.is-backup .home-connect-actions { margin-bottom: 0; }
 .home-connect-main { flex: 1; min-width: 0; }
 .home-connect h2 { margin: 0 0 6px; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: rgb(var(--ink-100)); }
 .home-connect p { margin: 0; font-size: 13px; line-height: 1.5; color: rgb(var(--ink-300)); }
@@ -115,6 +117,10 @@ body:has(.pill-banner:not(.hidden)) .home { margin-top: 52px; }
 .trash-restore { flex-shrink: 0; padding: 4px 10px; border: 0; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: rgb(var(--brand)); background: rgb(var(--brand) / .1); }
 .trash-restore:hover { background: rgb(var(--brand) / .18); }
 .trash-restore:disabled { opacity: .5; cursor: default; }
+.trash-purge { flex-shrink: 0; margin-left: 6px; padding: 4px 10px; border: 0; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: rgb(var(--ink-400)); background: transparent; }
+.trash-purge:hover { color: rgb(244 63 94); background: rgb(244 63 94 / .1); }
+.trash-purge:disabled { opacity: .5; cursor: default; }
+.trash-head { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 /* A doc name reads the same across the home (Journal, recent, longest, health): underlined when
    pointed at. */
 .act-journal .act-title:hover, .home-row:hover b, .home-bar-doc:hover .home-bar-k, .home .act-doclink:hover {

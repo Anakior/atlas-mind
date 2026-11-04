@@ -85,8 +85,8 @@
   }
 
 /* New-file modal: Document / Quick-capture segmented toggle (raw CSS — no Tailwind utility deps). */
-.nf-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: rgba(0, 0, 0, .3); border: 1px solid rgb(var(--ink-100) / .08); border-radius: 10px; }
-.nf-seg-btn { appearance: none; border: 0; background: transparent; color: #9a9ca1; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 7px; cursor: pointer; transition: background .12s, color .12s; }
+.nf-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: rgba(0, 0, 0, .3); border: 1px solid rgb(var(--ink-100) / .08); border-radius: 10px; }
+.nf-seg-btn { appearance: none; border: 0; background: transparent; color: #9a9ca1; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 6px; white-space: nowrap; border-radius: 7px; cursor: pointer; transition: background .12s, color .12s; }
 .nf-seg-btn:hover { color: #e7e8ea; }
 .nf-seg-btn.active { background: rgb(var(--accent)); color: #fff; }
 
@@ -104,6 +104,7 @@
 .phone-qr { background: #fff; padding: 6px; border-radius: 8px; line-height: 0; }
 /* New document: the skeletons as cards (the hidden <select> holds the choice). */
 .nf-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.nf-cards.hidden { display: none; }
 .nf-card { appearance: none; font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 8px; cursor: pointer; color: rgb(var(--ink-300)); background: rgb(var(--ink-100) / .04); border: 1px solid rgb(var(--ink-100) / .1); transition: background .12s, color .12s, border-color .12s; }
 .nf-card:hover { color: rgb(var(--ink-100)); border-color: rgb(var(--ink-100) / .25); }
 .nf-card.active { color: #fff; background: rgb(var(--accent)); border-color: rgb(var(--accent)); }

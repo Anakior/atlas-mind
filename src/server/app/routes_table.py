@@ -133,6 +133,7 @@ POST_ROUTES = [
     router.Route(_RK.EXACT_NOQUERY, "/api/upload", upload.put, _G.UPLOAD),    # per-file: may create there
     router.Route(_RK.EXACT, "/api/inbox/action", docs.inbox_action, _G.CSRF_BASE),  # inbox triage: owner-gated
     router.Route(_RK.EXACT, "/api/dir/rename", docs.dir_rename, _G.CSRF_BASE),  # per-folder: owner (can_manage)
+    router.Route(_RK.EXACT, "/api/dir", docs.dir_create, _G.CSRF_BASE),         # per-place: can_create
     router.Route(_RK.EXACT, "/api/sync", system.sync_post, _G.CSRF_BASE),    # retry the push: any member
     router.Route(_RK.EXACT, "/api/trash/restore", docs.trash_restore, _G.CSRF_BASE),  # per-doc: needs owner, like the delete
     router.Route(_RK.PREFIX, "/api/v1/", apiv1.post, _G.BEARER),
@@ -164,6 +165,8 @@ DELETE_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/github", github.disconnect, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/tokens", admin.tokens_delete, _G.CSRF_BASE),
     router.Route(_RK.EXACT, "/api/file", docs.delete, _G.CSRF_BASE),
+    router.Route(_RK.EXACT, "/api/dir", docs.dir_delete, _G.CSRF_BASE),        # an empty folder: owner
+    router.Route(_RK.EXACT, "/api/trash", docs.trash_purge, _G.CSRF_BASE),     # for good: owner, like restore
     router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.delete, _G.ADMIN_CSRF),
     router.Route(_RK.REGEX, _SHARE_ID_PATTERN, share.revoke, _G.ADMIN_CSRF),
     router.Route(_RK.REGEX, r"^/api/todos/(\d+)$", todos.delete, _G.CSRF_BASE),  # per-member: own list

@@ -12,6 +12,7 @@ import { sse } from '../core/sse-coord';
 import { startSyncBanner } from '../ui/sync-banner';
 import { refreshTrashLink } from '../home/side-panels';
 import { connectCard } from '../home/connect-card';
+import { backupCard } from '../home/backup-card';
 import { showAccount, showLocal } from '../home/side-nav';
 import { contentTree, contentCache, setWlMaps } from '../content/content-tree';
 import { decorateTreeBadges } from '../content/notes/notes-index';
@@ -79,6 +80,7 @@ export class Boot {
             document.body.classList.add('cloud-authed');
             securityPane.refreshState();
             void connectCard.mount();
+            void backupCard.mount();
           }
           startSyncBanner();
           void refreshTrashLink();

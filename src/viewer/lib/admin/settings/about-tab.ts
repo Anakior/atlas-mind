@@ -1,7 +1,5 @@
-// Settings › About (everyone): the version, how to report a problem and support Atlas (static, in
-// 05-settings.html). For an admin, whether a newer version is out and, where a click can install it,
-// the Update button (routes/admin.py update_run: pip in place, then the server restarts itself on
-// it); the page reloads once the new version answers.
+// Settings › About: the version, reporting a problem, support. For an admin, the update
+// (routes/admin.py update_run).
 
 import { t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
@@ -40,7 +38,6 @@ export class SettingsAbout {
     this.render(state);
   }
 
-  // The issue (or the mail) opens with the version, the mode and the browser already written down.
   private fillReport(): void {
     const version = document.getElementById('about-version')!.textContent!.replace(/^v/, '');
     const mode = document.body.classList.contains('local-mode') ? 'local' : 'cloud';
@@ -110,8 +107,8 @@ export class SettingsAbout {
     status.textContent = t('aboutRestartSlow');
   }
 
-  // The new version comes with a new service worker, whose takeover reloads the page once (boot's
-  // controllerchange): asking for it rather than reloading first spares a second reload.
+  // The new service worker's takeover reloads the page (boot's controllerchange): reloading first
+  // would reload it twice.
   private async reloadOnNewVersion(): Promise<void> {
     const reg = await navigator.serviceWorker?.getRegistration().catch(() => undefined);
 

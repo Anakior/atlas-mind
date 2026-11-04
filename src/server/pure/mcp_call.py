@@ -19,6 +19,7 @@ from server.pure.queries import (
     _api_stale, _api_outdated, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
 )
 from server.pure import attestations, contradictions, docs, file_links, file_text, provenance, resources
+from server.pure.uploads import clean_path
 from server.pure.git_history import (
     _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
     _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
@@ -28,7 +29,7 @@ from server.pure.params import clamp_int
 
 
 def _soft_delete(target: Path) -> str:
-    """Move a doc into content_root/.trash/ (reversible) instead of erasing it.
+    """Move a doc or a file into content_root/.trash/ (reversible) instead of erasing it.
 
     delete_doc is called by an AI with no confirmation box, so a wrong call must
     stay recoverable. '.trash' is dot-prefixed → auto-hidden from tree/search/links
@@ -48,7 +49,7 @@ def _soft_delete(target: Path) -> str:
 
 
 def trash_doc(target: Path, ctx, ai=None) -> str:
-    """Delete a doc the reversible way, for the viewer and delete_doc alike: into
+    """Delete a doc or a file the reversible way, for the viewer and delete_doc alike: into
     .trash/ with its ACL (so the freed path keeps no stale entry a future doc there
     would inherit), its share links revoked (a trashed doc must stop serving them),
     then one attributed commit. Returns the trash path."""
@@ -660,6 +661,21 @@ def _tool_edit_doc(args, ctx):
     return text_result(f"{done}: {rel} (now version {_version(now)})\n" + _diff(current, now))
 
 
+def _move_folder(src_rel, dst_rel, ctx, args):
+    """move_doc on a folder: it moves with everything in it (server.move_dir)."""
+    if args.get("dry_run"):
+        return text_result("dry_run previews a document move; a folder moves at once.", is_error=True)
+    status, payload = _s.move_dir(src_rel, dst_rel, ctx, ai=args.get("ai"))
+    if status == 404:
+        return _not_found(src_rel, ctx)
+    if status != 200:
+        return text_result(f"Cannot move this folder: {payload['error']}.", is_error=True)
+    relinked = ", ".join(f"{r['path']} ({r['count']})" for r in payload["rewrites"][:20])
+    return text_result(f"Moved folder: {payload['from']} -> {payload['to']}, with everything in it."
+                       + (f" {payload['links_updated']} wikilink(s) rewritten in: {relinked}."
+                          if payload["rewrites"] else " No wikilink to fix."))
+
+
 def _tool_move_doc(args, ctx):
     src_rel = (args.get("from") or "").strip()
     dst_rel = (args.get("to") or "").strip()
@@ -667,6 +683,8 @@ def _tool_move_doc(args, ctx):
         return text_result("'from' and 'to' are required", is_error=True)
     if _s._is_readonly_path(src_rel) or _s._is_readonly_path(dst_rel):
         return text_result("Read-only location (remote node mirror) — \"Appropriate\" it first to get an editable copy.", is_error=True)
+    if (_s.CONFIG.content_root / src_rel).is_dir():
+        return _move_folder(src_rel, dst_rel, ctx, args)
     if ctx is not None and not _visible(src_rel, ctx):
         return _not_found(src_rel, ctx)
     if ctx is not None and not _s.can_write(src_rel, ctx, "owner"):
@@ -677,7 +695,12 @@ def _tool_move_doc(args, ctx):
         return text_result("Insufficient permission to move to this destination.", is_error=True)
     src_rel = _s._canonical_rel(src_rel)  # match the on-disk ACL key
     dry_run = bool(args.get("dry_run"))
-    status, payload = _s._move_md_with_relink(src_rel, dst_rel, dry_run)
+    if _s._validate_doc_path(src_rel):
+        status, payload = _s._move_md_with_relink(src_rel, dst_rel, dry_run)
+    elif dry_run:
+        return text_result(f"Dry run, nothing moved. {src_rel} is a file: no [[link]] names it.")
+    else:  # a PDF, an image: nothing to relink
+        status, payload = docs.move_file(src_rel, dst_rel, _s.CONFIG.content_root)
     if status == "not_found":
         return _not_found(src_rel, ctx)
     if status != "ok":
@@ -761,12 +784,12 @@ def _tool_list_by_tag(args, ctx):
 
 def _tool_delete_doc(args, ctx):
     rel = (args.get("path") or "").strip()
-    target = _s._validate_doc_path(rel)
-    if not target:
-        return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
     if _s._is_readonly_path(rel):
         return text_result("Read-only location (remote node mirror) — cannot delete.", is_error=True)
-    if not target.exists() or not _visible(rel, ctx):
+    if clean_path(rel) is None:
+        return text_result("Invalid path (inside the mind, no '..')", is_error=True)
+    target = docs.content_file(rel, _s.CONFIG.content_root)  # a note or any file
+    if target is None or not _visible(rel, ctx):
         return _not_found(rel, ctx)
     if ctx is not None and not _s.can_write(rel, ctx, "owner"):
         return text_result("Insufficient permission (need owner to delete this document).", is_error=True)

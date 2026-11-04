@@ -82,6 +82,36 @@ class TestTrash(unittest.TestCase):
         self.assertEqual(self._restore(".trash/notes/mine.md", self.viewer).status, 404)
         self.assertIn("notes/mine.md", self._trash(self.admin))
 
+    def test_a_pdf_goes_to_trash_and_restores(self):
+        pdf = self.srv.content_root / "notes/scan.pdf"
+        pdf.write_bytes(b"%PDF-1.4 scan")
+        resp = self._delete("notes/scan.pdf", self.admin)
+        self.assertEqual(resp.status, 200, resp.body)
+        self.assertFalse(pdf.exists())
+        item = self._trash(self.admin)["notes/scan.pdf"]
+        self.assertEqual(self._restore(item["path"], self.admin).json()["path"], "notes/scan.pdf")
+        self.assertEqual(pdf.read_bytes(), b"%PDF-1.4 scan")
+
+    def _purge(self, body, who):
+        return self.srv.request("DELETE", "/api/trash", headers=who, json_body=body)
+
+    def test_an_item_is_deleted_for_good(self):
+        self._create("notes/poof.md", "# Poof\n", self.admin)
+        self._delete("notes/poof.md", self.admin)
+        self.assertEqual(self._purge({"path": ".trash/notes/poof.md"}, self.admin).json()["deleted"], 1)
+        self.assertFalse((self.srv.content_root / ".trash/notes/poof.md").exists())
+        self.assertNotIn("notes/poof.md", self._trash(self.admin))
+        self.assertEqual(self._purge({"path": ".trash/notes/poof.md"}, self.admin).status, 404)
+
+    def test_emptying_takes_only_what_is_yours(self):
+        self._create("notes/a-moi.md", "# A moi\n", self.admin)
+        self.fs.set_owner("notes/a-moi.md", "user:" + ADMIN_EMAIL)
+        self._delete("notes/a-moi.md", self.admin)
+        self._purge({"all": True}, self.viewer)
+        self.assertTrue((self.srv.content_root / ".trash/notes/a-moi.md").exists())
+        self._purge({"all": True}, self.admin)
+        self.assertEqual(self._trash(self.admin), {})
+
     def test_restore_refuses_paths_outside_the_trash(self):
         self._create("notes/live.md", "# Live\n", self.admin)
         for bad in ("notes/live.md", ".trash/../notes/live.md", ".trash/../../atlas.toml"):

@@ -152,6 +152,11 @@ export class SettingsPanel {
     this.panel.style.height = '';
   }
 
+  openTab(name: string): void {
+    this.open();
+    void this.selectTab(name);
+  }
+
   // Opens Settings → Hive with the path pre-filled (from the tree button). Called from the tree's
   // "share as node" button in content/content-tree.ts via settingsPanel.openPublish().
   openPublish(path: string): void {
@@ -228,8 +233,7 @@ export class SettingsPanel {
     this.settingsBackdrop.classList.remove('hidden');
   }
 
-  // Admin-only, best-effort (never blocks Settings): a newer version on PyPI puts a dot on the gear
-  // and a line atop Settings, both leading to About. Silent while the automatic check is off.
+  // Best-effort: never blocks Settings.
   async checkUpdate(): Promise<void> {
     let latest = '';
 
@@ -245,7 +249,6 @@ export class SettingsPanel {
     this.showUpdateBanner();
   }
 
-  // The line leads to About, so About itself goes without it.
   private showUpdateBanner(): void {
     const banner = document.getElementById('settings-update-banner')!;
 

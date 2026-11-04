@@ -1,6 +1,5 @@
-// Settings › Apparence tab (admin): the instance accent, the name before "Atlas" and the line under the
-// logo, and whether those two show, the same for every account. A pick applies at once and is saved
-// (the name and the line go to atlas.toml); a refused save puts the previous look back.
+// Settings › Apparence (admin): the accent, the name before "Atlas" and the line under the logo, the
+// same for every account. Applied at once; a refused save puts the previous look back.
 
 import { t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
@@ -38,8 +37,7 @@ export class SettingsAppearance {
         const field = document.getElementById(`appearance-${text.id}-text`) as HTMLInputElement;
 
         btn.addEventListener('click', () => this.save({ [text.show]: btn.getAttribute('aria-checked') !== 'true' }));
-        // Saved on Enter or on leaving the field, once it differs from what is saved.
-        // An emptied line goes back to what it was: hiding it is the switch's job.
+        // Hiding the line is the switch's job, not an empty field's.
         field.addEventListener('change', () => {
           if (text.id === 'tagline' && !field.value.trim()) this.render();
           else if (field.value.trim() !== this.text(text.id)) this.save({ [text.id]: field.value });

@@ -62,6 +62,22 @@ export async function refreshTreeOrReload(): Promise<void> {
   else location.reload();
 }
 
+export async function deleteEmptyFolder(path: string): Promise<void> {
+  const res = await fetch('/api/dir', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+
+  if (!res.ok) {
+    setStatus(t(res.status === 409 ? 'folderNotEmpty' : 'folderDeleteFailed'), 'err');
+
+    return;
+  }
+  await refreshTreeOrReload();
+  setStatus(t('folderDeleted'), 'ok');
+}
+
 export class NewFileModal extends Modal {
   private readonly form = document.getElementById('new-file-form') as HTMLFormElement;
   private readonly dir = document.getElementById('new-file-dir') as HTMLInputElement;
@@ -85,9 +101,14 @@ export class NewFileModal extends Modal {
   private readonly captureFields = document.getElementById('new-file-capture-fields') as HTMLElement;
   private readonly modeDocBtn = document.getElementById('new-file-mode-doc') as HTMLElement;
   private readonly modeCaptureBtn = document.getElementById('new-file-mode-capture') as HTMLElement;
+  private readonly modeFolderBtn = document.getElementById('new-file-mode-folder') as HTMLElement;
+  private readonly nameLabel = document.getElementById('new-file-name-label') as HTMLElement;
+  private readonly dirLabel = document.getElementById('new-file-dir-label') as HTMLElement;
+  private readonly tip = document.getElementById('new-file-tip') as HTMLElement;
+  private readonly extArea = document.getElementById('new-file-ext-area') as HTMLElement;
   private readonly captureTitle = document.getElementById('new-file-capture-title') as HTMLInputElement;
   private readonly captureBody = document.getElementById('new-file-capture-body') as HTMLTextAreaElement;
-  private mode: 'doc' | 'capture' = 'doc';
+  private mode: 'doc' | 'folder' | 'capture' = 'doc';
 
   constructor() {
     super(newFileBackdrop!);
@@ -114,23 +135,31 @@ export class NewFileModal extends Modal {
     });
     this.modeDocBtn.addEventListener('click', () => { this.setMode('doc'); this.dir.focus(); });
     this.modeCaptureBtn.addEventListener('click', () => { this.setMode('capture'); this.captureTitle.focus(); });
+    this.modeFolderBtn.addEventListener('click', () => { this.setMode('folder'); this.name.focus(); });
     this.form.addEventListener('submit', (e) => this.submit(e));
   }
 
-  // Swap the two field groups (and the title / submit label). Focus is the caller's job.
-  private setMode(m: 'doc' | 'capture'): void {
+  // Focus is the caller's job.
+  private setMode(m: 'doc' | 'folder' | 'capture'): void {
     this.mode = m;
 
     const capture = m === 'capture';
+    const folder = m === 'folder';
 
-    this.modeDocBtn.classList.toggle('active', !capture);
+    this.modeDocBtn.classList.toggle('active', m === 'doc');
+    this.modeFolderBtn.classList.toggle('active', folder);
     this.modeCaptureBtn.classList.toggle('active', capture);
     this.docFields.classList.toggle('hidden', capture);
     this.captureFields.classList.toggle('hidden', !capture);
-    this.uploadBtn.classList.toggle('hidden', capture);
-    this.titleEl.textContent = capture ? t('quickCaptureTitle') : t('newDocHeader');
+    for (const el of [this.cards, this.extArea, this.tip]) el.classList.toggle('hidden', folder);
+    this.uploadBtn.classList.toggle('hidden', m !== 'doc');
+    this.nameLabel.textContent = t(folder ? 'folderNameLabel' : 'titleLabel');
+    this.dirLabel.textContent = t(folder ? 'inFolderLabel' : 'folderLabel');
+    this.name.placeholder = t(folder ? 'folderNamePlaceholder' : 'docNamePlaceholder');
+    this.titleEl.textContent = capture ? t('quickCaptureTitle') : t(folder ? 'newFolderHeader' : 'newDocHeader');
     this.submitBtn.textContent = capture ? t('save') : t('create');
     this.error.classList.add('hidden');
+    this.showPath();
   }
 
   // window.Atlas.registerTemplate — delegated to the template registry.
@@ -183,7 +212,34 @@ export class NewFileModal extends Modal {
   private showPath(): void {
     const title = this.name.value.trim();
 
-    this.pathEl.textContent = title ? this.pathFor(title) : '';
+    if (this.mode === 'folder') this.pathEl.textContent = title ? this.folderPath() + '/' : '';
+    else this.pathEl.textContent = title ? this.pathFor(title) : '';
+  }
+
+  // Not slugified: the tree shows a folder's name as typed.
+  private folderPath(): string {
+    const name = this.name.value.trim().replace(/^\/+|\/+$/g, '');
+
+    return (this.folder() ? this.folder() + '/' : '') + name;
+  }
+
+  private async submitFolder(): Promise<void> {
+    if (!this.name.value.trim()) return this.showError(t('folderNameRequired'));
+    const res = await fetch('/api/dir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path: this.folderPath(),
+        private: this.visibility ? this.visibility.value === 'private' : undefined,
+      }),
+    });
+
+    if (!res.ok) {
+      return this.showError(t(res.status === 409 ? 'folderExists' : res.status === 400 ? 'folderNameInvalid' : 'folderCreateFailed'));
+    }
+    this.close();
+    await refreshTreeOrReload();
+    setStatus(t('folderCreated'), 'ok');
   }
 
   // One card per option of the template <select> (extensions add theirs to it).
@@ -264,6 +320,7 @@ export class NewFileModal extends Modal {
     this.error.classList.add('hidden');
 
     if (this.mode === 'capture') return this.submitCapture();
+    if (this.mode === 'folder') return this.submitFolder();
 
     let title = this.name.value.trim();
     const provider = this.registry.activeProvider();

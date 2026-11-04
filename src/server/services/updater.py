@@ -1,13 +1,5 @@
-"""Update the engine from Settings › About.
-
-Where the engine runs from a virtualenv it may write to, installed from PyPI (the alwaysdata
-marketplace install, a pip install on a server), an admin updates it with one click: pip
-installs the announced release into that same environment, a fresh interpreter checks that it
-imports and reports that version (otherwise the running release goes back), then the server
-re-executes itself in place: same PID and same port, so a host's supervisor never notices. A
-container, a source checkout, uvx or Windows updates its own way: install_kind() says which,
-for the About tab to explain.
-"""
+"""Update the engine from Settings › About: pip in its own virtualenv, an import check (else
+the running release goes back), then an in-place re-exec, so a host's supervisor never notices."""
 import os
 import subprocess
 import sys

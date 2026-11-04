@@ -1,9 +1,10 @@
-// Files into the mind from outside it. Dropped on the page, they land in the folder under the
-// pointer (a tree folder, or the folder of a tree file), else beside the open doc. Dropped or pasted
+// Files into the mind from outside it. Dropped on the tree, they land in the folder under the
+// pointer (a tree folder, the folder of a tree file, or the top level); anywhere else, nowhere. Dropped or pasted
 // into a note being written, they are stored beside it (as private as it, server side) and linked
 // at the caret. A .zip unpacks into a folder of its name. One request per file, its bytes as the
 // body; the server never replaces a file, a taken name comes back as "name (2).ext".
-// A note or a file of the tree, dragged onto a folder, moves there (its links follow, server side).
+// A note, a file or a folder of the tree, dragged onto a folder, moves there (its links follow,
+// server side).
 
 import { t } from '../core/i18n';
 import { setStatus } from '../core/net';
@@ -16,14 +17,46 @@ import { refreshTreeOrReload } from '../modals/new-file-modal';
 
 type Target = { folder: string; mark: HTMLElement | null } | 'note';
 
-// What a tree row carries when dragged: its path, under a type of our own.
+// What a tree row carries when dragged: its path, under a type of our own (one for a folder).
 const MOVE_TYPE = 'application/x-atlas-path';
+const FOLDER_TYPE = 'application/x-atlas-folder';
 
 // A tree file starts moving (content-tree.ts). Mirrors of another atlas are read-only.
 export function startMove(e: DragEvent, path: string): void {
   if (!e.dataTransfer || path.startsWith('remotes/')) return;
   e.dataTransfer.setData(MOVE_TYPE, path);
   e.dataTransfer.effectAllowed = 'move';
+}
+
+export function startMoveFolder(e: DragEvent, path: string): void {
+  if (!e.dataTransfer || path.startsWith('remotes')) return;
+  e.dataTransfer.setData(FOLDER_TYPE, path);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+async function moveFolderTo(path: string, folder: string): Promise<void> {
+  const to = folder + path.slice(path.lastIndexOf('/') + 1);
+
+  if (to === path || folder.startsWith(path + '/')) return;
+  const res = await fetch('/api/dir/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: path, to }),
+  });
+
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({ error: '' }));
+
+    setStatus(t('moveFailed', error || 'HTTP ' + res.status), 'err');
+
+    return;
+  }
+  if (currentFile && currentFile.path.startsWith(path + '/')) {
+    currentFile.path = to + currentFile.path.slice(path.length);
+    location.hash = '#' + encodeURIComponent(currentFile.path);
+  }
+  await refreshTreeOrReload();
+  setStatus(t('folderMoved'), 'ok');
 }
 
 async function moveTo(path: string, folder: string): Promise<void> {
@@ -152,30 +185,37 @@ class FileDrop {
 
     if (window.__viewerMode) return null;
 
-    return types.includes('Files') ? 'files' : types.includes(MOVE_TYPE) ? 'move' : null;
+    if (types.includes('Files')) return 'files';
+
+    return types.includes(MOVE_TYPE) || types.includes(FOLDER_TYPE) ? 'move' : null;
   }
 
   private target(e: DragEvent, moving = false): Target | null {
     const el = e.target as Element;
 
     if (!moving && editMode && el === editTextarea) return 'note';
-    const dir = treeEl.contains(el) ? (el.closest('[data-dir-path]') as HTMLElement | null) : null;
+    if (!treeEl.contains(el)) return null;
+    const dir = el.closest('[data-dir-path]') as HTMLElement | null;
 
     if (dir) return dir.dataset.dirPath!.startsWith('remotes') ? null : { folder: dir.dataset.dirPath + '/', mark: dir };
-    const file = treeEl.contains(el) ? (el.closest('[data-path]') as HTMLElement | null) : null;
+    const file = el.closest('[data-path]') as HTMLElement | null;
 
-    if (file) return { folder: folderOf(file.dataset.path!), mark: null };
-    // A move lands in the tree only (its empty space is the top level); files, anywhere.
-    if (moving) return treeEl.contains(el) ? { folder: '', mark: null } : null;
-
-    return { folder: currentFile ? folderOf(currentFile.path) : '', mark: null };
+    return { folder: file ? folderOf(file.dataset.path!) : '', mark: null };
   }
 
   private over(e: DragEvent): void {
     const kind = FileDrop.carried(e);
     const target = kind && this.target(e, kind === 'move');
 
-    if (!target) return this.clear();
+    if (!target) {
+      // Else the browser opens the file in place of Atlas.
+      if (kind === 'files') {
+        e.preventDefault();
+        e.dataTransfer!.dropEffect = 'none';
+      }
+
+      return this.clear();
+    }
     e.preventDefault();
     e.dataTransfer!.dropEffect = kind === 'move' ? 'move' : 'copy';
     const mark = target === 'note' ? null : target.mark;
@@ -188,7 +228,23 @@ class FileDrop {
     const where = target === 'note' ? '' : target.folder.replace(/\/$/, '') || t('dropRoot');
 
     this.hint.textContent = target === 'note' ? t('dropIntoNote') : t(kind === 'move' ? 'dropMoveInto' : 'dropInto', where);
+    this.place(e.target as Element);
     this.hint.classList.remove('hidden');
+  }
+
+  private place(el: Element): void {
+    const anchored = treeEl.contains(el);
+
+    this.hint.classList.toggle('is-anchored', anchored);
+    if (!anchored) {
+      this.hint.style.left = this.hint.style.top = '';
+
+      return;
+    }
+    const box = treeEl.getBoundingClientRect();
+
+    this.hint.style.left = box.left + 'px';
+    this.hint.style.top = box.top + 'px';
   }
 
   private clear(): void {
@@ -201,13 +257,20 @@ class FileDrop {
     const kind = FileDrop.carried(e);
     const target = kind && this.target(e, kind === 'move');
 
-    if (!target) return;
+    if (!target) {
+      if (kind === 'files') e.preventDefault();
+
+      return;
+    }
     e.preventDefault();
     this.clear();
     if (kind === 'move') {
+      if (target === 'note') return;
+      const dir = e.dataTransfer!.getData(FOLDER_TYPE);
       const path = e.dataTransfer!.getData(MOVE_TYPE);
 
-      if (path && fileMap[path] && target !== 'note') void moveTo(path, target.folder);
+      if (dir) void moveFolderTo(dir, target.folder);
+      else if (path && fileMap[path]) void moveTo(path, target.folder);
 
       return;
     }

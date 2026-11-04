@@ -155,6 +155,13 @@ class TestMcpDeleteDoc(unittest.TestCase):
         self.assertTrue(self.srv.path(".trash/" + rel).exists())
         self.assertIn("Projet B", self.srv.path(".trash/" + rel).read_text(encoding="utf-8"))
 
+    def test_delete_a_pdf(self):
+        self.srv.path("projets/scan.pdf").write_bytes(b"%PDF-1.4 scan")
+        err, text = _call(self.srv, self.token, "delete_doc", {"path": "projets/scan.pdf"})
+        self.assertFalse(err, text)
+        self.assertFalse(self.srv.path("projets/scan.pdf").exists())
+        self.assertTrue(self.srv.path(".trash/projets/scan.pdf").exists())
+
     def test_delete_remote_mirror_is_refused(self):
         err, text = _call(self.srv, self.token, "delete_doc", {"path": "remotes/x/foo.md"})
         self.assertTrue(err)

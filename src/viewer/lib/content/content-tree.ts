@@ -12,11 +12,11 @@ import { treeEl } from '../core/dom-refs';
 import { currentFile } from '../core/state';
 import { h, raw, render } from '../runtime/atlas-dom';
 import { renameModal } from '../modals/dialogs';
-import { dirRenameModal } from '../modals/new-file-modal';
+import { dirRenameModal, newFileModal, deleteEmptyFolder } from '../modals/new-file-modal';
 import { settingsPanel } from '../admin/settings/settings-panel';
 import { docRenderer, isViewable, IMAGE_EXTS } from './doc-renderer';
 import { decorateTreeBadges } from './notes/notes-index';
-import { startMove } from './file-drop';
+import { startMove, startMoveFolder } from './file-drop';
 
 // ─── Content loader (a small service; kept as functions for now, classed later) ───────────────
 export const contentCache = new Map<string, string>();
@@ -146,6 +146,8 @@ export class ContentTree {
   private static readonly FOLDER_ICON = '<svg class="w-4 h-4 text-[#fbc678] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>';
   private static readonly REMOTE_FOLDER_ICON = '<svg class="w-4 h-4 text-[#59d0cf] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z"/></svg>';
   private static readonly LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"/></svg>';
+  private static readonly PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>';
+  private static readonly TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>';
   private static readonly PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Z"/></svg>';
   private static readonly FILE_ICON = '<svg class="w-4 h-4 text-ink-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>';
   private static readonly ACL_ICON = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>';
@@ -194,6 +196,13 @@ export class ContentTree {
       children = own.concat(remotes);
     }
 
+    if (!children.length && depth > 0 && !IS_OFFLINE_BUILD && !prefix.startsWith('remotes')) {
+      return h('ul', { class: cls }, [
+        h('li', { key: 'add:' + prefix },
+          h('button', { type: 'button', class: 'tree-add w-full text-left px-2 py-1 rounded text-xs', onClick: () => newFileModal.open(prefix) }, t('addInEmptyFolder'))),
+      ]);
+    }
+
     return h('ul', { class: cls }, children.map((c) => (c.type === 'dir' ? this.dirView(c, depth, prefix) : this.fileView(c))));
   }
 
@@ -212,6 +221,7 @@ export class ContentTree {
 
     if (!isRemote) {
       btnChildren.push(
+        h('span', { class: 'dir-new-btn tree-action-btn', title: t('newInFolder'), onClick: (e: Event) => { e.stopPropagation(); newFileModal.open(childPath); } }, raw(ContentTree.PLUS_ICON)),
         h('span', { class: 'dir-access-btn tree-action-btn', title: t('aclBtnTitle'), onClick: (e: Event) => { e.stopPropagation(); if (window.openAccessFor) window.openAccessFor(childPath); } }, raw(ContentTree.ACL_ICON)),
       );
     }
@@ -223,10 +233,17 @@ export class ContentTree {
         h('span', { class: 'dir-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.stopPropagation(); settingsPanel.openPublish(childPath); } }, raw(ContentTree.LINK_ICON)),
       );
     }
+    if (child.keep && !child.children.length) {
+      btnChildren.push(
+        h('span', { class: 'dir-delete-btn tree-action-btn', title: t('deleteFolder'), onClick: (e: Event) => { e.stopPropagation(); void deleteEmptyFolder(childPath); } }, raw(ContentTree.TRASH_ICON)),
+      );
+    }
 
     const btn = h('button', {
       class: 'tree-item group w-full text-left px-2 py-1.5 rounded flex items-center gap-2 font-semibold text-ink-100' + (isRemote ? ' tree-remote' : ''),
       'data-dir-path': childPath,
+      draggable: isRemote || IS_OFFLINE_BUILD ? null : 'true',
+      onDragstart: (e: DragEvent) => startMoveFolder(e, childPath),
       onClick: () => this.toggleDir(childPath),
     }, btnChildren);
 
@@ -243,9 +260,8 @@ export class ContentTree {
     const fileActionable = !isRemoteFile && (child.ext === '.md' || child.ext === '.html');
 
     const aChildren: Child[] = [
-      raw(this.iconFor(child.ext)),
+      h('span', { class: 'tree-ico' }, raw(this.iconFor(child.ext)), this.visBadge(child)),
       h('span', { class: 'truncate min-w-0 flex-1 leading-snug', 'data-name': child.name, title: child.title ? child.name : null }, docLabel(child)),
-      this.visBadge(child),
     ];
 
     if (fileActionable) {
@@ -279,18 +295,19 @@ export class ContentTree {
     return h('li', { key: 'l:' + child.path }, h('a', props, aChildren));
   }
 
+  // On the icon: the row's end holds the actions.
   private visBadge(child: FileNode): Child {
     const color =
-      child.vis === 'private' ? 'rgba(251,191,36,.85)'
-        : child.vis === 'shared' ? 'rgba(56,189,248,.85)'
-          : child.vis === 'granted' ? 'rgba(52,211,153,.9)'
+      child.vis === 'private' ? 'rgb(251,191,36)'
+        : child.vis === 'shared' ? 'rgb(56,189,248)'
+          : child.vis === 'granted' ? 'rgb(52,211,153)'
             : null;
 
     if (!color) return null;
 
     const titleKey = child.vis === 'private' ? 'visPrivate' : child.vis === 'shared' ? 'visShared' : 'visGranted';
 
-    return h('span', { class: 'flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full', style: 'background-color:' + color, title: t(titleKey) });
+    return h('span', { class: 'tree-vis', style: '--vis:' + color, title: t(titleKey) });
   }
 
   private toggleDir(path: string): void {

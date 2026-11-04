@@ -11,6 +11,7 @@ import { escapeHtml, relativeDate } from '../core/utils';
 import { docRenderer } from '../content/doc-renderer';
 import { activityCard } from '../admin/activity/activity-boot';
 import { refreshTreeOrReload } from '../modals/new-file-modal';
+import { Dialogs } from '../modals/dialogs';
 
 export type SidePanel = 'inbox' | 'journal' | 'recent' | 'folders' | 'trash';
 
@@ -46,10 +47,11 @@ class SidePanels {
     this.body.addEventListener('click', (e) => {
       this.clickedAt = Date.now();
       const restore = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-restore]');
+      const purge = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-purge]');
 
-      if (restore) {
+      if (restore || purge) {
         e.preventDefault();
-        void this.restore(restore);
+        void (restore ? this.restore(restore) : this.purge(purge!));
 
         return;
       }
@@ -109,9 +111,12 @@ class SidePanels {
         .map((i) => {
           const dir = i.original.split('/').slice(0, -1).join('/') || t('rootLabel');
 
-          return `<div class="home-row"><span class="home-row-t"><b>${escapeHtml(i.name)}</b><em>${escapeHtml(dir)} · ${relativeDate(i.deleted_at)}</em></span><button type="button" class="trash-restore" data-restore="${escapeHtml(i.path)}">${t('trashRestore')}</button></div>`;
+          return `<div class="home-row"><span class="home-row-t"><b>${escapeHtml(i.name)}</b><em>${escapeHtml(dir)} · ${relativeDate(i.deleted_at)}</em></span><button type="button" class="trash-restore" data-restore="${escapeHtml(i.path)}">${t('trashRestore')}</button><button type="button" class="trash-purge" data-purge="${escapeHtml(i.path)}" data-name="${escapeHtml(i.name)}">${t('trashPurge')}</button></div>`;
         })
         .join('') || `<p class="home-empty">${t('trashEmpty')}</p>`;
+    if (items.length) {
+      this.body.insertAdjacentHTML('afterbegin', `<div class="trash-head"><button type="button" class="trash-purge" data-purge="" data-count="${items.length}">${t('trashEmptyAll')}</button></div>`);
+    }
     refreshTrashLink(items.length);
   }
 
@@ -122,6 +127,28 @@ class SidePanels {
 
       setStatus(t('docRestored', path), 'ok');
       await refreshTreeOrReload();
+      await this.renderTrash();
+    } catch (e) {
+      btn.disabled = false;
+      setStatus((e as Error).message, 'err');
+    }
+  }
+
+  // data-purge: an item's path, or empty for the whole bin.
+  private async purge(btn: HTMLButtonElement): Promise<void> {
+    const all = !btn.dataset.purge;
+    const ok = await Dialogs.confirm({
+      title: t(all ? 'trashEmptyAllTitle' : 'trashPurgeTitle'),
+      message: all ? t('trashEmptyAllMsg', Number(btn.dataset.count)) : t('trashPurgeMsg', btn.dataset.name),
+      confirmLabel: t(all ? 'trashEmptyAll' : 'trashPurge'),
+      destructive: true,
+    });
+
+    if (!ok) return;
+    btn.disabled = true;
+    try {
+      await api('DELETE', '/api/trash', all ? { all: true } : { path: btn.dataset.purge });
+      setStatus(t(all ? 'trashEmptied' : 'trashPurged'), 'ok');
       await this.renderTrash();
     } catch (e) {
       btn.disabled = false;

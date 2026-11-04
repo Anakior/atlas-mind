@@ -95,6 +95,89 @@ def iter_doc_files(content_root, excluded, suffixes=(".md", ".html")):
         yield path.relative_to(content_root).as_posix(), path
 
 
+def _link_index(content_root, build):
+    """The docs ({path, name, body}) and the path and name indexes a [[link]] resolves
+    against. Taken BEFORE a move, while every link still resolves to its old place."""
+    md_files = []
+    for rel, path in iter_doc_files(content_root, build.EXCLUDED_NAMES):
+        try:
+            md_files.append({"path": rel, "name": path.name,
+                             "body": path.read_text(encoding="utf-8-sig")})
+        except (OSError, UnicodeDecodeError):
+            continue
+    by_path = {f["path"].lower(): f["path"] for f in md_files}
+    by_stem: dict = {}
+    for f in md_files:
+        stem = re.sub(r"\.md$", "", f["name"], flags=re.I).lower()
+        by_stem.setdefault(stem, f["path"])
+    return md_files, by_path, by_stem
+
+
+def _relink(md_files, by_path, by_stem, build, moves: dict, skip=frozenset()) -> list:
+    """The new body of each doc whose [[links]] reach a moved doc: [(path, body, count)].
+    `moves` maps a doc's old path (lowercase) to its new one. A link by path takes the new
+    path; a link by name only changes when the name does."""
+    def replacer(counter):
+        def _replace(m):
+            whole, inner = m.group(0), m.group(1)
+            resolved = build._resolve_wikilink(inner, by_path, by_stem)
+            new = moves.get(resolved.lower()) if resolved else None
+            if not new:
+                return whole
+            target_part, sep, alias = inner.partition("|")
+            t = target_part.strip()
+            had_md = t.lower().endswith(".md")
+            if "/" in t:
+                new_target = new if had_md else re.sub(r"\.md$", "", new, flags=re.I)
+            else:
+                stem = re.sub(r"\.md$", "", new.rsplit("/", 1)[-1], flags=re.I)
+                new_target = stem + (".md" if had_md else "")
+            new_whole = f"[[{new_target}{sep}{alias}]]"
+            if new_whole == whole:
+                return whole
+            counter[0] += 1
+            return new_whole
+        return _replace
+
+    pending = []
+    for f in md_files:
+        if f["path"] in skip:
+            continue
+        counter = [0]
+        body = build._WIKILINK_RE.sub(replacer(counter), f["body"])
+        if counter[0]:
+            pending.append((f["path"], body, counter[0]))
+    return pending
+
+
+def move_dir_with_relink(src, dst, content_root, build) -> list:
+    """Rename the folder `src` to `dst` (absolute, both checked by the caller) and rewrite
+    every [[link]] that reaches a doc inside it by its path; a link by name still resolves.
+    Links are read before the rename, and each rewritten body is written where its doc
+    now lives. Returns the rewrites [{path, count}] at their new paths; raises OSError when
+    the rename fails (nothing touched)."""
+    old = src.relative_to(content_root).as_posix()
+    new = dst.relative_to(content_root).as_posix()
+    md_files, by_path, by_stem = _link_index(content_root, build)
+
+    def moved(rel):
+        return rel.lower().startswith(old.lower() + "/")
+
+    moves = {f["path"].lower(): new + f["path"][len(old):] for f in md_files if moved(f["path"])}
+    pending = _relink(md_files, by_path, by_stem, build, moves)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    src.rename(dst)
+    rewrites = []
+    for rel, body, count in pending:
+        rel = new + rel[len(old):] if moved(rel) else rel
+        try:
+            (content_root / rel).write_text(body, encoding="utf-8")
+            rewrites.append({"path": rel, "count": count})
+        except OSError as e:
+            print(f"[move folder] relink write failed {rel}: {e}", file=sys.stderr)
+    return rewrites
+
+
 def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run=False):
     """Move/rename a .md AND rewrite the incoming [[wikilinks]] that target it.
 
@@ -116,51 +199,10 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run
         return ("exists", f"Target already exists: {dst_rel} (no overwrite)")
     src_canon = src.relative_to(content_root).as_posix()
     dst_canon = dst.relative_to(content_root).as_posix()
-    dst_stem = re.sub(r"\.md$", "", dst.name, flags=re.I)
-
-    # Index wikilinks BEFORE the move (the source still resolves to its old path).
-    md_files = []
-    for rel, path in iter_doc_files(content_root, build.EXCLUDED_NAMES):
-        try:
-            md_files.append({"path": rel, "name": path.name,
-                             "body": path.read_text(encoding="utf-8-sig")})
-        except (OSError, UnicodeDecodeError):
-            continue
-    by_path = {f["path"].lower(): f["path"] for f in md_files}
-    by_stem: dict = {}
-    for f in md_files:
-        stem = re.sub(r"\.md$", "", f["name"], flags=re.I).lower()
-        by_stem.setdefault(stem, f["path"])
-
-    def _make_replacer(counter):
-        def _replace(m):
-            whole, inner = m.group(0), m.group(1)
-            resolved = build._resolve_wikilink(inner, by_path, by_stem)
-            if not resolved or resolved.lower() != src_canon.lower():
-                return whole  # doesn't target the moved doc → unchanged
-            target_part, sep, alias = inner.partition("|")
-            t = target_part.strip()
-            had_md = t.lower().endswith(".md")
-            if "/" in t:  # reference by path → new path
-                new_target = dst_canon if had_md else dst_canon[:-3]
-            else:         # reference by short name (stem) → new stem
-                new_target = dst_stem + (".md" if had_md else "")
-            new_whole = f"[[{new_target}{sep}{alias}]]"
-            if new_whole == whole:
-                return whole  # stem unchanged → nothing to rewrite
-            counter[0] += 1
-            return new_whole
-        return _replace
-
-    # In-memory computation (nothing written until the move succeeds).
-    pending = []
-    for f in md_files:
-        if f["path"] == src_canon:
-            continue  # the moved doc: its outgoing links don't change
-        counter = [0]
-        new_body = build._WIKILINK_RE.sub(_make_replacer(counter), f["body"])
-        if counter[0]:
-            pending.append((f["path"], new_body, counter[0]))
+    # Index wikilinks BEFORE the move (the source still resolves to its old path); the
+    # moved doc's own outgoing links don't change.
+    pending = _relink(*_link_index(content_root, build), build,
+                      {src_canon.lower(): dst_canon}, skip={src_canon})
     if dry_run:
         rewrites = [{"path": rel, "count": count} for rel, _, count in pending]
         return ("ok", {"from": src_canon, "to": dst_canon, "rewrites": rewrites,
@@ -190,8 +232,9 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run
 
 def _filter_tree(node, keep):
     """Prune the tree to entries kept by ``keep(path) -> bool``, dropping folders
-    that become empty. ``keep=None`` → returned unchanged (no filtering). The
-    model-B ``can_read`` whitelist feeds it (HTTP, MCP, Bearer)."""
+    that become empty, unless they are kept on purpose (a .gitkeep this reader may see).
+    ``keep=None`` → returned unchanged (no filtering). The model-B ``can_read``
+    whitelist feeds it (HTTP, MCP, Bearer)."""
     if keep is None:
         return node
     kids = []
@@ -201,7 +244,7 @@ def _filter_tree(node, keep):
                 kids.append(child)
         else:
             filtered = _filter_tree(child, keep)
-            if filtered.get("children"):
+            if filtered.get("children") or (child.get("keep") and keep(child["keep"])):
                 kids.append(filtered)
     return {**node, "children": kids}
 

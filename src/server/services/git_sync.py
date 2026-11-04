@@ -41,11 +41,9 @@ _NOTHING_TO_COMMIT = ("nothing to commit", "nothing added to commit",
                       "no changes added to commit")
 # A push refused because the remote has commits the mind lacks: pull, then push again.
 _REMOTE_AHEAD = ("fetch first", "non-fast-forward")
-# After a failed push the worker tries again after these delays (a newer save at once),
-# then leaves it to the periodic loop.
+# Retries of a failed push (a newer save retries at once), then the periodic loop's turn.
 _RETRY_S = (15, 45, 120)
-# A remote that fails now and then (GitHub having a bad day) is no news: a pull/push
-# failure is reported once it has lasted this long with changes waiting.
+# A remote failing now and then is no news: a pull/push failure counts once it lasts.
 _ERROR_GRACE_S = 120
 
 

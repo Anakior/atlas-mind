@@ -223,6 +223,7 @@ export class HomeView {
       </section>
 
       <div id="home-connect" class="hidden"></div>
+      <div id="home-backup" class="hidden"></div>
 
       <section id="home-activity-card" class="home-week">
         <div class="home-sec">
