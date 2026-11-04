@@ -8,6 +8,22 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-11-04
+
+Two fixes to the then-and-now view. No MCP tool changes: an Atlas on 2.2.0 or later gets this one
+from Settings › About.
+
+### Fixed
+- **Then and now: the days on the timeline no longer run into each other.** When a topic moved on
+  many close days, their dates overlapped the one compared with ("29 Aug" ran into "Then · Sep 4").
+  A date that would touch another is now hidden, its dot kept, with the date in its tooltip; the
+  date compared and today always show. On a phone, the dates that fit now show instead of none.
+- **Then and now follows a note that moved.** A note moved to another folder lost its history from
+  before the move: the day it moved showed as a day the topic moved, and a doc still saying the old
+  read as "untouched since" that day. The move is now seen as a move, and the note's history goes on
+  from before it, under its older names. It costs a little more time when the notes cited have moved,
+  nothing otherwise.
+
 ## [2.4.0] - 2026-11-04
 
 Atlas under any sub-path of its address, Settings as a real page, your own password changed and

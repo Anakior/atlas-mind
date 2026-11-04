@@ -130,29 +130,71 @@ def _passages(text: str, terms: list) -> list:
 
 
 def _history(paths, terms: list, day: str = "") -> tuple:
-    """One walk of the paths' history, diffs included: the day each was last changed (today, and
+    """A walk of the paths' history, diffs included: the day each was last changed (today, and
     on `day` when given) and the days the topic's lines changed in them. On a big mind a walk
-    costs about a second whatever it reads, so this one does the work of three."""
+    costs about a second whatever it reads, so each one does the work of three.
+
+    A doc moved is walked under its older names too: its history goes on from before the move,
+    and the move itself changes no line. Each generation of moves found costs one more walk, none
+    when nothing moved."""
     if not paths:  # with no pathspec, git would walk and diff the whole mind
         return {}, {}, []
-    out = _git("log", "-p", "--unified=0", "--no-renames", "--format=%x1e%cs", "HEAD", "--",
-               *sorted({"content/" + rel for rel in paths}))
     words = {_s._normalize_text(t) for t in terms}
-    now_days, then_days, moved = {}, {}, {}
-    for record in out.stdout.split("\x1e")[1:]:
-        lines = record.split("\n")
-        when, path = lines[0].strip(), None
-        for line in lines[1:]:
-            if line.startswith(("--- a/content/", "+++ b/content/")):
-                path = line[len("--- a/content/"):].rstrip("\t")
-                now_days.setdefault(path, when)
-                if day and when <= day:
-                    then_days.setdefault(path, when)
-            elif path and line[:1] in ("+", "-") and not line.startswith(("+++", "---")):
-                if any(w in _s._normalize_text(line) for w in words) and path not in moved.setdefault(when, []):
-                    moved[when].append(path)
+    names = {"content/" + rel: [rel] for rel in paths}  # each name walked: the paths it is a name of
+    while True:
+        out = _git("log", "-p", "--unified=0", "-M", "--format=%x1e%H %cs", "HEAD", "--", *sorted(names))
+        now_days, then_days, moved, born = {}, {}, {}, set()
+        for record in out.stdout.split("\x1e")[1:]:
+            lines = record.split("\n")
+            sha, when = lines[0].split()
+            asked, header, created, source = [], False, False, None
+            for line in lines[1:]:
+                if line.startswith("diff --git "):
+                    asked, header, source = [], True, None
+                elif line.startswith("@@"):
+                    header = False
+                elif not header:
+                    if asked and line[:1] in ("+", "-") and any(w in _s._normalize_text(line) for w in words):
+                        if asked[-1] not in moved.setdefault(when, []):
+                            moved[when].append(asked[-1])
+                elif line.startswith("rename from "):
+                    source = line[len("rename from "):]
+                elif line.startswith("rename to ") and source:
+                    # Walked newest first: from here on, the older name's changes are the doc's.
+                    target = names.get(line[len("rename to "):], [])
+                    names[source] = [rel for rel in names.get(source, []) if rel not in target] + target
+                elif line.startswith("--- "):
+                    created = line == "--- /dev/null"
+                    asked = [] if created else names.get(line[len("--- a/"):].rstrip("\t"), [])
+                elif line.startswith("+++ "):
+                    if line.startswith("+++ b/"):
+                        asked = names.get(line[len("+++ b/"):].rstrip("\t"), [])
+                        if created and asked:
+                            born.add(sha)
+                    for rel in asked:
+                        now_days.setdefault(rel, when)
+                        if day and when <= day:
+                            then_days.setdefault(rel, when)
+        older = _older_names(born, names)
+        if not older:
+            break
+        names.update(older)
     moments = [{"date": when, "docs": docs} for when, docs in sorted(moved.items())]
     return now_days, then_days, moments[-_MOMENTS:]
+
+
+def _older_names(born: set, names: dict) -> dict:
+    """{older name: the paths it is a name of}, for the walked names that a commit in `born`
+    created by moving a doc rather than writing one."""
+    if not born:
+        return {}
+    out = _git("show", "-M", "--diff-filter=R", "--name-status", "--format=", *sorted(born), "--", "content")
+    older = {}
+    for row in out.stdout.splitlines():
+        status, *pair = row.split("\t")
+        if status.startswith("R") and len(pair) == 2 and pair[1] in names and pair[0] not in names:
+            older[pair[0]] = names[pair[1]]
+    return older
 
 
 def _then_paths(terms: list, rev: str) -> list:

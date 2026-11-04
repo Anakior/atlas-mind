@@ -121,11 +121,17 @@ const scenarios = {
     report.quotes = await view.locator('.side blockquote').allTextContents();
     report.empty = await view.locator('.side.empty').count();
     report.moments = await view.locator('.moment').count();
+    // The day labels left showing on the timeline, and how many run into the one before.
+    const labels = await view.locator('.tick > span').evaluateAll((spans) => spans
+      .filter((span) => getComputedStyle(span).visibility !== 'hidden')
+      .map((span) => ({ text: span.textContent, left: span.getBoundingClientRect().left, right: span.getBoundingClientRect().right })));
+    report.labels = labels.map((label) => label.text);
+    report.overlaps = labels.filter((label, i) => i && label.left < labels[i - 1].right).length;
     report.lagging = await view.locator('.line q').allTextContents();
     await shot();
     // Ask why, have the lagging docs updated, compare with a day the topic moved.
     await view.locator('.actions .primary').click();
-    await view.locator('h2 .ghost').click();
+    if (report.lagging.length) await view.locator('h2 .ghost').click();
     await view.locator('.moment').first().click();
     await page.waitForTimeout(200);
   },

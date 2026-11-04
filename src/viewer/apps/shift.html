@@ -17,8 +17,8 @@ __KIT_CSS__
   .tick.then { color: var(--accent); font-weight: 700; }
   .tick.then i { background: var(--accent); box-shadow: 0 0 0 4px var(--tint); }
   .tick.today i { background: var(--bg); border-color: var(--text-3); }
+  .tick .crowded { visibility: hidden; }
   .caption { margin: 0 0 18px; color: var(--text-3); font-size: 12px; }
-  @media (max-width: 480px) { button.tick span { visibility: hidden; } }
 
   /* A claim then and now, side by side, with what happened to it. */
   .shift { margin: 0 0 18px; }
@@ -57,6 +57,7 @@ __KIT_CSS__
   var kit = atlasKit(__I18N__, app);
   var t = kit.t, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
   var state = { data: null };
+  var LABEL_GAP = 6;  // px between two day labels on the timeline
 
   function long(iso) {
     return new Date(iso + 'T12:00:00').toLocaleDateString(kit.lang, { day: 'numeric', month: 'long', year: 'numeric' });
@@ -103,6 +104,21 @@ __KIT_CSS__
     if (!placed) line.appendChild(mark());
     line.appendChild(add(el('span', 'tick today'), el('i'), el('span', null, t('today'))));
     return add(el('section'), line, el('p', 'caption', t('moments')));
+  }
+
+  // A day's label that would run into another one is hidden; its dot stays, with the date in its
+  // title. The date compared and today always show.
+  function thin() {
+    var spans = Array.prototype.slice.call(app.querySelectorAll('.tick > span'));
+    var moment = function (span) { return span.parentNode.classList.contains('moment'); };
+    var kept = spans.filter(function (span) { return !moment(span); })
+      .map(function (span) { return span.getBoundingClientRect(); });
+    spans.filter(moment).forEach(function (span) {
+      var r = span.getBoundingClientRect();
+      var clear = kept.every(function (k) { return r.right + LABEL_GAP <= k.left || r.left >= k.right + LABEL_GAP; });
+      span.classList.toggle('crowded', !clear);
+      if (clear) kept.push(r);
+    });
   }
 
   function side(claim, kind, empty) {
@@ -166,8 +182,10 @@ __KIT_CSS__
     app.className = '';
     app.replaceChildren();
     add(app, header(), timeline(), shifts(), lagging(), why());
+    thin();
   }
 
+  window.addEventListener('resize', thin);
   atlasApp.on('ui/notifications/tool-input', function () { kit.loading(''); });
   atlasApp.on('ui/notifications/tool-result', show);
   atlasApp.on('ui/notifications/tool-cancelled', function () { kit.status(t('cancelled')); });

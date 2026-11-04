@@ -141,6 +141,22 @@ class TestThenAndNow(unittest.TestCase):
                          ("notes/roadmap.md", "2025-01-15", 0))
         self.assertEqual([m["date"] for m in data["moments"]], ["2025-01-15", "2025-03-10"])
 
+    def test_a_moved_doc_keeps_its_history(self):
+        # The roadmap moved twice, never edited: tidying is not a day the topic moved.
+        for day, old, new in (("2025-04-01", "notes/roadmap.md", "notes/plans/roadmap.md"),
+                              ("2025-04-15", "notes/plans/roadmap.md", "archive/roadmap.md")):
+            (self.srv.content_root / new).parent.mkdir(parents=True, exist_ok=True)
+            self.srv.git("mv", f"content/{old}", f"content/{new}", check=True)
+            self.srv.git("commit", "-q", "-m", "docs: tidy", check=True,
+                         env={"GIT_AUTHOR_DATE": f"{day}T12:00:00", "GIT_COMMITTER_DATE": f"{day}T12:00:00"})
+        moments = self.call("then_and_now", topic="embeddings")["moments"]
+        self.assertEqual([m["date"] for m in moments], ["2025-01-15", "2025-03-10"])
+        self.assertIn("archive/roadmap.md", moments[0]["docs"])  # its first day, under its old name
+        lagging = [{"path": "archive/roadmap.md", "quote": "Embeddings: an opt-in extension.", "echoes": 0}]
+        data = self.call("show_shift", topic="embeddings", at="2025-02-01", shifts=SHIFTS, lagging=lagging)
+        self.assertEqual(data["lagging"][0]["last_modified"], "2025-01-15")  # moved since, never touched
+        self.assertEqual([m["date"] for m in data["moments"]], ["2025-01-15", "2025-03-10"])
+
 
 if __name__ == "__main__":
     unittest.main()

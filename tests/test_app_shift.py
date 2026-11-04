@@ -42,6 +42,23 @@ class TestShiftView(ViewTestCase):
         self.assertIn("as then: “The embeddings come as an opt-in extension”", update)  # what it still says
         self.assertIn("2025-01-15", compare)
 
+    def test_a_crowded_timeline_keeps_its_labels_apart(self):
+        rules = self.srv.content_root / "notes/rules.md"  # cited: the timeline reads its history
+        for day in range(11, 23):
+            with rules.open("a", encoding="utf-8", newline="\n") as f:
+                f.write(f"\nMarch {day}: embeddings stay out of the engine.\n")
+            self.srv.git("add", "-A", check=True)
+            when = f"2025-03-{day}T12:00:00"
+            self.srv.git("commit", "-q", "-m", "docs: journal", check=True,
+                         env={"GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+        held = {"path": "notes/rules.md", "quote": "never embeddings in the engine"}
+        report = self.host({"topic": "embeddings", "at": "2025-03-16",
+                            "shifts": [{"badge": "held", "then": held, "now": held}]})
+        self.assertEqual(report["moments"], 12)
+        self.assertEqual(report["overlaps"], 0)
+        self.assertIn("Then · Mar 16", report["labels"])  # mid-timeline, between two close days
+        self.assertEqual(report["labels"][-1], "today")
+
 
 if __name__ == "__main__":
     unittest.main()
