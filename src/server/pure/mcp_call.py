@@ -15,7 +15,7 @@ from pathlib import Path
 import server as _s
 from store import slugify_token_label, slugify_title
 from server.pure.queries import (
-    _visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
+    _visible, _visible_at, _touched_visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
     _api_stale, _api_outdated, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
 )
 from server.pure import attestations, contradictions, docs, file_links, file_text, provenance, resources
@@ -54,10 +54,13 @@ def trash_doc(target: Path, ctx, ai=None) -> str:
     would inherit), its share links revoked (a trashed doc must stop serving them),
     then one attributed commit. Returns the trash path."""
     rel = target.relative_to(_s.CONFIG.content_root).as_posix()
+    owner = _s.owner_of(rel)
     trashed = _soft_delete(target)
     try:
         store = _s.get_store()
         store.repoint_acl_by_path(rel, trashed)
+        if owner:  # private through its folder, which the trash is outside of
+            store.set_owner(trashed, owner)
         store.delete_shares_for_path(rel)
     except Exception as e:
         print(f"[delete cleanup] {e}", file=sys.stderr)
@@ -817,22 +820,25 @@ def _tool_doc_history(args, ctx):
         opts.append("--until=" + until)
     if grep:
         opts.append("--grep=" + grep)
+
+    def readable(records):
+        commits = [_fmt_commit(r) for r in records or []]
+        return [c for c in commits if _touched_visible(rel, c["sha"], ctx)]
+
     records = _git_doc_records(repo_rel, *opts)
     if records is None:
         return text_result("git log failed", is_error=True)
     head = _s.git("rev-parse", "HEAD").stdout.strip()
-    revisions = []
-    for record in records:
-        commit = _fmt_commit(record)
+    revisions = readable(records)
+    for commit in revisions:
         commit["is_current"] = commit["sha"] == head
-        revisions.append(commit)
     # Lifecycle header (absorbs the would-be doc_first_seen): --diff-filter=A gives
     # the true birth even past the -n cap; take the OLDEST add (delete+re-add -> >1).
-    adds = _git_doc_records(repo_rel, "--diff-filter=A")
-    created = _fmt_commit(adds[-1]) if adds else None
+    adds = readable(_git_doc_records(repo_rel, "--diff-filter=A"))
+    created = adds[-1] if adds else None
     if since or until or grep:
-        newest = _git_doc_records(repo_rel, "-n", "1")
-        last_modified = _fmt_commit(newest[0]) if newest else None
+        newest = readable(_git_doc_records(repo_rel, "-n", "1"))
+        last_modified = newest[0] if newest else None
     else:
         last_modified = revisions[0] if revisions else None
     return json_result({"path": rel, "created": created,
@@ -862,6 +868,8 @@ def _tool_doc_at(args, ctx):
     else:
         rev = "HEAD"
     rev_sha = _s.git("rev-parse", rev).stdout.strip() or rev
+    if not _visible_at(rel, rev_sha, ctx):
+        return text_result(f"Document not found: {rel}", is_error=True)
     show = _s.git("show", rev_sha + ":" + _s._doc_path_at(repo_rel, rev_sha))
     if show.returncode != 0:
         return text_result(f"Revision not found: {rev}", is_error=True)
@@ -900,6 +908,8 @@ def _tool_doc_diff(args, ctx):
         base_sha = prev.stdout.strip() if prev.returncode == 0 else ""
         if not base_sha:
             base_sha = _EMPTY_TREE
+    if not all(_visible_at(rel, sha, ctx) for sha in (rev_sha, base_sha) if sha != _EMPTY_TREE):
+        return text_result(f"Document not found: {rel}", is_error=True)
     diff_text, added, removed = _doc_diff_between(repo_rel, base_sha, rev_sha)
     if diff_text is None:
         return text_result("git diff failed", is_error=True)
@@ -1103,6 +1113,8 @@ def _tool_doc_revert(args, ctx):
         return text_result(f"Document not found: {rel}", is_error=True)
     if ctx is not None and not _s.can_write(rel, ctx, "edit"):
         return text_result("Insufficient permission (need edit on this document).", is_error=True)
+    if not _visible_at(rel, rev, ctx):
+        return text_result(f"Revision not found: {rev}", is_error=True)
     show = _s.git("show", rev + ":" + _s._doc_path_at("content/" + rel, rev))
     if show.returncode != 0:
         return text_result(f"Revision not found: {rev}", is_error=True)
@@ -1480,7 +1492,10 @@ def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
     if not any(t["name"] == name for t in _allowed_tools(ctx)):
         return text_result(f"This token is limited to {', '.join(sorted(ctx.scopes))}: {name} "
                            "is outside its scopes.", is_error=True)
-    return fn(args, ctx)
+    if _needed_scope(name) == "read":
+        return fn(args, ctx)
+    with _s.writing():
+        return fn(args, ctx)
 
 
 # 2026-07-28 _meta keys, and the error codes it reserves for the protocol.

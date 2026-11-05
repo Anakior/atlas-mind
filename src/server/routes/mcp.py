@@ -1,6 +1,8 @@
 """MCP streamable-HTTP transport route: /mcp with a Bearer token (OAuth or API), or the
 legacy /mcp/<token> (token in the path)."""
 import json
+import sys
+
 import server as _s
 from server.pure import mcp_call, oauth
 
@@ -85,7 +87,23 @@ def handle(handler):
     if response is None:
         _accepted(handler)
         return
+    _note_read(token, req, response)
     handler._send_json(_s._mcp_http_status(req, response), response)
+
+
+def _note_read(token, req, response):
+    """A read_doc that returned its doc: what the home's "connect your AI" step waits for, not a
+    mere connection (initialize, tools/list) nor a refused read."""
+    if not isinstance(req, dict) or req.get("method") != "tools/call":
+        return
+    params, result = req.get("params") or {}, response.get("result") or {}
+    if params.get("name") != "read_doc" or not result or result.get("isError"):
+        return
+    try:
+        _s.get_store().touch_last_read(_s._hash_api_token(token),
+                                       str((params.get("arguments") or {}).get("path") or ""))
+    except Exception as e:  # the read went through: its trace is best-effort
+        print(f"[mcp last_read] {e}", file=sys.stderr)
 
 
 def _accepted(handler):

@@ -17,6 +17,8 @@ content route would be reachable with no auth and no CSRF.
 import enum
 import re
 
+import server as _s
+
 
 class RouteKind(enum.Enum):
     EXACT = "exact"                    # path == pattern
@@ -60,16 +62,18 @@ class Route:
     """One declarative route. `handler(h)` is a function in server/routes/*.py that
     takes the live Handler and self-guards NOTHING. `when(h)` optionally gates the
     route on a runtime predicate (e.g. cloud mode); a route whose `when` returns
-    False is skipped, falling through like the legacy `if CONFIG.auth_enabled and …`."""
+    False is skipped, falling through like the legacy `if CONFIG.auth_enabled and …`.
+    `writes`: the route changes the mind's files, so it runs under the mind's write lock."""
 
-    __slots__ = ("kind", "pattern", "handler", "guard", "when", "_match")
+    __slots__ = ("kind", "pattern", "handler", "guard", "when", "writes", "_match")
 
-    def __init__(self, kind, pattern, handler, guard=Guard.PUBLIC, when=None):
+    def __init__(self, kind, pattern, handler, guard=Guard.PUBLIC, when=None, writes=False):
         self.kind = kind
         self.pattern = pattern
         self.handler = handler
         self.guard = guard
         self.when = when
+        self.writes = writes
         self._match = _compile_matcher(kind, pattern)
 
     def matches(self, path) -> bool:
@@ -111,6 +115,20 @@ def dispatch(handler, routes) -> bool:
             continue
         if route.matches(path):
             if _apply_guard(handler, route.guard):
-                route.handler(handler)
+                if route.writes:
+                    _write(handler, route.handler)
+                else:
+                    route.handler(handler)
             return True
     return False
+
+
+def _write(handler, fn):
+    """`fn` under the mind's write lock, its body read before: a client slow to send it must
+    not hold up every other write."""
+    handler._body_ahead = handler._read_body()
+    try:
+        with _s.writing():
+            fn(handler)
+    finally:
+        handler._body_ahead = None

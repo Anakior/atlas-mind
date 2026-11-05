@@ -112,6 +112,37 @@ class TestOfficeText(unittest.TestCase):
         self.assertEqual(self.read("odj.odt", ODT).splitlines(), ["## Ordre du jour", "un  deux\ttrois"])
         self.assertEqual(self.read("calc.ods", ODS).splitlines(), ["## Feuille1", "x | 42"])
 
+    def test_a_sheet_keeps_each_value_in_its_column(self):
+        def xlsx(target, rows):
+            return _zip({
+                "xl/workbook.xml": f'<workbook {S} {R}><sheets><sheet name="Budget" r:id="rId1"/></sheets></workbook>',
+                "xl/_rels/workbook.xml.rels": f'<Relationships {REL}><Relationship Id="rId1" Target="{target}"/></Relationships>',
+                "xl/worksheets/sheet1.xml": f'<worksheet {S}><sheetData>{rows}</sheetData></worksheet>'})
+
+        def cell(ref, text):
+            return f'<c r="{ref}" t="inlineStr"><is><t>{text}</t></is></c>'
+
+        # Excel leaves an empty cell out: B2 is missing, 10 is still the quantity.
+        sparse = (f'<row r="1">{cell("A1", "Produit")}{cell("B1", "Prix")}{cell("C1", "Quantité")}</row>'
+                  f'<row r="2">{cell("A2", "Atlas")}<c r="C2"><v>10</v></c></row>')
+        expected = ["## Budget", "Produit | Prix | Quantité", "Atlas |  | 10"]
+        self.assertEqual(self.read("sparse.xlsx", xlsx("worksheets/sheet1.xml", sparse)).splitlines(), expected)
+        # openpyxl names its sheets from the package's root.
+        self.assertEqual(self.read("openpyxl.xlsx", xlsx("/xl/worksheets/sheet1.xml", sparse)).splitlines(), expected)
+        # A reference past a sheet's last column stops there.
+        far = self.read("far.xlsx", xlsx("worksheets/sheet1.xml", f'<row>{cell("ZZZZZZZZ1", "x")}</row>'))
+        self.assertEqual(len(far.splitlines()[1].split(" | ")), 16385)
+
+        # LibreOffice writes equal neighbours once, with their count: empty ones as much as values.
+        ods = _zip({"content.xml": f'<office:document-content {ODF}><office:body><office:spreadsheet>'
+                    '<table:table table:name="Feuille1"><table:table-row>'
+                    '<table:table-cell><text:p>x</text:p></table:table-cell>'
+                    '<table:table-cell table:number-columns-repeated="2"/>'
+                    '<table:table-cell table:number-columns-repeated="2"><text:p>7</text:p></table:table-cell>'
+                    '<table:table-cell table:number-columns-repeated="1020"/>'
+                    '</table:table-row></table:table></office:spreadsheet></office:body></office:document-content>'})
+        self.assertEqual(self.read("calc.ods", ods).splitlines(), ["## Feuille1", "x |  |  | 7 | 7"])
+
     def test_what_is_not_read(self):
         self.assertIsNone(self.read("broken.docx", b"not a zip"))
         self.assertIsNone(self.read("other.docx", _zip({"word/other.xml": "<x/>"})))

@@ -57,6 +57,7 @@ def _without_base(path):
 
 
 class Handler(SimpleHTTPRequestHandler):
+    _body_ahead = None  # a write route's body, read before the lock (router._write)
     # Explicit MIME types for /vendor/: the system mimetypes table can miss
     # woff2 on some distros, and the browser then rejects mistyped fonts/CSS.
     extensions_map = {
@@ -625,6 +626,9 @@ class Handler(SimpleHTTPRequestHandler):
         """Reads the request body, bounded to MAX_BODY_BYTES. Beyond the bound:
         return b"" and close the connection to discard the unread body (avoids
         memory blow-up). Callers treat b"" as an empty/invalid body."""
+        if self._body_ahead is not None:  # read by the router before a write
+            body, self._body_ahead = self._body_ahead, None
+            return body
         length = _s._safe_int(self.headers.get("content-length"))
         if length > _s.MAX_BODY_BYTES:
             self.close_connection = True

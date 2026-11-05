@@ -32,15 +32,15 @@ def put(handler):
         with open(body, "wb") as f:
             if handler._spool_body_or_4xx(f, uploads.MAX_ZIP if is_zip else uploads.MAX_FILE) is None:
                 return
-        try:
-            written, skipped = _unzip(body, rel, ctx) if is_zip else ([_place(body, rel, ctx, beside)], [])
-        except uploads.UploadError as e:
-            handler._send_json(400, {"error": e.code})
-            return
-    root = _s.CONFIG.content_root
-    if written:
-        what = PurePosixPath(rel).name + (f" ({len(written)})" if is_zip else "")
-        _s.commit_change(ctx, f"created: {what}", *(root / p for p in written))
+        with _s.writing():  # received first: the free name picked stays free until the file is there
+            try:
+                written, skipped = _unzip(body, rel, ctx) if is_zip else ([_place(body, rel, ctx, beside)], [])
+            except uploads.UploadError as e:
+                handler._send_json(400, {"error": e.code})
+                return
+            if written:
+                what = PurePosixPath(rel).name + (f" ({len(written)})" if is_zip else "")
+                _s.commit_change(ctx, f"created: {what}", *(_s.CONFIG.content_root / p for p in written))
     handler._send_json(200, {"paths": written, "skipped": skipped})
 
 

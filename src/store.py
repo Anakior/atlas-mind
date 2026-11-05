@@ -427,17 +427,21 @@ class FileStore:
     REMOTES_FILE = "remotes.json"
     STATE_FILE = "state.json"
     ACL_FILE = "acl.json"        # per-document ACL: {path: {owner, grants[]}}
+    TRAIL_FILE = "acl_trail.json"  # where rights went when a doc moved or was deleted (acl.level_at)
     GROUPS_FILE = "groups.json"  # principals: {group_name: [emails]}
     TODOS_FILE = "todos.json"    # per-member todos (private, not git): {email: [items]}
     OAUTH_CLIENTS_FILE = "oauth_clients.json"  # OAuth clients registered via DCR
     SETTINGS_FILE = "settings.json"  # instance-wide viewer settings: {appearance: {brand, show_prefix, show_tagline}}
     # What outlives a restart and isn't in git: a full backup carries these (not the volatile
     # state, nor the lock).
-    DURABLE_FILES = (USERS_FILE, SHARES_FILE, NODES_FILE, REMOTES_FILE, ACL_FILE, GROUPS_FILE,
-                     TODOS_FILE, OAUTH_CLIENTS_FILE, SETTINGS_FILE)
+    DURABLE_FILES = (USERS_FILE, SHARES_FILE, NODES_FILE, REMOTES_FILE, ACL_FILE, TRAIL_FILE,
+                     GROUPS_FILE, TODOS_FILE, OAUTH_CLIENTS_FILE, SETTINGS_FILE)
 
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, head=None):
         self.base = Path(base_dir)
+        # The mind's current commit, stamped on each trail step; None (no git) makes a step
+        # cover every revision.
+        self._head = head or (lambda: None)
         self._locks = {
             self.USERS_FILE: threading.Lock(),
             self.SHARES_FILE: threading.Lock(),
@@ -445,6 +449,7 @@ class FileStore:
             self.REMOTES_FILE: threading.Lock(),
             self.STATE_FILE: threading.Lock(),
             self.ACL_FILE: threading.Lock(),
+            self.TRAIL_FILE: threading.Lock(),
             self.GROUPS_FILE: threading.Lock(),
             self.TODOS_FILE: threading.Lock(),
             self.OAUTH_CLIENTS_FILE: threading.Lock(),
@@ -667,6 +672,17 @@ class FileStore:
             state[key] = int(time.time())
             self._write(self.STATE_FILE, state)
 
+    def touch_last_read(self, token_hash: str, path: str) -> None:
+        """The last doc an access's AI read (a read_doc that returned it): the proof it reads
+        the mind, which a connection alone (last_used_at) is not. state.json too."""
+        key = _last_used_key(self.find_api_identity(token_hash) or {})
+        if not key:
+            return
+        with self._locks[self.STATE_FILE]:
+            state = dict(self._load(self.STATE_FILE, dict))
+            state["read:" + key] = {"at": int(time.time()), "path": path}
+            self._write(self.STATE_FILE, state)
+
     # ── TOTP anti-replay (last accepted step per account) ─────────────────────
     # Stored in state.json (volatile) under "totp_step:<email>", namespaced so it
     # never collides with last_used_at. Best-effort: a read/write hiccup must NOT
@@ -841,6 +857,8 @@ class FileStore:
             key = _last_used_key(user)
             if key in state:
                 meta["last_used_at"] = state[key]
+            if "read:" + key in state:
+                meta["last_read"] = state["read:" + key]
             identities.append(meta)
         return identities
 
@@ -1214,7 +1232,11 @@ class FileStore:
         return out
 
     def delete_acl(self, path: str) -> bool:
-        """Drop the whole ACL entry of `path`. False if there was none."""
+        """Drop the whole ACL entry of `path`. False if there was none. A private entry
+        goes to the trail first: the history of that doc stays as private as it was."""
+        entry = self.get_acl(path)
+        if entry and entry.get("owner"):
+            self._trail({"from": path, "entry": entry})
         with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             if path not in acl:
@@ -1257,6 +1279,7 @@ class FileStore:
     def repoint_acl_by_path(self, old_path: str, new_path: str) -> bool:
         """Move a doc's ACL entry when it is renamed/moved in-app, so its sharing
         travels with it (mirror of repoint_shares_by_path). False if no entry."""
+        self.trail_move(old_path, new_path)
         with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             if old_path not in acl:
@@ -1264,6 +1287,31 @@ class FileStore:
             acl[new_path] = acl.pop(old_path)
             self._write(self.ACL_FILE, acl)
             return True
+
+    def acl_trail(self) -> list:
+        """Where rights went, oldest first: a doc or folder moved ({from, to}) or a private
+        doc deleted for good ({from, entry}: the rights it had), each with `before`, the
+        mind's commit just before. The old path's history keeps answering to them."""
+        with self._locks[self.TRAIL_FILE]:
+            return self._load(self.TRAIL_FILE)
+
+    def trail_move(self, old_path: str, new_path: str) -> None:
+        """Record that `old_path` (a doc or a folder) now lives at `new_path`. Written
+        before the ACL moves, so the old path's history is never left without it."""
+        self._trail({"from": old_path, "to": new_path})
+
+    def _trail(self, step: dict) -> None:
+        step["before"] = self._head()
+        with self._rmw(self.TRAIL_FILE):
+            self._write(self.TRAIL_FILE, self._load(self.TRAIL_FILE) + [step])
+
+    def _rewrite_trail_rights(self, change) -> None:
+        """Apply `change(entry) -> entry` to the rights each deleted doc kept in the trail."""
+        with self._rmw(self.TRAIL_FILE):
+            trail = self._load(self.TRAIL_FILE)
+            new = [{**s, "entry": change(s["entry"])} if "entry" in s else s for s in trail]
+            if new != trail:
+                self._write(self.TRAIL_FILE, new)
 
     def repoint_acl_under(self, old_dir: str, new_dir: str) -> int:
         """Move every ACL entry under a renamed folder (the folder key itself +
@@ -1329,19 +1377,17 @@ class FileStore:
         their owned/created docs go to a surviving admin instead of either falling
         to the commons (which would EXPOSE a private doc) or stranding under a ghost
         owner that no one — not even an admin — can manage. Returns entries changed."""
+        def swap(entry):
+            return {**entry, **{key: new_principal for key in ("owner", "creator")
+                                if entry.get(key) == old_principal}}
+
+        self._rewrite_trail_rights(swap)
         with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             changed = 0
             for path, entry in list(acl.items()):
-                e = dict(entry)
-                touched = False
-                if e.get("owner") == old_principal:
-                    e["owner"] = new_principal
-                    touched = True
-                if e.get("creator") == old_principal:
-                    e["creator"] = new_principal
-                    touched = True
-                if touched:
+                e = swap(entry)
+                if e != entry:
                     acl[path] = e
                     changed += 1
             if changed:
@@ -1353,6 +1399,8 @@ class FileStore:
         entry left with no owner, creator or grant. Used when a user or group is
         deleted so re-creating the same email / group name can't silently inherit
         the old grants (privilege resurrection). Returns entries changed."""
+        self._rewrite_trail_rights(lambda entry: {
+            **entry, "grants": [g for g in entry.get("grants", []) if g.get("principal") != principal]})
         with self._rmw(self.ACL_FILE):
             acl = dict(self._load(self.ACL_FILE, dict))
             changed = 0

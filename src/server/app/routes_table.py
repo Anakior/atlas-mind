@@ -119,7 +119,7 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/backup", docs.backup, _G.ADMIN_CSRF),        # owner, password (+ 2FA) again
     router.Route(_RK.EXACT, "/api/admin/update", admin.update_run, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/remotes/sync", admin.remotes_sync, _G.ADMIN_CSRF),
-    router.Route(_RK.EXACT, "/api/admin/remotes/appropriate", admin.remotes_appropriate, _G.ADMIN_CSRF),
+    router.Route(_RK.EXACT, "/api/admin/remotes/appropriate", admin.remotes_appropriate, _G.ADMIN_CSRF, writes=True),
     router.Route(_RK.EXACT, "/api/account/profile", account.profile_post, _G.CSRF_BASE),
     router.Route(_RK.EXACT, "/api/account/logout-all", account.logout_all, _G.CSRF_BASE),
     router.Route(_RK.EXACT, "/api/account/password", account.password_change, _G.CSRF_BASE, when=_when_cloud),
@@ -130,19 +130,19 @@ POST_ROUTES = [
     router.Route(_RK.EXACT, "/api/account/totp/disable", account.totp_disable, _G.CSRF_BASE),
     router.Route(_RK.EXACT, "/api/share", share.create, _G.CSRF_BASE),       # per-doc: owner can share
     router.Route(_RK.EXACT, "/api/acl", acl.acl_post, _G.CSRF_BASE),
-    router.Route(_RK.EXACT, "/api/todos", todos.create, _G.CSRF_BASE),       # per-member: own list
-    router.Route(_RK.EXACT, "/api/notes", notes.create, _G.ADMIN_CSRF),
-    router.Route(_RK.EXACT, "/api/revert", docs.revert, _G.CSRF_BASE),       # per-doc: needs edit
-    router.Route(_RK.EXACT, "/api/run/undo", docs.run_undo, _G.CSRF_BASE),   # the run's person, or edit/owner per doc
-    router.Route(_RK.EXACT, "/api/contradiction", docs.contradiction_verdict, _G.CSRF_BASE),  # 13c verdict: needs read both
-    router.Route(_RK.EXACT, "/api/file/move", docs.move, _G.CSRF_BASE),      # per-doc: needs owner
+    router.Route(_RK.EXACT, "/api/todos", todos.create, _G.CSRF_BASE, writes=True),       # per-member: own list
+    router.Route(_RK.EXACT, "/api/notes", notes.create, _G.ADMIN_CSRF, writes=True),
+    router.Route(_RK.EXACT, "/api/revert", docs.revert, _G.CSRF_BASE, writes=True),       # per-doc: needs edit
+    router.Route(_RK.EXACT, "/api/run/undo", docs.run_undo, _G.CSRF_BASE, writes=True),   # the run's person, or edit/owner per doc
+    router.Route(_RK.EXACT, "/api/contradiction", docs.contradiction_verdict, _G.CSRF_BASE, writes=True),  # 13c verdict: needs read both
+    router.Route(_RK.EXACT, "/api/file/move", docs.move, _G.CSRF_BASE, writes=True),      # per-doc: needs owner
     router.Route(_RK.EXACT_NOQUERY, "/api/upload", upload.put, _G.UPLOAD),    # per-file: may create there
-    router.Route(_RK.EXACT, "/api/inbox/action", docs.inbox_action, _G.CSRF_BASE),  # inbox triage: owner-gated
-    router.Route(_RK.EXACT, "/api/dir/rename", docs.dir_rename, _G.CSRF_BASE),  # per-folder: owner (can_manage)
-    router.Route(_RK.EXACT, "/api/dir", docs.dir_create, _G.CSRF_BASE),         # per-place: can_create
+    router.Route(_RK.EXACT, "/api/inbox/action", docs.inbox_action, _G.CSRF_BASE, writes=True),  # inbox triage: owner-gated
+    router.Route(_RK.EXACT, "/api/dir/rename", docs.dir_rename, _G.CSRF_BASE, writes=True),  # per-folder: owner (can_manage)
+    router.Route(_RK.EXACT, "/api/dir", docs.dir_create, _G.CSRF_BASE, writes=True),         # per-place: can_create
     router.Route(_RK.EXACT, "/api/sync", system.sync_post, _G.CSRF_BASE),    # retry the push: any member
-    router.Route(_RK.EXACT, "/api/trash/restore", docs.trash_restore, _G.CSRF_BASE),  # per-doc: needs owner, like the delete
-    router.Route(_RK.PREFIX, "/api/v1/", apiv1.post, _G.BEARER),
+    router.Route(_RK.EXACT, "/api/trash/restore", docs.trash_restore, _G.CSRF_BASE, writes=True),  # per-doc: needs owner, like the delete
+    router.Route(_RK.PREFIX, "/api/v1/", apiv1.post, _G.BEARER, writes=True),
     router.Route(_RK.EXACT_NOQUERY, "/mcp", mcp.handle, _G.BEARER),
     router.Route(_RK.PREFIX, "/mcp/", mcp.handle, _G.BEARER),
     # OAuth endpoints self-verify: register + token are for clients (no cookie), the
@@ -155,9 +155,9 @@ POST_ROUTES = [
 # PATCH: per-route guards (do_PATCH no longer blanket-admins). notes + share
 # repoint stay ADMIN_CSRF; todos is CSRF_BASE (a member patches its OWN list).
 PATCH_ROUTES = [
-    router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.patch, _G.ADMIN_CSRF),
+    router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.patch, _G.ADMIN_CSRF, writes=True),
     router.Route(_RK.REGEX, _SHARE_ID_PATTERN, share.repoint, _G.ADMIN_CSRF),
-    router.Route(_RK.REGEX, r"^/api/todos/(\d+)$", todos.patch, _G.CSRF_BASE),
+    router.Route(_RK.REGEX, r"^/api/todos/(\d+)$", todos.patch, _G.CSRF_BASE, writes=True),
 ]
 
 # DELETE: per-route guards (do_DELETE no longer blanket-admins). Admin routes keep
@@ -170,16 +170,16 @@ DELETE_ROUTES = [
     router.Route(_RK.EXACT, "/api/admin/remotes", admin.remotes_delete, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/admin/github", github.disconnect, _G.ADMIN_CSRF),
     router.Route(_RK.EXACT, "/api/tokens", admin.tokens_delete, _G.CSRF_BASE),
-    router.Route(_RK.EXACT, "/api/file", docs.delete, _G.CSRF_BASE),
-    router.Route(_RK.EXACT, "/api/dir", docs.dir_delete, _G.CSRF_BASE),        # an empty folder: owner
-    router.Route(_RK.EXACT, "/api/trash", docs.trash_purge, _G.CSRF_BASE),     # for good: owner, like restore
-    router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.delete, _G.ADMIN_CSRF),
+    router.Route(_RK.EXACT, "/api/file", docs.delete, _G.CSRF_BASE, writes=True),
+    router.Route(_RK.EXACT, "/api/dir", docs.dir_delete, _G.CSRF_BASE, writes=True),        # an empty folder: owner
+    router.Route(_RK.EXACT, "/api/trash", docs.trash_purge, _G.CSRF_BASE, writes=True),     # for good: owner, like restore
+    router.Route(_RK.EXACT_NOQUERY, "/api/notes", notes.delete, _G.ADMIN_CSRF, writes=True),
     router.Route(_RK.REGEX, _SHARE_ID_PATTERN, share.revoke, _G.ADMIN_CSRF),
-    router.Route(_RK.REGEX, r"^/api/todos/(\d+)$", todos.delete, _G.CSRF_BASE),  # per-member: own list
+    router.Route(_RK.REGEX, r"^/api/todos/(\d+)$", todos.delete, _G.CSRF_BASE, writes=True),  # per-member: own list
 ]
 
 # PUT: a single content route. do_PUT no longer blanket-admins; /api/file is
 # CSRF_BASE (any member, authorized per-document in docs.file_put — create/edit).
 PUT_ROUTES = [
-    router.Route(_RK.EXACT, "/api/file", docs.file_put, _G.CSRF_BASE),
+    router.Route(_RK.EXACT, "/api/file", docs.file_put, _G.CSRF_BASE, writes=True),
 ]

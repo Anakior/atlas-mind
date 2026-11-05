@@ -20,6 +20,7 @@ Model B:
 Principals are opaque strings typed by prefix: ``user:<email>``, ``group:<name>``,
 ``anon:<token_sha256>`` (a share-link), and ``*`` = any authenticated human.
 """
+import functools
 import posixpath
 import time
 
@@ -272,17 +273,71 @@ def can_manage(rel, ctx, store=None):
     return effective_level(rel, ctx, store) == "owner"
 
 
-def in_private_space(rel, store=None):
-    """True if some ancestor of ``rel`` declares an owner — ``rel`` sits inside a
-    private space, so a doc created there is private by inheritance (you cannot make
-    it commons inside a private folder)."""
+def owner_of(rel, store=None):
+    """The owner whose privacy covers ``rel`` (its own or a folder's), or None: commons."""
     store = store or _s.get_store()
     rel = posixpath.normpath((rel or "").strip("/"))
     for path in _ancestors(rel):
         entry = store.get_acl(path)
         if entry and entry.get("owner"):
-            return True
-    return False
+            return entry["owner"]
+    return None
+
+
+def in_private_space(rel, store=None):
+    """True if some ancestor of ``rel`` declares an owner — ``rel`` sits inside a
+    private space, so a doc created there is private by inheritance (you cannot make
+    it commons inside a private folder)."""
+    return owner_of(rel, store) is not None
+
+
+def level_at(rel, rev, ctx, store=None):
+    """The level ``ctx`` has on what ``rel`` named at commit ``rev``. A past version is read
+    with the rights of every place the doc has been since: its old path as it is today, then
+    each place the trail moved it to, or the rights it had when it was deleted for good. A
+    rename or a deletion never reopens a private doc's past, and whoever takes over a freed
+    path does not get the past of the doc that was there before."""
+    level = effective_level(rel, ctx, store)
+    if ctx.superuser:
+        return level
+    store = store or _s.get_store()
+    rel = posixpath.normpath((rel or "").strip("/"))
+    for step in store.acl_trail():
+        if level is None:
+            break
+        frm = step["from"]
+        if (rel != frm and not rel.startswith(frm + "/")) or not _reaches(rev, step.get("before")):
+            continue
+        if "to" not in step:
+            return _lower(level, _kept_level(step["entry"], ctx))
+        rel = step["to"] + rel[len(frm):]
+        level = _lower(level, effective_level(rel, ctx, store))
+    return level
+
+
+def _reaches(rev, before):
+    """Whether ``rev`` is ``before`` or older on its line. Unknown either way counts as yes."""
+    if not before:
+        return True
+    sha = _s.git("rev-parse", "--verify", "--quiet", rev + "^{commit}").stdout.strip()
+    return not sha or _is_ancestor(sha, before)
+
+
+@functools.lru_cache(maxsize=4096)
+def _is_ancestor(sha, before):
+    return _s.git("merge-base", "--is-ancestor", sha, before).returncode != 1
+
+
+def _kept_level(entry, ctx):
+    """The level ``ctx`` had on a private doc deleted for good, from the rights it kept."""
+    if entry.get("owner") in ctx.principals:
+        return "owner"
+    grant = best_grant(entry.get("grants", ()), ctx.principals, int(time.time()))
+    return grant["level"] if grant else None
+
+
+def _lower(a, b):
+    return None if a is None or b is None else min(a, b, key=LEVELS.get)
 
 
 def can_create(rel, ctx, store=None):

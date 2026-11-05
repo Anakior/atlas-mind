@@ -63,7 +63,9 @@ def classify_git_error(text: str) -> str:
 class GitSync:
     def __init__(self, *, config):
         self._config = config
-        self._lock = threading.Lock()        # serializes the git ops that change the repo
+        # Serializes every change to the mind, its files as much as its git: a write takes it
+        # (writing()) before reading what it changes and commits under it, hence re-entrant.
+        self._lock = threading.RLock()
         self._remote_lock = threading.Lock() # serializes fetch/push, apart from _lock
         self._push_lock = threading.Lock()   # guards the coalescing-push flag + handle
         self._push_pending = False
@@ -153,6 +155,10 @@ class GitSync:
                 print(f"[dev rebuild] {e}", file=sys.stderr, flush=True)
 
     # --- attributed inline commit + coalesced push ------------------------
+
+    def writing(self):
+        """The mind's write lock: what a change reads, checks, writes and commits stays its own."""
+        return self._lock
 
     def commit_change(self, subject, paths, *, author=None, trailers=()) -> None:
         """Commit this action's `paths` NOW (attributed, path-scoped), then wake the

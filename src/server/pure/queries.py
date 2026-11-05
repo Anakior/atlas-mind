@@ -15,6 +15,17 @@ def _visible(rel, ctx):
     return ctx is None or _s.can_read(rel, ctx)
 
 
+def _visible_at(rel, rev, ctx):
+    """Whether `ctx` may read what `rel` named at commit `rev` (acl.level_at)."""
+    return ctx is None or _s.can_read_at(rel, rev, ctx)
+
+
+def _touched_visible(rel, sha, ctx):
+    """Whether `ctx` may see that commit `sha` touched `rel`: the doc there just before and just
+    after (a deletion is judged by the doc it removed)."""
+    return _visible_at(rel, sha + "^", ctx) and _visible_at(rel, sha, ctx)
+
+
 def _doc_corpus(ctx=None):
     """[(rel, name, text)] for every doc readable by `ctx`, each file read once.
     THE choke-point: search/topology/tags/links all iterate here, so filtering
@@ -398,15 +409,16 @@ def _activity_events(days, limit, author, type_filter, ctx):
                 # A soft-delete is a rename INTO .trash (excluded); keep the visible side
                 # so the event isn't dropped — its "deleted:" subject still types it.
                 rel = new_rel if (new_rel and _history_path_included(new_rel, excluded, False)) else old_rel
-                if rel is not None and _history_path_included(rel, excluded, False):
+                if (rel is not None and _history_path_included(rel, excluded, False)
+                        and _touched_visible(rel, sha, ctx)):
                     files.append({"status": status[:1], "path": rel})
                 i += 3
             else:
                 rel = _strip_content(tokens[i + 1]) if i + 1 < len(tokens) else None
-                if rel is not None and _history_path_included(rel, excluded, False):
+                if (rel is not None and _history_path_included(rel, excluded, False)
+                        and _touched_visible(rel, sha, ctx)):
                     files.append({"status": status[:1] or "?", "path": rel})
                 i += 2
-        files = [f for f in files if _visible(f["path"], ctx)]
         if not files:
             continue
         verb = subj.split(":", 1)[0].strip().split(" ")[0].lower() if ":" in subj else ""

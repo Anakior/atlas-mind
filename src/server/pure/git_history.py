@@ -3,7 +3,7 @@ import datetime
 import re
 
 import server as _s
-from server.pure.queries import _visible, _strip_content, _history_path_included
+from server.pure.queries import _touched_visible, _strip_content, _history_path_included
 
 # The well-known empty-tree object: lets doc_diff express "this doc's first
 # appearance" as a normal two-tree diff (empty -> rev) instead of a special case.
@@ -30,7 +30,8 @@ def _scrub_commits(commits, ctx):
         return commits
     out = []
     for c in commits:
-        files = [f for f in c.get("files", []) if _visible(f.get("path", ""), ctx)]
+        files = [f for f in c.get("files", []) if all(
+            _touched_visible(rel, c["sha"], ctx) for rel in (f["path"], f.get("old_path")) if rel)]
         if files:
             out.append({**c, "files": files})
     return out

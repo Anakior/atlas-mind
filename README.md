@@ -19,7 +19,7 @@ Atlas Mind is the memory you share with your AI. Your notes stay **plain files i
 - **Your files.** Markdown with no syntax of its own, next to the PDFs, Word documents, HTML decks, images and JSON you already have, read as they are. All of it in a git repository that is yours: leave with a zip, open it anywhere.
 - **Your AI's memory.** One address to give your assistant (Claude, ChatGPT, Claude Code, any MCP client): it signs you in over OAuth, asks for what it may do, then searches, reads, writes and files into your mind in every conversation.
 - **A memory you can trust.** Every change is attributed, a person's or an AI's. See what an agent wrote and undo it in one click, ask what the mind said on a topic six months ago, find the notes nobody has looked at in a year and the ones that contradict each other.
-- **Yours from end to end.** One Python program on the standard library: no database, no build step to run, nothing sent anywhere. Your notes never leave your server, and nothing you write trains anyone's model.
+- **Yours from end to end.** One Python program on the standard library: no database, no build step to run, no telemetry. Your files stay on the server you choose and Atlas hands them to no AI service on its own: an assistant you connect receives the notes it reads, and what happens to them then is up to its service and your settings there.
 
 It is not a multi-tenant SaaS or a real-time collaborative editor: one focused mind per instance, fully yours, that can share slices with other Atlases.
 

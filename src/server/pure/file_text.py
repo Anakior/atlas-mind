@@ -20,6 +20,7 @@ from server.pure import pdf_text
 EXTS = (".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".pdf")
 MAX_CHARS = 1_000_000
 _MAX_PART = 50 << 20
+_MAX_COLUMNS = 16384  # a sheet's last column (XFD) in Excel and LibreOffice alike
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
@@ -62,12 +63,18 @@ def _extract(path, _mtime, size):
 
 
 def _office(path, reader):
+    lines, size = [], 0
     try:
         with zipfile.ZipFile(path) as zf:
-            text = "\n".join(line for line in reader(zf) if line.strip())
+            for line in reader(zf):
+                if line.strip():
+                    lines.append(line)
+                    size += len(line) + 1
+                    if size > MAX_CHARS:  # the rest would be cut anyway
+                        break
     except (zipfile.BadZipFile, KeyError, IndexError, ET.ParseError, OSError, ValueError):
         return None
-    return text[:MAX_CHARS]
+    return "\n".join(lines)[:MAX_CHARS]
 
 
 def _pdf(path):
@@ -152,10 +159,22 @@ def _xml(zf, name):
 
 
 def _targets(zf, part):
-    """{relationship id: part name} of an OOXML part."""
+    """{relationship id: part name} of an OOXML part. A target is relative to the part, or to
+    the package's root when it starts with "/" (openpyxl writes them so)."""
     rels = join(dirname(part), "_rels", part.rsplit("/", 1)[-1] + ".rels")
-    return {r.get("Id"): normpath(join(dirname(part), r.get("Target", "")))
+    return {r.get("Id"): normpath(join(dirname(part), r.get("Target", ""))).lstrip("/")
             for r in _xml(zf, rels).iter(_REL + "Relationship")}
+
+
+def _column(ref, next_column):
+    """0-based column of a cell reference ("C2" -> 2), or `next_column` when it has none."""
+    letters = re.match(r"[A-Z]*", ref or "").group()
+    if not letters:
+        return next_column
+    n = 0
+    for letter in letters:
+        n = n * 26 + ord(letter) - ord("A") + 1
+    return min(n - 1, _MAX_COLUMNS)
 
 
 _W_BREAKS = {_W + "tab": "\t", _W + "br": "\n", _W + "cr": "\n"}
@@ -197,6 +216,8 @@ def _xlsx(zf):
         for row in _xml(zf, targets[sheet.get(_R + "id")]).iter(_S + "row"):
             cells = []
             for c in row.iter(_S + "c"):
+                # An empty cell is left out of the file: its neighbour's reference keeps the gap.
+                cells += [""] * (_column(c.get("r"), len(cells)) - len(cells))
                 v = c.find(_S + "v")
                 if c.get("t") == "s" and v is not None:
                     cells.append(shared[int(v.text)])
@@ -229,7 +250,11 @@ def _odf_lines(el, sheets):
         elif c.tag == _T + "p":
             yield _odf_text(c)
         elif c.tag == _TB + "table-row":
-            yield " | ".join(_odf_text(cell).strip() for cell in c).rstrip(" |")
+            cells = []
+            for cell in c:  # equal neighbours, empty ones included, are written once with their count
+                repeat = int(cell.get(_TB + "number-columns-repeated", "1"))
+                cells += [_odf_text(cell).strip()] * min(repeat, _MAX_COLUMNS - len(cells))
+            yield " | ".join(cells).rstrip(" |")
         else:
             if (c.tag == _TB + "table" and sheets) or c.tag == _D + "page":
                 yield "## " + (c.get(_TB + "name") or c.get(_D + "name") or "")

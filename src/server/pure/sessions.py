@@ -11,7 +11,7 @@ import server as _s
 from server.pure import provenance
 from server.pure.git_history import _attributed_log, _doc_diff_between, _scrub_commits
 from server.pure.prompts import PROMPTS_DIR
-from server.pure.queries import _api_search, _headings, _visible
+from server.pure.queries import _api_search, _headings, _visible, _visible_at
 
 _RESUME_RE = re.compile(r"^#{1,3}\s+(?:\d+\.\s*)?(?:comment reprendre|how to resume)\b", re.I | re.M)
 _OPEN_RE = re.compile(r"suspens|clarifier|loose ends?|open (?:points?|questions?)|reprendre la suite|"
@@ -291,7 +291,7 @@ def resume(args: dict, ctx) -> dict:
 
     text = saves[target]
     save = card(target, full=True)
-    versions = _versions(target)
+    versions = [v for v in _versions(target) if _visible_at(target, v[0], ctx)]
     if versions:
         save["paused_days"] = _days(versions[0][1])
     points, closed = _carried(target, _points(text), versions)

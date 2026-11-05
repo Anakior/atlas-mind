@@ -911,7 +911,7 @@
         },
         "base_version": {
           "type": "string",
-          "description": "read_doc's `version`: the edit is refused if the doc changed since."
+          "description": "read_doc's `version`: the edit is refused if the doc changed since. Without it, a `content` rewrite replaces the doc as it stands when it lands."
         },
         "dry_run": {
           "type": "boolean",

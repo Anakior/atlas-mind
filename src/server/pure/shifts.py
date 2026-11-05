@@ -10,7 +10,7 @@ from itertools import zip_longest
 
 import server as _s
 from server.pure import contradictions, provenance
-from server.pure.queries import _api_search, _visible
+from server.pure.queries import _api_search, _visible, _visible_at
 
 _DOCS = 8              # docs read on each side
 _DOC_CHARS = 900       # passages kept per doc and side
@@ -68,10 +68,11 @@ def _show(rev: str, repo_rel: str):
     return out.stdout if out.returncode == 0 else None
 
 
-def _hidden(rel: str, ctx) -> bool:
+def _hidden(rel: str, ctx, rev=None) -> bool:
+    """Not a doc to quote here, or not one `ctx` may read (as it stood at `rev`, when given)."""
     names = _s._import_build().EXCLUDED_NAMES
     return (not rel.endswith(".md") or any(part in names for part in rel.split("/"))
-            or not _visible(rel, ctx))
+            or not (_visible(rel, ctx) if rev is None else _visible_at(rel, rev, ctx)))
 
 
 def _blocks(text: str):
@@ -257,9 +258,13 @@ def evidence(topic: str, at: str, ctx=None) -> dict:
     head = _s.git("rev-parse", "HEAD").stdout.strip()
     moves = _renames(rev)
     back = {now: then for then, now in moves.items()}
-    then_docs = [(rel, moves.get(rel, rel)) for rel in _then_paths(terms, rev) if not _hidden(rel, ctx)][:_DOCS]
+    # A pair is quoted only when both its sides are readable: the doc as it stood then, and
+    # where it is now.
+    then_docs = [(rel, moves.get(rel, rel)) for rel in _then_paths(terms, rev)
+                 if not _hidden(rel, ctx, rev) and not _hidden(moves.get(rel, rel), ctx)][:_DOCS]
     found_now = [h["path"] for h in _api_search(topic, _DOCS * 2, ctx) if not _hidden(h["path"], ctx)]
-    now_docs = [(back.get(rel, rel), rel) for rel in found_now[:_DOCS]]
+    now_docs = [(back.get(rel, rel), rel) for rel in found_now[:_DOCS]
+                if not _hidden(back.get(rel, rel), ctx, rev)]
     # Then and now taken in turn, so the budget can't spend itself on one side before the other.
     pairs = list(dict.fromkeys(pair for both in zip_longest(then_docs, now_docs) for pair in both if pair))
     now_days, then_days, moments, _ = _history({rel for pair in pairs for rel in pair}, terms, day)
@@ -355,7 +360,7 @@ def _check(side: dict, rev: str, ctx, rejected: list, kind: str):
     if not isinstance(side, dict):
         return None
     rel, quote = (side.get("path") or "").strip(), (side.get("quote") or "").strip()
-    if _s._validate_doc_path(rel) is None or _hidden(rel, ctx) or not quote:
+    if _s._validate_doc_path(rel) is None or _hidden(rel, ctx, rev) or not quote:
         rejected.append({"side": kind, "path": rel, "quote": quote, "reason": "no such doc"})
         return None
     text = _show(rev, "content/" + rel)

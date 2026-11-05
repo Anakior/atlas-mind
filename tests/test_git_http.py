@@ -118,17 +118,17 @@ class TestGitHttp(unittest.TestCase):
         self.assertEqual(resp.status, 401)
         self.assertIn("Basic", resp.headers.get("WWW-Authenticate", ""))
 
-    def test_atlas_sync_round_trip(self):
-        def sync(*args):
-            env = {**os.environ, "ATLAS_TOKEN": self.token}
-            return subprocess.run([sys.executable, str(CLI), "sync", *args], capture_output=True,
-                                  text=True, env=env, cwd=str(self.tmp))
+    def sync(self, *args):
+        env = {**os.environ, "ATLAS_TOKEN": self.token}
+        return subprocess.run([sys.executable, str(CLI), "sync", *args], capture_output=True,
+                              text=True, env=env, cwd=str(self.tmp))
 
-        made = sync(self.srv.base_url, "synced")
+    def test_atlas_sync_round_trip(self):
+        made = self.sync(self.srv.base_url, "synced")
         self.assertEqual(made.returncode, 0, made.stderr)
         copy = self.tmp / "synced"
         (copy / "content" / "from-my-copy.md").write_bytes(b"# Mine\n")
-        sent = sync(str(copy))
+        sent = self.sync(str(copy))
         self.assertEqual(sent.returncode, 0, sent.stderr)
         self.assertIn("1 change(s) sent", sent.stdout)
         self.assertTrue((self.srv.content_root / "from-my-copy.md").is_file())
@@ -137,29 +137,24 @@ class TestGitHttp(unittest.TestCase):
         self.srv.git("add", "-A", check=True)
         # The sync after the push may have recorded it already: either commit will do.
         self.srv.git("commit", "-q", "-m", "online edit")
-        got = sync(str(copy))
+        got = self.sync(str(copy))
         self.assertEqual(got.returncode, 0, got.stderr)
         self.assertRegex(got.stdout, r"[1-9]\d* received")
         self.assertTrue((copy / "content" / "from-online.md").is_file())
-        self.assertIn("Up to date", sync(str(copy)).stdout)
+        self.assertIn("Up to date", self.sync(str(copy)).stdout)
 
     def test_atlas_sync_keeps_both_versions(self):
-        def sync(*args):
-            env = {**os.environ, "ATLAS_TOKEN": self.token}
-            return subprocess.run([sys.executable, str(CLI), "sync", *args], capture_output=True,
-                                  text=True, env=env, cwd=str(self.tmp))
-
         def online(text):
             (self.srv.content_root / "both.md").write_bytes(text)
             self.srv.git("add", "-A", check=True)
             self.srv.git("commit", "-q", "-m", "online edit")
 
         online(b"# Shared\n\nfirst\n")
-        self.assertEqual(sync(self.srv.base_url, "both-sides").returncode, 0)
+        self.assertEqual(self.sync(self.srv.base_url, "both-sides").returncode, 0)
         copy = self.tmp / "both-sides"
         (copy / "content" / "both.md").write_bytes(b"# Shared\n\nmine\n")
         online(b"# Shared\n\nonline\n")
-        done = sync(str(copy))
+        done = self.sync(str(copy))
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("yours is beside it", done.stdout)
         self.assertIn("online", (copy / "content" / "both.md").read_text())
@@ -167,6 +162,26 @@ class TestGitHttp(unittest.TestCase):
         self.assertEqual(len(mine), 1, list((copy / "content").iterdir()))
         self.assertIn("mine", mine[0].read_text())
         self.assertTrue((self.srv.content_root / mine[0].name).is_file())
+
+    def test_atlas_sync_keeps_a_note_the_instance_deleted(self):
+        (self.srv.content_root / "lone").mkdir()
+        (self.srv.content_root / "lone" / "note.md").write_bytes(b"# Lone\n")
+        self.srv.git("add", "-A", check=True)
+        self.srv.git("commit", "-q", "-m", "lone note")
+        self.assertEqual(self.sync(self.srv.base_url, "lone-copy").returncode, 0)
+        copy = self.tmp / "lone-copy"
+        (copy / "content" / "lone" / "note.md").write_bytes(b"# Lone\n\nmine\n")
+        self.srv.git("rm", "-q", "content/lone/note.md", check=True)
+        self.srv.git("commit", "-q", "-m", "deleted online")
+
+        done = self.sync(str(copy))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        kept = copy / "content" / "lone" / "note (my version).md"
+        self.assertIn("mine", kept.read_text())
+        self.assertTrue((self.srv.content_root / "lone" / kept.name).is_file())
+        self.assertEqual(self.sync(str(copy)).returncode, 0)
+        self.assertIn("mine", kept.read_text())
+        self.assertIn("mine", (self.srv.content_root / "lone" / kept.name).read_text())
 
     def test_atlas_sync_with_the_address_inside_a_copy_syncs_it(self):
         # A copy made by `git clone`, then `atlas sync <address>` run from inside it: that copy

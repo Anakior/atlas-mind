@@ -533,6 +533,7 @@ connectTitle
 connectTry1
 connectTry2
 connectTry3
+connected
 connecter
 connecteur
 connection,
@@ -702,6 +703,7 @@ doc:
 docCreated
 docDeleted
 docMoved
+docName(read.path),
 docNamePlaceholder
 docRenamed
 docRestored
@@ -813,6 +815,7 @@ everywhere
 ex:
 exact
 exactly:
+exemple
 exist,
 existants
 existe
@@ -1240,6 +1243,7 @@ installed:
 installs
 instance
 instance.
+instance:
 instances
 instant.
 instead.
@@ -1415,6 +1419,7 @@ lourd)
 lourde
 low
 lu
+lu.
 lui
 lui.
 m14.74
@@ -2409,7 +2414,7 @@ start
 start,
 state
 state,
-state.read.label
+state.connected.label
 static
 stats
 statsLine

@@ -113,7 +113,7 @@ from server.pure.acl import (  # noqa: F401  per-document ACL (model B — parta
     ViewerCtx, viewer_ctx, share_ctx, effective_level, LEVELS, parse_ai_trailer,
     can_read as _acl_can_read, can_write as _acl_can_write,
     can_manage as _acl_can_manage, can_create as _acl_can_create,
-    in_private_space as _acl_in_private_space,
+    in_private_space as _acl_in_private_space, level_at as _acl_level_at, owner_of as _acl_owner_of,
 )
 
 # ── cross-platform ACL-key integrity (canonical path) ─────────────────────────
@@ -176,6 +176,15 @@ def can_create(rel, ctx, store=None):
 
 def in_private_space(rel, store=None):
     return _acl_in_private_space(_canonical_rel(rel), store)
+
+
+def owner_of(rel, store=None):
+    return _acl_owner_of(_canonical_rel(rel), store)
+
+
+def can_read_at(rel, rev, ctx, store=None):
+    """can_read for what `rel` named at commit `rev` (acl.level_at): the history tools' gate."""
+    return _acl_level_at(_canonical_rel(rel), rev, ctx, store) is not None
 
 
 def _stamp_new_doc(rel, ctx, *, private=None):
@@ -338,7 +347,8 @@ def build_store(config):
     volume outside the repo (the Fly rootfs is ephemeral AND the content repo must
     not carry credentials); without a volume, cloud LOSES users/shares on every
     machine recreation."""
-    st = store.FileStore(config.store_dir)
+    st = store.FileStore(config.store_dir,
+                         head=lambda: git("rev-parse", "--verify", "--quiet", "HEAD").stdout.strip() or None)
     _exclude_store_dir_from_git(config.store_dir)
     return st
 
@@ -572,6 +582,11 @@ def trigger_sync():
     schedule_warm()
 
 
+def writing():
+    """The mind's write lock (GitSync.writing): held by every MCP write tool and write route."""
+    return _CTX.git_sync.writing()
+
+
 def commit_change(ctx, subject, *paths, ai=None):
     """Attributed commit of ONE content action then a background push: `paths` are the
     absolute files it touched (doc + side effects), `subject` the commit summary, `ctx`
@@ -793,6 +808,7 @@ def move_dir(src_rel, dst_rel, ctx, *, ai=None):
             pass
         return 500, {"error": "move failed"}
     try:
+        store.trail_move(csrc, dst_rel)
         store.drop_acl_under(csrc)
         store.repoint_shares_under(csrc, dst_rel)
     except Exception as e:

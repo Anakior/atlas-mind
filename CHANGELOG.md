@@ -8,6 +8,42 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-05
+
+A stabilisation release, after a review of 2.4.2: the history of private notes, two edits at once,
+`atlas sync`, spreadsheets, and what the home and the README promise. One MCP tool text changed
+(`edit_doc`'s `base_version`): refresh the connector's tools in Claude to see it. An Atlas on 2.2.0
+or later gets this one from Settings › About.
+
+### Fixed
+- **A private note's past stays private after a move, a deletion or emptying the trash.** Its rights
+  were filed under its path, so once the note moved or went to the trash its old path read as shared,
+  and its history with it: `doc_at`, `doc_diff`, `doc_history`, `then_and_now`, the activity and the
+  viewer's history showed it to anyone. A past version is now read with the rights of every place the
+  note has been since, kept in `.atlas/acl_trail.json` (part of a backup); whoever takes over a freed
+  path does not get the past of the note that was there.
+- **A note deleted from a private folder stays private in the trash**, which sits outside that
+  folder: anyone who knew its path could read it there.
+- **`atlas sync` keeps your version of a note the instance deleted.** When it was the last note of
+  its folder, the copy beside it could not be written and the sync stopped with the deletion
+  recorded. Your version now goes beside it in the merge commit itself, and a copy that cannot be
+  written leaves your copy as it was.
+- **Spreadsheets keep each value in its column.** An empty cell is left out of an .xlsx, and written
+  once with a count in an .ods: the values after it slid to the left. An .xlsx written by openpyxl
+  read as empty.
+- **Two edits made from the same version can no longer both go through.** An edit read the note,
+  checked its version and wrote it with nothing holding the note in between: two assistants, or an
+  assistant and the editor, editing from the same version both succeeded and one change vanished.
+  The changes to a mind now go one at a time, from reading what they change to their commit: the
+  second edit is refused and asked to read the note again.
+- **"Claude read your Atlas" means it read something.** The home's first step was ticked as soon as
+  an assistant connected. It now says the assistant is connected, suggests a question to ask it, and
+  ticks once it has read a note, named.
+- **The demo's "Get your own" leads to creating an Atlas**, not to the code on GitHub.
+- **The README and the site say what leaves your server.** They promised that notes never leave it:
+  an assistant you connect receives the notes it reads, and what happens to them then is up to its
+  service.
+
 ## [2.4.2] - 2026-11-05
 
 Faster: then and now, and the first search after a start on a mind with PDFs. No MCP tool

@@ -2134,35 +2134,45 @@ def _beside(dest: Path, rel: str) -> str:
 
 def _keep_both(dest: Path) -> list:
     """Take the instance's changes when the same notes changed here too: the online
-    version stays in place, this copy's goes beside it. Never a git screen. Returns the
-    copies made."""
+    version stays in place, this copy's goes beside it, in the same commit as the merge.
+    Never a git screen. A copy that can't be written leaves this copy as it was. Returns
+    the copies made."""
     who = _copy_who(dest)
     base = _copy_git(dest, "merge-base", "HEAD", "FETCH_HEAD").stdout.strip()
 
     def changed(rev):
         return set(_copy_git(dest, "diff", "--name-only", base, rev).stdout.splitlines())
 
-    def blob(path):
-        return _copy_git(dest, "rev-parse", "--verify", "--quiet", f"HEAD:{path}").stdout.strip()
+    def blob(rev, path):  # rev "" = the merge being made
+        return _copy_git(dest, "rev-parse", "--verify", "--quiet", f"{rev}:{path}").stdout.strip()
 
-    mine = {path: blob(path) for path in changed("HEAD") & changed("FETCH_HEAD")}
-    if _copy_git(dest, *who, "merge", "-q", "--no-edit", "-X", "theirs", "FETCH_HEAD").returncode:
+    mine = {path: blob("HEAD", path) for path in changed("HEAD") & changed("FETCH_HEAD")}
+    if _copy_git(dest, "merge", "-q", "--no-commit", "-X", "theirs", "FETCH_HEAD").returncode:
         # What -X theirs leaves open: a note deleted on one side, edited on the other.
         for path in _copy_git(dest, "diff", "--name-only", "--diff-filter=U").stdout.splitlines():
             if _copy_git(dest, "cat-file", "-e", f"FETCH_HEAD:{path}").returncode == 0:
                 _copy_git(dest, "checkout", "FETCH_HEAD", "--", path)
             else:
                 _copy_git(dest, "rm", "-q", "--", path)
-        _copy_git(dest, *who, "commit", "-q", "--no-edit")
     copies = []
-    for path, before in mine.items():
-        if before and blob(path) != before:
-            rel = _beside(dest, path)
-            (dest / rel).write_bytes(_copy_git(dest, "cat-file", "blob", before, text=False).stdout)
-            copies.append(rel)
+    try:
+        for path, before in mine.items():
+            if before and blob("", path) != before:
+                rel = _beside(dest, path)
+                # Its folder may be gone with the note the instance deleted.
+                (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+                (dest / rel).write_bytes(_copy_git(dest, "cat-file", "blob", before, text=False).stdout)
+                copies.append(rel)
+    except OSError as e:
+        # Left half-merged, the next sync would commit the instance's side alone.
+        _copy_git(dest, "merge", "--abort")
+        for rel in copies:
+            (dest / rel).unlink(missing_ok=True)
+        raise CliError(f"could not keep this copy's version beside the instance's ({e}); "
+                       "nothing was changed here") from e
     if copies:
         _copy_git(dest, "add", "--", *copies)
-        _copy_git(dest, *who, "commit", "-q", "-m", "notes: keep both versions")
+    _copy_git(dest, *who, "commit", "-q", "--no-edit")
     return copies
 
 

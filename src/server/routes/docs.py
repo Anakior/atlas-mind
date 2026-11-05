@@ -18,6 +18,7 @@ import server as _s
 import store
 from server.pure import docs, export
 from server.pure.docs import move_file
+from server.pure.queries import _touched_visible
 from server.pure.uploads import clean_path
 from server.render import share_page
 
@@ -171,6 +172,8 @@ def history(handler):
         if not record:
             continue
         fields = (record.split("\x1f") + ["", "", "", "", ""])[:5]
+        if not ctx.superuser and not _touched_visible(rel, fields[0], ctx):
+            continue
         ai = _s.parse_ai_trailer(fields[4])  # X-Atlas-Author trailer → AI family (13d filter)
         revisions.append({
             "sha": fields[0], "author": fields[1],
@@ -195,6 +198,9 @@ def revision(handler):
     if not _s._valid_git_rev(rev):
         handler._send_json(400, {"error": "invalid rev"})
         return
+    if not ctx.superuser and not _s.can_read_at(rel, rev, ctx):
+        handler._send_json(404, {"error": "not found"})
+        return
     result = _s.git("show", rev + ":" + _s._doc_path_at("content/" + rel, rev))
     if result.returncode != 0:
         handler._send_json(404, {"error": "revision not found"})
@@ -218,6 +224,9 @@ def diff(handler):
         return
     if not _s._valid_git_rev(rev_from) or not _s._valid_git_rev(rev_to):
         handler._send_json(400, {"error": "invalid rev"})
+        return
+    if not ctx.superuser and not (_s.can_read_at(rel, rev_from, ctx) and _s.can_read_at(rel, rev_to, ctx)):
+        handler._send_json(404, {"error": "not found"})
         return
     repo_rel = "content/" + rel
     from_path = _s._doc_path_at(repo_rel, rev_from)
@@ -438,6 +447,9 @@ def revert(handler):
             return
         if not _s.can_write(rel, ctx, "edit"):
             handler._send_json(403, {"error": "insufficient permission (need edit on this document)"})
+            return
+        if not _s.can_read_at(rel, rev, ctx):
+            handler._send_json(404, {"error": "revision not found"})
             return
     show = _s.git("show", rev + ":" + _s._doc_path_at("content/" + rel, rev))
     if show.returncode != 0:
