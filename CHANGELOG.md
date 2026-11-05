@@ -8,6 +8,24 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-11-05
+
+Faster: then and now, and the first search after a start on a mind with PDFs. No MCP tool
+changes: an Atlas on 2.2.0 or later gets this one from Settings › About.
+
+### Fixed
+- **Then and now answers several times faster.** Each quote was dated by a git blame of its own, up
+  to a second on a long-lived note, and each move of a cited note cost one more walk of the history.
+  The quotes are now dated from the one walk the answer already makes, which also follows a note
+  moved to another folder. On a mind of 3,500 commits, showing a comparison went from 12 seconds to 3.
+- **A PDF or an office file is read once.** Search and `read_doc` take a file's text out with the
+  standard library, which for a PDF meant going word by word through everything drawn on its pages,
+  boxes, rules and colours included. That drawing is now passed over in one go, twice as fast, and
+  the text is kept in the store (`.atlas/text-cache/`) under the file's content hash: a restart or a
+  deploy reads it back instead of taking the files apart again. On a mind with a hundred PDFs, the
+  first search after a start went from 20 seconds to 2. The store keeps only the texts of the files
+  still in the mind, and none of it goes into a backup.
+
 ## [2.4.1] - 2026-11-04
 
 Two fixes to the then-and-now view. No MCP tool changes: an Atlas on 2.2.0 or later gets this one

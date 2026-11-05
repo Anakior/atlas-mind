@@ -134,6 +134,7 @@ def warm_search():
     change doesn't read the PDFs and office files itself (seconds on a small instance)."""
     for rel, path in _s._iter_doc_files(SEARCHED):
         _s._doc_entry(rel, path)
+    file_text.prune()  # every file seen: the texts kept for the others can go
 
 
 def _api_search(q: str, limit: int, ctx=None, only=None) -> list:

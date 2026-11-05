@@ -31,6 +31,12 @@ _TOKEN = re.compile(rb"[\s\x00]+|%[^\r\n]*|(<<)|(>>)|(\[)|(\])|/([^" + _SEP + rb
                     rb"|(\()|([^" + _SEP + rb"]+)|(.)", re.S)
 _NUMBER = re.compile(rb"[+-]?(?:\d+\.?\d*|\.\d+)\Z")
 _INLINE_IMAGE_END = re.compile(rb"\sEI(?=[\s\x00]|\Z)")
+# Drawing in a page's content (paths, colours, clipping, the graphics state) with its numbers, read
+# in one match: none of it is text. A match ends on a drawing operator, so the numbers given to a
+# text operator are left to it; each number ends on a space, so a run reads one way only.
+_DRAWING = re.compile(rb"(?:(?:[+-]?(?:\d+\.?\d*|\.\d+)[\s\x00]+)*"
+                      rb"(?:re|[mlcvyhn]|[fFbBWsS]\*?|cm|[wJjMdi]|ri|gs|[gG]|rg|RG|[kK]|cs|CS|scn?|SCN?|sh|[qQ])"
+                      rb"(?=[\s\x00/\[\]<>()%]|\Z)[\s\x00]*)+")
 _ESCAPES = {ord("n"): b"\n", ord("r"): b"\r", ord("t"): b"\t", ord("b"): b"\b", ord("f"): b"\f"}
 
 
@@ -65,13 +71,20 @@ def _literal(data, i):
     return bytes(out), n
 
 
-def _tokens(data):
+def _tokens(data, skip=None):
     """The tokens of PDF syntax: "<<" ">>" "[" "]" (plain str), Name, bytes for strings,
-    int/float, Op for every other word. An inline image's binary data is skipped."""
-    i, n = 0, len(data)
+    int/float, Op for every other word. An inline image's binary data is passed over, and so
+    is what `skip` matches where an operator's operands start."""
+    i, n, start = 0, len(data), True
     while i < n:
+        if start and skip is not None:
+            drawn = skip.match(data, i)
+            if drawn:
+                i = drawn.end()
+                continue
         m = _TOKEN.match(data, i)
         i = m.end()
+        start = start and m.lastindex is None  # a space or a comment keeps it
         dopen, dclose, aopen, aclose, name, hexa, lit, word, _ = m.groups()
         if dopen:
             yield "<<"
@@ -95,6 +108,7 @@ def _tokens(data):
                 yield float(word) if b"." in word else int(word)
             else:
                 yield Op(word.decode("latin-1"))
+                start = True
                 if word == b"ID":
                     end = _INLINE_IMAGE_END.search(data, i)
                     i = end.end() if end else n
@@ -406,7 +420,7 @@ class _Page:
 
     def run(self, content, resources, depth=0):
         stack, operands = [], []
-        for tok in _tokens(content):
+        for tok in _tokens(content, _DRAWING):
             if type(tok) is str:
                 if tok in ("[", "<<"):
                     stack.append(operands)

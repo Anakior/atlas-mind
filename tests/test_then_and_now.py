@@ -127,7 +127,10 @@ class TestThenAndNow(unittest.TestCase):
         reversed_, dropped, new, held = data["shifts"]
         self.assertEqual((reversed_["then"]["date"], reversed_["now"]["date"]), ("2025-01-15", "2025-03-10"))
         self.assertEqual(reversed_["then"]["line"], 5)
-        self.assertTrue(reversed_["then"]["sha"])
+        first, last = (self.srv.git(*args).stdout.strip()[:8]
+                       for args in (("rev-list", "--max-parents=0", "HEAD"), ("rev-parse", "HEAD")))
+        self.assertEqual((reversed_["then"]["sha"], reversed_["now"]["sha"]), (first, last))  # as blame says
+        self.assertEqual(held["now"]["sha"], first)  # written before its doc moved
         self.assertEqual(reversed_["note"], "From an extension to never.")
         self.assertIsNone(dropped["now"])
         self.assertIsNone(new["then"])
@@ -142,17 +145,18 @@ class TestThenAndNow(unittest.TestCase):
         self.assertEqual([m["date"] for m in data["moments"]], ["2025-01-15", "2025-03-10"])
 
     def test_a_moved_doc_keeps_its_history(self):
-        # The roadmap moved twice, never edited: tidying is not a day the topic moved.
+        # The roadmap moved to another folder, then renamed, never edited: tidying is not a day the
+        # topic moved.
         for day, old, new in (("2025-04-01", "notes/roadmap.md", "notes/plans/roadmap.md"),
-                              ("2025-04-15", "notes/plans/roadmap.md", "archive/roadmap.md")):
+                              ("2025-04-15", "notes/plans/roadmap.md", "archive/old-roadmap.md")):
             (self.srv.content_root / new).parent.mkdir(parents=True, exist_ok=True)
             self.srv.git("mv", f"content/{old}", f"content/{new}", check=True)
             self.srv.git("commit", "-q", "-m", "docs: tidy", check=True,
                          env={"GIT_AUTHOR_DATE": f"{day}T12:00:00", "GIT_COMMITTER_DATE": f"{day}T12:00:00"})
         moments = self.call("then_and_now", topic="embeddings")["moments"]
         self.assertEqual([m["date"] for m in moments], ["2025-01-15", "2025-03-10"])
-        self.assertIn("archive/roadmap.md", moments[0]["docs"])  # its first day, under its old name
-        lagging = [{"path": "archive/roadmap.md", "quote": "Embeddings: an opt-in extension.", "echoes": 0}]
+        self.assertIn("archive/old-roadmap.md", moments[0]["docs"])  # its first day, under its old name
+        lagging = [{"path": "archive/old-roadmap.md", "quote": "Embeddings: an opt-in extension.", "echoes": 0}]
         data = self.call("show_shift", topic="embeddings", at="2025-02-01", shifts=SHIFTS, lagging=lagging)
         self.assertEqual(data["lagging"][0]["last_modified"], "2025-01-15")  # moved since, never touched
         self.assertEqual([m["date"] for m in data["moments"]], ["2025-01-15", "2025-03-10"])

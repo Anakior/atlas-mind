@@ -4,6 +4,7 @@ since deleted or moved included, the dates the topic moved); the model pairs the
 before the view shows a pair, every quote is checked word for word against the version it
 cites, so a claim the mind never made cannot be put in its mouth."""
 import datetime as dt
+import functools
 import re
 from itertools import zip_longest
 
@@ -61,6 +62,7 @@ def _git(*args):
     return _s.git("-c", "core.quotepath=false", *args)
 
 
+@functools.lru_cache(maxsize=128)  # a doc at a given commit never changes
 def _show(rev: str, repo_rel: str):
     out = _git("show", f"{rev}:{repo_rel}")
     return out.stdout if out.returncode == 0 else None
@@ -129,24 +131,30 @@ def _passages(text: str, terms: list) -> list:
     return out
 
 
-def _history(paths, terms: list, day: str = "") -> tuple:
+def _history(paths, terms: list, day: str = "", cited=None) -> tuple:
     """A walk of the paths' history, diffs included: the day each was last changed (today, and
-    on `day` when given) and the days the topic's lines changed in them. On a big mind a walk
-    costs about a second whatever it reads, so each one does the work of three.
+    on `day` when given), the days the topic's lines changed in them, and the commit that wrote
+    each `cited` line ({key: (path, line, last day it may date from, or "")}), as blame would tell
+    without one blame per line (up to a second each on a long-lived doc). On a big mind a walk
+    costs about a second whatever it reads, so each one does all of that.
 
     A doc moved is walked under its older names too: its history goes on from before the move,
-    and the move itself changes no line. Each generation of moves found costs one more walk, none
-    when nothing moved."""
+    and the move itself changes no line. A move to another folder shows within the walk; a file
+    renamed costs one more walk."""
     if not paths:  # with no pathspec, git would walk and diff the whole mind
-        return {}, {}, []
+        return {}, {}, [], {}
     words = {_s._normalize_text(t) for t in terms}
+    wanted = {}
+    for key, (rel, line, until) in (cited or {}).items():
+        wanted.setdefault(line, []).append((key, rel, until))
     names = {"content/" + rel: [rel] for rel in paths}  # each name walked: the paths it is a name of
     while True:
-        out = _git("log", "-p", "--unified=0", "-M", "--format=%x1e%H %cs", "HEAD", "--", *sorted(names))
-        now_days, then_days, moved, born = {}, {}, {}, set()
+        out = _git("log", "-p", "--unified=0", "-M", "--format=%x1e%H %cs %as %an", "HEAD", "--",
+                   *_pathspecs(names))
+        now_days, then_days, moved, born, writers = {}, {}, {}, set(), {}
         for record in out.stdout.split("\x1e")[1:]:
             lines = record.split("\n")
-            sha, when = lines[0].split()
+            sha, when, written, author = (lines[0].split(" ", 3) + [""])[:4]
             asked, header, created, source = [], False, False, None
             for line in lines[1:]:
                 if line.startswith("diff --git "):
@@ -154,15 +162,20 @@ def _history(paths, terms: list, day: str = "") -> tuple:
                 elif line.startswith("@@"):
                     header = False
                 elif not header:
-                    if asked and line[:1] in ("+", "-") and any(w in _s._normalize_text(line) for w in words):
-                        if asked[-1] not in moved.setdefault(when, []):
-                            moved[when].append(asked[-1])
+                    if not asked or line[:1] not in ("+", "-"):
+                        continue
+                    if any(w in _s._normalize_text(line) for w in words) and asked[-1] not in moved.setdefault(when, []):
+                        moved[when].append(asked[-1])
+                    for key, rel, until in wanted.get(line[1:].strip(), []) if line[0] == "+" else []:
+                        if key not in writers and rel in asked and (not until or when <= until):
+                            writers[key] = {"sha": sha[:8], "author": author, "date": written}
                 elif line.startswith("rename from "):
                     source = line[len("rename from "):]
                 elif line.startswith("rename to ") and source:
                     # Walked newest first: from here on, the older name's changes are the doc's.
-                    target = names.get(line[len("rename to "):], [])
-                    names[source] = [rel for rel in names.get(source, []) if rel not in target] + target
+                    target = names.get(line[len("rename to "):])
+                    if target:
+                        names[source] = [rel for rel in names.get(source, []) if rel not in target] + target
                 elif line.startswith("--- "):
                     created = line == "--- /dev/null"
                     asked = [] if created else names.get(line[len("--- a/"):].rstrip("\t"), [])
@@ -180,7 +193,14 @@ def _history(paths, terms: list, day: str = "") -> tuple:
             break
         names.update(older)
     moments = [{"date": when, "docs": docs} for when, docs in sorted(moved.items())]
-    return now_days, then_days, moments[-_MOMENTS:]
+    return now_days, then_days, moments[-_MOMENTS:], writers
+
+
+def _pathspecs(names) -> list:
+    """The names walked, then each file name under any folder: a doc moved to another folder shows
+    as a rename within the walk instead of a doc born that day."""
+    anywhere = {":(glob)content/**/" + re.sub(r"([*?\[\\])", r"\\\1", name.rsplit("/", 1)[-1]) for name in names}
+    return sorted(names) + sorted(anywhere)
 
 
 def _older_names(born: set, names: dict) -> dict:
@@ -242,7 +262,7 @@ def evidence(topic: str, at: str, ctx=None) -> dict:
     now_docs = [(back.get(rel, rel), rel) for rel in found_now[:_DOCS]]
     # Then and now taken in turn, so the budget can't spend itself on one side before the other.
     pairs = list(dict.fromkeys(pair for both in zip_longest(then_docs, now_docs) for pair in both if pair))
-    now_days, then_days, moments = _history({rel for pair in pairs for rel in pair}, terms, day)
+    now_days, then_days, moments, _ = _history({rel for pair in pairs for rel in pair}, terms, day)
     docs, more, room = [], [], _TOTAL_CHARS
     for then_rel, now_rel in pairs:
         then_text = _show(rev, "content/" + then_rel)
@@ -331,8 +351,7 @@ def _blame(rev: str, repo_rel: str, line: int) -> dict:
 
 
 def _check(side: dict, rev: str, ctx, rejected: list, kind: str):
-    """A quoted claim as shown: verified against `rev`, dated by the commit that wrote it (verify
-    dates it by its doc's last change when blame can't tell)."""
+    """A quoted claim as shown, verified against `rev`, with the line it starts on; verify dates it."""
     if not isinstance(side, dict):
         return None
     rel, quote = (side.get("path") or "").strip(), (side.get("quote") or "").strip()
@@ -345,9 +364,7 @@ def _check(side: dict, rev: str, ctx, rejected: list, kind: str):
         rejected.append({"side": kind, "path": rel, "quote": quote,
                          "reason": "not found word for word" if text else "no such doc at that date"})
         return None
-    line = _line_of(start, text)
-    written = _blame(rev, "content/" + rel, line) if line else {}
-    return {"path": rel, "quote": quote, "line": line, "date": "", **written}
+    return {"path": rel, "quote": quote, "line": _line_of(start, text), "date": ""}
 
 
 def verify(args: dict, ctx=None) -> dict:
@@ -383,10 +400,18 @@ def verify(args: dict, ctx=None) -> dict:
         if checked:
             checked["echoes"] = echoes
             lagging.append(checked)
-    sides = [(pair[kind], kind) for pair in shifts for kind in ("then", "now") if pair[kind]]
-    sides += [(doc, "now") for doc in lagging]
-    now_days, then_days, moments = _history({side["path"] for side, _ in sides}, terms, day)
-    for side, kind in sides:
+    sides = [(pair[kind], kind, rev if kind == "then" else head)
+             for pair in shifts for kind in ("then", "now") if pair[kind]]
+    sides += [(doc, "now", head) for doc in lagging]
+    cited = {}
+    for i, (side, kind, at) in enumerate(sides):
+        if side["line"]:
+            line = _show(at, "content/" + side["path"]).split("\n")[side["line"] - 1].strip()
+            cited[i] = (side["path"], line, day if kind == "then" else "")
+    now_days, then_days, moments, writers = _history({side["path"] for side, _, _ in sides}, terms, day, cited)
+    for i, (side, kind, at) in enumerate(sides):
+        # Dated by the commit that wrote its line; blame for one the walk can't see (a merge's).
+        side.update(writers.get(i) or (_blame(at, "content/" + side["path"], side["line"]) if side["line"] else {}))
         side["date"] = side["date"] or (then_days if kind == "then" else now_days).get(side["path"], "")
     for doc in lagging:
         doc["last_modified"] = now_days.get(doc["path"], "")

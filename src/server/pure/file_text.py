@@ -3,12 +3,18 @@ the stdlib: .docx, .xlsx and .pptx (Office Open XML) and their OpenDocument cous
 XML; a PDF goes through server.pure.pdf_text. Headings come out as `#` lines (a PDF's pages as
 `## Page N`), so a part can be asked for by name like a note's section; a sheet's rows come out
 as `a | b | c`. Read-only: the file itself is never rewritten."""
+import hashlib
+import json
+import os
 import re
+import shutil
 import zipfile
 import xml.etree.ElementTree as ET
 from functools import lru_cache
+from pathlib import Path
 from posixpath import dirname, join, normpath
 
+import server as _s
 from server.pure import pdf_text
 
 EXTS = (".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".pdf")
@@ -38,11 +44,24 @@ def extract(path):
 
 @lru_cache(maxsize=32)
 def _extract(path, _mtime, size):
-    if path.lower().endswith(".pdf"):
-        return _pdf(path, size)
-    reader = _READERS.get(path[path.rfind("."):].lower())
-    if reader is None:
+    ext = path[path.rfind("."):].lower()
+    if ext == ".pdf":
+        if size > pdf_text.MAX_BYTES:
+            return None
+    elif ext not in _READERS:
         return None
+    key = _digest(path)
+    if key is None:
+        return None
+    kept = _kept(key)
+    if kept is not _NOT_KEPT:
+        return kept
+    text = _pdf(path) if ext == ".pdf" else _office(path, _READERS[ext])
+    _keep(key, text)
+    return text
+
+
+def _office(path, reader):
     try:
         with zipfile.ZipFile(path) as zf:
             text = "\n".join(line for line in reader(zf) if line.strip())
@@ -51,15 +70,71 @@ def _extract(path, _mtime, size):
     return text[:MAX_CHARS]
 
 
-def _pdf(path, size):
-    if size > pdf_text.MAX_BYTES:
-        return None
+def _pdf(path):
     try:
         with open(path, "rb") as f:
             text = pdf_text.extract(f.read())
     except Exception:  # a damaged or unusual file never breaks a read or a search
         return None
     return text[:MAX_CHARS] if text else None
+
+
+# A text taken out of a file is kept in the store under the file's content hash, so a restart or a
+# deploy reads it back instead of taking every PDF apart again. It is only as good as the code that
+# took it out: each version of that code keeps its own.
+_READER = hashlib.sha256(Path(__file__).read_bytes() + Path(pdf_text.__file__).read_bytes()).hexdigest()[:16]
+_NOT_KEPT = object()
+_SEEN = set()  # the content hashes read since the start: what prune() keeps
+
+
+def _kept_dir():
+    store = getattr(_s.CONFIG, "store_dir", None)
+    return Path(store) / "text-cache" / _READER if store else None
+
+
+def _digest(path):
+    try:
+        with open(path, "rb") as f:
+            key = hashlib.file_digest(f, "sha256").hexdigest()
+    except OSError:
+        return None
+    _SEEN.add(key)
+    return key
+
+
+def _kept(key):
+    folder = _kept_dir()
+    try:
+        return json.loads((folder / f"{key}.json").read_text(encoding="utf-8")) if folder else _NOT_KEPT
+    except (OSError, ValueError):
+        return _NOT_KEPT
+
+
+def _keep(key, text):
+    folder = _kept_dir()
+    if folder is None:
+        return
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        tmp = folder / f"{key}.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps(text), encoding="utf-8")
+        os.replace(tmp, folder / f"{key}.json")
+    except OSError:
+        pass  # a store that can't be written to only means taking the text out again next time
+
+
+def prune():
+    """Drop the texts kept for files no longer in the mind, and those of an older reader. Call it
+    after a pass over every file, once each one's hash has been seen."""
+    folder = _kept_dir()
+    if folder is None or not folder.parent.is_dir():
+        return
+    for other in folder.parent.iterdir():
+        if other != folder:
+            shutil.rmtree(other, ignore_errors=True)
+    for kept in folder.glob("*.json"):
+        if kept.stem not in _SEEN:
+            kept.unlink(missing_ok=True)
 
 
 def _xml(zf, name):

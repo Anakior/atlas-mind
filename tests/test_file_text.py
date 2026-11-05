@@ -159,12 +159,66 @@ class TestPdfText(unittest.TestCase):
         pdf = _pdf(_stream(content, flate=True), GLYPHS, WIDTHS, _stream(CMAP))
         self.assertEqual(file_text.pdf_text.extract(pdf), "## Page 1\nHi yo")
 
+    def test_the_drawing_around_the_text_is_passed_over(self):
+        # A form's way: boxes and rules drawn between the lines, a matrix set right before the text;
+        # and a long number given to a text operator, which a reader that could split a number in
+        # two would never finish passing over.
+        content = (b"q 0.9 g 50 690 500 40 re f Q 1 0 0 RG 0.5 w 50 688 m 550 688 l S "
+                   b"BT /F1 12 Tf 1 0 0 1 72 700 Tm (Total) Tj ET 0 0 1 rg 72 650 m 72 640 l h f* "
+                   b"BT 72 620.000000000000000000000000000000 Td (due) Tj ET")
+        self.assertEqual(file_text.pdf_text.extract(_pdf(_stream(content), HELVETICA)), "## Page 1\nTotal\ndue")
+
     def test_a_scan_or_a_locked_file_gives_nothing(self):
         scan = _pdf(_stream(b"q 600 0 0 800 0 0 cm /Im1 Do Q"), b"<< >>").replace(b"/Font << /F1 4 0 R >>", b"")
         self.assertIsNone(file_text.pdf_text.extract(scan))
         locked = _pdf(_stream(b"BT /F1 12 Tf (x) Tj ET"), HELVETICA, trailer=b"/Encrypt 9 0 R ")
         self.assertIsNone(file_text.pdf_text.extract(locked))
         self.assertIsNone(file_text.pdf_text.extract(b"not a pdf"))
+
+
+class TestTextKept(unittest.TestCase):
+    """A file's text is taken out once: after a restart it is read back from the store."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir, self.store = Path(tmp.name), Path(tmp.name) / "store"
+        for patch in (mock.patch.object(file_text._s, "CONFIG", SimpleNamespace(store_dir=self.store)),
+                      mock.patch.object(file_text, "_SEEN", set())):
+            patch.start()
+            self.addCleanup(patch.stop)
+        self.restart()
+        self.addCleanup(file_text._extract.cache_clear)
+
+    def restart(self):
+        file_text._extract.cache_clear()
+        file_text._SEEN.clear()
+
+    def pdf(self, name, content):
+        path = self.dir / name
+        path.write_bytes(_pdf(_stream(content), HELVETICA))
+        return path
+
+    def test_a_restart_reads_the_text_back(self):
+        text, scan = self.pdf("a.pdf", b"BT /F1 12 Tf (kept) Tj ET"), self.pdf("scan.pdf", b"q Q")
+        with mock.patch.object(file_text.pdf_text, "extract", wraps=file_text.pdf_text.extract) as taken:
+            for _ in range(2):
+                self.assertEqual(file_text.extract(text), "## Page 1\nkept")
+                self.assertIsNone(file_text.extract(scan))  # nothing to read: kept as that too
+                self.restart()
+        self.assertEqual(taken.call_count, 2)
+
+    def test_the_store_keeps_only_what_the_mind_still_holds(self):
+        kept, gone = self.pdf("kept.pdf", b"BT /F1 12 Tf (one) Tj ET"), self.pdf("gone.pdf", b"BT /F1 12 Tf (two) Tj ET")
+        file_text.extract(kept), file_text.extract(gone)
+        older = self.store / "text-cache" / "an-older-reader"
+        older.mkdir(parents=True)
+        self.restart()
+        gone.unlink()
+        file_text.extract(kept)
+        file_text.prune()
+        self.assertEqual(len(list((self.store / "text-cache").rglob("*.json"))), 1)
+        self.assertFalse(older.exists())
 
 
 class TestFileLinks(unittest.TestCase):
