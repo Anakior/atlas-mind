@@ -67,7 +67,7 @@ export class SettingsAppearance {
     const brand = appearance.current.brand || '';
     const custom = brand && !PRESETS.includes(brand) ? brand : '';
     const swatch = (hex: string, tip: string, value = hex) =>
-      `<button type="button" class="appearance-swatch" style="--sw:${hex}" data-brand="${value}" data-tip="${escapeHtml(tip)}" aria-pressed="${brand === value}"></button>`;
+      `<button type="button" class="appearance-swatch" style="--sw:${hex}" data-brand="${value}" data-tip="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}" aria-pressed="${brand === value}"></button>`;
 
     this.langButtons().forEach((b) => this.markLang(b, b.dataset.lang === LANG));
     document.getElementById('appearance-swatches')!.innerHTML =

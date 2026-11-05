@@ -11,7 +11,7 @@ accompanying OFL text).
 | File | Library | Version | License | Upstream |
 |---|---|---|---|---|
 | `marked.min.js` | marked | 15.0.12 | MIT | https://github.com/markedjs/marked |
-| `purify.min.js` | DOMPurify | 3.0.9 | Apache-2.0 OR MPL-2.0 | https://github.com/cure53/DOMPurify |
+| `purify.min.js` | DOMPurify | 3.4.17 | Apache-2.0 OR MPL-2.0 | https://github.com/cure53/DOMPurify |
 | `highlight.min.js` | highlight.js | 11.9.0 | BSD-3-Clause | https://github.com/highlightjs/highlight.js |
 | `highlight-github-dark.min.css` | highlight.js (github-dark theme) | 11.9.0 | BSD-3-Clause | https://github.com/highlightjs/highlight.js |
 | `minisearch.min.js` | MiniSearch | 7.2.0 | MIT — Copyright 2022 Luca Ongaro | https://github.com/lucaong/minisearch |

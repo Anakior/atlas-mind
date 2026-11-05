@@ -12,6 +12,13 @@ export function docLabel(f: FileNode): string {
   return f.title || f.name;
 }
 
+// The same from a path, whether the doc is in the viewer's tree or not (a past change, a deleted doc).
+export function docLabelAt(path: string): string {
+  const f = fileMap[path];
+
+  return f ? docLabel(f) : (path.split('/').pop() || path).replace(/\.(md|html)$/i, '');
+}
+
 export function index(node: TreeNode): void {
   const children = node.type === 'dir' ? node.children : [];
 

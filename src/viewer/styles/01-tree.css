@@ -1,13 +1,18 @@
-  .tree-item.active {
+  .tree-item.active, .tree-row:has(> .tree-item.active) {
     background: linear-gradient(90deg, rgb(var(--accent) / 0.28) 0%, rgb(var(--accent) / 0.08) 70%, transparent 100%);
     color: rgb(var(--ink-100));
     font-weight: 600;
     box-shadow: inset 2px 0 0 rgb(var(--accent));
   }
-  .tree-item:hover:not(.active) { background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-100)); }
-  .tree-item { transition: background 0.08s ease, color 0.08s ease, box-shadow 0.08s ease; }
+  .tree-item:hover:not(.active), .tree-row:hover:not(:has(> .tree-item.active)) { background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-100)); }
+  .tree-item, .tree-row { transition: background 0.08s ease, color 0.08s ease, box-shadow 0.08s ease; }
   /* A folder under files being dragged: they will land in it. */
-  .tree-item.drop-into { background: rgb(var(--accent) / 0.22); box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.7); }
+  .tree-item.drop-into, .tree-row:has(> .tree-item.drop-into) { background: rgb(var(--accent) / 0.22); box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.7); }
+  /* In the tree a row holds the doc or folder (.tree-item) and its action buttons, and paints the
+     item's state itself, so the actions at its end sit on the same highlight. */
+  .tree-row { display: flex; align-items: center; border-radius: 0.25rem; }
+  #tree .tree-row > .tree-item { flex: 1; min-width: 0; background: none; box-shadow: none; }
+  #tree .tree-row:hover > .tree-item { color: rgb(var(--ink-100)); }
   .file-drop-hint {
     position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); z-index: 60;
     padding: 0.5rem 0.9rem; border-radius: 999px; pointer-events: none;
@@ -22,7 +27,6 @@
   /* remotes/ : mirrors of remote nodes (read-only) — slightly indented
      to distinguish them from own content, folder renaming hidden. */
   .tree-item.tree-remote { font-style: italic; opacity: 0.82; }
-  .tree-item.tree-remote .dir-rename-btn { display: none !important; }
   .tree-remote-badge {
     font-style: normal; font-size: 9px; line-height: 1; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.04em;
@@ -61,3 +65,7 @@
   /* Ringed in the menu's colour, so the dot reads over the icon. */
   .tree-ico { position: relative; display: inline-flex; flex-shrink: 0; }
   .tree-vis { position: absolute; right: -3px; bottom: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--vis); box-shadow: 0 0 0 2px rgb(var(--side)); }
+  /* A shape per state, not only a colour: private a dot, shared out a ring, shared with you a diamond. */
+  .tree-vis--private { --vis: rgb(251, 191, 36); }
+  .tree-vis--shared { --vis: rgb(56, 189, 248); background: rgb(var(--side)); box-shadow: inset 0 0 0 2px var(--vis), 0 0 0 2px rgb(var(--side)); }
+  .tree-vis--granted { --vis: rgb(52, 211, 153); border-radius: 1px; transform: rotate(45deg) scale(0.85); }

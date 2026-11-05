@@ -1,7 +1,7 @@
 // Document editor exposed as the `editor` singleton: the chrome buttons trigger edit mode, the
 // command palette (graph/command-palette.ts) and keyboard router (graph/keyboard-router.ts) call
 // enterEditMode, while the doc renderer (content/doc-renderer.ts) and tag browser
-// (content/tag-browse.ts) call exitEditMode when leaving a doc.
+// (content/tag-browse.ts) call leaveEditMode when leaving a doc.
 //
 // Editor owns the markdown toolbar and the split-view edit mode (textarea + live preview, one at a
 // time on a phone). The split UI is built imperatively and the debounced preview rewrite touches
@@ -21,15 +21,11 @@ import {
   isServerMode,
 } from '../core/state';
 import { fileMap } from '../core/tree';
-import { mdInsertWrap, mdInsertLineStart, mdInsertAtCursor } from '../content/tags';
-import { loadContent, contentCache } from '../content/content-tree';
+import { mdInsertWrap, mdInsertLineStart, mdInsertAtCursor, stripFrontmatter } from '../content/tags';
+import { loadContent, putDoc, rememberContent } from '../content/content-tree';
 import { Dialogs } from '../modals/dialogs';
 import { markdown } from '../content/markdown';
-import { docRenderer } from '../content/doc-renderer';
-import { attachCopyButtons } from '../content/content-decorators';
-import { taskCheckboxes } from '../content/task-checkboxes';
-import { renderBacklinksFor } from '../content/backlinks';
-import { toc } from '../content/toc';
+import { canEdit, docRenderer } from '../content/doc-renderer';
 import { sse } from '../core/sse-coord';
 import { tocShow } from '../home/layout-chrome';
 
@@ -65,7 +61,9 @@ export class Editor {
     '</button>' +
     '<button data-md="todo" class="md-tb-btn" title="' +
     t('tbTodo') +
-    '">☐ Todo</button>' +
+    '">' +
+    t('tbTodoLabel') +
+    '</button>' +
     '<button data-md="quote" class="md-tb-btn" title="' +
     t('tbQuote') +
     '">' +
@@ -87,10 +85,14 @@ export class Editor {
     '</button>' +
     '<button data-md="table" class="md-tb-btn" title="' +
     t('tbTable') +
-    '">⊞ Table</button>' +
+    '">' +
+    t('tbTableLabel') +
+    '</button>' +
     '<button data-md="hr" class="md-tb-btn" title="' +
     t('tbHr') +
-    '">— HR</button>';
+    '">' +
+    t('tbHrLabel') +
+    '</button>';
 
   // The split-view live-preview debounce timer, cleared on exit. The [[wikilink]] popup, its caret
   // measurement, and its own timers/listeners live in the composed WikilinkAutocomplete.
@@ -146,7 +148,12 @@ export class Editor {
     )
       return;
     if (currentFile) Editor.writeDraft(currentFile.path, null);
-    this.exitEditMode(false);
+    this.exitEditMode();
+  }
+
+  // The preview shows the doc as it will read: no frontmatter, no language guessing (see Markdown).
+  private static preview(text: string, path: string): string {
+    return markdown.render(stripFrontmatter(text), path, true);
   }
 
   private mdHandleAction(action: string): void {
@@ -206,7 +213,7 @@ export class Editor {
 
   // ---- edit-mode lifecycle ----
   async enterEditMode(): Promise<void> {
-    if (!currentFile) return;
+    if (editMode || !canEdit(currentFile)) return;
     // Make sure we have the content before switching to edit mode.
     let content: string;
 
@@ -281,7 +288,7 @@ export class Editor {
     previewEl.className =
       'min-w-0 px-8 py-6 overflow-y-auto scrollbar-thin prose prose-sm prose-invert max-w-none';
     previewEl.style.flex = '1 1 0';
-    previewEl.innerHTML = markdown.render(content, path);
+    previewEl.innerHTML = Editor.preview(content, path);
 
     splitWrap.appendChild(ta);
     splitWrap.appendChild(divider);
@@ -305,7 +312,7 @@ export class Editor {
       if (!btn) return;
       const preview = btn.dataset.pane === 'preview';
 
-      if (preview) previewEl.innerHTML = markdown.render(ta.value, path);
+      if (preview) previewEl.innerHTML = Editor.preview(ta.value, path);
       splitWrap.classList.toggle('show-preview', preview);
       modes.querySelectorAll('[data-pane]').forEach((b) => b.classList.toggle('active', b === btn));
     });
@@ -316,7 +323,7 @@ export class Editor {
       this.wikilink.update();
       if (this.previewTimer) clearTimeout(this.previewTimer);
       this.previewTimer = setTimeout(() => {
-        previewEl.innerHTML = markdown.render(ta.value, path);
+        previewEl.innerHTML = Editor.preview(ta.value, path);
       }, 150);
       if (this.draftTimer) clearTimeout(this.draftTimer);
       this.draftTimer = setTimeout(() => {
@@ -391,41 +398,27 @@ export class Editor {
     btnSave.textContent = t('saving');
 
     try {
-      const res = await Editor.put({ path: file.path, content: newContent, base_content: this.editBase });
+      const res = await putDoc({ path: file.path, content: newContent, base_content: this.editBase });
 
-      if (res.status === 409) {
-        const { current } = (await res.json()) as { current?: string };
-
-        await this.keepBoth(file, newContent, current ?? '');
+      if (!res.ok) {
+        await this.keepBoth(file, newContent, res.current);
 
         return;
       }
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = (await res.json()) as { mtime?: number };
-
       Editor.writeDraft(file.path, null);
-      file.content = newContent;
-      contentCache.set(file.path, newContent);
-      file.mtime = data.mtime || Math.floor(Date.now() / 1000);
+      file.mtime = res.mtime;
+      rememberContent(file, newContent);
       // Neutralize the live-reload SSE that follows the commit, to avoid a 2nd
       // re-render (flash) on top of the one done when exiting edit mode. Same trick
       // as the checkboxes.
       sse.muteSelfSave(file.path);
-      this.exitEditMode(true);
+      this.exitEditMode();
     } catch (e) {
       Dialogs.notifyError('err', (e as Error).message);
     } finally {
       (btnSave as HTMLButtonElement).disabled = false;
       btnSave.textContent = t('saveBtn');
     }
-  }
-
-  private static put(body: FilePutBody): Promise<Response> {
-    return fetch('/api/file', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
   }
 
   // The doc changed since the session opened it (an AI edit, another tab): never overwrite it.
@@ -441,13 +434,10 @@ export class Editor {
     });
 
     if (!keep) return;
-    const res = await Editor.put({ path: copy, content: mine });
-
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    await putDoc({ path: copy, content: mine }); // a new doc: nothing to conflict with
     Editor.writeDraft(file.path, null);
-    file.content = current;
-    contentCache.set(file.path, current);
-    this.exitEditMode(true);
+    rememberContent(file, current);
+    this.exitEditMode();
     Dialogs.alert({ title: t('conflictTitle'), message: t('conflictSavedAs', copyName) });
   }
 
@@ -464,33 +454,20 @@ export class Editor {
     }
   }
 
-  exitEditMode(reload?: boolean): void {
+  // Back to reading the doc, through the normal rendering (frontmatter off, tags, notes, links). Its
+  // text is in hand (saved, or the one the session started from), so nothing is fetched.
+  exitEditMode(): void {
+    this.leaveEditMode();
+    if (currentFile) void docRenderer.show(currentFile);
+  }
+
+  // Leave the session for another page: tear it down, the next page renders itself.
+  leaveEditMode(): void {
     this.teardownEditSession();
     setEditMode(false);
     setEditTextarea(null);
     contentEl.classList.add('max-w-4xl', 'px-10', 'py-10', 'prose', 'prose-invert');
     contentEl.classList.remove('max-w-none', 'px-4', 'py-4');
-
-    if (reload && currentFile) docRenderer.show(currentFile);
-    else if (currentFile) {
-      btnEdit.classList.remove('hidden');
-      btnSave.classList.add('hidden');
-      btnCancel.classList.add('hidden');
-      // Re-render from the cached content (always present since we were editing).
-      const cached =
-        currentFile.content != null ? currentFile.content : contentCache.get(currentFile.path);
-
-      contentEl.innerHTML = markdown.render(cached || '', currentFile.path);
-      attachCopyButtons();
-      taskCheckboxes.wireTaskCheckboxes(currentFile, cached || '');
-      renderBacklinksFor(currentFile);
-      toc.buildToc();
-      document.dispatchEvent(
-        new CustomEvent('atlas:doc-rendered', {
-          detail: { path: currentFile.path, markdown: cached || '' },
-        }),
-      );
-    }
   }
 
   // Clear the live-preview timer and tear down the wikilink popup so nothing survives the session.

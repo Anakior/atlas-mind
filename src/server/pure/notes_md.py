@@ -4,6 +4,7 @@ facade at call time."""
 import json
 
 import server as _s
+from server.pure.docs import renamed
 
 
 def _notes_path(rel: str):
@@ -33,6 +34,25 @@ def load_notes(rel: str) -> list:
         return []
     notes = data.get("notes") if isinstance(data, dict) else data
     return notes if isinstance(notes, list) else []
+
+
+def repoint(old: str, new: str) -> list:
+    """Move the annotations of `old` (a doc, or a folder and what is in it) to `new`.
+    Returns the sidecar files touched, for the move's commit."""
+    notes_dir = _s.CONFIG.notes_dir
+    if not notes_dir.is_dir() or _notes_path(old) is None or _notes_path(new) is None:
+        return []
+    touched = []
+    for sidecar in [p for p in notes_dir.rglob("*.json") if p.is_file()]:
+        rel = sidecar.relative_to(notes_dir).as_posix()[:-len(".json")]
+        to = renamed(rel, old, new)
+        if to is None:
+            continue
+        target = notes_dir / (to + ".json")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        sidecar.replace(target)
+        touched += [sidecar, target]
+    return touched
 
 
 def save_notes(rel: str, notes: list) -> bool:

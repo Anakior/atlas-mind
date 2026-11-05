@@ -354,7 +354,9 @@ class TestCliBuild(CliMindTest):
         result = run_cli("build", self.mind)
         self.assertEqual(result.returncode, 0, result.stderr)
         index = (self.mind / "dist" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("welcome.md", index)
+        self.assertIn("<!DOCTYPE html>", index)
+        links = json.loads((self.mind / "dist" / "_backlinks.json").read_text(encoding="utf-8"))
+        self.assertIn("welcome.md", links)  # the build read the mind (the shell itself names no doc)
 
     def test_build_offline_generates_monolith(self):
         self.init_mind()
@@ -675,13 +677,19 @@ class TestCliServe(CliMindTest):
         # serve built the missing viewer at startup (dist/index.html).
         status, body = http_get(f"{base}/")
         self.assertEqual(status, 200)
-        self.assertIn(b"welcome.md", body)
+        self.assertIn(b"<!DOCTYPE html>", body)
 
-    def test_serve_unknown_mind_is_a_human_error(self):
-        result = run_cli("serve", self.tmp / "nexiste-pas", "--port", "1")
+    def test_serve_a_folder_that_is_no_mind_is_a_human_error(self):
+        # A missing or empty folder becomes a new mind (the README's "try it once"); one
+        # that already holds something else is left alone.
+        folder = self.tmp / "not-a-mind"
+        folder.mkdir()
+        (folder / "notes.txt").write_text("x", encoding="utf-8")
+        result = run_cli("serve", folder, "--port", "1")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("not found", result.stderr)
+        self.assertIn("no content/ directory", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse((folder / "atlas.toml").exists())
 
 
 # ─── help & cross-cutting errors ─────────────────────────────────────────────────

@@ -14,7 +14,7 @@ import { escapeHtml } from '../core/utils';
 import { api, setStatus } from '../core/net';
 import { currentFile } from '../core/state';
 import { Dialogs } from '../modals/dialogs';
-import { contentCache } from './content-tree';
+import { forgetContent } from './content-tree';
 import { docRenderer } from './doc-renderer';
 import { markdown } from './markdown';
 import { stripFrontmatter } from './tags';
@@ -325,7 +325,8 @@ export class HistoryPanel {
       return;
     }
 
-    wrap.innerHTML = markdown.render(stripFrontmatter(data.content || '')); // sanitized via DOMPurify
+    // Relative images and links resolve beside the doc, as in its live render.
+    wrap.innerHTML = markdown.render(stripFrontmatter(data.content || ''), file.path);
   }
 
   // Restore a doc to a past revision by writing that content back as a new, forward-moving change
@@ -347,7 +348,7 @@ export class HistoryPanel {
       return;
     }
 
-    contentCache.delete(file.path); // force a fresh load of the restored content
+    forgetContent(file.path); // a fresh load of the restored content
     this.close();
     setStatus(t('historyRestored'), 'info');
     docRenderer.show(file);

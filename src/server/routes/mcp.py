@@ -67,13 +67,17 @@ def handle(handler):
     # A tool beyond the token's scopes: over OAuth, a 403 the client can answer by asking
     # the person for more (step-up); the legacy URL keeps the in-band tool error.
     if bearer and isinstance(req, dict) and req.get("method") == "tools/call":
-        need = _s._needed_scope(((req.get("params") or {}).get("name")) or "")
+        need = _s._needed_scope(_params(req).get("name") or "")
         if need and ctx.scopes is not None and need not in ctx.scopes:
             _deny(handler, 403, {"error": "insufficient_scope"},
                   oauth.challenge_header(base, "insufficient_scope", need))
             return
 
-    # A JSON-RPC batch is legacy-only (2025-03-26), so it always answers 200.
+    # A JSON-RPC batch is legacy-only (2025-03-26), so it always answers 200, but for an empty
+    # one, which JSON-RPC answers with one Invalid Request.
+    if req == []:
+        handler._send_json(400, mcp_call._rpc_error(None, -32600, "Invalid request: an empty batch"))
+        return
     if isinstance(req, list):
         responses = [r for r in (_s._mcp_jsonrpc(item, ctx, handler.headers) for item in req)
                      if r is not None]
@@ -91,12 +95,18 @@ def handle(handler):
     handler._send_json(_s._mcp_http_status(req, response), response)
 
 
+def _params(req) -> dict:
+    """A request's params, {} when it has none or they are not an object (the dispatch refuses them)."""
+    params = req.get("params") if isinstance(req, dict) else None
+    return params if isinstance(params, dict) else {}
+
+
 def _note_read(token, req, response):
     """A read_doc that returned its doc: what the home's "connect your AI" step waits for, not a
     mere connection (initialize, tools/list) nor a refused read."""
     if not isinstance(req, dict) or req.get("method") != "tools/call":
         return
-    params, result = req.get("params") or {}, response.get("result") or {}
+    params, result = _params(req), response.get("result") or {}
     if params.get("name") != "read_doc" or not result or result.get("isError"):
         return
     try:

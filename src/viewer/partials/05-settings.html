@@ -105,12 +105,12 @@
           <div id="settings-local-snippets"></div>
         </div>
         <div class="settings-card s-6">
-        <h4 class="settings-card-title" data-i18n="settingsTokenTitle">Un token, pour les autres clients</h4>
-        <p id="settings-token-manual-hint" class="text-xs text-ink-500 mb-2" data-i18n="settingsTokenManualHint">Pour un client sans OAuth, cr&eacute;e plut&ocirc;t un token&nbsp;: son URL contient le secret.</p>
+        <h4 class="settings-card-title" data-i18n="settingsTokenTitle">Une adresse secr&egrave;te, pour les autres assistants</h4>
+        <p id="settings-token-manual-hint" class="text-xs text-ink-500 mb-2" data-i18n="settingsTokenManualHint">Un assistant qui ne sait pas te demander de te connecter&nbsp;? Cr&eacute;e-lui plut&ocirc;t une adresse secr&egrave;te&nbsp;: l&rsquo;acc&egrave;s est dedans.</p>
         <form id="settings-token-form" class="flex flex-col sm:flex-row gap-2 sm:items-end">
           <div class="flex-1 min-w-0">
             <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenLabel">Libell&eacute;</label>
-            <input id="settings-token-label" type="text" autocomplete="off" placeholder="claude, mcp-perso&hellip;" data-i18n-placeholder="settingsTokenLabelPlaceholder"
+            <input id="settings-token-label" type="text" autocomplete="off" placeholder="claude, mon assistant&hellip;" data-i18n-placeholder="settingsTokenLabelPlaceholder"
               class="w-full px-3 py-2 bg-navy-900 border subtle-border rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent text-sm font-mono">
           </div>
           <!-- What the token may do (MCP + REST): an agent fed untrusted input gets the least it needs. -->
@@ -126,7 +126,7 @@
               <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
             </div>
           </div>
-          <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0" data-i18n="settingsCreateToken">Cr&eacute;er un token</button>
+          <button type="submit" class="px-3 py-2 text-sm bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0" data-i18n="settingsCreateToken">Cr&eacute;er l&rsquo;adresse</button>
         </form>
         <!-- One-time display of the token in plain text + MCP connector URL. Strong
              warning banner (the secret NEVER reappears), Close button,
@@ -140,12 +140,12 @@
             </button>
           </div>
           <div class="p-3">
-            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenPlain">Token</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsTokenPlain">Cl&eacute; d&rsquo;acc&egrave;s</label>
             <div class="flex gap-2 mb-3">
               <input id="settings-token-plain" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-sm font-mono focus:outline-none">
               <button id="settings-token-copy" class="px-3 py-2 text-xs bg-accent hover:brightness-110 text-white rounded-lg font-medium flex-shrink-0 inline-flex items-center gap-1.5" data-i18n="copy">Copier</button>
             </div>
-            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsMcpUrl">URL connecteur MCP</label>
+            <label class="text-xs uppercase tracking-wider text-ink-500 font-semibold mb-1 block" data-i18n="settingsMcpUrl">Adresse &agrave; coller dans l&rsquo;assistant</label>
             <div class="flex gap-2">
               <input id="settings-token-mcp" readonly class="flex-1 min-w-0 px-2 py-2 bg-black/40 border subtle-border rounded-lg text-ink-100 text-sm font-mono focus:outline-none">
               <button id="settings-token-mcp-copy" class="px-3 py-2 text-xs bg-navy-700 hover:bg-navy-600 text-ink-200 rounded flex-shrink-0" data-i18n="copy">Copier</button>

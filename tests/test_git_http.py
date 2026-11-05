@@ -36,6 +36,10 @@ class TestPushGuard(unittest.TestCase):
                      "content/x/.git/config", "README.md"):
             self.assertIn(path, self.check(["content/a.md", path]), path)
 
+    def test_no_link_lands_among_the_notes(self):
+        self.assertIn("link", refusal([(OLD, NEW, "refs/heads/main")], lambda o, n: ["content/x.md"],
+                                      lambda o, n: ["content/x.md"]))
+
     def test_only_main_moves_forward(self):
         self.assertIn("main branch", self.check([], ref="refs/heads/other"))
         self.assertIn("deleted", self.check([], new=ZERO))
@@ -88,6 +92,18 @@ class TestGitHttp(unittest.TestCase):
         self.assertTrue((self.srv.content_root / "from-laptop.md").is_file())
         self.assertIn("from my laptop", self.srv.git("log", "-1", "--format=%s").stdout)
 
+    def test_a_limited_token_does_only_what_it_may(self):
+        _, reader = self.fs.create_api_identity("reader", acts_as=ADMIN_EMAIL, scopes=["read"])
+        _, dropper = self.fs.create_api_identity("dropper", acts_as=ADMIN_EMAIL, scopes=["inbox"])
+        self.assertNotEqual(self.clone("dropper-copy", token=dropper).returncode, 0)
+        self.assertEqual(self.clone("reader-copy", token=reader).returncode, 0)
+        copy = self.tmp / "reader-copy"
+        (copy / "content" / "sneaked.md").write_bytes(b"# Sneaked\n")
+        _git(copy, "add", "-A")
+        _git(copy, "commit", "-q", "-m", "sneaked in")
+        self.assertNotEqual(_git(copy, "push", "-q", "origin", "HEAD:main", check=False).returncode, 0)
+        self.assertFalse((self.srv.content_root / "sneaked.md").exists())
+
     def test_a_large_push_arrives(self):
         # Past http.postBuffer (1 MiB) git sends the push chunked.
         self.assertEqual(self.clone("large").returncode, 0)
@@ -119,7 +135,9 @@ class TestGitHttp(unittest.TestCase):
         self.assertIn("Basic", resp.headers.get("WWW-Authenticate", ""))
 
     def sync(self, *args):
-        env = {**os.environ, "ATLAS_TOKEN": self.token}
+        # No machine git config: a computer where git knows no identity, as on CI.
+        env = {**os.environ, "ATLAS_TOKEN": self.token,
+               "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
         return subprocess.run([sys.executable, str(CLI), "sync", *args], capture_output=True,
                               text=True, env=env, cwd=str(self.tmp))
 

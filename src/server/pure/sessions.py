@@ -11,7 +11,7 @@ import server as _s
 from server.pure import provenance
 from server.pure.git_history import _attributed_log, _doc_diff_between, _scrub_commits
 from server.pure.prompts import PROMPTS_DIR
-from server.pure.queries import _api_search, _headings, _visible, _visible_at
+from server.pure.queries import _api_search, _headings, _readable, _visible_at
 
 _RESUME_RE = re.compile(r"^#{1,3}\s+(?:\d+\.\s*)?(?:comment reprendre|how to resume)\b", re.I | re.M)
 _OPEN_RE = re.compile(r"suspens|clarifier|loose ends?|open (?:points?|questions?)|reprendre la suite|"
@@ -199,7 +199,7 @@ def _days(iso: str) -> int:
 
 def _find_saves(ctx) -> tuple:
     """The saves ctx can read ({path: text}) and the path / stem maps that resolve wikilinks."""
-    docs = [(rel, path) for rel, path in _s._iter_doc_files() if _visible(rel, ctx)]
+    docs = _readable(ctx)
     saves = {}
     for rel, path in docs:
         # The search cache already holds every doc folded: only a likely save is read in full.

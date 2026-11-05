@@ -3,13 +3,14 @@
 
 import { t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
-import { SettingsContext } from './settings-shared';
+import { SettingsContext, copyBox, copyToClipboard } from './settings-shared';
 
 interface UpdateState {
   current: string | null;
   latest: string | null;
   install: 'button' | 'container' | 'source' | 'manual';
   update_available: boolean;
+  repair?: string | null; // the command that puts the running release back after a failed update
 }
 
 const REPO = 'https://github.com/Anakior/atlas-mind';
@@ -50,6 +51,13 @@ export class SettingsAbout {
   }
 
   private render(state: UpdateState | null): void {
+    if (state?.repair) {
+      const repair = state.repair;
+
+      this.box.innerHTML = `<p class="text-sm text-rose-300">${t('aboutNeedsRepair')}</p>${copyBox(repair, 'data-about-repair')}`;
+      this.box.querySelector('[data-about-repair]')?.addEventListener('click', () => void copyToClipboard(repair));
+      return;
+    }
     if (!state?.latest) {
       this.box.innerHTML = `<p class="${HINT}">${t('aboutCheckFailed')}</p>`;
       return;

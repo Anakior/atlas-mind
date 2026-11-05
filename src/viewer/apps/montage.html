@@ -189,7 +189,7 @@ __KIT_CSS__
       call('agent_runs', {}).then(kit.data).then(function (d) { busy(false); state.list = d; showList(); }, fail);
     };
     var pills = add(el('div', 'pills'), add(el('span', 'pill'), icon('calendar'), dayOf(run.start)),
-      el('span', 'pill', count('commits', s.frames.length)), el('span', 'pill', count('docs', run.documents.length)));
+      el('span', 'pill', count('commits', s.frames.length)), el('span', 'pill', count('docs', run.documents.length + (run.documents_more || 0))));
     app.className = '';
     app.replaceChildren();
     add(app, back, add(el('header'), el('h1', null, t('scene_title', { who: who(run), span: span(run) })), pills),
@@ -284,7 +284,7 @@ __KIT_CSS__
       }
       lines.appendChild(line);
     });
-    return add(el('section'), add(el('h2'), t('docs_title'), el('span', 'count', s.run.documents.length)), lines);
+    return add(el('section'), add(el('h2'), t('docs_title'), el('span', 'count', s.run.documents.length + (s.run.documents_more || 0))), lines);
   }
 
   // A doc is undone once removed, or once every commit of the run touching it is.

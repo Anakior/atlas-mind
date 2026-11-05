@@ -4,9 +4,10 @@
 // independent (golden B). The content loader + the markdown setup are module-level exports other
 // modules import; only the tree's internals are encapsulated in the class.
 
-import { IS_OFFLINE_BUILD, EMBED_CONTENT, TREE } from '../core/data-csrf';
+import { IS_OFFLINE_BUILD, EMBED_CONTENT, TREE, docPath, docUrl } from '../core/data-csrf';
 import { t } from '../core/i18n';
-import { escapeHtml } from '../core/utils';
+import { requestError } from '../core/net';
+import { docHash } from '../core/route';
 import { fileMap, docLabel } from '../core/tree';
 import { treeEl } from '../core/dom-refs';
 import { currentFile } from '../core/state';
@@ -19,39 +20,64 @@ import { decorateTreeBadges } from './notes/notes-index';
 import { startMove, startMoveFolder } from './file-drop';
 
 // ─── Content loader (a small service; kept as functions for now, classed later) ───────────────
-export const contentCache = new Map<string, string>();
+// A doc's text, for the mtime the tree gave it: a doc the AI (or another device) changed comes back
+// from the tree with a new mtime, so reopening it fetches the new text instead of showing the old one.
+const contentCache = new Map<string, { mtime: number; text: string }>();
+
+export function rememberContent(file: FileNode, text: string): void {
+  contentCache.set(file.path, { mtime: file.mtime, text });
+  file.content = text;
+}
+
+// A write made elsewhere (a revert, a move, an extension): the next open fetches the doc again.
+export function forgetContent(path: string): void {
+  contentCache.delete(path);
+  for (const f of [fileMap[path], currentFile]) if (f && f.path === path) f.content = undefined;
+}
 
 export async function loadContent(file: FileNode): Promise<string> {
   if (file.content != null) return file.content; // offline-baked or already loaded
 
   const cached = contentCache.get(file.path);
 
-  if (cached != null) {
-    file.content = cached;
+  if (cached && cached.mtime === file.mtime) {
+    file.content = cached.text;
 
-    return cached;
+    return cached.text;
   }
   if (IS_OFFLINE_BUILD) {
     const c = EMBED_CONTENT![file.path];
 
     if (c == null) throw new Error(t('offlineMissing'));
-    contentCache.set(file.path, c);
-    file.content = c;
+    rememberContent(file, c);
 
     return c;
   }
 
-  const url = '/' + file.path.split('/').map(encodeURIComponent).join('/') + (file.mtime ? '?v=' + file.mtime : '');
-  const res = await fetch(url);
+  const res = await fetch(docPath(file.path) + (file.mtime ? '?v=' + file.mtime : ''));
 
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  if (!res.ok) throw requestError(res.status);
 
   const text = await res.text();
 
-  contentCache.set(file.path, text);
-  file.content = text;
+  rememberContent(file, text);
 
   return text;
+}
+
+// Every write of a whole doc says which text it started from (base_content): the server then answers
+// 409 with its current text instead of overwriting a doc that changed meanwhile.
+export async function putDoc(body: FilePutBody): Promise<{ ok: true; mtime: number } | { ok: false; current: string }> {
+  const res = await fetch('/api/file', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (res.status === 409) return { ok: false, current: ((await res.json()) as { current?: string }).current ?? '' };
+  if (!res.ok) throw requestError(res.status);
+
+  return { ok: true, mtime: ((await res.json()) as { mtime?: number }).mtime || Math.floor(Date.now() / 1000) };
 }
 
 // Shared with the todo widget + showWelcome; exported here as the common owner those modules import.
@@ -67,33 +93,9 @@ export function setNotesIndex(v: Record<string, number> | null): void {
   notesIndex = v;
 }
 
-// ─── Markdown pipeline base (marked + hljs config, wikilink maps) — the Markdown class in
-// markdown.ts builds on this base config. ──────────────────────────────────────────────────────
+// ─── Markdown pipeline base (marked options, wikilink maps) — the Markdown class in markdown.ts
+// builds on this base config. ──────────────────────────────────────────────────────────────────
 marked.setOptions({ gfm: true, breaks: false });
-// marked ≥ v5 dropped the `highlight` option (silently ignored by the vendored v15), so highlight
-// in a custom `code` renderer instead. The hljs output survives DOMPurify; the `hljs` class enables
-// the vendored github-dark theme.
-marked.use({
-  renderer: {
-    code({ text, lang }: { text: string; lang?: string }) {
-      const language = (lang || '').trim().split(/\s+/)[0];
-      let html;
-
-      try {
-        html =
-          language && hljs.getLanguage(language)
-            ? hljs.highlight(text, { language }).value
-            : hljs.highlightAuto(text).value;
-      } catch (e) {
-        html = escapeHtml(text);
-      }
-
-      const cls = language ? ' language-' + escapeHtml(language) : '';
-
-      return '<pre><code class="hljs' + cls + '">' + html + '</code></pre>\n';
-    },
-  },
-});
 
 // Wikilinks [[doc]]: target → path resolution (direct path, else stem). Maps built once over
 // fileMap; any openable doc is a valid target. Nulled on reload (was a latent stale-cache bug).
@@ -213,101 +215,91 @@ export class ContentTree {
     const open = this.openDirs.has(childPath);
     const dirLabel = isRemoteRoot ? t('remotesLabel') : child.name;
 
-    const btnChildren: Child[] = [
-      h('span', { class: 'caret text-xs text-ink-400' + (open ? ' open' : '') }, raw('&#9656;')),
-      raw(isRemoteRoot ? ContentTree.REMOTE_FOLDER_ICON : ContentTree.FOLDER_ICON),
-      h('span', { class: 'truncate min-w-0 flex-1', 'data-name': child.name }, dirLabel),
-    ];
+    const actions: VNode[] = [];
 
     if (!isRemote) {
-      btnChildren.push(
-        h('span', { class: 'dir-new-btn tree-action-btn', title: t('newInFolder'), onClick: (e: Event) => { e.stopPropagation(); newFileModal.open(childPath); } }, raw(ContentTree.PLUS_ICON)),
-        h('span', { class: 'dir-access-btn tree-action-btn', title: t('aclBtnTitle'), onClick: (e: Event) => { e.stopPropagation(); if (window.openAccessFor) window.openAccessFor(childPath); } }, raw(ContentTree.ACL_ICON)),
-      );
-    }
-    btnChildren.push(
-      h('span', { class: 'dir-rename-btn tree-action-btn', title: t('renameFolder'), onClick: (e: Event) => { e.stopPropagation(); dirRenameModal.open(childPath); } }, raw(ContentTree.PENCIL_ICON)),
-    );
-    if (!isRemote) {
-      btnChildren.push(
-        h('span', { class: 'dir-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.stopPropagation(); settingsPage.openPublish(childPath); } }, raw(ContentTree.LINK_ICON)),
+      actions.push(
+        this.action('dir-new-btn', 'newInFolder', ContentTree.PLUS_ICON, () => newFileModal.open(childPath)),
+        this.action('dir-access-btn', 'aclBtnTitle', ContentTree.ACL_ICON, () => window.openAccessFor?.(childPath)),
+        this.action('dir-rename-btn', 'renameFolder', ContentTree.PENCIL_ICON, () => dirRenameModal.open(childPath)),
+        this.action('dir-share-btn tree-action-btn--share', 'shareAsNode', ContentTree.LINK_ICON, () => settingsPage.openPublish(childPath)),
       );
     }
     if (child.keep && !child.children.length) {
-      btnChildren.push(
-        h('span', { class: 'dir-delete-btn tree-action-btn', title: t('deleteFolder'), onClick: (e: Event) => { e.stopPropagation(); void deleteEmptyFolder(childPath); } }, raw(ContentTree.TRASH_ICON)),
-      );
+      actions.push(this.action('dir-delete-btn', 'deleteFolder', ContentTree.TRASH_ICON, () => void deleteEmptyFolder(childPath)));
     }
 
     const btn = h('button', {
-      class: 'tree-item group w-full text-left px-2 py-1.5 rounded flex items-center gap-2 font-semibold text-ink-100' + (isRemote ? ' tree-remote' : ''),
+      type: 'button',
+      class: 'tree-item w-full text-left px-2 py-1.5 rounded flex items-center gap-2 font-semibold text-ink-100' + (isRemote ? ' tree-remote' : ''),
       'data-dir-path': childPath,
+      'aria-expanded': open ? 'true' : 'false',
       draggable: isRemote || IS_OFFLINE_BUILD ? null : 'true',
       onDragstart: (e: DragEvent) => startMoveFolder(e, childPath),
       onClick: () => this.toggleDir(childPath),
-    }, btnChildren);
+    },
+    h('span', { class: 'caret text-xs text-ink-400' + (open ? ' open' : ''), 'aria-hidden': 'true' }, raw('&#9656;')),
+    raw(isRemoteRoot ? ContentTree.REMOTE_FOLDER_ICON : ContentTree.FOLDER_ICON),
+    h('span', { class: 'truncate min-w-0 flex-1', 'data-name': child.name }, dirLabel));
 
     const sub = this.treeView(child, depth + 1, childPath);
 
     if (!open) sub.props.class += ' hidden';
 
-    return h('li', { key: 'd:' + childPath, class: isRemoteRoot ? 'tree-section--remotes' : null }, btn, sub);
+    return h('li', { key: 'd:' + childPath, class: isRemoteRoot ? 'tree-section--remotes' : null }, h('div', { class: 'tree-row group' }, btn, actions), sub);
   }
 
   private fileView(child: FileNode): VNode {
     const isRemoteFile = child.path.startsWith('remotes/');
     const openable = isViewable(child.ext);
     const fileActionable = !isRemoteFile && (child.ext === '.md' || child.ext === '.html');
-
-    const aChildren: Child[] = [
-      h('span', { class: 'tree-ico' }, raw(this.iconFor(child.ext)), this.visBadge(child)),
-      h('span', { class: 'truncate min-w-0 flex-1 leading-snug', 'data-name': child.name, title: child.title ? child.name : null }, docLabel(child)),
-    ];
-
-    if (fileActionable) {
-      aChildren.push(
-        h('span', { class: 'file-access-btn tree-action-btn', title: t('aclBtnTitle'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); if (window.openAccessFor) window.openAccessFor(child.path); } }, raw(ContentTree.ACL_ICON)),
-        h('span', { class: 'file-rename-btn tree-action-btn', title: t('renameFile'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); docRenderer.show(child); renameModal.open('rename'); } }, raw(ContentTree.PENCIL_ICON)),
-        h('span', { class: 'file-share-btn tree-action-btn tree-action-btn--share', title: t('shareAsNode'), onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); settingsPage.openPublish(child.path); } }, raw(ContentTree.LINK_ICON)),
-      );
-    }
+    const actions = fileActionable
+      ? [
+        this.action('file-access-btn', 'aclBtnTitle', ContentTree.ACL_ICON, () => window.openAccessFor?.(child.path)),
+        this.action('file-rename-btn', 'renameFile', ContentTree.PENCIL_ICON, () => { void docRenderer.open(child); renameModal.open('rename'); }),
+        this.action('file-share-btn tree-action-btn--share', 'shareAsNode', ContentTree.LINK_ICON, () => settingsPage.openPublish(child.path)),
+      ]
+      : [];
 
     const props: Record<string, any> = {
-      key: 'f:' + child.path,
-      class: 'tree-item group w-full px-2 py-1.5 rounded flex items-start gap-2 cursor-pointer text-ink-200' + (isRemoteFile ? ' tree-remote' : ''),
+      class: 'tree-item w-full px-2 py-1.5 rounded flex items-start gap-2 cursor-pointer text-ink-200' + (isRemoteFile ? ' tree-remote' : ''),
       'data-path': child.path,
       // Dragged onto a folder, it moves there (file-drop.ts).
       draggable: isRemoteFile || IS_OFFLINE_BUILD ? null : 'true',
       onDragstart: (e: DragEvent) => startMove(e, child.path),
+      // An openable doc opens in place; the link is there for a new tab and the keyboard.
+      href: openable ? docHash(child.path) : docUrl(child.path),
     };
 
     if (currentFile && child.path === currentFile.path) props.class += ' active';
     if (openable) {
-      props.onClick = (e: Event) => {
+      props.onClick = (e: MouseEvent) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return;
         e.preventDefault();
-        docRenderer.show(child);
-        history.replaceState(null, '', '#' + encodeURIComponent(child.path));
+        void docRenderer.open(child);
       };
-    } else {
-      props.href = encodeURI(child.path);
     }
 
-    return h('li', { key: 'l:' + child.path }, h('a', props, aChildren));
+    return h('li', { key: 'l:' + child.path }, h('div', { class: 'tree-row group' },
+      h('a', props,
+        h('span', { class: 'tree-ico' }, raw(this.iconFor(child.ext)), this.visBadge(child)),
+        h('span', { class: 'truncate min-w-0 flex-1 leading-snug', 'data-name': child.name, title: child.title ? child.name : null }, docLabel(child))),
+      actions));
   }
 
-  // On the icon: the row's end holds the actions.
+  // A row's own action: a real button beside the row's link, so the keyboard reaches it.
+  private action(cls: string, labelKey: string, icon: string, run: () => void): VNode {
+    return h('button', { type: 'button', class: 'tree-action-btn ' + cls, title: t(labelKey), onClick: run }, raw(icon));
+  }
+
+  // On the icon: the row's end holds the actions. A shape per state as well as a colour, and a name
+  // for a screen reader.
   private visBadge(child: FileNode): Child {
-    const color =
-      child.vis === 'private' ? 'rgb(251,191,36)'
-        : child.vis === 'shared' ? 'rgb(56,189,248)'
-          : child.vis === 'granted' ? 'rgb(52,211,153)'
-            : null;
+    if (!child.vis) return null;
 
-    if (!color) return null;
+    const label = t(child.vis === 'private' ? 'visPrivate' : child.vis === 'shared' ? 'visShared' : 'visGranted');
 
-    const titleKey = child.vis === 'private' ? 'visPrivate' : child.vis === 'shared' ? 'visShared' : 'visGranted';
-
-    return h('span', { class: 'tree-vis', style: '--vis:' + color, title: t(titleKey) });
+    return h('span', { class: 'tree-vis tree-vis--' + child.vis, role: 'img', 'aria-label': label, title: label });
   }
 
   private toggleDir(path: string): void {
@@ -368,7 +360,7 @@ export class ContentTree {
       span.className = 'tree-remote-origin';
       span.textContent = host;
       span.title = r.url || '';
-      btn.insertBefore(span, btn.querySelector('.dir-rename-btn'));
+      btn.appendChild(span);
     }
   }
 }

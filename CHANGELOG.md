@@ -8,6 +8,91 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-11-05
+
+A hardening release, after a full audit of 2.5.0: access rights on every path to a document, git
+that never leaves a conflict half-way, what the viewer lets a note do, and an AI side several times
+faster on a big mind. The tool definitions changed: refresh the connector's tools in Claude. If you
+installed with the systemd unit `atlas deploy` writes, set your own `SESSION_SECRET` before updating.
+An Atlas on 2.2.0 or later gets this one from Settings › About.
+
+### Changed
+- **A session secret anyone could guess is refused.** In cloud mode the server no longer starts with a
+  placeholder (`change-me`…) or a secret shorter than 16 characters, and the systemd unit written by
+  `atlas deploy` no longer carries one. If you installed with that unit, set your own `SESSION_SECRET`
+  (`systemctl edit atlas`) before you update.
+- **A pull interval under 10 seconds is raised to 10**, with a word at startup: below that the pull
+  loop hammered the remote. For an instant pull, set up the GitHub webhook.
+- **The deploy templates come from `atlas deploy` only.** The copies in the repository's `deploy/`
+  that had drifted from it (`fly.toml`, `fly.toml.example`, `update.sh`, `atlas.service`) are gone.
+- The package declares its license the current way (SPDX `AGPL-3.0-or-later`); Python 3.14 joins
+  the tested versions.
+
+### Fixed
+- **Access rights hold on every path to a document.** On a mind shared by several accounts, a few
+  ways in other than the viewer and the AI tools now apply a document's rights the same way: files
+  opened directly, folder pages, annotations, share links, the nodes a mind publishes, the trash,
+  and moving a private document. An account that is removed loses its sessions and its access
+  tokens at once, and an access token limited to reading or to the inbox keeps to it on the mind's
+  own git.
+- **`atlas sync` works again on a computer where git knows no name.** 2.5.0 broke it as soon as the
+  same notes had changed on both sides.
+- **A conflict with the remote never writes conflict markers into a note.** A save that conflicts
+  stays recorded here, the pull is undone and the banner says so; a restart in the middle of a pull
+  no longer leaves the mind half-way (detached, its changes no longer sent).
+- **Annotations, confirmations and contradiction verdicts follow a document** when it, or its
+  folder, moves or goes to the trash and back. A new document at the old place starts clean.
+- **Links follow a renamed folder even right after it moved.** A document moved just after its
+  folder was renamed could leave links pointing at the old name.
+- **A restore checks the whole backup before it changes anything**, puts the history and the
+  accounts back in one step, and keeps each history it replaces, not only the last one.
+- **A build that runs too long no longer stops the push** of the changes before it.
+- **The mind's content is served more strictly**: a file a subscribed node sends must be a
+  document, and any file that is not plainly an image, a sound, a video, a PDF or text opens
+  sandboxed.
+- **An update that cannot put the running version back says so** in Settings › About, with the
+  command that repairs it, instead of reading as up to date.
+- **`atlas serve` on a folder that does not exist yet creates the mind**, as the README's quick
+  start says; `atlas --version` prints the version.
+- `atlas serve` and the builds run the engine's own code even when the folder they run from holds
+  a `server.py` or a `build/` of its own.
+
+**For your AI** (tool definitions changed: refresh the connector's tools in Claude)
+- **What comes from outside your mind is marked as such in more of what your AI reads**: recent
+  docs, the tree, edit diffs, the activity, the changelog, stale docs. A path written in another
+  case or with backslashes no longer slips past these marks or the read-only mirrors.
+- **Every write made with an access token is attributed to it**, even when the AI names no family
+  (`ai/unknown`): runs and their undo see it.
+- **Several times faster on a big mind.** The corpus, its rights and its links are kept between
+  calls: on 3,000 docs, `get_links` went from 3.5 s to 0.05 s, `brief` from 7 s to 0.6 s, a search
+  from 4 s to 0.5 s.
+- **Big answers come in parts**: `read_doc` and `doc_at` stop at 60,000 characters and say where to
+  read on (`doc_at` takes `start_line`/`end_line`), `list_tree` folds deep folders on a very large
+  mind, `agent_runs` lists 20 docs per run with a count of the rest. `changes_since` no longer loses
+  what a cut answer left out.
+- `brief` reads PDFs and office files too; `recent_docs` ranks by last change, not by the file's
+  date (the boot time on a cloud instance); a folder filter takes `path_prefix`, `prefix` or `path`;
+  judging a contradiction needs the right to edit both docs; a regular expression in `grep_docs`
+  can no longer hold the server up.
+- Malformed requests get a proper JSON-RPC error instead of a closed connection.
+
+**In the viewer**
+- **A change made elsewhere is never overwritten.** Ticking a box or adding a tag on a note an AI
+  or another tab changed meanwhile reloads it and says so, instead of saving over that change.
+- **A note can no longer pass itself off as Atlas**: the page runs only its own scripts, and what a
+  note may contain is held tighter (forms, styles over the page).
+- **Back goes back**, and a link to another note opens it in the viewer.
+- **The graph opens at once on a big mind** (Barnes-Hut layout: 0.5 s instead of 6 s at 3,300 notes),
+  and the editor's preview keeps up with typing.
+- **To-dos keep their identity across devices**: ticking or deleting from a list that is out of
+  date reaches that to-do or none, never its neighbour; editing one is no longer cut short by the
+  refresh.
+- **A failure says so**, in plain words, with a way to retry, instead of an empty "all clear"; no
+  more "HTTP 403" on screen.
+- Leaving the editor no longer shows a note's header as a title; Enter presses the focused button
+  of a dialog; folders and their actions work from the keyboard, dialogs keep the focus, privacy is
+  not told by colour alone; the trash's buttons line up.
+
 ## [2.5.0] - 2026-11-05
 
 A stabilisation release, after a review of 2.4.2: the history of private notes, two edits at once,

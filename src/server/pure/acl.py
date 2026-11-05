@@ -59,7 +59,8 @@ class ViewerCtx:
         # tool argument, so an agent cannot impersonate another source. None for humans.
         self.source = source
         # scopes: what an API/MCP token may do (store.API_SCOPES); None = everything.
-        self.scopes = frozenset(scopes) if scopes else None
+        # Writing implies reading: an edit's diff (or its dry run) shows the text anyway.
+        self.scopes = (frozenset(scopes) | ({"read"} if "write" in scopes else set())) if scopes else None
 
 
 # Anonymous caller (no session, no token): no principals → only share-links and
@@ -105,11 +106,12 @@ def viewer_ctx(identity, store=None):
         acts_as = identity.get("acts_as")
         if acts_as:
             human = store.get_user_by_email(acts_as)
-            if human:
-                # Bound: act as the human (private space + grants) + commons write.
-                h = _ctx_for_human(human, store)
-                return ViewerCtx(h.principals, h.is_admin, h.primary, api=True, source=source,
-                                 scopes=scopes)
+            if not human:
+                return ANON  # acting for an account that is gone: no access, not the commons
+            # Bound: act as the human (private space + grants) + commons write.
+            h = _ctx_for_human(human, store)
+            return ViewerCtx(h.principals, h.is_admin, h.primary, api=True, source=source,
+                             scopes=scopes)
         # Unbound: writes the commons (api=True) but never admin and never in a
         # private space — owned docs stay hidden until the token is bound to a human
         # via acts_as. (Single-user: bind the token to yourself to see everything.)
@@ -126,19 +128,24 @@ def attribution_for(ctx, ai=None, store=None):
     (autonomous AI / anonymous → the bot authors). `ai` is the actor's self-reported AI
     family (MCP writes); it becomes the `X-Atlas-Author: ai/<family>` trailer — the sole
     AI marker. Slugified: it lands in the commit body, so it must not inject. An API/MCP
-    write also names its token (`X-Atlas-Token`, the slug of its label), so one agent's
-    run can be told apart from another's acting for the same person."""
+    write is always an agent's, `ai/unknown` when it does not say which, and also names
+    its token (`X-Atlas-Token`, the slug of its label), so one agent's run can be told
+    apart from another's acting for the same person, and undone."""
     store = store or _s.get_store()
     primary = ctx.primary if ctx else None
     email = primary[len("user:"):] if primary and primary.startswith("user:") else None
     user = store.get_user_by_email(email) if email else None
     author = (_s.display_name(user), email) if user and user.get("role") != _s.API_ROLE else None
+    api = getattr(ctx, "api", False)
     trailers = []
-    if ai:
+    if ai or api:
         try:
-            trailers = ["X-Atlas-Author: ai/" + slugify_token_label(ai)]
-            if getattr(ctx, "api", False) and ctx.source:
-                trailers.append("X-Atlas-Token: " + slugify_token_label(ctx.source))
+            trailers.append("X-Atlas-Author: ai/" + slugify_token_label(ai or "unknown"))
+        except ValueError:
+            trailers.append("X-Atlas-Author: ai/unknown")
+    if api and ctx.source:
+        try:
+            trailers.append("X-Atlas-Token: " + slugify_token_label(ctx.source))
         except ValueError:
             pass
     return author, trailers
@@ -316,16 +323,20 @@ def level_at(rel, rev, ctx, store=None):
 
 
 def _reaches(rev, before):
-    """Whether ``rev`` is ``before`` or older on its line. Unknown either way counts as yes."""
+    """Whether ``rev`` is ``before`` or older on its line. Unknown either way counts as yes,
+    and so does a ``before`` that a pull rewrote out of the mind's history: the step then
+    covers every revision rather than none."""
     if not before:
         return True
     sha = _s.git("rev-parse", "--verify", "--quiet", rev + "^{commit}").stdout.strip()
-    return not sha or _is_ancestor(sha, before)
+    head = _s.git("rev-parse", "--verify", "--quiet", "HEAD^{commit}").stdout.strip()
+    return not sha or not head or _ancestry(before, head) != 0 or _ancestry(sha, before) != 1
 
 
 @functools.lru_cache(maxsize=4096)
-def _is_ancestor(sha, before):
-    return _s.git("merge-base", "--is-ancestor", sha, before).returncode != 1
+def _ancestry(sha, of):
+    """0 when ``sha`` is ``of`` or one of its ancestors, 1 when it is not, else unknown."""
+    return _s.git("merge-base", "--is-ancestor", sha, of).returncode
 
 
 def _kept_level(entry, ctx):

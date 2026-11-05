@@ -63,6 +63,16 @@ DEFAULT_TOKEN_LABEL = "claude"
 UNUSABLE_PASSWORD_HASH = store.UNUSABLE_PASSWORD_HASH
 
 
+def _version() -> str:
+    """This engine's version, from the package file beside this one (the CLI also runs as
+    a plain script, outside the package)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("atlas_mind_version", ENGINE_SRC / "__init__.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.__version__
+
+
 class CliError(Exception):
     """User error: human message on stderr, exit 1 — never a traceback for a
     typo or a non-existent mind."""
@@ -98,7 +108,7 @@ def _run_build(mind: Path, *, offline: bool = False, as_email: str | None = None
     env = os.environ.copy()
     env["ATLAS_MIND"] = str(mind)
     env["PYTHONPATH"] = str(ENGINE_SRC) + os.pathsep + env.get("PYTHONPATH", "")
-    command = [sys.executable, "-m", "build"]
+    command = [sys.executable, "-P", "-m", "build"]  # -P: never a build/ of the mind's
     if offline:
         command.append("--offline")
     if as_email:
@@ -266,7 +276,7 @@ AGENTS_MD_EN = """\
 
 Your AI assistant reads this document every time it connects to your Atlas. Adapt
 it: this is where you tell it how to work with you. Keep it short and directive
-(8,000 characters at most).
+(7,000 characters at most: Atlas adds its own rules after it, and cuts what goes past).
 
 ## Principle
 
@@ -433,7 +443,8 @@ AGENTS_MD_FR = """\
 
 Ce document est lu par ton assistant IA chaque fois qu'il se connecte à ton Atlas.
 Adapte-le : c'est ici que tu lui dis comment travailler avec toi. Garde-le court et
-directif (8 000 caractères au plus).
+directif (7 000 caractères au plus : Atlas ajoute ses propres règles après, et coupe ce
+qui dépasse).
 
 ## Principe
 
@@ -766,6 +777,11 @@ def cmd_init(args) -> int:
 
 
 def cmd_serve(args) -> int:
+    target = Path(args.dir).expanduser().resolve()
+    if not target.exists() or (target.is_dir() and not any(target.iterdir())):
+        # "Try it once": a folder that does not exist yet, or an empty one, becomes a new mind.
+        print(f"No mind at {target} yet: creating one (atlas init).")
+        init_mind(target, "en")
     mind = _require_mind(args.dir)
     if not (mind / "content").is_dir():
         raise CliError(
@@ -782,7 +798,8 @@ def cmd_serve(args) -> int:
     env["PYTHONPATH"] = str(ENGINE_SRC) + os.pathsep + env.get("PYTHONPATH", "")
     if args.port is not None:
         env["PORT"] = str(args.port)
-    # PYTHONPATH puts the engine src first so `-m server` resolves the engine's server.
+    # PYTHONPATH puts the engine src first so `-m server` resolves the engine's server, and
+    # -P keeps a server.py of the current folder from being run instead.
     if os.name == "nt":
         # Windows has NO true execve: os.execve spawns a new pid and exits this
         # one, which breaks pid-based supervision (and segfaults under MSYS2 on
@@ -791,13 +808,13 @@ def cmd_serve(args) -> int:
         # handles KeyboardInterrupt). The graceful-SIGTERM cloud path (systemd /
         # Fly) is Linux-only, so it keeps the POSIX overlay below.
         try:
-            return subprocess.run([sys.executable, "-m", "server"], env=env).returncode
+            return subprocess.run([sys.executable, "-P", "-m", "server"], env=env).returncode
         except KeyboardInterrupt:
             return 0
     # POSIX: exec so the process BECOMES the server — it must BE the pid that
     # receives SIGTERM for the cloud graceful flush (systemd/Fly send it there).
     os.execve(sys.executable,
-              [sys.executable, "-m", "server"], env)
+              [sys.executable, "-P", "-m", "server"], env)
     return 0  # unreachable
 
 
@@ -938,7 +955,7 @@ def cmd_dev(args) -> int:
     # subprocess, NOT os.execve like `serve`: execve segfaults under MSYS2/git-bash
     # on recent CPython, and a child process keeps Ctrl+C working on every platform.
     try:
-        return subprocess.run([sys.executable, "-m", "server"], env=env).returncode
+        return subprocess.run([sys.executable, "-P", "-m", "server"], env=env).returncode
     except KeyboardInterrupt:
         return 0
 
@@ -1237,11 +1254,9 @@ SESSION_SECRET=
 # Behind the bundled Caddy reverse proxy, trust its forwarded client IP
 # (used by the login rate limit). Caddy is configured to set X-Forwarded-For.
 ATLAS_TRUSTED_IP_HEADER=X-Forwarded-For
-# Optional: auto-pull + auto-push the mind to a PRIVATE GitHub repo. <TOKEN> =
-# a GitHub fine-grained PAT with Contents:Read-and-write on that repo, created
-# at https://github.com/settings/personal-access-tokens/new (otherwise just
-# commit/push the ./mind repo yourself).
-# GITHUB_REPO_URL=https://x-access-token:<TOKEN>@github.com/<you>/<your-mind>.git
+# A PRIVATE GitHub copy: the mounted ./mind keeps its own git, so give it a remote
+# (git -C mind remote add origin <url> && git -C mind push -u origin main) and Atlas
+# pulls from and pushes to it. GITHUB_REPO_URL is only read to clone an EMPTY mind.
 """
 
 DEPLOY_SYSTEMD = """\
@@ -1268,10 +1283,9 @@ WorkingDirectory=/opt/atlas
 Environment=ATLAS_STORE=file
 Environment=KB_AUTH_ENABLED=1
 Environment=PORT=8765
-# REQUIRED. Do NOT hardcode it here in a committed file — instead run
+# REQUIRED, and on purpose not here (the server refuses to start without it): run
 # `systemctl edit atlas` and add, under [Service]:
 #   Environment=SESSION_SECRET=<long random value>
-Environment=SESSION_SECRET=change-me
 ExecStart=/opt/atlas/venv/bin/atlas serve /opt/atlas/mind
 Restart=on-failure
 
@@ -1591,8 +1605,9 @@ def cmd_deploy(args) -> int:
         print( "     (python3 -c \"import secrets; print(secrets.token_hex(32))\").")
         print( "  4. Put your domain in deploy/Caddyfile and point its DNS at this server.")
         print( "  5. docker compose up -d   (first run: open the printed setup token to create admin).")
-        print( "  Cloud mode commits content writes into the mounted repo; set GITHUB_REPO_URL in .env")
-        print( "  to also auto-push to your PRIVATE GitHub remote.")
+        print( "  Cloud mode commits content writes into the mounted repo; to keep a PRIVATE GitHub")
+        print( "  copy, add it a remote (git -C mind remote add origin <url> && git -C mind push -u")
+        print( "  origin main): Atlas pulls from and pushes to its upstream.")
     elif args.target == "fly":
         print(f"Going online on Fly.io as '{app_name}'.")
         print("  TIP: re-run with --wizard to do ALL of the steps below interactively")
@@ -2147,7 +2162,7 @@ def _keep_both(dest: Path) -> list:
         return _copy_git(dest, "rev-parse", "--verify", "--quiet", f"{rev}:{path}").stdout.strip()
 
     mine = {path: blob("HEAD", path) for path in changed("HEAD") & changed("FETCH_HEAD")}
-    if _copy_git(dest, "merge", "-q", "--no-commit", "-X", "theirs", "FETCH_HEAD").returncode:
+    if _copy_git(dest, *who, "merge", "-q", "--no-commit", "-X", "theirs", "FETCH_HEAD").returncode:
         # What -X theirs leaves open: a note deleted on one side, edited on the other.
         for path in _copy_git(dest, "diff", "--name-only", "--diff-filter=U").stdout.splitlines():
             if _copy_git(dest, "cat-file", "-e", f"FETCH_HEAD:{path}").returncode == 0:
@@ -2221,7 +2236,7 @@ def _sync_clone(url: str, dest) -> int:
     if dest.exists() and any(dest.iterdir()):
         raise CliError(f"{dest} is not empty: pick another folder")
     token = (os.environ.get("ATLAS_TOKEN")
-             or getpass.getpass("Access token (Settings > Copies > On your computer): ")).strip()
+             or getpass.getpass("Access token (Settings › My Atlas › Copies, On your computer): ")).strip()
     if not token:
         raise CliError("an access token is needed")
     header = "Authorization: Basic " + base64.b64encode(f"atlas:{token}".encode()).decode()
@@ -2236,18 +2251,20 @@ def _sync_clone(url: str, dest) -> int:
 
 def _sync_once(dest: Path) -> str:
     """Send this copy's note changes, take the instance's: one round."""
-    _copy_git(dest, "add", "-A", "--", "content")
-    _copy_git(dest, "add", "-A", "--", "AGENTS.md")
-    if _copy_git(dest, "diff", "--cached", "--quiet").returncode:
-        _copy_git(dest, *_copy_who(dest), "commit", "-q", "-m",
-                  f"notes: from {platform.node() or 'a copy'}")
+    who = _copy_who(dest)  # merge and rebase need one as much as commit
     received, kept = 0, []
     for _ in range(3):  # the instance may record a change of its own while we push
+        # Committed each round, a note saved meanwhile included: no --autostash, whose
+        # failed re-apply counts as a success and leaves conflict markers in the note.
+        _copy_git(dest, "add", "-A", "--", "content")
+        _copy_git(dest, "add", "-A", "--", "AGENTS.md")
+        if _copy_git(dest, "diff", "--cached", "--quiet").returncode:
+            _copy_git(dest, *who, "commit", "-q", "-m", f"notes: from {platform.node() or 'a copy'}")
         fetch = _copy_git(dest, "fetch", "-q", "origin", "main")
         if fetch.returncode:
             raise CliError(_copy_refusal(fetch.stderr))
         new = int(_copy_git(dest, "rev-list", "--count", "HEAD..FETCH_HEAD").stdout or 0)
-        if new and _copy_git(dest, "rebase", "-q", "--autostash", "FETCH_HEAD").returncode:
+        if new and _copy_git(dest, *who, "rebase", "-q", "FETCH_HEAD").returncode:
             _copy_git(dest, "rebase", "--abort")
             kept += _keep_both(dest)
         received += new
@@ -2336,6 +2353,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="atlas",
         description="Atlas engine: scaffolding, server, build and "
                     "administration of a mind's file registry.")
+    parser.add_argument("--version", action="version", version=f"atlas-mind {_version()}")
     subparsers = parser.add_subparsers(dest="command", metavar="<command>",
                                        required=True)
 

@@ -5,21 +5,31 @@ import uuid
 import server as _s
 
 
+def _readable(handler, rel) -> bool:
+    """Whether the viewer may read the doc `rel`, whose annotations quote it; answers
+    400/404 otherwise (a private doc reads as missing)."""
+    if _s._notes_path(rel) is None:
+        handler._send_json(400, {"error": "invalid path"})
+        return False
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser and not _s.can_read(rel, ctx):
+        handler._send_json(404, {"error": "not found"})
+        return False
+    return True
+
+
 def list_notes(handler):
     """GET /api/notes?path=<rel> — the annotations of a doc (auth)."""
     rel = (handler._query().get("path", [""])[0] or "").strip()
-    if _s._notes_path(rel) is None:
-        handler._send_json(400, {"error": "invalid path"})
-        return
-    handler._send_json(200, _s.load_notes(rel))
+    if _readable(handler, rel):
+        handler._send_json(200, _s.load_notes(rel))
 
 
 def create(handler):
     """POST /api/notes — attach an annotation to a doc selection."""
     data = handler._read_json()
     rel = (data.get("path") or "").strip()
-    if _s._notes_path(rel) is None:
-        handler._send_json(400, {"error": "invalid path"})
+    if not _readable(handler, rel):
         return
     note_text = (data.get("note") or "").strip()
     exact = (data.get("exact") or "").strip()
@@ -60,6 +70,8 @@ def patch(handler):
     if _s._notes_path(rel) is None or not note_id:
         handler._send_json(400, {"error": "path and id required"})
         return
+    if not _readable(handler, rel):
+        return
     note_text = (handler._read_json().get("note") or "").strip()
     if not note_text:
         handler._send_json(400, {"error": "empty note"})
@@ -86,6 +98,8 @@ def delete(handler):
     note_id = (q.get("id", [""])[0] or "").strip()
     if _s._notes_path(rel) is None or not note_id:
         handler._send_json(400, {"error": "path and id required"})
+        return
+    if not _readable(handler, rel):
         return
     notes = _s.load_notes(rel)
     kept = [n for n in notes if n.get("id") != note_id]

@@ -241,8 +241,10 @@ class TestVendoringSources(unittest.TestCase):
         self.assertNotIn("DOMPurify.sanitize(raw) : raw", text)
         self.assertNotIn(
             "(typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize", text)
-        # renderMd always sanitizes, and blocks rendering if the lib is missing.
-        self.assertIn("return DOMPurify.sanitize(marked.parse(md || ''));", text)
+        # renderMd always sanitizes (through the one sanitizer config), and blocks
+        # rendering if the lib is missing.
+        self.assertIn("return sanitizeHtml(marked.parse(md || ''));", text)
+        self.assertIn("return DOMPurify.sanitize(html,", text)
         self.assertIn("rendu bloqué", text)
 
     def test_sw_precaches_vendor_and_versioned_cache(self):

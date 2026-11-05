@@ -369,7 +369,7 @@ def _check(side: dict, rev: str, ctx, rejected: list, kind: str):
         rejected.append({"side": kind, "path": rel, "quote": quote,
                          "reason": "not found word for word" if text else "no such doc at that date"})
         return None
-    return {"path": rel, "quote": quote, "line": _line_of(start, text), "date": ""}
+    return {"path": rel, "quote": quote, "line": _line_of(start, text), "date": "", **provenance.mark(rel)}
 
 
 def verify(args: dict, ctx=None) -> dict:

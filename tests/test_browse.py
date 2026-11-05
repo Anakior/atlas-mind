@@ -141,15 +141,12 @@ class TestBrowseMind(unittest.TestCase):
         self.assertEqual(resp.body, DECK_HTML.encode("utf-8"))
         self.assertEqual(resp.headers.get("Content-Type"), "text/html")
 
-    def test_directory_listing_exposed(self):
-        # Characterization (surprising): GET /<dir>/ hits no dist/ index.html →
-        # SimpleHTTPRequestHandler generates a listing of the corresponding
-        # content/ directory (the mind's files are exposed).
+    def test_a_folder_is_never_listed(self):
+        # GET /<dir>/ hits no dist/ index.html: the stdlib handler would list the
+        # content/ folder, private docs included. Refused instead.
         resp = self.srv.get("/projets/")
-        self.assertEqual(resp.status, 200)
-        self.assertEqual(resp.headers.get("Content-Type"), "text/html; charset=utf-8")
-        self.assertIn("alpha.md", resp.text)
-        self.assertIn("notes.txt", resp.text)
+        self.assertEqual(resp.status, 404)
+        self.assertNotIn("alpha.md", resp.text)
         # Without trailing slash: 301 redirect from the stdlib handler.
         resp = self.srv.get("/projets")
         self.assertEqual(resp.status, 301)

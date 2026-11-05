@@ -30,6 +30,6 @@
      same size/alignment for folders AND files (the pencil was a misaligned
      unicode ✎, now a Heroicon like the link). */
   .tree-action-btn { opacity: 0; display: inline-flex; align-items: center; align-self: center; flex-shrink: 0; padding: 0 0.2rem; color: #94a3b8; transition: opacity 0.12s, color 0.12s; }
-  .group:hover > .tree-action-btn { opacity: 1; }
+  .group:hover > .tree-action-btn, .tree-row:focus-within > .tree-action-btn { opacity: 1; }
   .tree-action-btn:hover { color: #e5e6e8; }
   .tree-action-btn--share:hover { color: rgb(var(--accent)); }

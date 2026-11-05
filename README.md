@@ -37,7 +37,7 @@ atlas init ~/my-mind               # a new mind: atlas.toml, starter notes, AGEN
 atlas serve ~/my-mind              # http://127.0.0.1:8765
 ```
 
-**On your server**: `atlas deploy ~/my-mind --target compose|systemd|fly` writes the files and prints the guide (`--target fly --wizard` goes all the way). Atlas runs at the root of its address or under any sub-path (`base_path = "/notes"`).
+**On your server**: `atlas deploy ~/my-mind --target compose|systemd|fly` writes the files and prints the guide (`--target fly --wizard` goes all the way). Atlas runs at the root of its address or under any sub-path (`base_path = "/notes"` in the `[server]` section of `atlas.toml`).
 
 Requires **Python 3.11+** and **git**. `init` never overwrites: it refuses a non-empty folder without `--force` and keeps the files already there.
 
@@ -99,10 +99,10 @@ There is also a **REST API v1** (Bearer tokens) with a published **OpenAPI 3.1**
 ## Run it
 
 - **Security**: admin and member accounts, per-note access, optional TOTP 2FA, recovery codes for a forgotten password, per-account lockout and per-IP rate limits, full CSRF defence.
-- **Network**: by default Atlas only reaches out to read an MCP client's public metadata when you connect that client over OAuth (`[oauth] client_metadata_fetch = false` turns it off), and to ask PyPI for the latest version when an admin opens About.
+- **Network**: by default Atlas only reaches out to read an MCP client's public metadata when you connect that client over OAuth (`[oauth] client_metadata_fetch = false` turns it off), and to ask PyPI for the latest version when an admin opens About (and at most once a day for the admin's update banner with `[server] update_check = true`, which the alwaysdata install turns on).
 - **Configuration**: one small `atlas.toml`: the name and line under the logo, the language, the port, accounts, the sub-path.
 - **Updates**: from **Settings › About** on a pip install (alwaysdata), `atlas update --target …` for a deployment, `uv tool upgrade atlas-mind` on your computer. The engine and your notes update separately: upgrading never touches a note.
-- **Commands**: `atlas --help` lists them: `init`, `serve`, `build`, `deploy`, `update`, `user`, `token`, `share`, `inbox`, `import`, `export`, `sync`, `backup`, `restore`, `hook`, `doctor`.
+- **Commands**: `atlas --help` lists them: `init`, `serve`, `build`, `deploy`, `update`, `user`, `token`, `share`, `inbox`, `import`, `export`, `sync`, `backup`, `restore`, `hook`, `setup-code`, `doctor`.
 
 ## Documentation
 

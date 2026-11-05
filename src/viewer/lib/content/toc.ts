@@ -1,13 +1,14 @@
 // Table of contents over the already-rendered content DOM (not the markdown source). buildToc is
-// called by DocRenderer.show (doc-renderer.ts) and editor.exitEditMode (editor/editor.ts) after they
-// set contentEl.innerHTML. readingTimeFromWords is a sibling pure util read by the same DocRenderer.show.
+// called by DocRenderer.show (doc-renderer.ts) after it sets contentEl.innerHTML. readingTimeFromWords is a sibling pure util read by the same DocRenderer.show.
 
 import { tocList, contentEl, tocPanel } from '../core/dom-refs';
 import { slugify } from '../core/utils';
 import { layoutChrome } from '../home/layout-chrome';
+import { DOC_ID_PREFIX } from './sanitize';
 
 export class Toc {
   // Build the right-panel TOC from the rendered h2/h3 (<2 headings → hide it); anchors smooth-scroll.
+  // A heading's id carries the doc prefix, so "## Content" never takes the app's own #content.
   buildToc(): void {
     tocList.innerHTML = '';
 
@@ -40,6 +41,7 @@ export class Toc {
       }
 
       used.add(id);
+      id = DOC_ID_PREFIX + id;
       heading.id = id;
 
       const a = document.createElement('a');

@@ -60,8 +60,7 @@ class SidePanels {
 
       if (!f) return;
       e.preventDefault();
-      docRenderer.show(f);
-      history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+      void docRenderer.open(f);
     });
     window.addEventListener('atlas:settings', () => this.close());
     // A doc opened from the panel (a Journal title, a recent doc) takes its place.

@@ -20,15 +20,16 @@ import { TemplateRegistry } from './template-registry';
 import { DirRenameModal } from './dir-rename-modal';
 import { t } from '../core/i18n';
 import { escapeHtml, slugify } from '../core/utils';
-import { setStatus } from '../core/net';
+import { requestError, setStatus } from '../core/net';
 import { currentFile, editMode } from '../core/state';
-import { contentCache } from '../content/content-tree';
+import { forgetContent } from '../content/content-tree';
 import { fileMap } from '../core/tree';
 import { renameBackdrop, renameModal } from './dialogs';
 import { shareBackdrop, closeShareModal } from '../admin/settings/settings-shared';
 import { sendToFolder } from '../content/file-drop';
 import { docRenderer } from '../content/doc-renderer';
 import { editor } from '../editor/editor';
+import { shortcutsHeld } from '../graph/keyboard-router';
 
 // Cross-file refs read by boot/bootstrap.ts; HTMLElement | null, so consumers assert with `!`.
 export const newFileBtn = document.getElementById('new-file-btn');
@@ -306,7 +307,7 @@ export class NewFileModal extends Modal {
         body: JSON.stringify({ path, content }),
       });
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
       this.close();
       setStatus(t('noteSaved'), 'ok');
     } catch (err) {
@@ -358,15 +359,14 @@ export class NewFileModal extends Modal {
         body: JSON.stringify({ path, content, private: visibility === 'private' }),
       });
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
       this.close();
-      location.hash = '#' + encodeURIComponent(path);
       setStatus((provider && provider.successMessage) || t('docCreated'), 'ok');
       await refreshTreeOrReload();
       // Straight to writing it: the title was the second and last gesture.
       if (fileMap[path]) {
-        await docRenderer.show(fileMap[path]);
-        editor.enterEditMode();
+        await docRenderer.open(fileMap[path]);
+        void editor.enterEditMode();
       }
     } catch (err) {
       this.showError(t('errSp', (err as Error).message));
@@ -388,12 +388,8 @@ window.Atlas = {
     return currentFile ? { path: currentFile.path } : null;
   },
   invalidateDoc(path: string): void {
-    contentCache.delete(path);
-
-    if (currentFile && currentFile.path === path) {
-      currentFile.content = undefined;
-      currentFile.mtime = 0;
-    }
+    forgetContent(path);
+    if (currentFile && currentFile.path === path) currentFile.mtime = 0;
   },
   registerTemplate(value: string, provider: TemplateProvider): boolean {
     return newFileModal.registerTemplate(value, provider);
@@ -429,12 +425,7 @@ document.addEventListener('keydown', (e) => {
     }
   }
 
-  if (
-    e.key === 'n' &&
-    !window.__viewerMode &&
-    !editMode &&
-    !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? '')
-  ) {
+  if (e.key === 'n' && !window.__viewerMode && !editMode && !shortcutsHeld(e)) {
     e.preventDefault();
     newFileModal.open();
   }

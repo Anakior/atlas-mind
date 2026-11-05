@@ -9,7 +9,7 @@
 
 import { IS_OFFLINE_BUILD, EMBED_BACKLINKS } from '../core/data-csrf';
 import { tocLinks } from '../core/dom-refs';
-import { currentFile, tocHasLinks, setTocHasLinks } from '../core/state';
+import { currentView, tocHasLinks, setTocHasLinks } from '../core/state';
 import { fileMap } from '../core/tree';
 import { escapeHtml } from '../core/utils';
 import { t } from '../core/i18n';
@@ -59,6 +59,7 @@ export async function loadBacklinksIndex(): Promise<Record<string, BacklinkEntry
 }
 
 export async function renderBacklinksFor(file: FileNode): Promise<void> {
+  const view = currentView();
   // Synchronous reset (before the await): applyToc() from buildToc() will see a clean state.
   setTocHasLinks(false);
 
@@ -69,7 +70,7 @@ export async function renderBacklinksFor(file: FileNode): Promise<void> {
 
   const idx = await loadBacklinksIndex();
 
-  if (currentFile !== file) return; // user changed page mid-load
+  if (currentView() !== view) return; // user changed page mid-load
   const entry = idx[file.path] || { out: [], in: [] };
   const resolve = (paths: string[] | undefined): FileNode[] =>
     (paths || []).map((p) => fileMap[p]).filter((f): f is FileNode => !!f);
@@ -126,10 +127,7 @@ export async function renderBacklinksFor(file: FileNode): Promise<void> {
       e.preventDefault();
       const f = fileMap[(a as HTMLElement).dataset.conn!];
 
-      if (f) {
-        docRenderer.show(f);
-        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-      }
+      if (f) void docRenderer.open(f);
     });
   });
   layoutChrome.applyToc();

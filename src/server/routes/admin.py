@@ -295,9 +295,12 @@ def update_check(handler):
     current = _s.current_version()
     install = updater.install_kind()
     asked = bool(handler._query().get("now"))
+    # A failed update that could not put the running release back: the files on disk say
+    # neither release, so `current` alone would read as up to date.
+    repair = updater.needs_repair
     if not _s.CONFIG.update_check and not asked:
         handler._send_json(200, {"current": current, "latest": None, "install": install,
-                                 "update_available": False, "disabled": True})
+                                 "update_available": False, "disabled": True, "repair": repair})
         return
     latest = _s.latest_pypi_version(_ABOUT_MAX_AGE_S if asked else None)
     handler._send_json(200, {
@@ -306,6 +309,7 @@ def update_check(handler):
         "install": install,
         "update_available": _is_newer(latest, current),
         "url": PROJECT_URL,
+        "repair": repair,
     })
 
 
@@ -350,6 +354,10 @@ def nodes_post(handler):
         handler._send_json(400, {"error": "path not found"})
         return
     clean = target.relative_to(_s.CONFIG.content_root).as_posix()
+    ctx = handler._viewer_ctx()
+    if not ctx.superuser and not _s.can_manage(clean, ctx):  # a node publishes it to another Atlas
+        handler._send_json(400, {"error": "path not found"})
+        return
     import secrets
     token = secrets.token_urlsafe(32)
     try:

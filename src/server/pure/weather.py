@@ -5,9 +5,8 @@ With the periodic docs that went missing and the docs flagged outdated: a week's
 call."""
 from collections import defaultdict
 
-import server as _s
 from server.pure import contradictions, rhythms
-from server.pure.queries import _activity_events, _api_outdated, _api_stale, _visible
+from server.pure.queries import _activity_events, _api_outdated, _api_stale, _readable
 
 _MAX_EVENTS = 2000
 _MAX_STORMS = 30
@@ -22,10 +21,9 @@ def _regions(rel: str) -> list:
 def weather(weeks: int, months: int, ctx=None) -> dict:
     regions = defaultdict(lambda: {"docs": 0, "commits": set(), "ai": set(), "changed": set(),
                                    "fog": 0, "storms": 0, "outdated": 0})
-    for rel, _ in _s._iter_doc_files():
-        if _visible(rel, ctx):
-            for r in _regions(rel):
-                regions[r]["docs"] += 1
+    for rel, _ in _readable(ctx):  # the corpus's memo: one ACL pass per change, not per call
+        for r in _regions(rel):
+            regions[r]["docs"] += 1
     commits, ai_commits = set(), set()
     for event in _activity_events(weeks * 7, _MAX_EVENTS, None, None, ctx) or []:
         commits.add(event["sha"])

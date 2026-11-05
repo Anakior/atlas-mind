@@ -90,24 +90,24 @@ CONFIG = None  # type: AtlasConfig
 _CTX = None  # type: AppContext
 
 from server.pure.todos_md import (  # noqa: F401
-    TODO_HEADER, _norm_cat, parse_todos, write_todos, load_todos,
+    TODO_HEADER, _norm_cat, parse_todos, write_todos, load_todos, _write_todos_md, stable_ids,
 )
 from server.pure.notes_md import _notes_path, load_notes, save_notes  # noqa: F401
 from server.pure.contradictions_store import (  # noqa: F401  verdict cache (13c feedback)
-    VERDICTS, doc_hash, load_verdicts, verdict_index, valid_verdict, set_verdict,
+    VERDICTS, doc_hash, load_verdicts, verdict_index, set_verdict,
     verdict_holds, line_hashes,
 )
 from server.pure.params import clamp_int  # noqa: F401  request-param clamp (routes + tools)
 from server.pure.auth import (  # noqa: F401  token/CSRF/share/bearer crypto + identity
     _has_control_chars, is_valid_email, _b64url_nopad, _b64url_nopad_decode,
-    current_session_epoch, make_token, verify_token, authenticate_user, authenticate,
+    current_session_epoch, make_token, verify_token, authenticate_user,
     new_share_token, verify_share_token, make_csrf_token, verify_csrf_token,
     consume_recovery_code, _hash_api_token, verify_api_bearer,
     resolve_mcp_identity,
 )
 from server.pure.docs import (  # noqa: F401  tree ACL / git-history / live tasks / search text
-    _filter_tree, _valid_git_rev, _doc_path_history, _doc_path_at,
-    _live_tasks_index, _normalize_text, _html_to_text, _HTML_BLOCK_RE,
+    _filter_tree, _valid_git_rev, _doc_path_at,
+    _live_tasks_index, _normalize_text, _html_to_text,
 )
 from server.pure.acl import (  # noqa: F401  per-document ACL (model B — partage à la Notion)
     ViewerCtx, viewer_ctx, share_ctx, effective_level, LEVELS, parse_ai_trailer,
@@ -152,10 +152,25 @@ def _canonical_rel(rel):
         root = CONFIG.content_root
         target = (root / rel).resolve()
         if target.exists():  # an existing file OR folder → its real on-disk key
-            return target.relative_to(root).as_posix()
+            real = target.relative_to(root).as_posix()
+            # Windows' resolve() returns the disk's case; macOS' keeps the one asked for.
+            return real if os.name == "nt" else _disk_case(root, real)
     except (ValueError, OSError):
         pass
     return rel
+
+
+def _disk_case(root, rel):
+    """`rel` spelled as its folders hold it, one component at a time."""
+    parts, here = [], root
+    for part in rel.split("/"):
+        with os.scandir(here) as entries:
+            names = [e.name for e in entries]
+        name = part if part in names else next(
+            (n for n in names if n.casefold() == part.casefold()), part)
+        parts.append(name)
+        here = here / name
+    return "/".join(parts)
 
 
 def can_read(rel, ctx, store=None):
@@ -202,15 +217,29 @@ def _stamp_new_doc(rel, ctx, *, private=None):
 
 
 def _repoint_doc(frm, to):
-    """Move a doc's ACL + share-registry entries from `frm` to `to`. Best-effort and
-    logged — called BEFORE the git sync so the moved doc never lands at its new path
-    with no ACL (which would read as commons)."""
+    """Move a doc's ACL + share-registry entries, and what is kept beside it, from `frm`
+    to `to`. Best-effort and logged — called BEFORE the git sync so the moved doc never
+    lands at its new path with no ACL (which would read as commons). Returns the side
+    files touched, for the move's commit."""
     try:
         store = get_store()
         store.repoint_acl_by_path(frm, to)   # privacy travels first
         store.repoint_shares_by_path(frm, to)
     except Exception as e:
         print(f"[move repoint] {e}", file=sys.stderr)
+    return _repoint_sidecars(frm, to)
+
+
+def _repoint_sidecars(old, new):
+    """Annotations, confirmations and contradiction verdicts, kept by path, follow a move of
+    `old` (a doc or a folder) to `new`. Returns the files touched."""
+    from server.pure import attestations, contradictions_store, notes_md
+    try:
+        return [*notes_md.repoint(old, new), *attestations.repoint(old, new),
+                *contradictions_store.repoint(old, new)]
+    except OSError as e:
+        print(f"[move sidecars] {e}", file=sys.stderr)
+        return []
 
 
 def _promote_inbox_item(src_rel, dest, ctx, tags=None, ai=None):
@@ -251,10 +280,10 @@ def _promote_inbox_item(src_rel, dest, ctx, tags=None, ai=None):
     else:
         new_text = body.lstrip("\n")
     (CONFIG.content_root / payload["to"]).write_text(new_text, encoding="utf-8")
-    _repoint_doc(payload["from"], payload["to"])  # privacy travels BEFORE the git sync
+    extras = _repoint_doc(payload["from"], payload["to"])  # privacy travels BEFORE the git sync
     touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
     commit_change(ctx, f"kept: {stem} -> {dest or '/'}",
-                  *(CONFIG.content_root / p for p in touched), ai=ai)
+                  *(CONFIG.content_root / p for p in touched), *extras, ai=ai)
     return True, dst_rel
 
 
@@ -288,7 +317,7 @@ def registry_503(handler, context, e):
 from server.pure.hive import (  # noqa: F401  federation node links / mirror / fetch
     encode_node_link, decode_node_link, verify_node_bearer, _validate_node_path,
     _iter_node_files, _remote_mirror_root, _is_readonly_path, _is_safe_node_name,
-    _mirror_is_under_remotes, _atomic_write_bytes, _is_blocked_ip, _validate_remote_url,
+    _mirror_is_under_remotes, _atomic_write_bytes,
     _http_get_bearer, _prune_empty_dirs,
 )
 from server.pure.queries import (  # noqa: F401  read-side corpus/feed queries
@@ -299,7 +328,7 @@ from server.pure.contradictions import (  # noqa: F401  13c same-subject pair ge
     find_contradictions, find_doc_neighbors, schedule_warm,
 )
 from server.pure.mcp_call import (  # noqa: F401  MCP tool dispatch
-    _soft_delete, trash_doc, _mcp_call_tool, _mcp_jsonrpc, _mcp_http_status, _needed_scope, _span_hash,
+    trash_doc, _mcp_call_tool, _mcp_jsonrpc, _mcp_http_status, _needed_scope, _span_hash,
     run_of, undo_run,
 )
 from server.extensions import load_server_extensions  # noqa: F401
@@ -375,7 +404,7 @@ def setup_is_open() -> bool:
 # ─── TOTP (RFC 6238) + recovery codes ───────────────────────────────────────────
 from server.totp import (  # noqa: F401
     TOTP_STEP_SECONDS, TOTP_DIGITS, TOTP_WINDOW, TOTP_SECRET_BYTES,
-    RECOVERY_CODE_COUNT, generate_totp_secret, _hotp, _decode_base32_secret,
+    generate_totp_secret,
     verify_totp_step, verify_totp, totp_provisioning_uri, generate_recovery_codes,
 )
 
@@ -640,7 +669,8 @@ def migrate_legacy_format():
         if first:
             todos.append({"text": first, "done": False})
     if todos:
-        write_todos([{"id": i, **t} for i, t in enumerate(todos)])
+        # The markdown list itself, in either mode: a cloud admin's own list is read from it once.
+        _write_todos_md(stable_ids(todos))
 
 
 # Live reload (local-dev): SSE fan-out + dist/index.html watcher live in the
@@ -653,7 +683,7 @@ from server.services.sse_gate import SSE_GATE  # noqa: F401
 
 from server.render.i18n import _strings, _t  # noqa: F401
 from server.render.pages import (  # noqa: F401
-    _load_page, render_page, share_extension_assets,
+    render_page, share_extension_assets,
 )
 
 
@@ -691,15 +721,40 @@ def sync_remote(remote: dict) -> dict:
     return _CTX.remote_sync.sync_one(remote)
 
 
-from server.render.search_cache import _doc_entry, _doc_text, _DOC_CACHE  # noqa: F401
+from server.render.search_cache import _doc_entry, _doc_text  # noqa: F401
 from server.render.mcp_tools import _mcp_tools  # noqa: F401
 
 
 def _move_md_with_relink(src_rel: str, dst_rel: str, dry_run=False):
     """Move a .md/.html and rewrite the incoming [[wikilinks]] that target it.
-    Injects the content root + build module into docs.move_md_with_relink."""
-    return docs.move_md_with_relink(src_rel, dst_rel, CONFIG.content_root, _import_build(),
-                                    dry_run, index=CONFIG.dist_dir / "_backlinks.json")
+    Injects the content root + build module into docs.move_md_with_relink. The doc's
+    privacy is copied to the new path BEFORE the rename (the caller's _repoint_doc then
+    moves it): the doc never reads as commons there, and a registry that fails stops
+    the move rather than leave it so."""
+    target = _validate_doc_path(dst_rel)
+    placed = not dry_run and target is not None and not target.exists()
+    if placed:
+        try:
+            get_store().copy_acl_under(_canonical_rel(src_rel), dst_rel)
+        except Exception as e:
+            print(f"[move acl] {e}", file=sys.stderr)
+            return "error", "Move failed: the document's sharing could not follow it"
+    status, payload = docs.move_md_with_relink(src_rel, dst_rel, CONFIG.content_root, _import_build(),
+                                               dry_run, index=CONFIG.dist_dir / "_backlinks.json",
+                                               may_relink=_may_relink)
+    if placed and status != "ok":
+        get_store().drop_acl_under(dst_rel)
+    return status, payload
+
+
+def _may_relink(linking_rel, old_rel, new_rel):
+    """Whether a move may rewrite its link in `linking_rel`, which shows the new name to
+    everyone who reads that doc. A doc that is commons once moved: anywhere. A private one
+    (its own entry travels with it, or its new folder is private): only in docs private to
+    the same owner; the others keep the old name, which they could not open anyway."""
+    entry = get_store().get_acl(_canonical_rel(old_rel)) or {}
+    owner = entry.get("owner") or owner_of(new_rel)
+    return owner is None or owner_of(linking_rel) == owner
 
 
 # ─── Folders: create, move, delete an empty one ─────────────────────────────────
@@ -799,8 +854,12 @@ def move_dir(src_rel, dst_rel, ctx, *, ai=None):
     except Exception as e:
         print(f"[folder move copy_acl] {e}", file=sys.stderr)
     try:
-        rewrites = docs.move_dir_with_relink(src, dst, CONFIG.content_root, _import_build(),
-                                             index=CONFIG.dist_dir / "_backlinks.json")
+        # A doc moving with the folder already shows its new name: its links may follow.
+        within = csrc.lower() + "/"
+        rewrites = docs.move_dir_with_relink(
+            src, dst, CONFIG.content_root, _import_build(), index=CONFIG.dist_dir / "_backlinks.json",
+            may_relink=lambda linking, old, new: (linking.lower().startswith(within)
+                                                  or _may_relink(linking, old, new)))
     except OSError:
         try:
             store.drop_acl_under(dst_rel)  # roll back the speculative ACL copy
@@ -814,7 +873,8 @@ def move_dir(src_rel, dst_rel, ctx, *, ai=None):
     except Exception as e:
         print(f"[folder move repoint] {e}", file=sys.stderr)
     relinked = [CONFIG.content_root / r["path"] for r in rewrites]
-    commit_change(ctx, f"folder moved: {src_rel} → {dst_rel}", src, dst, *relinked, ai=ai)
+    commit_change(ctx, f"folder moved: {src_rel} → {dst_rel}", src, dst, *relinked,
+                  *_repoint_sidecars(csrc, dst_rel), ai=ai)
     return 200, {"ok": True, "from": src_rel, "to": dst_rel, "rewrites": rewrites,
                  "links_updated": sum(r["count"] for r in rewrites)}
 
@@ -844,6 +904,19 @@ def _seed_dev_admin() -> None:
         print(f"[dev] could not seed admin: {e}", file=sys.stderr, flush=True)
 
 
+_WEAK_SECRET_EXIT = (
+    "FATAL: SESSION_SECRET is missing or too weak in cloud mode (KB_AUTH_ENABLED=1).\n"
+    "  fly secrets set SESSION_SECRET=$(python3 -c \"import secrets;print(secrets.token_hex(32))\")"
+)
+
+
+def _weak_secret(secret: bytes) -> bool:
+    """A session secret anyone could guess: it signs sessions and share links, so it would
+    let them forge either. Placeholders from the templates and short values are refused."""
+    return (not secret or len(secret) < 16 or b"change-me" in secret.lower()
+            or b"changeme" in secret.lower())
+
+
 def run() -> None:
     """Boot the server: resolve the mind, (cloud) clone + secret guard, load the
     config, start the background threads and serve forever. Invoked by
@@ -859,11 +932,8 @@ def run() -> None:
         # ABSENT from the env is still accepted here — atlas.toml (inside the clone)
         # may provide it; the full guard after AtlasConfig.load is the authority.
         env_secret = os.environ.get("SESSION_SECRET")
-        if env_secret is not None and env_secret in ("", "dev-secret-change-me"):
-            sys.exit(
-                "FATAL: SESSION_SECRET not set in cloud mode (KB_AUTH_ENABLED=1).\n"
-                "  fly secrets set SESSION_SECRET=$(python3 -c \"import secrets;print(secrets.token_hex(32))\")"
-            )
+        if env_secret is not None and _weak_secret(env_secret.encode()):
+            sys.exit(_WEAK_SECRET_EXIT)
         freshly_cloned = ensure_repo_cloned(mind_root)
 
     # Config built HERE and nowhere else: after the clone, so <mind>/atlas.toml
@@ -876,11 +946,8 @@ def run() -> None:
     if CONFIG.auth_enabled:
         # Refuse to start in cloud with the default secret: it is public →
         # forgeable session AND share tokens = total auth bypass. Crash instead.
-        if not CONFIG.session_secret or CONFIG.session_secret == b"dev-secret-change-me":
-            sys.exit(
-                "FATAL: SESSION_SECRET not set in cloud mode (KB_AUTH_ENABLED=1).\n"
-                "  fly secrets set SESSION_SECRET=$(python3 -c \"import secrets;print(secrets.token_hex(32))\")"
-            )
+        if _weak_secret(CONFIG.session_secret):
+            sys.exit(_WEAK_SECRET_EXIT)
 
     # Build the application context (config + store + services) now that CONFIG is
     # final and the secret guard has passed; the HTTP server carries it. Built
@@ -898,13 +965,10 @@ def run() -> None:
             # Set always (idempotent): a checkout restored from the volume may lack it.
             git("config", "user.email", CONFIG.git_author_email)
             git("config", "user.name", CONFIG.git_author_name)
+            _CTX.git_sync.recover()
             if not freshly_cloned:
-                # Repo persisted on the volume: refresh now instead of waiting for the pull
-                # loop. Best-effort — a slow/offline remote must not block boot.
-                try:
-                    git("pull", "--rebase", "--autostash", "--quiet", timeout=30)
-                except Exception as e:
-                    print(f"[boot] git pull skipped: {e}", file=sys.stderr, flush=True)
+                # Repo persisted on the volume: refresh now instead of waiting for the pull loop.
+                _CTX.git_sync.catch_up()
         _CTX.git_sync.build()
 
     # Mind's server extensions, loaded once at boot. A broken one is reported on

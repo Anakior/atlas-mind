@@ -18,7 +18,9 @@ name). These two tests close the two halves of that gap:
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -111,6 +113,23 @@ class TestPyprojectPackaging(unittest.TestCase):
             "ships an amputated wheel.\n"
             f"on disk but NOT declared: {sorted(on_disk - declared)}\n"
             f"declared but NOT on disk: {sorted(declared - on_disk)}")
+
+
+class TestVersionAgrees(unittest.TestCase):
+    """One release, one number: the package, its MCP registry entry and the newest released
+    section of the changelog (an [Unreleased] one may sit above it)."""
+
+    def test_version_agrees_everywhere(self):
+        init = (SRC_DIR / "__init__.py").read_text(encoding="utf-8")
+        version = re.search(r'^__version__ = "([^"]+)"', init, re.MULTILINE).group(1)
+        server = json.loads((REPO_ROOT / "server.json").read_text(encoding="utf-8"))
+        self.assertEqual(server["version"], version, "server.json")
+        for package in server.get("packages", []):
+            self.assertEqual(package["version"], version, "server.json packages")
+        changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        released = re.search(r"^## \[(\d[^\]]*)\]", changelog, re.MULTILINE)
+        self.assertIsNotNone(released, "CHANGELOG.md has no released section")
+        self.assertEqual(released.group(1), version, "the newest released section of CHANGELOG.md")
 
 
 if __name__ == "__main__":

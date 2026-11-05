@@ -149,6 +149,9 @@ def render_template(*, tree: dict, embed_content: dict | None,
                            description=site_description or tagline,
                            site_url=site_url, og_image=og_image, lang=lang)
     replacements = {
+        # The server swaps in a fresh nonce per response (the shell's CSP); a static
+        # offline build has no CSP to match.
+        "__CSP_NONCE__": "" if embed_content is not None else "__CSP_NONCE__",
         "__BUILD_TS__": build_ts,
         "__BASE_PATH_JSON__": _enc(base_path),
         "__BASE__": _html.escape(base_path, quote=True),

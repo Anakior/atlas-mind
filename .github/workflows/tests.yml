@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +31,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: src/viewer/build/package-lock.json
 
@@ -48,5 +48,80 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: src/viewer/build
 
+      # One process per test class, each without a global git identity (see the script).
       - name: Run test suite
-        run: python -m unittest discover -s tests -v
+        run: python tests/run_parallel.py
+
+  bundle:
+    name: Viewer bundle matches its sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/viewer/build/package-lock.json
+
+      - name: Rebuild the bundle
+        run: |
+          npm ci
+          npm run build
+        working-directory: src/viewer/build
+
+      - name: Compare with the committed one
+        run: git diff --exit-code --stat -- src/viewer/vendor/app.bundle.js
+
+  wheel:
+    name: Installed wheel boots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build the sdist, then the wheel from it
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --outdir dist .
+
+      # Outside the checkout from here on, so nothing runs from the sources.
+      - name: Install the wheel in a fresh virtualenv
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -m venv venv
+          venv/bin/pip install "$GITHUB_WORKSPACE"/dist/*.whl
+          venv/bin/atlas init mind --yes
+        env:
+          GIT_CONFIG_GLOBAL: /dev/null
+
+      - name: Serve it locally (atlas serve)
+        working-directory: ${{ runner.temp }}
+        run: |
+          venv/bin/atlas serve mind --port 8766 > local.log 2>&1 &
+          server=$!
+          curl -fsS -o /dev/null --retry 60 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:8766/ || { cat local.log; exit 1; }
+          kill "$server"
+
+      - name: Serve it online (python -m atlas_mind.server, as on alwaysdata)
+        working-directory: ${{ runner.temp }}
+        env:
+          KB_AUTH_ENABLED: "1"
+          KB_REPO_PATH: ${{ runner.temp }}/mind
+          ATLAS_STORE: file
+          SESSION_SECRET: ci-wheel-check-not-a-real-secret-0123456789
+          PORT: "8765"
+          GIT_CONFIG_GLOBAL: /dev/null
+        run: |
+          venv/bin/python -m atlas_mind.server > cloud.log 2>&1 &
+          server=$!
+          curl -fsS -o /dev/null --retry 60 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:8765/healthz || { cat cloud.log; exit 1; }
+          curl -fsS -o /dev/null http://127.0.0.1:8765/login || { cat cloud.log; exit 1; }
+          kill "$server"

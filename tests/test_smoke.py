@@ -47,9 +47,16 @@ class TestSmoke(unittest.TestCase):
         self.assertEqual(headers.get("Content-Type"), "text/html; charset=utf-8")
         self.assertTrue(body.startswith(b"<!DOCTYPE html>"))
         text = body.decode("utf-8")
-        # build.py injected the tree (__DATA__): the mind's docs are in there…
-        self.assertIn("accueil.md", text)
-        self.assertIn("projets/alpha.md", text)
+        # The shell is the same for every account: it names no doc (the tree comes
+        # from /api/tree, filtered per viewer)…
+        self.assertNotIn("accueil.md", text)
+        self.assertNotIn("projets/alpha.md", text)
+        # Only the shell's own scripts run: the nonce of its policy is the one they carry.
+        csp = headers.get("Content-Security-Policy", "")
+        nonce = csp.split("'nonce-", 1)[1].split("'", 1)[0] if "'nonce-" in csp else ""
+        self.assertTrue(nonce)
+        self.assertIn(f'<script nonce="{nonce}">', text)
+        self.assertNotIn("__CSP_NONCE__", text)
         # …and the template placeholders were indeed replaced.
         self.assertNotIn("__DATA__", text)
         self.assertNotIn("__BUILD_TS__", text)

@@ -13,6 +13,7 @@ import json
 import os
 import posixpath
 import re
+import secrets
 import sys
 
 
@@ -45,6 +46,15 @@ _CONTENT_SANDBOX = {
     ".html": "sandbox allow-scripts", ".htm": "sandbox allow-scripts",
     ".xhtml": "sandbox allow-scripts", ".svg": "sandbox", ".xml": "sandbox",
 }
+# The viewer shell's policy: its own scripts only (the nonce marks its inline ones), no
+# plugin, no <base>, forms and frames on this site. Styles stay open: the shell and the
+# notes carry inline ones.
+_SHELL_CSP = ("script-src 'self' 'nonce-{nonce}'; object-src 'none'; base-uri 'none'; "
+              "form-action 'self'; frame-src 'self'; frame-ancestors 'self'")
+# The types a browser shows without running anything; every other one is sandboxed too
+# (an .xsl, an .rdf… can carry a script the host's mime table lets run).
+_INERT_TYPES = ("image/", "audio/", "video/", "font/", "application/pdf", "application/json",
+                "text/plain", "text/csv", "text/markdown")
 
 
 def _without_base(path):
@@ -101,6 +111,10 @@ class Handler(SimpleHTTPRequestHandler):
         elif base and keyword == "Set-Cookie":
             value = value.replace("; Path=/;", f"; Path={base};", 1)
         super().send_header(keyword, value)
+
+    def list_directory(self, path):
+        """No autoindex: a folder listing would name the private docs in it."""
+        self.send_error(404)
 
     def translate_path(self, path):
         clean = path.split("?", 1)[0].split("#", 1)[0]
@@ -806,17 +820,16 @@ class Handler(SimpleHTTPRequestHandler):
         extension dispatch, setup redirect and session guard): dotfile/source
         ACL, per-document ACL, gzip dist indices, .html intercept, then the
         stdlib static handler."""
-        rel = self.path.split("?", 1)[0].lstrip("/")
+        rel = self.path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
         # Security: the static handler serves any file under ROOT, dotfiles
         # included. Refuse dotfiles (.git/config holds the GitHub PAT) and source
-        # code (*.py/*.pyc). Checks MUST run on the CANONICAL path (normalized +
-        # URL-decoded exactly as translate_path resolves it): otherwise a
-        # non-normalized path (/a//b, %2f tricks) slips past the literal-prefix
-        # ACL here while translate_path still serves the file — a real ACL bypass.
-        from urllib.parse import unquote as _unquote
-        _norm = posixpath.normpath(_unquote(self.path.split("?", 1)[0]))
-        _decoded = "/".join(w for w in _norm.split("/") if w and w not in (".", ".."))
-        if (any(p.startswith(".") for p in _decoded.split("/"))
+        # code (*.py/*.pyc). The checks run on the very file translate_path will
+        # serve, so no spelling of the URL (/a//b, %2f, a raw '#', a backslash)
+        # can check one path and serve another — a real ACL bypass otherwise.
+        served = os.path.relpath(self.translate_path(self.path), _s.CONFIG.content_root)
+        _decoded = "" if served == "." else served.replace(os.sep, "/")
+        if (_decoded.startswith("../") or _decoded == ".."
+                or any(p.startswith(".") for p in _decoded.split("/"))
                 or _decoded.endswith((".py", ".pyc"))):
             self.send_error(404)
             return
@@ -852,11 +865,15 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 target.relative_to(_s.CONFIG.dist_dir)
                 if target.is_file():
-                    body = target.read_bytes()
+                    # Only the shell's own scripts run: a fresh nonce on them, and a note that
+                    # slips markup past the sanitizer still runs nothing.
+                    nonce = secrets.token_urlsafe(16)
+                    body = target.read_bytes().replace(b"__CSP_NONCE__", nonce.encode())
                     # no-store: the shell inlines the app JS, so a cached shell = stale
                     # JS; it must be revalidated every load for a deploy to land.
                     self._send_bytes(200, body, "text/html; charset=utf-8",
-                                     [("Cache-Control", "no-store")])
+                                     [("Cache-Control", "no-store"),
+                                      ("Content-Security-Policy", _SHELL_CSP.format(nonce=nonce))])
                     return
             except (ValueError, OSError):
                 pass
@@ -864,7 +881,9 @@ class Handler(SimpleHTTPRequestHandler):
         # link) runs top-level on the atlas origin, where its script could read kb_csrf and
         # act as the visitor: sandboxed, like a shared .html (route /share) and the viewer's
         # iframe. A deck keeps its own JS; an .svg or .xml needs none.
-        self._content_sandbox = _CONTENT_SANDBOX.get(posixpath.splitext(_decoded)[1].lower())
+        mime = self.guess_type(_decoded)
+        self._content_sandbox = _CONTENT_SANDBOX.get(posixpath.splitext(_decoded)[1].lower()) or (
+            None if mime.startswith(_INERT_TYPES) and mime != "image/svg+xml" else "sandbox")
         try:
             return super().do_GET()
         finally:

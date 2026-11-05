@@ -29,7 +29,7 @@ def file_put(handler):
     data = handler._read_json()
     rel = (data.get("path") or "").strip()
     content = data.get("content", "")
-    if not rel or ".." in rel.split("/"):
+    if not rel or docs.hidden_segment(rel):  # "..", .trash/…
         handler._send_json(400, {"error": "invalid path"})
         return
     rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level)
@@ -495,11 +495,11 @@ def move(handler):
         return
     # Keep the doc's privacy + share links with it (ACL repointed before the git sync;
     # a registry hiccup must not fail the move — the doctor reconciles any orphan).
-    _s._repoint_doc(payload["from"], payload["to"])
+    extras = _s._repoint_doc(payload["from"], payload["to"])
     touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
     subject = (f"moved: {posixpath.splitext(payload['from'])[0]}"
                f" → {posixpath.splitext(payload['to'])[0]}")
-    _s.commit_change(ctx, subject, *(_s.CONFIG.content_root / p for p in touched))
+    _s.commit_change(ctx, subject, *(_s.CONFIG.content_root / p for p in touched), *extras)
     handler._send_json(200, {"ok": True, **payload})
 
 
@@ -699,6 +699,11 @@ def trash_restore(handler):
         handler._send_json(404, {"error": "not in the trash"})
         return
     original = PurePosixPath(rel[len(_TRASH):])
+    # Back where it was only for someone who may create there: the trash is no way into
+    # another person's private folder.
+    if not ctx.superuser and not _s.can_create(original.as_posix(), ctx):
+        handler._send_json(403, {"error": "insufficient permission to restore it there"})
+        return
     dest = _s.CONFIG.content_root / original
     n = 1
     while dest.exists():
@@ -711,5 +716,5 @@ def trash_restore(handler):
         _s.get_store().repoint_acl_by_path(rel, restored)
     except Exception as e:
         print(f"[restore acl] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"restored: {dest.stem}", target, dest)
+    _s.commit_change(ctx, f"restored: {dest.stem}", target, dest, *_s._repoint_sidecars(rel, restored))
     handler._send_json(200, {"ok": True, "path": restored})

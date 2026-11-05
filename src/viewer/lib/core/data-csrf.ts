@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 // ─── Data injected by render.py ───────────────────────────────────────────
 // Online: EMBED_* are null, loaded on demand from the server.
 // Offline: they hold the inline data (standalone HTML).
@@ -36,9 +38,13 @@ export const SITE_NAME = document.title;
 export let TAGLINE: string = __TAGLINE_JSON__;
 export let SITE_PREFIX: string = __SITE_PREFIX_JSON__;
 // The path Atlas is served under ("" at the root of its address, "/notes/atlas" below it): every
-// URL the page makes starts with it. Relative fetches get it from the wrapper below; the rest call url().
+// URL the page makes starts with it. fetch() gets it from the wrapper below; href, src, EventSource
+// and the like call url().
 export const BASE: string = IS_OFFLINE_BUILD ? '' : __BASE_PATH_JSON__;
 export const url = (path: string): string => BASE + path;
+// A doc's address inside Atlas, for fetch(); docUrl is the full one, for an href or a src.
+export const docPath = (path: string): string => '/' + path.split('/').map(encodeURIComponent).join('/');
+export const docUrl = (path: string): string => url(docPath(path));
 export function setIdentity(prefix: string, tagline: string): void {
   SITE_PREFIX = prefix;
   TAGLINE = tagline;
@@ -104,10 +110,13 @@ export function currentCsrfToken(): string | null {
       }
     }
 
-    // A path from the root of the address ("/api/…") is Atlas's own: under its base path (once).
-    if (typeof input === 'string' && input.startsWith('/') && !input.startsWith('//')
-        && !(BASE && (input === BASE || input.startsWith(BASE + '/')))) input = BASE + input;
+    // A path from the root of the address ("/api/…", docPath()) is Atlas's own: the base path goes in
+    // front of it, always — never guessed from the path, which a folder named like the base would fool.
+    if (typeof input === 'string' && input.startsWith('/') && !input.startsWith('//')) input = BASE + input;
 
-    return nativeFetch(input, init);
+    // A request that never reached Atlas says so in the page's language, not "Failed to fetch".
+    return nativeFetch(input, init).catch((e: unknown) => {
+      throw e instanceof TypeError ? new TypeError(t('errNetwork')) : e;
+    });
   };
 })();

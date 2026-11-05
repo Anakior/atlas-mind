@@ -65,12 +65,14 @@ def make_token(email: str, role: str, epoch: int = 0) -> str:
 
 
 def verify_token(token: str):
-    """Returns {'email': ..., 'role': ...} or None. Old tokens without role default to viewer (least privilege).
+    """Returns {'email': ..., 'role': ...} or None.
 
     Verifies, in order: HMAC signature (constant time) → expiration
-    (CONFIG.session_max_age) → session epoch (server-side revocation). A registry
-    unreachable at the time of the epoch check REJECTS the cookie (fail-closed):
-    a re-login is better than a revoked session being re-validated."""
+    (CONFIG.session_max_age) → the account, read from the registry: it must still
+    exist, its session epoch must match (server-side revocation), and the role is
+    its current one, never the cookie's. A registry unreachable at that point
+    REJECTS the cookie (fail-closed): a re-login is better than a revoked session
+    being re-validated."""
     try:
         payload_b64, sig_b64 = token.split(".", 1)
         # An old-format token (no '.') falls into the exception via the decoding
@@ -86,10 +88,11 @@ def verify_token(token: str):
         if time.time() - data["ts"] > _s.CONFIG.session_max_age:
             return None
         email = data["email"]
-        cookie_epoch = int(data.get("ep") or 0)
-        if current_session_epoch(email) != cookie_epoch:
+        user = _s.get_store().get_user_by_email(email)
+        if (not user or user.get("role") == _s.API_ROLE
+                or int(user.get("session_epoch") or 0) != int(data.get("ep") or 0)):
             return None
-        return {"email": email, "role": data.get("role", "viewer")}
+        return {"email": email, "role": user.get("role", "admin")}  # login's own default
     except Exception:
         return None
 
@@ -119,16 +122,6 @@ def authenticate_user(email: str, password: str):
     if not store.verify_password(password, user.get("password_hash")):
         return None
     return user
-
-
-def authenticate(email: str, password: str):
-    """Returns the user role if credentials match, None otherwise.
-
-    Keeps the historical signature (role only). The 2-factor login flow goes
-    through authenticate_user to be able to inspect the account's 2FA state."""
-    user = authenticate_user(email, password)
-    # Least privilege: a record missing its role resolves to viewer, never admin.
-    return user.get("role", "viewer") if user else None
 
 
 # Share links are opaque CAPABILITY tokens: a random key whose SHA256 indexes the

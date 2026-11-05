@@ -4,7 +4,7 @@
 
 import { Modal } from '../ui/modal-base';
 import { t } from '../core/i18n';
-import { setStatus } from '../core/net';
+import { requestError, setStatus } from '../core/net';
 import { dirRenameBackdrop, refreshTreeOrReload } from './new-file-modal';
 
 export class DirRenameModal extends Modal {
@@ -81,11 +81,8 @@ export class DirRenameModal extends Modal {
         body: JSON.stringify({ from: this.sourcePath, to: newPath }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-
-        throw new Error(err.error || 'HTTP ' + res.status);
-      }
+      // 409: the place is taken (the server's own reason is English).
+      if (!res.ok) throw res.status === 409 ? new Error(t('fileExistsAt')) : requestError(res.status);
 
       this.close();
       // The tree (and any open doc's hash) is reconciled by refreshTreeOrReload below.

@@ -127,7 +127,7 @@ body:has(.pill-banner:not(.hidden)) .home { margin-top: 52px; }
 }
 /* The trash panel's rows: not links, each with its Restaurer button. */
 .home-row:has(.trash-restore) { align-items: center; cursor: default; }
-.trash-restore { flex-shrink: 0; padding: 4px 10px; border: 0; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: rgb(var(--brand)); background: rgb(var(--brand) / .1); }
+.trash-restore { flex-shrink: 0; margin-left: auto; padding: 4px 10px; border: 0; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: rgb(var(--brand)); background: rgb(var(--brand) / .1); }
 .trash-restore:hover { background: rgb(var(--brand) / .18); }
 .trash-restore:disabled { opacity: .5; cursor: default; }
 .trash-purge { flex-shrink: 0; margin-left: 6px; padding: 4px 10px; border: 0; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: rgb(var(--ink-400)); background: transparent; }

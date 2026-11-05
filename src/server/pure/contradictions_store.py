@@ -8,6 +8,7 @@ import json
 import time
 
 import server as _s
+from server.pure.docs import renamed
 
 VERDICTS = ("real", "none")
 
@@ -61,6 +62,28 @@ def line_hashes(text: str) -> set:
     return {doc_hash(line.strip()) for line in text.splitlines() if line.strip()}
 
 
+def _save(entries: list):
+    _cache_path().write_text(
+        json.dumps({"version": 1, "verdicts": entries}, ensure_ascii=False, indent=1),
+        encoding="utf-8")
+    return _cache_path()
+
+
+def repoint(old: str, new: str) -> list:
+    """Carry the verdicts naming `old` (a doc or a folder) to `new`, each pair kept in its
+    normalized order; the file, if it changed."""
+    entries = load_verdicts()
+    moved = []
+    for e in entries:
+        a, b = renamed(e.get("a", ""), old, new) or e.get("a"), renamed(e.get("b", ""), old, new) or e.get("b")
+        if (a, b) == _pair(a, b):
+            moved.append({**e, "a": a, "b": b})
+        else:  # the rename swapped their order: each side keeps its hash and span
+            moved.append({**e, "a": b, "b": a, "a_hash": e.get("b_hash"), "b_hash": e.get("a_hash"),
+                          **({"a_span": e["b_span"], "b_span": e["a_span"]} if "a_span" in e else {})})
+    return [_save(moved)] if moved != entries else []
+
+
 def set_verdict(a, b, verdict, a_hash, b_hash, by, note="", a_span="", b_span=""):
     """Upsert a pair's verdict (keyed normalized) and persist. Returns the cache file path
     so the caller can commit it. Stores the doc hashes; if the judged line spans are given,
@@ -76,10 +99,7 @@ def set_verdict(a, b, verdict, a_hash, b_hash, by, note="", a_span="", b_span=""
     if sa and sb:
         entry["a_span"], entry["b_span"] = sa, sb
     entries.append(entry)
-    _cache_path().write_text(
-        json.dumps({"version": 1, "verdicts": entries}, ensure_ascii=False, indent=1),
-        encoding="utf-8")
-    return _cache_path()
+    return _save(entries)
 
 
 def verdict_holds(entry, a_doc_hash, b_doc_hash, a_line_hashes=frozenset(), b_line_hashes=frozenset()):

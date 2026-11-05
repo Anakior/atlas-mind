@@ -196,10 +196,7 @@ export class MindGraph {
 
       this.close();
 
-      if (f) {
-        docRenderer.show(f);
-        history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-      }
+      if (f) void docRenderer.open(f);
     }
   }
 

@@ -5,11 +5,17 @@ time from __file__ then reassigned one by one in __main__ in cloud mode) and
 DECOUPLES the engine (src/ + web/) from the mind (the content directory).
 
 Sources, in order of priority:
-  1. environment variables (PORT, ATLAS_BIND, KB_AUTH_ENABLED, SESSION_SECRET,
-     GIT_PULL_INTERVAL, GITHUB_WEBHOOK_SECRET, ATLAS_TRUSTED_IP_HEADER,
-     ATLAS_STORE, ATLAS_STORE_DIR, GITHUB_REPO_URL)
+  1. environment variables: PORT, KB_AUTH_ENABLED, SESSION_SECRET, SESSION_MAX_AGE,
+     GIT_PULL_INTERVAL, GITHUB_WEBHOOK_SECRET, ATLAS_TRUSTED_IP_HEADER, ATLAS_PUBLIC_URL,
+     ATLAS_BASE_PATH, ATLAS_ALLOW_PRIVATE_REMOTES, ATLAS_UPDATE_CHECK, ATLAS_STORE,
+     ATLAS_STORE_DIR, GITHUB_REPO_URL; and, with no atlas.toml key, ATLAS_BIND (bind
+     address), ATLAS_DEV (dev sandbox) and ATLAS_SETUP_CODE_SHA256 (first-admin code)
   2. <mind>/atlas.toml (optional, tomllib — stdlib)
   3. defaults = the EXACT historical values from server.py / build.py
+
+Read outside this module: ATLAS_MIND and KB_REPO_PATH (the mind, below), ATLAS_LANG (the
+language of a mind the cloud boot creates), ATLAS_DEV_FRESH (dev sandbox without its
+seeded admin), ATLAS_TOKEN (`atlas sync`), FLY_APP_NAME / FLY_ALLOC_ID (running on Fly).
 
 Mind resolution (resolve_mind_root):
   - explicit argument to AtlasConfig.load(root=...)
@@ -28,11 +34,16 @@ atlas.toml format (all keys optional):
     port = 8765
     auth_enabled = false
     session_secret = "..."
-    git_pull_interval = 300
+    session_max_age = 2592000  # seconds (30 days)
+    git_pull_interval = 300    # seconds between two pulls, 10 at least
     github_webhook_secret = "..."
     trusted_ip_header = "CF-Connecting-IP"  # client IP header behind a proxy
                                             # (list → last element, the only one
                                             # set by the trusted proxy)
+    public_url = "https://atlas.example.com"  # when a proxy rewrites Host
+    base_path = "/notes"       # served under a sub-path of its address
+    allow_private_remotes = false  # hive nodes on localhost / the LAN
+    update_check = false           # daily PyPI check for the admin's banner
 
     [store]
     kind = "file"             # local JSON registry under .atlas (no database)
@@ -56,6 +67,9 @@ atlas.toml format (all keys optional):
                                   # (only a <meta name=description> is emitted).
     description = "..."           # meta/OG description (default: the tagline)
     og_image = "https://example.com/card.jpg"  # social-card image (absolute URL)
+
+    [oauth]
+    client_metadata_fetch = true  # fetch an MCP client's metadata document
 """
 from pathlib import Path
 import difflib
@@ -89,6 +103,8 @@ DEFAULT_SESSION_SECRET = "dev-secret-change-me"
 # epoch (logout-all / password reset / TOTP change bump it).
 DEFAULT_SESSION_MAX_AGE = 30 * 86400
 DEFAULT_GIT_PULL_INTERVAL = 300
+# Each pull also rebuilds and pushes: below this the loop hammers the remote.
+MIN_GIT_PULL_INTERVAL = 10
 DEFAULT_STORE_KIND = "file"
 DEFAULT_KB_REPO_PATH = "/app/repo"
 DEFAULT_GIT_AUTHOR_NAME = "Atlas Bot"
@@ -167,29 +183,44 @@ def set_toml_root_keys(text: str, values: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _home_of(key: str, section: str):
+    """Where `key` belongs when it sits in the wrong place: "[server] port" for a section's
+    key, or the top of the file for a root key written after a [section] header (TOML reads
+    it as part of that section). None when it belongs nowhere."""
+    if section and key in _KNOWN_TOML_TOP_LEVEL and key not in _KNOWN_TOML_KEYS:
+        return f"{key} at the top of the file, before any [section]"
+    return next((f"[{name}] {key}" for name, keys in _KNOWN_TOML_KEYS.items()
+                 if name != section and key in keys), None)
+
+
 def _warn_unknown_toml_keys(data: dict) -> None:
     """Reports on stderr (non-fatal) any unknown atlas.toml section or key: a
-    typo (auth_enable, [sever]...) must never be silently ignored. A warning, not
-    an error, so an atlas.toml written for a newer engine stays usable (forward
-    compat)."""
-    def warn(label: str, unknown: str, known) -> None:
-        renamed = _RENAMED_TOML_KEYS.get(unknown)
-        suggestion = ([renamed] if renamed
-                      else difflib.get_close_matches(unknown, sorted(known), n=1))
-        hint = f" (did you mean {suggestion[0]!r}?)" if suggestion else ""
+    typo (auth_enable, [sever]...) or a key in the wrong section must never be
+    silently ignored. A warning, not an error, so an atlas.toml written for a
+    newer engine stays usable (forward compat)."""
+    def warn(label: str, unknown: str, known, home=None) -> None:
+        if home:
+            hint = f" (did you mean {home}?)"
+        else:
+            renamed = _RENAMED_TOML_KEYS.get(unknown)
+            suggestion = ([renamed] if renamed
+                          else difflib.get_close_matches(unknown, sorted(known), n=1))
+            hint = f" (did you mean {suggestion[0]!r}?)" if suggestion else ""
         print(f"atlas.toml: unknown {label} ignored{hint}", file=sys.stderr)
 
     for key, value in data.items():
         if key not in _KNOWN_TOML_TOP_LEVEL:
-            label = f"section [{key}]" if isinstance(value, dict) else f"key {key}"
-            warn(label, key, _KNOWN_TOML_TOP_LEVEL)
+            if isinstance(value, dict):
+                warn(f"section [{key}]", key, _KNOWN_TOML_TOP_LEVEL)
+            else:
+                warn(f"key {key}", key, _KNOWN_TOML_TOP_LEVEL, _home_of(key, ""))
             continue
         known_keys = _KNOWN_TOML_KEYS.get(key)
         if known_keys is None or not isinstance(value, dict):
             continue  # known scalar key, or malformed table (_table raises later)
         for sub_key in value:
             if sub_key not in known_keys:
-                warn(f"key {key}.{sub_key}", sub_key, known_keys)
+                warn(f"key {key}.{sub_key}", sub_key, known_keys, _home_of(sub_key, key))
 
 
 def resolve_mind_root(env=None) -> Path:
@@ -380,11 +411,13 @@ class AtlasConfig:
             self.git_pull_interval = _toml_int(server, "server",
                                                "git_pull_interval",
                                                DEFAULT_GIT_PULL_INTERVAL)
-        if self.git_pull_interval < 0:
-            # time.sleep(negative) would silently kill the git_pull_loop thread.
-            raise AtlasConfigError(
-                f"GIT_PULL_INTERVAL / server.git_pull_interval must be "
-                f"positive or zero (got {self.git_pull_interval})")
+        if self.git_pull_interval < MIN_GIT_PULL_INTERVAL:
+            # 0 would spin git_pull_loop without a pause, a negative sleep kills its thread:
+            # raised to the floor, with a word, rather than an instance that won't start.
+            print(f"atlas.toml: git_pull_interval {self.git_pull_interval} raised to "
+                  f"{MIN_GIT_PULL_INTERVAL} seconds (for an instant pull, set up the GitHub "
+                  f"webhook)", file=sys.stderr)
+            self.git_pull_interval = MIN_GIT_PULL_INTERVAL
 
         if "GITHUB_WEBHOOK_SECRET" in env:
             webhook_secret = env["GITHUB_WEBHOOK_SECRET"]
@@ -446,10 +479,9 @@ class AtlasConfig:
             self.allow_private_remotes = _toml_bool(
                 server, "server", "allow_private_remotes", False)
 
-        # Update check: admin Settings banner when a newer atlas-mind is on PyPI.
-        # The ONLY outbound call the engine could make on its own (cached ~1/day,
-        # admin-only, best-effort) — OFF by default so a stock instance makes zero
-        # third-party network calls (the README's promise). Opt in to enable it.
+        # Update check: admin Settings banner when a newer atlas-mind is on PyPI
+        # (cached ~1/day, admin-only, best-effort). OFF by default: a stock instance
+        # asks PyPI only when an admin opens About (the README's promise).
         update_check_env = env.get("ATLAS_UPDATE_CHECK", "").strip()
         if update_check_env:
             self.update_check = update_check_env.lower() in (
@@ -536,8 +568,8 @@ class AtlasConfig:
         # ── oauth (MCP authorization) ──────────────────────────────────────
         # An MCP client may identify itself by the HTTPS URL of a metadata document
         # (CIMD), which Atlas then fetches: the one outbound call besides the update
-        # check, made only when a signed-in person connects that client. false keeps
-        # zero outbound calls; clients then register themselves (DCR) instead.
+        # check, made only when a signed-in person connects that client. false leaves
+        # the update check alone; clients then register themselves (DCR) instead.
         oauth = _table(data, "oauth")
         self.oauth_client_metadata_fetch = _toml_bool(
             oauth, "oauth", "client_metadata_fetch", True)

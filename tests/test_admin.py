@@ -828,7 +828,7 @@ class TestAdminUiPanel(unittest.TestCase):
         for en_value in ("settingsTitle: 'Settings'",
                          "settingsTabUsers: 'Users'",
                          "settingsTabShares: 'Shares'",
-                         "settingsMcpUrl: 'MCP connector URL'"):
+                         "settingsMcpUrl: 'Address to paste into the assistant'"):
             _assert_i18n(self, self.index, en_value)
 
     def test_settings_entry_point_gated_on_admin_cloud(self):

@@ -1,11 +1,11 @@
 <div id="palette-backdrop" class="hidden fixed inset-0 z-50 overlay-backdrop">
-  <div class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[640px] max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 overflow-hidden">
+  <div role="dialog" aria-modal="true" aria-label="Recherche et actions" data-i18n-aria="paletteLabel" class="absolute left-1/2 top-[12%] -translate-x-1/2 w-[640px] max-w-[92vw] bg-navy-800 border subtle-border rounded-xl shadow-2xl shadow-black/70 overflow-hidden">
     <div class="border-b subtle-border flex items-center gap-2 px-4">
       <svg class="w-4 h-4 text-ink-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-      <input id="palette-input" type="text" placeholder="Rechercher un fichier ou une action&hellip;" data-i18n-placeholder="palettePlaceholder" class="flex-1 px-1 py-3 bg-transparent text-ink-100 placeholder-ink-500 text-sm focus:outline-none">
+      <input id="palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" aria-label="Rechercher un fichier ou une action" data-i18n-aria="palettePlaceholder" placeholder="Rechercher un fichier ou une action&hellip;" data-i18n-placeholder="palettePlaceholder" class="flex-1 px-1 py-3 bg-transparent text-ink-100 placeholder-ink-500 text-sm focus:outline-none">
       <kbd class="text-[10px] text-ink-500 bg-black/30 border subtle-border px-1.5 py-0.5 rounded font-mono">Esc</kbd>
     </div>
-    <ul id="palette-list" class="max-h-[420px] overflow-y-auto scrollbar-thin py-1"></ul>
+    <ul id="palette-list" role="listbox" class="max-h-[420px] overflow-y-auto scrollbar-thin py-1"></ul>
     <div class="px-4 py-2 border-t subtle-border text-[10px] text-ink-500 flex justify-between font-sans">
       <span><kbd class="bg-black/30 px-1 rounded">&uarr;&darr;</kbd> <span data-i18n="paletteNavigate">naviguer</span> · <kbd class="bg-black/30 px-1 rounded">&crarr;</kbd> <span data-i18n="paletteOpen">ouvrir</span></span>
       <span id="palette-count"></span>
@@ -13,10 +13,10 @@
   </div>
 </div>
 
-<div id="graph-overlay" class="hidden fixed inset-0 z-50" style="background:#0e0d12">
+<div id="graph-overlay" class="hidden fixed inset-0 z-50" style="background:#0e0d12" role="dialog" aria-modal="true" aria-labelledby="graph-title">
   <canvas id="graph-canvas" class="absolute inset-0" style="width:100%;height:100%"></canvas>
   <div class="absolute top-4 left-5 pointer-events-none select-none">
-    <div class="text-sm font-semibold text-ink-100 font-sans" data-i18n="graphTitle">The Mind</div>
+    <div id="graph-title" class="text-sm font-semibold text-ink-100 font-sans" data-i18n="graphTitle">The Mind</div>
     <div class="text-[11px] text-ink-400 font-sans" data-i18n="mindSubtitle">ton palais mental — celui que ton IA arpente avec toi</div>
     <div class="text-[11px] text-ink-500 font-sans" id="graph-stats"></div>
   </div>
@@ -34,10 +34,10 @@
   <div id="graph-tooltip" class="absolute pointer-events-none hidden bg-navy-800/95 border subtle-border text-ink-100 text-xs px-2.5 py-1.5 rounded-md shadow-xl font-sans z-10"></div>
 </div>
 <div id="tasks-overlay" class="hidden fixed inset-0 z-50 overflow-y-auto overlay-backdrop">
-  <div style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
+  <div role="dialog" aria-modal="true" aria-labelledby="tasks-title" style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
     <div class="flex items-center justify-between" style="margin-bottom:1.5rem">
       <div>
-        <div class="text-lg font-semibold text-ink-100 font-sans" data-i18n="tasksTitle">Tâches</div>
+        <div id="tasks-title" class="text-lg font-semibold text-ink-100 font-sans" data-i18n="tasksTitle">Tâches</div>
         <div id="tasks-stats" class="text-xs text-ink-400 font-sans"></div>
       </div>
       <div class="flex items-center gap-2">
@@ -55,13 +55,13 @@
 
 <!-- The menu's panels (home/side-panels.ts): Inbox, Journal and Récents over any page, like Tâches. -->
 <div id="side-panel" class="hidden fixed inset-0 z-50 overflow-y-auto overlay-backdrop">
-  <div style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
+  <div role="dialog" aria-modal="true" aria-labelledby="side-panel-title" style="max-width:46rem;margin:0 auto;padding:2.5rem 1.5rem">
     <div class="flex items-center justify-between" style="margin-bottom:1.5rem">
       <div>
         <div id="side-panel-title" class="text-lg font-semibold text-ink-100 font-sans"></div>
         <div id="side-panel-sub" class="text-xs text-ink-400 font-sans"></div>
       </div>
-      <button id="side-panel-close" class="p-1.5 text-ink-400 hover:text-ink-100 rounded hover:bg-ink-100/10" data-tip="Fermer (Esc)" data-i18n-tip="closeEsc">
+      <button id="side-panel-close" class="p-1.5 text-ink-400 hover:text-ink-100 rounded hover:bg-ink-100/10" data-tip="Fermer (Esc)" data-i18n-tip="closeEsc" aria-label="Fermer" data-i18n-aria="close">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -85,10 +85,10 @@
   <div id="toc-notes" class="overflow-y-auto scrollbar-thin px-2 pt-2 pb-2 text-xs max-h-[28vh] shrink-0"></div>
 </aside>
 <div id="history-overlay" class="hidden fixed inset-0 z-50 overlay-backdrop">
-  <div id="history-card" class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl overflow-hidden flex flex-col">
+  <div id="history-card" role="dialog" aria-modal="true" aria-labelledby="history-title" class="panel-card absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl overflow-hidden flex flex-col">
     <div class="px-5 py-4 flex items-center justify-between gap-3">
       <div class="min-w-0">
-        <div class="text-lg font-semibold text-ink-100 font-sans" data-i18n="historyHeader">Historique</div>
+        <div id="history-title" class="text-lg font-semibold text-ink-100 font-sans" data-i18n="historyHeader">Historique</div>
         <div id="history-path" class="text-xs font-mono text-ink-400 truncate mt-0.5"></div>
       </div>
       <button id="history-close" class="p-1 -mr-1 text-ink-500 hover:text-ink-100 rounded hover:bg-ink-100/5" title="Fermer (Esc)" data-i18n-title="historyClose">

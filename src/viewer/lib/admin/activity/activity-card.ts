@@ -14,7 +14,7 @@
 import { EMBED_ACTIVITY, IS_OFFLINE_BUILD, url } from '../../core/data-csrf';
 import { LANG, t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
-import { fileMap, docLabel } from '../../core/tree';
+import { fileMap, docLabelAt } from '../../core/tree';
 import { avatarSeed, constellationSvg } from '../../ui/avatar';
 import { historyPanel } from '../../content/history-panel';
 import { docRenderer } from '../../content/doc-renderer';
@@ -61,7 +61,7 @@ export class ActivityCard {
       aiBadge: (family) => self.aiBadge(family),
       rel: (min) => self.rel(min),
       dayKey: (min) => self.dayKey(min),
-      docTitle: (p) => self.docTitle(p),
+      docTitle: (p) => docLabelAt(p || ''),
       skelRows: (n) => self.skelRows(n),
       openDocHistory: (path) => self.openDocHistory(path),
       hasDoc: (path) => typeof fileMap !== 'undefined' && !!fileMap[path],
@@ -78,19 +78,13 @@ export class ActivityCard {
   }
 
   private verb(type: string): string {
-    return (ActivityIcons.VERB[LANG] || ActivityIcons.VERB.fr)[type] || type;
+    return ActivityIcons.TYPES[type] ? t('actVerb_' + type) : type;
   }
 
   // In a sentence ("Ludovic a créé X"), French wants the auxiliary; English doesn't. The bare
   // verb() stays for the orrery legend, where chips read as labels, not sentences.
   private verbPhrase(type: string): string {
     return (LANG === 'en' ? '' : 'a ') + this.verb(type);
-  }
-
-  private docTitle(p: string): string {
-    const f = fileMap[p];
-
-    return f ? docLabel(f) : ((p || '').split('/').pop() || p).replace(/\.(md|html)$/i, '');
   }
 
   private iconSvg(type: string, size: number): string {
@@ -122,20 +116,16 @@ export class ActivityCard {
   }
 
   private rel(min: number): string {
-    const en = LANG === 'en';
-
-    if (min < 1) return en ? 'just now' : "à l'instant";
-    if (min < 60) return Math.round(min) + ' min';
+    if (min < 1) return t('justNow');
+    if (min < 60) return t('relMin', Math.round(min));
 
     const hrs = Math.round(min / 60);
 
-    if (hrs < 24) return hrs + ' h';
+    if (hrs < 24) return t('relHours', hrs);
 
     const d = Math.round(min / 1440);
 
-    if (d === 1) return en ? 'yesterday' : 'hier';
-
-    return en ? d + 'd ago' : 'il y a ' + d + ' j';
+    return d === 1 ? t('relYesterday') : t('daysAgo', d);
   }
 
   private dayKey(min: number): string {
@@ -173,8 +163,7 @@ export class ActivityCard {
     const f = typeof fileMap !== 'undefined' ? fileMap[path] : undefined;
 
     if (!f) return;
-    docRenderer.show(f);
-    history.replaceState(null, '', '#' + encodeURIComponent(f.path));
+    void docRenderer.open(f);
   }
 
   // ── Digest (the weekly summary above the Journal) ─────────────────────────
@@ -287,6 +276,11 @@ export class ActivityCard {
       if ((ev.target as HTMLElement).closest('.act-seeall')) {
         this.expanded = !this.expanded;
         this.renderJournal(root);
+
+        return;
+      }
+      if ((ev.target as HTMLElement).closest('[data-hretry]')) {
+        this.healthView.retry(root.querySelector<HTMLElement>('#activity-health')!);
 
         return;
       }

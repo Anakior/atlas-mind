@@ -21,6 +21,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import struct
 import sys
 import tempfile
@@ -428,9 +429,13 @@ class TestAccountLockout(unittest.TestCase):
 
     def test_lockout_logs_fail2ban_line(self):
         login(self.srv, ADMIN_EMAIL, "encore-faux")
-        time.sleep(0.2)
+        line = re.compile(r"auth fail email=admin@test\.local ip=\S+ count=\d+")
+        deadline = time.monotonic() + 10
         log = self.srv.read_log()
-        self.assertRegex(log, r"auth fail email=admin@test\.local ip=\S+ count=\d+")
+        while not line.search(log) and time.monotonic() < deadline:
+            time.sleep(0.05)
+            log = self.srv.read_log()
+        self.assertRegex(log, line)
         # No password must ever appear in the logs.
         self.assertNotIn("encore-faux", log)
 

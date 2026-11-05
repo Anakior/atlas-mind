@@ -179,14 +179,21 @@ def totp_disable(handler):
     if not user.get("totp_enabled"):
         handler._send_json(409, {"error": "2FA not enabled"})
         return
+    # Codes guessed here count like failed sign-ins: six digits don't stand a free run.
+    ip = handler._client_ip()
+    if not _s.login_rate_limit_ok(ip) or _s.account_lock_remaining(email) > 0:
+        handler._send_json(429, {"error": "locked"})
+        return
     verified = False
     if code:
         verified = _s.verify_totp(user.get("totp_secret") or "", code)
     elif recovery:
         verified = _s.consume_recovery_code(email, recovery)
     if not verified:
+        _s.register_login_failure(email, ip)
         handler._send_json(400, {"error": "invalid code"})
         return
+    _s.reset_login_failures(email)
     try:
         _s.get_store().upsert_user(email, {
             "totp_enabled": False,

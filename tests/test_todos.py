@@ -3,13 +3,17 @@
 Scope: GET/POST /api/todos, PATCH/DELETE /api/todos/:id, persistence in
 content/notes/quick.md (H2 Work/Personal sections, GFM checkboxes).
 
-Behaviors ENCODED AS-IS (bugs/quirks included):
-- A todo's id is its INDEX in the file order (parse_todos reassigns
-  id = position on every read): any write can renumber the others.
-- write_todos groups by section (Work first, then Personal): a "work"
-  POST is inserted BEFORE the personal items -> their ids are shifted.
-- A PATCH cat moves the item to another section -> its own id changes in the
-  response.
+Behaviors ENCODED AS-IS (quirks included):
+- A todo's id is its own and stable: a write never renumbers the others, so a
+  toggle or a delete sent from a device whose list is out of date reaches that
+  todo or none (404), never its neighbour. The markdown records it as an HTML
+  comment (`- [ ] text <!-- id:N -->`), invisible in the rendered doc.
+- A file written before ids were stored (no comment) still reads: its todos get
+  0..n-1 in file order, the same on every device, recorded by the next write.
+- A new todo's id is one the list never had (the clock in ms): a deleted id is
+  never handed out again.
+- write_todos groups by section (Work first, then Personal): a "work" POST is
+  written BEFORE the personal items; a PATCH cat moves the item to its section.
 - Unknown category (POST or PATCH) -> silently falls back to "work".
 - A text containing a newline + "- [ ]" injects extra todos into the markdown
   (no sanitization).
@@ -38,12 +42,12 @@ class TestReadTodos(unittest.TestCase):
         cls.addClassCleanup(cls.srv.stop)
         cls.srv.start()
 
-    def test_get_returns_items_with_index_ids(self):
+    def test_get_numbers_a_file_without_ids_in_file_order(self):
         status, headers, _ = resp = self.srv.get("/api/todos")
         self.assertEqual(status, 200)
         self.assertEqual(headers.get("Content-Type"),
                          "application/json; charset=utf-8")
-        # The ids are positions in the file (0..n-1), not stable identifiers.
+        # The default quick.md predates stored ids: 0..n-1 in file order.
         self.assertEqual(resp.json(), [
             {"id": 0, "text": "Préparer le bilan mensuel", "done": False,
              "cat": "work"},
@@ -105,22 +109,59 @@ class TestParseQuirks(unittest.TestCase):
         self.assertEqual(self.todos[3]["cat"], "work")
 
 
+class TestStoredIds(unittest.TestCase):
+    """Ids recorded in the markdown, mixed with lines written by hand."""
+
+    QUICK_MD = TODO_HEADER + (
+        "## Work\n\n"
+        "- [ ] gardé <!-- id:7 -->\n"
+        "- [ ] ajouté à la main\n"
+        "- [x] copié-collé <!-- id:7 -->\n"
+        "\n"
+        "## Personal\n\n"
+        "- [ ] perso <!--id:3-->\n"
+        "\n"
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        mind = dict(DEFAULT_MIND)
+        mind[TODO_REL] = cls.QUICK_MD
+        cls.srv = AtlasServer(mind=mind)
+        cls.addClassCleanup(cls.srv.stop)
+        cls.srv.start()
+
+    def test_recorded_ids_are_read_and_the_comment_left_out_of_the_text(self):
+        todos = self.srv.get("/api/todos").json()
+        self.assertEqual([(t["id"], t["text"]) for t in todos], [
+            (7, "gardé"),
+            # No id, or one already taken: the next free numbers, in file order.
+            (8, "ajouté à la main"),
+            (9, "copié-collé"),
+            (3, "perso"),
+        ])
+
+    def test_the_same_ids_on_every_read(self):
+        first = self.srv.get("/api/todos").json()
+        self.assertEqual(self.srv.get("/api/todos").json(), first)
+
+
 class TestCreateTodo(unittest.TestCase):
     """POST /api/todos -- one server per test (each test writes)."""
 
-    def test_post_without_cat_defaults_to_work_and_shifts_personal_ids(self):
+    def test_post_without_cat_defaults_to_work_and_leaves_other_ids(self):
         with AtlasServer() as srv:
             resp = srv.post("/api/todos", json_body={"text": "Nouvelle tâche"})
             self.assertEqual(resp.status, 200)
             todos = resp.json()
             self.assertEqual(len(todos), 4)
-            # The new "work" item is written at the end of the Work
-            # section, hence BEFORE the personal items: it takes id 2 and the
-            # existing personal item moves from id 2 to id 3 (silent
-            # renumbering).
-            self.assertEqual(todos[2], {"id": 2, "text": "Nouvelle tâche",
-                                        "done": False, "cat": "work"})
-            self.assertEqual(todos[3], {"id": 3, "text": "Tester le build PoE",
+            # Written at the end of the Work section, hence BEFORE the personal
+            # item -- which keeps its id 2.
+            created = todos[2]
+            self.assertEqual({k: created[k] for k in ("text", "done", "cat")},
+                             {"text": "Nouvelle tâche", "done": False, "cat": "work"})
+            self.assertNotIn(created["id"], (0, 1, 2))
+            self.assertEqual(todos[3], {"id": 2, "text": "Tester le build PoE",
                                         "done": False, "cat": "personal"})
 
     def test_post_personal_category_accepts_mixed_case(self):
@@ -128,8 +169,8 @@ class TestCreateTodo(unittest.TestCase):
             # _norm_cat strips and lowercases the received category.
             todos = srv.post("/api/todos", json_body={
                 "text": "Course du soir", "cat": "  PerSonAl "}).json()
-            self.assertEqual(todos[-1], {"id": 3, "text": "Course du soir",
-                                         "done": False, "cat": "personal"})
+            self.assertEqual((todos[-1]["text"], todos[-1]["cat"]),
+                             ("Course du soir", "personal"))
 
     def test_post_unknown_cat_falls_back_to_work(self):
         with AtlasServer() as srv:
@@ -152,15 +193,17 @@ class TestCreateTodo(unittest.TestCase):
 
     def test_post_writes_exact_markdown(self):
         with AtlasServer() as srv:
-            srv.post("/api/todos", json_body={"text": "Nouvelle tâche"})
+            todos = srv.post("/api/todos", json_body={"text": "Nouvelle tâche"}).json()
+            new_id = todos[2]["id"]
+            # The ids the old file was read with are recorded along the way.
             self.assertEqual(read_quick_md(srv), TODO_HEADER + (
                 "## Work\n\n"
-                "- [ ] Préparer le bilan mensuel\n"
-                "- [x] Review the draft\n"
-                "- [ ] Nouvelle tâche\n"
+                "- [ ] Préparer le bilan mensuel <!-- id:0 -->\n"
+                "- [x] Review the draft <!-- id:1 -->\n"
+                f"- [ ] Nouvelle tâche <!-- id:{new_id} -->\n"
                 "\n"
                 "## Personal\n\n"
-                "- [ ] Tester le build PoE\n"
+                "- [ ] Tester le build PoE <!-- id:2 -->\n"
                 "\n"
             ))
 
@@ -171,15 +214,22 @@ class TestCreateTodo(unittest.TestCase):
             self.assertEqual(srv.get("/api/todos").json(), [])
             todos = srv.post("/api/todos",
                              json_body={"text": "Premier item"}).json()
-            self.assertEqual(todos, [{"id": 0, "text": "Premier item",
-                                      "done": False, "cat": "work"}])
+            self.assertEqual(len(todos), 1)
+            self.assertEqual(todos[0]["text"], "Premier item")
             self.assertEqual(read_quick_md(srv), TODO_HEADER + (
                 "## Work\n\n"
-                "- [ ] Premier item\n"
+                f"- [ ] Premier item <!-- id:{todos[0]['id']} -->\n"
                 "\n"
                 "## Personal\n\n"
                 "\n"
             ))
+
+    def test_a_deleted_id_is_never_handed_out_again(self):
+        with AtlasServer(mind={"accueil.md": "# Accueil\n"}) as srv:
+            first = srv.post("/api/todos", json_body={"text": "a"}).json()[0]["id"]
+            srv.delete(f"/api/todos/{first}")
+            again = srv.post("/api/todos", json_body={"text": "b"}).json()[0]["id"]
+            self.assertNotEqual(again, first)
 
     def test_post_text_with_checkbox_newline_injects_extra_todo(self):
         with AtlasServer() as srv:
@@ -191,6 +241,7 @@ class TestCreateTodo(unittest.TestCase):
             self.assertEqual(len(todos), 5)
             self.assertEqual(todos[2]["text"], "vrai item")
             self.assertEqual(todos[3]["text"], "item injecté")
+            self.assertEqual(len({t["id"] for t in todos}), 5)
 
     def test_post_triggers_background_git_commit(self):
         with AtlasServer() as srv:
@@ -232,8 +283,9 @@ class TestPatchTodo(unittest.TestCase):
                              json_body={"text": "  Texte révisé  "})
             self.assertEqual(resp.status, 200)
             todos = resp.json()
-            self.assertEqual(todos[0]["text"], "Texte révisé")
-            self.assertIn("- [ ] Texte révisé\n", read_quick_md(srv))
+            self.assertEqual(todos[0], {"id": 0, "text": "Texte révisé",
+                                        "done": False, "cat": "work"})
+            self.assertIn("- [ ] Texte révisé <!-- id:0 -->\n", read_quick_md(srv))
 
     def test_patch_blank_text_is_silently_ignored(self):
         with AtlasServer() as srv:
@@ -243,24 +295,23 @@ class TestPatchTodo(unittest.TestCase):
             self.assertEqual(resp.status, 200)
             self.assertEqual(resp.json()[0]["text"], "Préparer le bilan mensuel")
 
-    def test_patch_cat_moves_item_and_changes_its_id(self):
+    def test_patch_cat_moves_item_and_keeps_its_id(self):
         with AtlasServer() as srv:
-            # SURPRISE: moving id 0 (work) to personal relocates it into the
-            # Personal section, hence AFTER the remaining work item -> its id
-            # becomes 1 in the response, and the old id 1 becomes id 0.
+            # Moving id 0 (work) to personal relocates it into the Personal
+            # section, AFTER the remaining work item -- under the same id.
             todos = srv.patch("/api/todos/0",
                               json_body={"cat": "personal"}).json()
             self.assertEqual(todos[0]["text"], "Review the draft")
-            self.assertEqual(todos[1], {"id": 1,
+            self.assertEqual(todos[1], {"id": 0,
                                         "text": "Préparer le bilan mensuel",
                                         "done": False, "cat": "personal"})
             self.assertEqual(read_quick_md(srv), TODO_HEADER + (
                 "## Work\n\n"
-                "- [x] Review the draft\n"
+                "- [x] Review the draft <!-- id:1 -->\n"
                 "\n"
                 "## Personal\n\n"
-                "- [ ] Préparer le bilan mensuel\n"
-                "- [ ] Tester le build PoE\n"
+                "- [ ] Préparer le bilan mensuel <!-- id:0 -->\n"
+                "- [ ] Tester le build PoE <!-- id:2 -->\n"
                 "\n"
             ))
 
@@ -281,7 +332,7 @@ class TestPatchTodo(unittest.TestCase):
 
     def test_patch_invalid_ids_return_404(self):
         with AtlasServer() as srv:
-            # Out-of-bounds index -> 404 JSON.
+            # An id the list doesn't have -> 404 JSON.
             resp = srv.patch("/api/todos/99", json_body={"done": True})
             self.assertEqual(resp.status, 404)
             self.assertEqual(resp.json(), {"error": "not found"})
@@ -295,16 +346,28 @@ class TestPatchTodo(unittest.TestCase):
 class TestDeleteTodo(unittest.TestCase):
     """DELETE /api/todos/:id -- one server per test."""
 
-    def test_delete_reindexes_remaining_items(self):
+    def test_delete_leaves_the_other_ids(self):
         with AtlasServer() as srv:
             todos = srv.delete("/api/todos/0").json()
-            # The survivors are renumbered: the old id 1 becomes id 0.
             self.assertEqual(todos, [
-                {"id": 0, "text": "Review the draft", "done": True,
+                {"id": 1, "text": "Review the draft", "done": True,
                  "cat": "work"},
-                {"id": 1, "text": "Tester le build PoE", "done": False,
+                {"id": 2, "text": "Tester le build PoE", "done": False,
                  "cat": "personal"},
             ])
+
+    def test_an_out_of_date_device_reaches_the_todo_it_shows_or_none(self):
+        with AtlasServer() as srv:
+            # Two devices load the same list; the phone deletes the first todo.
+            stale = srv.get("/api/todos").json()
+            srv.delete(f"/api/todos/{stale[0]['id']}")
+            # The laptop, still showing the old list, deletes "Review the draft":
+            # that one goes, not the todo that moved into its place.
+            after = srv.delete(f"/api/todos/{stale[1]['id']}").json()
+            self.assertEqual([t["text"] for t in after], ["Tester le build PoE"])
+            # And the todo the phone already removed is gone, not a neighbour.
+            resp = srv.patch(f"/api/todos/{stale[0]['id']}", json_body={"done": True})
+            self.assertEqual(resp.status, 404)
 
     def test_delete_keeps_empty_section_in_markdown(self):
         with AtlasServer() as srv:
@@ -314,14 +377,14 @@ class TestDeleteTodo(unittest.TestCase):
             # blank line).
             self.assertEqual(read_quick_md(srv), TODO_HEADER + (
                 "## Work\n\n"
-                "- [ ] Préparer le bilan mensuel\n"
-                "- [x] Review the draft\n"
+                "- [ ] Préparer le bilan mensuel <!-- id:0 -->\n"
+                "- [x] Review the draft <!-- id:1 -->\n"
                 "\n"
                 "## Personal\n\n"
                 "\n"
             ))
 
-    def test_delete_out_of_range_returns_404_json(self):
+    def test_delete_unknown_id_returns_404_json(self):
         with AtlasServer() as srv:
             resp = srv.delete("/api/todos/3")
             self.assertEqual(resp.status, 404)
@@ -338,13 +401,11 @@ class TestDeleteTodo(unittest.TestCase):
             self.assertEqual(resp.body, b"")
 
 
-class TestCloudTodoReindex(unittest.TestCase):
-    """Cloud per-member todos.json: ids must stay positional across a delete,
-    like the markdown path. Regression for the '404 on validating a todo' bug —
-    clearing the done items of a long list left the survivors carrying their
-    stale stored ids, so a later toggle PATCHed todos[id] past the end of the
-    now-shorter list and got a 404. The markdown path self-heals (parse_todos
-    reassigns id = position); the cloud path didn't until load_todos re-densifies."""
+class TestCloudTodoIds(unittest.TestCase):
+    """Cloud per-member todos.json: the same stable ids as the markdown path.
+    Regression for the '404 on validating a todo' bug (positional ids drifting
+    after a delete) and for its fix, which renumbered the list so a stale device
+    hit the wrong todo."""
 
     def _auth(self, srv):
         # Use the VIEWER (non-admin): it never triggers the legacy-markdown
@@ -357,7 +418,7 @@ class TestCloudTodoReindex(unittest.TestCase):
         return {"Cookie": cookie,
                 "X-CSRF-Token": csrf_token_for(srv, cookie)}
 
-    def test_delete_reindexes_so_a_high_id_toggle_does_not_404(self):
+    def test_ids_survive_a_delete_and_a_toggle_reaches_its_todo(self):
         from test_admin import cloud_env
         with AtlasServer(extra_env=cloud_env()) as srv:
             h = self._auth(srv)
@@ -365,19 +426,31 @@ class TestCloudTodoReindex(unittest.TestCase):
                 self.assertEqual(
                     srv.post("/api/todos", headers=h,
                              json_body={"text": text, "cat": "personal"}).status, 200)
-            # Drop the first item: survivors must be renumbered 0..2, both in the
-            # delete response and on the next GET — not keep their stored ids 1,2,3.
-            after = srv.delete("/api/todos/0", headers=h).json()
-            self.assertEqual([t["id"] for t in after], [0, 1, 2])
-            got = srv.get("/api/todos", headers=h).json()
-            self.assertEqual([t["id"] for t in got], [0, 1, 2])
-            # Pre-fix the last survivor still carried id 3 with only 3 items left,
-            # so toggling it indexed past the end -> 404. It must now succeed.
-            last = got[-1]["id"]
-            resp = srv.patch("/api/todos/" + str(last), headers=h,
-                             json_body={"done": True})
+            ids = [t["id"] for t in srv.get("/api/todos", headers=h).json()]
+            self.assertEqual(len(set(ids)), 4)
+            after = srv.delete(f"/api/todos/{ids[0]}", headers=h).json()
+            self.assertEqual([t["id"] for t in after], ids[1:])
+            self.assertEqual([t["id"] for t in srv.get("/api/todos", headers=h).json()], ids[1:])
+            resp = srv.patch(f"/api/todos/{ids[-1]}", headers=h, json_body={"done": True})
             self.assertEqual(resp.status, 200)
-            self.assertTrue(resp.json()[last]["done"])
+            self.assertEqual([t["text"] for t in resp.json() if t["done"]], ["d"])
+            # The deleted id stays gone.
+            self.assertEqual(srv.delete(f"/api/todos/{ids[0]}", headers=h).status, 404)
+
+    def test_a_list_stored_with_repeated_ids_is_repaired_on_read(self):
+        from test_admin import cloud_env, file_store_of, VIEWER_EMAIL
+        with AtlasServer(extra_env=cloud_env()) as srv:
+            h = self._auth(srv)
+            # What positional ids left behind: [0, 1, 2], delete 1, create -> [0, 2, 2].
+            file_store_of(srv).save_user_todos(VIEWER_EMAIL, [
+                {"id": 0, "text": "a", "done": False, "cat": "work"},
+                {"id": 2, "text": "b", "done": False, "cat": "work"},
+                {"id": 2, "text": "c", "done": False, "cat": "work"},
+            ])
+            todos = srv.get("/api/todos", headers=h).json()
+            self.assertEqual([(t["id"], t["text"]) for t in todos], [(0, "a"), (2, "b"), (3, "c")])
+            resp = srv.delete("/api/todos/3", headers=h)
+            self.assertEqual([t["text"] for t in resp.json()], ["a", "b"])
 
 
 if __name__ == "__main__":

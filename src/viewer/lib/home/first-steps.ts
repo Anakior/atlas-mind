@@ -4,7 +4,7 @@
 // this device; it goes away once every step is done.
 
 import { t } from '../core/i18n';
-import { docLabel, fileMap } from '../core/tree';
+import { docLabelAt } from '../core/tree';
 import { api } from '../core/net';
 import { escapeHtml, relativeDate } from '../core/utils';
 import { SITE_NAME, url } from '../core/data-csrf';
@@ -32,13 +32,6 @@ const DISMISS_KEY = 'atlas-firststeps-dismissed';
 const WAIT_POLL_MS = 5000;
 const WAIT_MAX_MS = 15 * 60_000;
 const TRIES = ['connectTry1', 'connectTry2', 'connectTry3'];
-
-// A doc as the person sees it in the tree: its title, else its file name.
-function docName(path: string): string {
-  const file = fileMap[path];
-
-  return file ? docLabel(file) : (path.split('/').pop() || path).replace(/\.(md|html)$/i, '');
-}
 
 export function mcpUrl(): string {
   return location.origin + url('/mcp');
@@ -135,7 +128,7 @@ class FirstSteps {
     const waiting = `<span class="home-connect-wait"><i aria-hidden="true"></i>${t('connectWaiting')}</span>`;
     const read = state.read?.last_read;
     const claude = read
-      ? `<p>${escapeHtml(t('connectDone', state.read!.label || 'Claude', docName(read.path), relativeDate(read.at)))}. ${t('connectTryTitle')}</p>
+      ? `<p>${escapeHtml(t('connectDone', state.read!.label || 'Claude', docLabelAt(read.path), relativeDate(read.at)))}. ${t('connectTryTitle')}</p>
          ${tries(TRIES)}`
       : state.connected
       ? `<p>${escapeHtml(t('connectConnected', state.connected.label || 'Claude'))}</p>

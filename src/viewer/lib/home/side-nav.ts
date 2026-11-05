@@ -79,8 +79,7 @@ class SideNav {
   private go(where: string): void {
     if (where === 'home') {
       sidePanels.close();
-      homeView.showWelcome();
-      history.replaceState(null, '', location.pathname);
+      homeView.goHome();
     } else {
       sidePanels.open(where as SidePanel);
     }

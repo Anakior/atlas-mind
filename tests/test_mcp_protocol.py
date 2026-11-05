@@ -201,7 +201,21 @@ class TestMcpInstructionsFromAgentsMd(unittest.TestCase):
         (self.srv.root / "AGENTS.md").write_text("rule line\n" * 2000, encoding="utf-8")
         text = self._instructions()
         self.assertLessEqual(len(text), 8000)
-        self.assertTrue(text.partition("\n\nSome answers are views")[0].endswith("rule line"))
+        agents_md = text.partition("\n\nSome answers are views")[0]
+        # Cut on a line, and saying so: the rest of the owner's rules is not silently lost.
+        self.assertTrue(agents_md.endswith("rule line\n[AGENTS.md goes on past here: the rest did not "
+                                           "fit in the instructions.]"), agents_md[-120:])
+
+    def test_an_agents_md_that_fits_is_whole(self):
+        from server.pure import mcp_call, provenance, resources
+        room = mcp_call._INSTRUCTIONS_MAX - len(resources.APP_RULE + "\n\n" + provenance.RULE) - 2
+        rules = ("x" * 99 + "\n") * (room // 100)
+        (self.srv.root / "AGENTS.md").write_text(rules, encoding="utf-8")
+        self.assertEqual(self._instructions().partition("\n\nSome answers are views")[0], rules.strip())
+
+    def test_default_instructions_name_brief(self):
+        (self.srv.root / "AGENTS.md").unlink(missing_ok=True)
+        self.assertIn("call brief", self._instructions())
 
 
 if __name__ == "__main__":

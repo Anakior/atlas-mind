@@ -4,7 +4,7 @@
 
 import { meState } from '../core/data-csrf';
 import { t } from '../core/i18n';
-import { setStatus } from '../core/net';
+import { requestError, setStatus } from '../core/net';
 import { currentFile } from '../core/state';
 import { escapeHtml } from '../core/utils';
 import { Dialogs } from '../modals/dialogs';
@@ -173,9 +173,7 @@ export class AccessDialog {
     });
 
     if (!res.ok) {
-      const p = await res.json().catch(() => null);
-
-      this.errEl.textContent = (p && p.error) || 'HTTP ' + res.status;
+      this.errEl.textContent = requestError(res.status).message;
       this.errEl.classList.remove('hidden');
 
       return false;

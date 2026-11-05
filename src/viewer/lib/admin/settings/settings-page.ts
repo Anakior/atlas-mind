@@ -8,6 +8,7 @@
 import { t } from '../../core/i18n';
 import { contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, tocPanel } from '../../core/dom-refs';
 import { setCurrentFile } from '../../core/state';
+import { pushRoute } from '../../core/route';
 import { tocShow } from '../../home/layout-chrome';
 import { constellationSvg } from '../../ui/avatar';
 import { securityPane } from '../totp/security-pane';
@@ -76,11 +77,8 @@ export class SettingsPage {
     new MutationObserver(() => {
       if (this.isOpen() && contentEl.firstChild) this.leave();
     }).observe(contentEl, { childList: true });
-    // Back and forward between sections, and from the page back to a doc.
-    window.addEventListener('hashchange', () => {
-      if (ROUTE.test(location.hash)) this.route(location.hash);
-      else if (this.isOpen()) window.dispatchEvent(new Event('atlas:route'));
-    });
+    // Back and Forward between sections, and from the page back to a doc, go through home-view's
+    // popstate router (routeFromHash → route below).
   }
 
   isOpen(): boolean {
@@ -100,7 +98,7 @@ export class SettingsPage {
   open(section = ''): void {
     const target = this.visible(section) ? section : this.defaultSection();
 
-    if (location.hash !== '#settings/' + target) history.pushState(null, '', '#settings/' + target);
+    pushRoute('#settings/' + target);
     this.show(target);
   }
 

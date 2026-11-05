@@ -1,7 +1,9 @@
 """Getting a mind back after losing its instance, from the zip "Export my notes" made
 (server.pure.export): its history bundle when it carries one — every version comes
 back — else its files, laid over the notes already here. Replacing the history never
-loses the current one: it stays under refs/atlas/before-restore."""
+loses the current one: it stays under refs/atlas/before-restore (the last one) and
+refs/atlas/before-restore-<its commit> (each one)."""
+import json
 import os
 import shutil
 import subprocess
@@ -46,6 +48,10 @@ def read_backup(zip_path: Path):
     except zipfile.BadZipFile:
         raise RestoreError("bad_zip", "not a zip file")
     with z:
+        # Checked whole before anything is touched: a restore never stops half-way on
+        # a damaged member.
+        if z.testzip() is not None:
+            raise RestoreError("bad_zip", "the zip is damaged")
         infos = [(i, _rel(i.filename)) for i in z.infolist()]
         infos = [(i, p) for i, p in infos if p is not None]
         if sum(i.file_size for i, _ in infos) > MAX_UNPACKED:
@@ -67,6 +73,12 @@ def read_backup(zip_path: Path):
                 continue
             else:
                 files.append((info.filename, rel.as_posix()))
+        for member, name in registry:
+            if name.endswith(".json"):
+                try:
+                    json.loads(z.read(member).decode("utf-8"))
+                except ValueError:
+                    raise RestoreError("bad_zip", f"{name} is damaged in the zip")
     return bundle, files, registry
 
 
@@ -80,7 +92,12 @@ def adopt(repo: Path, ref: str) -> None:
     under BEFORE. RestoreError when `ref` holds no Atlas mind."""
     if _git(repo, "cat-file", "-e", f"{ref}:content").returncode:
         raise RestoreError("not_atlas", "no content/ folder in that history")
-    _git(repo, "update-ref", BEFORE, "HEAD")
+    # .atlas/ holds the instance's own code (extensions run at boot): never from a history.
+    if _git(repo, "ls-tree", "--name-only", ref, "--", ".atlas").stdout.strip():
+        raise RestoreError("not_atlas", "that history carries an .atlas/ folder")
+    head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    _git(repo, "update-ref", f"{BEFORE}-{head}", head)
+    _git(repo, "update-ref", BEFORE, head)
     reset = _git(repo, "reset", "--hard", "--quiet", ref)
     if reset.returncode:
         raise RestoreError("other", reset.stderr.strip())

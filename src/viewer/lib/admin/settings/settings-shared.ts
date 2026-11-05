@@ -12,6 +12,7 @@
 // via delegated click listeners reading data-* — the keyed-runtime port is a later pass.
 
 import { LANG, t } from '../../core/i18n';
+import { requestError } from '../../core/net';
 import { url } from '../../core/data-csrf';
 import { currentFile } from '../../core/state';
 import { escapeHtml, isLoopback } from '../../core/utils';
@@ -131,7 +132,7 @@ shareExistingList!.addEventListener('click', async (e) => {
     try {
       const res = await fetch('/api/share/' + delBtn.dataset.id, { method: 'DELETE' });
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
       refreshShareList();
     } catch (e) {
       shareError!.textContent = t('err', (e as Error).message);
@@ -169,7 +170,7 @@ document.querySelectorAll<HTMLButtonElement>('.share-dur').forEach((btn) => {
         body: JSON.stringify({ path: file.path, expires_days: days }),
       });
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
       const data = await res.json();
       const fullUrl = location.origin + url('/s/' + data.token);
 

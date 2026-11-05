@@ -10,7 +10,7 @@ interface ActivityRenderCtx {
   readonly expanded: boolean;
   readonly aiOnly: boolean;
   // Helper cluster (single implementation, owned by the shell).
-  TY(type: string): { label: string; color: string; d: string };
+  TY(type: string): { color: string; d: string };
   iconSvg(type: string, size: number): string;
   verb(type: string): string;
   verbPhrase(type: string): string;

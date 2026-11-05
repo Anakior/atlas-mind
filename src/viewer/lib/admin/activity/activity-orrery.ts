@@ -4,6 +4,7 @@
 // it reads through the ActivityRenderCtx the shell hands it (helpers + openDocHistory) and keeps its own
 // transient orreryItems (the list the nodes index into).
 
+import { t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
 import { ActivityIcons } from './activity-icons';
 
@@ -117,7 +118,7 @@ export class ActivityOrrery {
 
   private popHtml(e: ActivityItem): string {
     const ty = this.ctx.TY(e.type);
-    const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${escapeHtml(e.ai)}</span>` : '';
+    const via = e.ai ? `<span class="text-ink-500 text-xs">· ${escapeHtml(t('actVia', e.ai))}</span>` : '';
 
     return (
       `<div class="flex items-center gap-2 mb-1.5"><span style="line-height:0">${this.ctx.avatar(e, 26)}</span><span class="text-sm font-semibold text-ink-100">${escapeHtml(e.who)}</span>${via}</div>
@@ -201,7 +202,7 @@ export class ActivityOrrery {
       if (spin) { spin.classList.remove('spinning'); void spin.getBBox(); spin.classList.add('spinning'); }
       sun.classList.remove('pop'); void sun.getBBox(); sun.classList.add('pop');
       if (n % 5 === 0 && egg) {
-        egg.textContent = ActivityIcons.EGG_LINES[(n / 5 - 1) % ActivityIcons.EGG_LINES.length];
+        egg.textContent = t('actEggLine', n / 5 - 1);
         egg.classList.remove('show'); void egg.offsetWidth; egg.classList.add('show');
       }
     });

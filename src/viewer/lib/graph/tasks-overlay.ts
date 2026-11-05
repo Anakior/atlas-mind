@@ -12,6 +12,7 @@ import { fileMap } from '../core/tree';
 import { escapeHtml } from '../core/utils';
 import { highlightFirstMatch } from '../content/content-decorators';
 import { docRenderer } from '../content/doc-renderer';
+import { sanitizeHtml } from '../content/sanitize';
 
 export class TasksOverlay {
   private overlay = document.getElementById('tasks-overlay')!;
@@ -154,7 +155,7 @@ export class TasksOverlay {
   // is itself a button — no nested navigation). Any error falls back to ESCAPED text, never raw HTML.
   private renderTaskText(s: string): string {
     try {
-      return DOMPurify.sanitize(marked.parseInline(s), { FORBID_TAGS: ['a', 'img'] });
+      return sanitizeHtml(marked.parseInline(s), ['a', 'img']);
     } catch (e) {
       return escapeHtml(s);
     }
@@ -224,8 +225,7 @@ export class TasksOverlay {
           this.close();
 
           if (!file) return;
-          await docRenderer.show(file);
-          history.replaceState(null, '', '#' + encodeURIComponent(file.path));
+          await docRenderer.open(file);
           this.scrollToCheckbox(task);
         });
         section.appendChild(row);

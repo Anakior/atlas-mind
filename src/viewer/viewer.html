@@ -13,7 +13,7 @@
 <title>__SITE_NAME__</title>
 __HEAD_META__
 <link rel="icon" href="__BASE__/icon.svg" type="image/svg+xml">
-<script>
+<script nonce="__CSP_NONCE__">
 // Appearance before the first paint: the saved theme (dark by default, or the system's in auto) and
 // the instance accent and prefix display cached from the last visit, so a reload never flashes.
 (function () {
@@ -60,10 +60,10 @@ __EXTENSIONS_CSS__
 </head>
 <body class="font-sans text-ink-200 antialiased">
 __BODY__
-<script>
+<script nonce="__CSP_NONCE__">
 __APP_JS__
 </script>
-<script>
+<script nonce="__CSP_NONCE__">
 // Mind extensions (.atlas/extensions/*.js) — inlined at build time by build.py,
 // executed after the viewer's main script.
 __EXTENSIONS_JS__

@@ -3,6 +3,7 @@
 // rather than feature state. The bodies read their refs (the live `todoStatus` binding, fetch) at
 // call time.
 import { todoStatus } from '../graph/todo-surface';
+import { t } from './i18n';
 
 // Static chrome (the two spans) is built once; setStatus only swaps the colour
 // class and the message text via textContent — never innerHTML — so a message
@@ -25,6 +26,21 @@ export function setStatus(msg: string, kind?: StatusKind): void {
   todoStatus!.replaceChildren(statusMsg, statusHost);
 }
 
+// A refused request in plain words: one sentence per kind of refusal, never "HTTP 403" nor the
+// server's own (English) message.
+const REFUSALS: Record<number, string> = {
+  401: 'reqSignedOut',
+  403: 'reqForbidden',
+  404: 'reqNotFound',
+  409: 'reqConflict',
+  413: 'reqTooLarge',
+  429: 'reqTooMany',
+};
+
+export function requestError(status: number): Error {
+  return new Error(t(REFUSALS[status] || (status >= 500 ? 'reqServer' : 'reqFailed')));
+}
+
 export async function api<T = any>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   const opts: RequestInit = { method, headers };
@@ -36,7 +52,7 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
 
   const res = await fetch(path, opts);
 
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  if (!res.ok) throw requestError(res.status);
 
   return res.json();
 }

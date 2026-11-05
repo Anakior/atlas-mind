@@ -7,12 +7,13 @@
 // server side).
 
 import { t } from '../core/i18n';
-import { setStatus } from '../core/net';
+import { requestError, setStatus } from '../core/net';
+import { docHash, replaceRoute } from '../core/route';
 import { currentFile, editMode, editTextarea, isServerMode } from '../core/state';
 import { fileMap } from '../core/tree';
 import { treeEl } from '../core/dom-refs';
 import { mdInsertAtCursor } from './tags';
-import { IMAGE_EXTS } from './doc-renderer';
+import { IMAGE_EXTS, docRenderer } from './doc-renderer';
 import { refreshTreeOrReload } from '../modals/new-file-modal';
 
 type Target = { folder: string; mark: HTMLElement | null } | 'note';
@@ -34,6 +35,11 @@ export function startMoveFolder(e: DragEvent, path: string): void {
   e.dataTransfer.effectAllowed = 'move';
 }
 
+// Why a move was refused, in plain words (the server's own message is English).
+function moveRefusal(status: number): string {
+  return status === 409 ? t('fileExistsAt') : requestError(status).message;
+}
+
 async function moveFolderTo(path: string, folder: string): Promise<void> {
   const to = folder + path.slice(path.lastIndexOf('/') + 1);
 
@@ -45,15 +51,13 @@ async function moveFolderTo(path: string, folder: string): Promise<void> {
   });
 
   if (!res.ok) {
-    const { error } = await res.json().catch(() => ({ error: '' }));
-
-    setStatus(t('moveFailed', error || 'HTTP ' + res.status), 'err');
+    setStatus(t('moveFailed', moveRefusal(res.status)), 'err');
 
     return;
   }
   if (currentFile && currentFile.path.startsWith(path + '/')) {
     currentFile.path = to + currentFile.path.slice(path.length);
-    location.hash = '#' + encodeURIComponent(currentFile.path);
+    replaceRoute(docHash(currentFile.path));
   }
   await refreshTreeOrReload();
   setStatus(t('folderMoved'), 'ok');
@@ -70,15 +74,13 @@ async function moveTo(path: string, folder: string): Promise<void> {
   });
 
   if (!res.ok) {
-    const { error } = await res.json().catch(() => ({ error: '' }));
-
-    setStatus(t('moveFailed', error || 'HTTP ' + res.status), 'err');
+    setStatus(t('moveFailed', moveRefusal(res.status)), 'err');
 
     return;
   }
   if (currentFile && currentFile.path === path) {
     currentFile.path = to;
-    location.hash = '#' + encodeURIComponent(to);
+    replaceRoute(docHash(to));
   }
   await refreshTreeOrReload();
   setStatus(t('docMoved'), 'ok');
@@ -123,10 +125,10 @@ export async function sendToFolder(files: File[], folder: string): Promise<void>
       problems.push((e as Error).message);
     }
   }
-  if (added.length === 1 && files.length === 1 && extOf(files[0].name) !== '.zip') {
-    location.hash = '#' + encodeURIComponent(added[0]);
-  }
   if (added.length) await refreshTreeOrReload();
+  if (added.length === 1 && files.length === 1 && extOf(files[0].name) !== '.zip' && fileMap[added[0]]) {
+    void docRenderer.open(fileMap[added[0]]);
+  }
   const parts = [added.length ? t('upAdded', added.length) : '', skipped ? t('upSkipped', skipped) : '', ...problems];
 
   setStatus(parts.filter(Boolean).join(' · '), problems.length || skipped ? 'err' : 'ok');

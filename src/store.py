@@ -803,7 +803,8 @@ class FileStore:
                 admin_count = sum(1 for u in users if u.get("role") == "admin")
                 if admin_count <= 1:
                     raise LastAdminError("cannot delete the last admin")
-            kept = [u for u in users if u.get("email") != email]
+            # Its access tokens and OAuth grants go with it: they act in its name.
+            kept = [u for u in users if u.get("email") != email and u.get("acts_as") != email]
             self._write(self.USERS_FILE, kept)
             successor = next((u.get("email") for u in kept
                               if u.get("role") == "admin"), None)

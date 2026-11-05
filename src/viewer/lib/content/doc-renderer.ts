@@ -3,21 +3,23 @@
 // and fires the post-render hooks. The DOM is written exactly as before (innerHTML/createElement/
 // appendChild) — no reconciliation refactor — so the goldens stay byte-stable; the one structural
 // change is that the tree's active/ancestor-open highlight is derived by content-tree.ts via
-// contentTree.rerender() instead of an imperative DOM poke. DocRenderer.show is the render entry
-// point its cross-module callers import. The anti-race guards stay object-identity
-// (currentFile !== file): a slow load for doc A must not clobber doc B.
+// contentTree.rerender() instead of an imperative DOM poke. DocRenderer.open (show + a history entry)
+// and DocRenderer.show are the entry points its cross-module callers import. The anti-race guards
+// compare the navigation number (currentView): a slow load for doc A must not clobber doc B.
 
 import { IS_OFFLINE_BUILD } from '../core/data-csrf';
 import { LANG, t } from '../core/i18n';
 import { escapeHtml, relativeDate } from '../core/utils';
+import { docHash, pushRoute } from '../core/route';
 import { contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, btnEdit, btnSave, btnCancel } from '../core/dom-refs';
-import { currentFile, setCurrentFile, editMode } from '../core/state';
+import { currentFile, setCurrentFile, currentView, editMode, isServerMode } from '../core/state';
 import { editor } from '../editor/editor';
 import { pins } from '../graph/pins';
+import { toast } from '../ui/toast';
 import { renderSkeleton } from './skeleton';
 import { toc, readingTimeFromWords } from './toc';
 import { historyPanel } from './history-panel';
-import { contentTree, loadContent } from './content-tree';
+import { contentTree, loadContent, rememberContent } from './content-tree';
 import { docLabel } from '../core/tree';
 import { frameRenderer } from './frames';
 import { stripFrontmatter, docTags } from './tags';
@@ -35,13 +37,28 @@ export function isViewable(ext: string): boolean {
   return VIEWABLE_EXTS.has(ext);
 }
 
+// Whether this viewer may write the doc: a .md served by Atlas, outside the read-only mirrors of other
+// atlases and the read-only shared view. The Edit button, the `e` shortcut, the tag chips and the task
+// checkboxes all ask it.
+export function canEdit(file: FileNode | null): file is FileNode {
+  return !!file && file.ext === '.md' && isServerMode && !window.__viewerMode && !file.path.startsWith('remotes/');
+}
+
 export class DocRenderer {
+  // Open a doc as a page of its own: Back returns to the one before.
+  open(file: FileNode, highlightQuery?: string): Promise<void> {
+    pushRoute(docHash(file.path));
+
+    return this.show(file, highlightQuery);
+  }
+
   // THE document renderer that owns #content. Writes the skeleton, gates the breadcrumb chrome,
   // dispatches by extension (.html/.pdf/.docx → an isolated frame, else the markdown pipeline) and
-  // fires the post-render hooks. async: a slow load is raced out by the currentFile !== file guards.
+  // fires the post-render hooks. async: a slow load is raced out by the currentView() guards.
   async show(file: FileNode, highlightQuery?: string): Promise<void> {
-    if (editMode) editor.exitEditMode(false);
+    if (editMode) editor.leaveEditMode();
     setCurrentFile(file);
+    const view = currentView();
     // Reset the overrides set by HTML rendering (cf. renderHtmlFrame): a .md doc after a .html must
     // get back the prose width/padding, and the todos widget (hidden during the preview) reappears.
     contentEl.style.maxWidth = '';
@@ -68,7 +85,7 @@ export class DocRenderer {
     // no Share (don't re-share others' content), no ⋯ menu (rename/move/delete → 403).
     const isRemoteDoc = (file.path || '').startsWith('remotes/');
 
-    btnEdit.classList.toggle('hidden', isRemoteDoc);
+    btnEdit.classList.toggle('hidden', !canEdit(file));
     btnSave.classList.add('hidden');
     btnCancel.classList.add('hidden');
     document.getElementById('btn-share')?.classList.toggle('hidden', isRemoteDoc);
@@ -152,14 +169,14 @@ export class DocRenderer {
     try {
       content = await loadContent(file);
     } catch (e) {
-      if (currentFile !== file) return;
+      if (currentView() !== view) return;
       contentEl.innerHTML =
         '<div class="text-rose-400 text-sm">' + escapeHtml(t('loadError', (e as Error).message)) + '</div>';
 
       return;
     }
 
-    if (currentFile !== file) return;
+    if (currentView() !== view) return;
     const body = stripFrontmatter(content);
 
     contentEl.innerHTML = docTags.renderDocTags(file) + markdown.render(body, file.path);
@@ -175,6 +192,23 @@ export class DocRenderer {
     );
 
     if (highlightQuery) highlightFirstMatch(contentEl, highlightQuery);
+  }
+
+  // Render the open doc again where the reader is (a live reload, a conflict): no jump to the top.
+  async rerender(file: FileNode): Promise<void> {
+    const main = document.querySelector('main')!;
+    const top = main.scrollTop;
+
+    await this.show(file);
+    main.scrollTop = top;
+  }
+
+  // A write was refused because the doc changed since it was shown (an AI edit, another device):
+  // show its current text and say so, rather than write over it.
+  async reloadChanged(file: FileNode, current: string): Promise<void> {
+    rememberContent(file, current);
+    toast(t('docChangedReloaded'));
+    if (currentFile && currentFile.path === file.path) await this.rerender(file);
   }
 }
 

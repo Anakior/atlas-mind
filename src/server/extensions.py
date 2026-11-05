@@ -35,6 +35,9 @@ class ExtensionContext:
       automatically, so an extension using `fetch()` needs no special handling; a
       raw XHR must add it (read the readable kb_csrf cookie). A "public" route is
       not CSRF-checked (it self-protects, e.g. a webhook verifying a signature).
+    - context.writing(): the mind's write lock, as a `with` block. A route that changes
+      files of the mind reads, writes and commits inside it, like the core's own writes,
+      so no save, pull or other write lands in between.
     """
 
     def __init__(self, config, routes):
@@ -51,6 +54,9 @@ class ExtensionContext:
             raise ValueError(
                 f"unknown role: {role!r} (public, auth or admin)")
         self._routes.append((method, re.compile(pattern), handler, role))
+
+    def writing(self):
+        return _s.writing()
 
 
 def load_server_extensions(config, routes=None):

@@ -91,10 +91,7 @@ export class Pins {
         e.preventDefault();
         const f = fileMap[(a as HTMLElement).dataset.pinpath!];
 
-        if (f) {
-          docRenderer.show(f);
-          history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-        }
+        if (f) void docRenderer.open(f);
       }),
     );
     this.list.querySelectorAll('[data-unpin]').forEach((b) =>

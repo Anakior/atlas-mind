@@ -5,7 +5,7 @@
 
 import { LANG, t } from '../../core/i18n';
 import { escapeHtml } from '../../core/utils';
-import { setStatus } from '../../core/net';
+import { requestError, setStatus } from '../../core/net';
 
 interface RunDoc {
   path: string;
@@ -49,7 +49,7 @@ export class ActivityUndo {
     const r = await fetch('/api/run?sha=' + encodeURIComponent(sha)).catch(() => null);
 
     if (!r || !r.ok) {
-      this.fail(panel, r && r.status === 404 ? t('actUndoNoRun') : t('err', r ? 'HTTP ' + r.status : 'network'));
+      this.fail(panel, r && r.status === 404 ? t('actUndoNoRun') : t('err', r ? requestError(r.status).message : t('errNetwork')));
 
       return;
     }
@@ -72,7 +72,7 @@ export class ActivityUndo {
   }
 
   private show(panel: HTMLElement, run: RunPreview): void {
-    const who = escapeHtml(run.author) + (run.ai ? ` <span class="text-ink-500">· via ${escapeHtml(run.ai)}</span>` : '');
+    const who = escapeHtml(run.author) + (run.ai ? ` <span class="text-ink-500">· ${escapeHtml(t('actVia', run.ai))}</span>` : '');
     const docs = run.documents.map((d) =>
       `<label class="act-undo-doc${d.may_undo ? '' : ' is-locked'}" title="${escapeHtml(d.path)}">
         <input type="checkbox" value="${escapeHtml(d.path)}"${d.may_undo ? ' checked' : ' disabled'}>
@@ -123,7 +123,7 @@ export class ActivityUndo {
     if (!r || !r.ok) {
       const why = r && ActivityUndo.WHY[r.status];
 
-      this.fail(panel, why ? t(why) : t('err', r ? 'HTTP ' + r.status : 'network'));
+      this.fail(panel, why ? t(why) : t('err', r ? requestError(r.status).message : t('errNetwork')));
 
       return;
     }

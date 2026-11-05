@@ -23,11 +23,30 @@ The test suite is standard-library `unittest`, run from the repository root:
 
 ```bash
 python3 -m unittest discover -s tests
+python3 tests/run_parallel.py        # the same tests, one process per test class: much faster
+```
+
+`run_parallel.py` is what CI runs, and like CI it hides your global git config: a
+change that needs a git identity fails there as it would on a newcomer's computer.
+
+The tests of the viewer's code (the QR code, the avatars, the MCP Apps views) run
+under Node with the viewer's build tools. Without them they are **skipped**, and
+`run_parallel.py` lists each skip with its reason. To run them too:
+
+```bash
+cd src/viewer/build
+npm ci                                # esbuild, TypeScript, Playwright (gitignored node_modules)
+npx playwright install chromium       # the browser of the MCP Apps view tests
 ```
 
 Please run the full suite before opening a pull request, and add or update tests
 for any behaviour you change. Tests live in `tests/` (one file per area, plus
 `tests/harness.py`).
+
+The viewer ships built: `src/viewer/vendor/app.bundle.js` is compiled from the
+TypeScript in `src/viewer/lib/`. After changing those sources, rebuild it with
+`npm run build` in `src/viewer/build` and commit it with them (CI rebuilds it and
+fails when the committed bundle differs).
 
 ### Tool-use evals
 
@@ -98,6 +117,11 @@ docker compose -f deploy/docker-compose.dev.yml down -v   # wipe the dev mind
 Same sandbox, isolated in a container, running the engine from your local source
 (mounted live). The host port is pinned to `127.0.0.1`, so it never leaves your
 machine.
+
+To try your change the way Atlas is deployed (cloud mode with git on, the engine
+baked into an image), `deploy/Dockerfile` and `deploy/docker-compose.yml` build an
+image from your checkout; the compose file's header says how to run it. Real
+deployments take the PyPI release instead: `atlas deploy` writes their files.
 
 ## Front-end CSS (Tailwind)
 

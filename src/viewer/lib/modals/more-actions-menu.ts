@@ -6,9 +6,11 @@
 import { btnMore, btnMoreMenu, renameModal, Dialogs } from './dialogs';
 import { t } from '../core/i18n';
 import { currentFile } from '../core/state';
-import { setStatus } from '../core/net';
+import { requestError, setStatus } from '../core/net';
 import { refreshTreeOrReload } from './new-file-modal';
 import { refreshTrashLink } from '../home/side-panels';
+import { homeView } from '../home/home-view';
+import { replaceRoute } from '../core/route';
 
 export class MoreActionsMenu {
   constructor() {
@@ -56,8 +58,10 @@ export class MoreActionsMenu {
           body: JSON.stringify({ path: currentFile!.path }),
         });
 
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        location.hash = '';
+        if (!res.ok) throw requestError(res.status);
+        // The deleted doc's page becomes the home: Back never lands on it again.
+        replaceRoute('');
+        homeView.showWelcome();
         setStatus(t('docDeleted'), 'ok');
         await refreshTreeOrReload();
         void refreshTrashLink();

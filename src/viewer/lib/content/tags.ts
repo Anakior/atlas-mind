@@ -10,13 +10,13 @@
 //                 click delegation (chips + [[wikilink]]s) and the outside-click close; tag mutations
 //                 delegate to the injected TagStore, and a chip click hands off to tagBrowsePage.showTag.
 //
-// The "all docs with #tag" browse page (tagBrowsePage.showTag) lives in tag-browse.ts.
+// The "all docs with #tag" browse page (tagBrowsePage.showTag) lives in tag-browse.ts; the links of a
+// rendered doc ([[wikilinks]], links to other docs) are routed by doc-links.ts.
 //
 // folderTagsOf / stripFrontmatter / mdInsert* are stateless cross-cutting utils, exported here and
 // imported by doc-renderer.ts / editor.ts / the graph / inbox.ts. (highlightFirstMatch moved to
 // content-decorators.ts.)
 
-import { IS_OFFLINE_BUILD } from '../core/data-csrf';
 import { t } from '../core/i18n';
 import { escapeHtml } from '../core/utils';
 import { fileMap } from '../core/tree';
@@ -24,9 +24,9 @@ import { contentEl } from '../core/dom-refs';
 import { currentFile, editTextarea } from '../core/state';
 import { Dialogs } from '../modals/dialogs';
 import { AtlasCombobox } from '../ui/combobox';
-import { loadContent, contentCache } from './content-tree';
+import { loadContent, putDoc, rememberContent } from './content-tree';
 import { tagBrowsePage } from './tag-browse';
-import { docRenderer } from './doc-renderer';
+import { canEdit, docRenderer } from './doc-renderer';
 
 export function stripFrontmatter(text: string): string {
   return text.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n?/, '');
@@ -44,8 +44,8 @@ export class DocTags {
   renderDocTags(file: FileNode | null): string {
     if (!file || file.ext !== '.md') return '';
 
-    // Mirror doc = read-only: no +/× (any tag write would 403).
-    const canEdit = !IS_OFFLINE_BUILD && !window.__viewerMode && !(file.path || '').startsWith('remotes/');
+    // A doc this viewer can't write (a mirror, the offline build): chips without +/×.
+    const editable = canEdit(file);
     const folderSet = new Set(folderTagsOf(file.path));
     const chips = (file.tags || [])
       .map((tg) =>
@@ -61,31 +61,31 @@ export class DocTags {
           escapeHtml(tg) +
           '">#' +
           escapeHtml(tg) +
-          (canEdit
-            ? '<button class="doc-tag-x" data-removetag="' +
-            escapeHtml(tg) +
-            '" title="' +
-            escapeHtml(t('removeTag')) +
-            '">×</button>'
-            : '') +
+          (editable ? this.removeButton('data-removetag', tg) : '') +
           '</span>',
       )
       .join('');
 
-    if (!chips && !canEdit) return '';
+    if (!chips && !editable) return '';
 
     return (
       '<div class="doc-tags not-prose">' +
       chips +
-      (canEdit ? '<button class="doc-tag-add" title="' + escapeHtml(t('addTag')) + '">+</button>' : '') +
+      (editable ? '<button type="button" class="doc-tag-add" title="' + escapeHtml(t('addTag')) + '">+</button>' : '') +
       '</div>'
     );
+  }
+
+  // The × of a chip, named after its tag for a screen reader.
+  removeButton(attr: string, tag: string): string {
+    return '<button type="button" class="doc-tag-x" ' + attr + '="' + escapeHtml(tag) + '" title="' +
+      escapeHtml(t('removeTagNamed', tag)) + '">×</button>';
   }
 }
 
 // ---- the tag data layer: frontmatter rewrite, persist, and the all-tags aggregate ----
 export class TagStore {
-  constructor(private readonly docTags: DocTags) {}
+  constructor(readonly docTags: DocTags) {}
 
   allTagsList(): string[] {
     const s = new Set<string>();
@@ -130,7 +130,7 @@ export class TagStore {
   }
 
   // Persists custom tags: rewrite frontmatter, PUT /api/file (server rebuilds + commits), then update
-  // fileMap and re-render the chips in place.
+  // fileMap and re-render the chips in place. A doc that changed meanwhile is reloaded, not overwritten.
   private async persistTags(file: FileNode, customTags: string[]): Promise<boolean> {
     let loaded: string;
 
@@ -143,27 +143,27 @@ export class TagStore {
     const newContent = TagStore.setFrontmatterTags(loaded, customTags);
 
     try {
-      const res = await fetch('/api/file', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: file.path, content: newContent }),
-      });
+      const res = await putDoc({ path: file.path, content: newContent, base_content: loaded });
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) {
+        await docRenderer.reloadChanged(file, res.current);
+
+        return false;
+      }
+      file.mtime = res.mtime;
     } catch (err) {
       Dialogs.notifyError('tagSaveFailed', (err as Error).message);
 
       return false;
     }
 
-    contentCache.set(file.path, newContent);
-    file.content = newContent;
+    rememberContent(file, newContent);
     const merged = folderTagsOf(file.path);
 
     for (const tg of customTags) if (!merged.includes(tg)) merged.push(tg);
     file.tags = merged;
 
-    if (currentFile === file) {
+    if (currentFile && currentFile.path === file.path) {
       const wrap = contentEl.querySelector('.doc-tags');
 
       if (wrap) wrap.outerHTML = this.docTags.renderDocTags(file);
@@ -256,14 +256,7 @@ export class TagEditor {
 
       box.innerHTML = cur.length
         ? cur
-          .map(
-            (tg) =>
-              '<span class="doc-tag" style="cursor:default">#' +
-              escapeHtml(tg) +
-              '<button class="doc-tag-x" data-ed-rm="' +
-              escapeHtml(tg) +
-              '">×</button></span>',
-          )
+          .map((tg) => '<span class="doc-tag" style="cursor:default">#' + escapeHtml(tg) + this.store.docTags.removeButton('data-ed-rm', tg) + '</span>')
           .join('')
         : '<span class="text-[11px] text-ink-500">' + t('noCustomTags') + '</span>';
       box.querySelectorAll('[data-ed-rm]').forEach((b) =>
@@ -336,20 +329,6 @@ export class TagEditor {
       if (tagBtn && tagBtn.dataset.tag) {
         e.preventDefault();
         tagBrowsePage.showTag(tagBtn.dataset.tag);
-
-        return;
-      }
-
-      const wl = target.closest('a.wikilink') as HTMLElement | null;
-
-      if (wl) {
-        e.preventDefault();
-        const f = wl.dataset.path ? fileMap[wl.dataset.path] : undefined;
-
-        if (f) {
-          docRenderer.show(f);
-          history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-        }
       }
     });
   }

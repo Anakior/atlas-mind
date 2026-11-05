@@ -6,7 +6,8 @@ import path from 'node:path';
 // scope here. `atlas dev` rebuilds the bundle on every start, so the goldens always
 // run against the current src/viewer/lib sources.
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
-const PORT = 8799;
+// ATLAS_E2E_PORT: run beside a dev server already on 8799 (reuseExistingServer would test that one).
+const PORT = Number(process.env.ATLAS_E2E_PORT) || 8799;
 const authFile = path.join(__dirname, 'e2e', '.auth', 'state.json');
 
 export default defineConfig({

@@ -9,7 +9,7 @@ from urllib.parse import quote, unquote
 
 import server as _s
 from server.pure import provenance
-from server.pure.queries import _visible
+from server.pure.queries import _readable, _visible
 from server.render.apps import render_app
 
 PAGE_SIZE = 200
@@ -58,7 +58,7 @@ def link(rel: str) -> dict:
 
 def list_resources(ctx, cursor: str = "") -> dict:
     """One page of the documents ctx can read, by path; `nextCursor` while more remain."""
-    docs = sorted((rel, path) for rel, path in _s._iter_doc_files() if _visible(rel, ctx))
+    docs = sorted(_readable(ctx))
     start = int(cursor) if cursor.isdigit() else 0
     page = docs[start:start + PAGE_SIZE]
     result = {"resources": [{"uri": uri_for(rel), "name": rel, "title": _title(rel, path),

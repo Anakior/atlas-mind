@@ -394,7 +394,10 @@ class TestRawContentSandbox(unittest.TestCase):
                                "/data/stats.json": None, "/accueil.md": None})
 
     def test_the_viewer_shell_is_not(self):
-        self.assertIsNone(self.srv.get("/").headers.get("Content-Security-Policy"))
+        # Not sandboxed: its policy only keeps scripts to its own.
+        csp = self.srv.get("/").headers.get("Content-Security-Policy", "")
+        self.assertNotIn("sandbox", csp)
+        self.assertIn("script-src 'self' 'nonce-", csp)
 
 
 if __name__ == "__main__":

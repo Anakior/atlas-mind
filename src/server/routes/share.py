@@ -67,12 +67,15 @@ def list_shares(handler):
     query = handler._query()
     filter_path = (query.get("path", [""])[0] or "").strip()
     include_revoked = query.get("include_revoked", ["0"])[0] == "1"
+    ctx = handler._viewer_ctx()
     try:
         docs = _s.get_store().list_shares(
             path=filter_path or None,
             include_revoked=include_revoked,
             limit=200,
         )
+        # The admin sees the links of the docs they can read, not a member's private ones.
+        docs = [d for d in docs if ctx.superuser or _s.can_read(d.get("path") or "", ctx)]
         for doc in docs:
             _annotate_share(doc)
         handler._send_json(200, docs)
@@ -99,6 +102,23 @@ def _resolve_target(handler, rel):
     return target
 
 
+def _may_share(handler, rel) -> bool:
+    """Whether the viewer may point a public link at `rel`: an existing doc they own (or
+    curate). 404 first if they can't even read it (no existence oracle), 403 otherwise."""
+    if _resolve_target(handler, rel) is None:
+        return False
+    ctx = handler._viewer_ctx()
+    if ctx.superuser:
+        return True
+    if not _s.can_read(rel, ctx):
+        handler._send_json(404, {"error": "document not found"})
+        return False
+    if not _s.can_manage(rel, ctx):
+        handler._send_json(403, {"error": "only the owner can create a share link for this document"})
+        return False
+    return True
+
+
 def create(handler):
     """POST /api/share — mint an opaque capability link for a doc.
 
@@ -108,18 +128,8 @@ def create(handler):
     data = handler._read_json()
     rel = (data.get("path") or "").strip()
     days = _s._safe_int(data.get("expires_days"))
-    if _resolve_target(handler, rel) is None:
+    if not _may_share(handler, rel):
         return
-    # Owner-or-admin only: the doc's owner may mint a public link. 404
-    # first if it is not even readable (no-existence-oracle), 403 if not manageable.
-    ctx = handler._viewer_ctx()
-    if not ctx.superuser:
-        if not _s.can_read(rel, ctx):
-            handler._send_json(404, {"error": "document not found"})
-            return
-        if not _s.can_manage(rel, ctx):
-            handler._send_json(403, {"error": "only the owner can create a share link for this document"})
-            return
     exp = int(time.time() + days * 86400) if days > 0 else 0
     token = _s.new_share_token()
     sess = handler._session()
@@ -151,7 +161,7 @@ def repoint(handler):
     m = re.match(_s._SHARE_ID_PATTERN, handler.path)
     data = handler._read_json()
     rel = (data.get("path") or "").strip()
-    if _resolve_target(handler, rel) is None:
+    if not _may_share(handler, rel):
         return
     try:
         if not _s.get_store().repoint_share(m.group(1), rel):

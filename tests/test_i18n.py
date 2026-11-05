@@ -87,7 +87,7 @@ class TestI18nEnglishViewerAndShare(unittest.TestCase):
         text = self.srv.get("/").text
         self.assertIn('<html lang="en">', text)
         # Labels from the STRINGS.en dictionary embedded in the page.
-        self.assertIn("Signed in as", text)
+        self.assertIn("Expand / collapse all", text)
         self.assertIn("Recently modified", text)
         self.assertRegex(text, "[\"']Search…[\"']")
         self.assertNotIn("__LANG__", text)

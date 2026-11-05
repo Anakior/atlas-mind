@@ -1,8 +1,10 @@
-"""Public REST API v1 (bearer-token) routes: search, file read/create, tree, recent."""
-import posixpath
+"""Public REST API v1 (bearer-token) routes: search, file read/create, tree, recent. What was
+written outside the mind (a mirror, an inbox drop) carries `untrusted`, as over MCP."""
 import sys
 
 import server as _s
+from server.pure import provenance
+from server.pure.hive import _mind_rel
 
 
 def _v1_search(handler, ctx, query):
@@ -11,7 +13,8 @@ def _v1_search(handler, ctx, query):
         handler._send_json(400, {"error": "missing query parameter 'q'"})
         return
     limit = _s.clamp_int(query.get("limit", [None])[0], 10, 1, 50)
-    handler._send_json(200, _s._api_search(q, limit, ctx))
+    handler._send_json(200, [{**hit, **provenance.mark(hit["path"])}
+                             for hit in _s._api_search(q, limit, ctx)])
 
 
 def _v1_file(handler, ctx, query):
@@ -27,6 +30,7 @@ def _v1_file(handler, ctx, query):
         "content": text,
         "mtime": int(target.stat().st_mtime),
         "words": len(text.split()),
+        **provenance.mark(rel),
     })
 
 
@@ -34,6 +38,7 @@ def _v1_tree(handler, ctx, query):
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
         tree = _s._filter_tree(tree, lambda p: _s.can_read(p, ctx))
+        provenance.mark_tree(tree)
         handler._send_json(200, tree)
     except Exception as e:
         _s.registry_503(handler, "[api v1 tree]", e)
@@ -93,7 +98,10 @@ def post(handler):
     if not target:
         handler._send_json(400, {"error": "invalid path (must be a .md or .html inside root, no '..')"})
         return
-    rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level)
+    rel = _mind_rel(rel)  # canonical ACL key (matches effective_level), however it was spelled
+    if _s._is_readonly_path(rel):  # a doc planted there would pass for the remote node's
+        handler._send_json(403, {"error": "read-only location (remote node mirror)"})
+        return
     if not _s.can_create(rel, ctx):  # commons is member-writable; a private space needs edit
         handler._send_json(403, {"error": "insufficient permission to create at this location"})
         return
@@ -113,5 +121,6 @@ def post(handler):
             # the creator's ownership, so a swallowed failure would silently leave a
             # member's doc commons-by-default — a privacy inversion — instead of private.
             print(f"[api create owner] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"created: {target.stem}", target)
+    ai = data.get("ai")  # the AI family, as over MCP; without it the commit says ai/unknown
+    _s.commit_change(ctx, f"created: {target.stem}", target, ai=ai if isinstance(ai, str) else None)
     handler._send_json(201, {"ok": True, "path": rel, "mtime": int(target.stat().st_mtime)})

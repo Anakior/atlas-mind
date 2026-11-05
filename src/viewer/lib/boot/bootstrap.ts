@@ -2,18 +2,18 @@
 // the sidebar tree through the Atlas DOM runtime (contentTree.reload) — the keyed reconciler keeps
 // the open folders (state) and the scroll offset, so no DOM-sniff / save-restore crutch is needed.
 // The content branch (open doc / home / route) stays imperative until those modules migrate.
-import { isServerMode, editMode, EMBED_MIND, currentFile, setCurrentFile, mdCount, setMdCount, otherCount, setOtherCount } from '../core/state';
+import { isServerMode, editMode, EMBED_MIND, currentFile, refreshCurrentFile, mdCount, setMdCount, otherCount, setOtherCount } from '../core/state';
 import { setCsrfToken, setMeState, setTotpEnabled, TREE, url } from '../core/data-csrf';
 import { treeEl, contentEl, statsEl } from '../core/dom-refs';
 import { t } from '../core/i18n';
-import { setStatus } from '../core/net';
+import { requestError, setStatus } from '../core/net';
 import { fileMap, index } from '../core/tree';
 import { sse } from '../core/sse-coord';
 import { startSyncBanner } from '../ui/sync-banner';
 import { refreshTrashLink } from '../home/side-panels';
 import { firstSteps } from '../home/first-steps';
 import { showAccount, showLocal } from '../home/side-nav';
-import { contentTree, contentCache, setWlMaps } from '../content/content-tree';
+import { contentTree, setWlMaps } from '../content/content-tree';
 import { decorateTreeBadges } from '../content/notes/notes-index';
 import { setBacklinksIndex, setBacklinksLoading } from '../content/backlinks';
 import { docRenderer } from '../content/doc-renderer';
@@ -31,6 +31,10 @@ export class Boot {
   private swUpdatePending = false;
   private swReg: ServiceWorkerRegistration | null = null;
   private hadController = false;
+  // Soft reloads overlap (one SSE per write): each is numbered, and a tree older than the one already
+  // applied is dropped instead of overwriting it.
+  private reloadSeq = 0;
+  private appliedSeq = 0;
 
   start(): void {
     if (isServerMode) {
@@ -129,15 +133,18 @@ export class Boot {
 
   async softReload(): Promise<void> {
     if (this.shouldAbortReload()) return;
+    const seq = ++this.reloadSeq;
 
     try {
       const res = await fetch('/api/tree');
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
 
       const newTree = await res.json();
 
       if (this.shouldAbortReload()) return; // re-check post-await: the user may have started editing
+      if (seq < this.appliedSeq) return;
+      this.appliedSeq = seq;
 
       TREE.children = newTree.children;
       TREE.name = newTree.name;
@@ -167,16 +174,11 @@ export class Boot {
           // The open doc is gone from the viewer's filtered tree → clean not-found, not a home bounce.
           homeView.showNotFound(currentFile.path);
         } else if (newFile.mtime !== currentFile.mtime) {
-          // Re-fetch the open doc; save/restore main's scroll around the (still-imperative) re-render.
-          contentCache.delete(newFile.path);
-          newFile.content = undefined;
-          const main = document.querySelector('main')!;
-          const scrollPos = main.scrollTop;
-
-          await docRenderer.show(newFile);
-          main.scrollTop = scrollPos;
+          // Changed: the new mtime misses the content cache, so the doc is fetched again.
+          await docRenderer.rerender(newFile);
         } else {
-          setCurrentFile(newFile);
+          // Same doc, fresher node: its own loads in flight (skeleton, notes, links) still land.
+          refreshCurrentFile(newFile);
         }
       } else if (document.getElementById('home-activity-card') && window.refreshActivityData) {
         // Home on screen: do NOT re-render it (that re-mounts the activity cards and wipes the open

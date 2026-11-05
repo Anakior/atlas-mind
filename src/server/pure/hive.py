@@ -1,10 +1,14 @@
 """Hive node publishing/subscription helpers: node links, path resolution, the
 read-only remote mirror, and the hardened HTTP fetch for syncing remotes."""
 import base64
+import http.client
 import json
 import os
+import posixpath
+import socket
 import sys
 import tempfile
+from urllib.parse import urlsplit
 
 import server as _s
 
@@ -77,10 +81,15 @@ def _validate_node_path(rel: str):
 
 def _iter_node_files(node_path: str):
     """Yields (path_relative_to_node, Path) for each doc published under the node.
-    Folder → subtree rebased on the node root; single file → one (name, Path) pair."""
+    Folder → subtree rebased on the node root; single file → one (name, Path) pair.
+    Only what every account of this mind may read: a member's private doc inside the
+    node's folder is never published."""
     node_path = node_path.strip("/")
     prefix = node_path + "/"
+    everyone = _s.ViewerCtx({"*"}, False, None)
     for rel, path in _s._iter_doc_files():
+        if not _s.can_read(rel, everyone):
+            continue
         if rel == node_path:              # node = single document
             yield path.name, path
         elif rel.startswith(prefix):      # node = folder
@@ -93,12 +102,43 @@ def _remote_mirror_root(name: str):
     return _s.CONFIG.content_root / _s.REMOTES_DIR / name
 
 
+def _lexical_rel(rel: str) -> str:
+    """`rel` with '\\' read as the separator it is on Windows, and its '.', '..' and doubled
+    slashes folded."""
+    rel = rel or ""
+    if os.name == "nt":
+        rel = rel.replace("\\", "/")
+    return posixpath.normpath(rel.strip("/"))
+
+
+def _mind_rel(rel: str) -> str:
+    """`rel` as the filesystem reads it: where names ignore case (Windows, macOS), the spelling
+    on disk of the folders that exist, short names (REMOTE~1) included, so `Remotes\\x.md`
+    names the mirror it opens. Lexical on a case-sensitive filesystem, where another
+    spelling is another file."""
+    rel = _lexical_rel(rel)
+    if not _s._is_fs_case_insensitive():
+        return rel
+    root = _s.CONFIG.content_root
+    try:
+        return (root / rel).resolve().relative_to(root).as_posix()
+    except (ValueError, OSError):
+        return rel
+
+
+def _top_dir(rel: str) -> str:
+    """The top folder of a _lexical_rel or _mind_rel path, to compare with remotes or inbox:
+    folded where names ignore case, since macOS does not give back the spelling on disk and
+    Windows drops the trailing dots and spaces of a name."""
+    top = rel.split("/")[0]
+    return top.rstrip(" .").casefold() if _s._is_fs_case_insensitive() else top
+
+
 def _is_readonly_path(rel: str) -> bool:
     """A path under remotes/ is a remote mirror: read-only on the local side
     (any edit/delete/move is refused — the truth lives at the publisher, we
     resync on top of it)."""
-    parts = (rel or "").strip("/").split("/")
-    return len(parts) >= 1 and parts[0] == _s.REMOTES_DIR
+    return _top_dir(_mind_rel(rel)) == _s.REMOTES_DIR
 
 
 def _is_safe_node_name(name: str) -> bool:
@@ -142,21 +182,20 @@ def _atomic_write_bytes(dest, body: bytes) -> None:
 
 
 def _is_blocked_ip(ip_str: str) -> bool:
-    import ipaddress
+    """Anything but a public unicast address: the OAuth metadata fetch's own rule (shared
+    100.64/10 and IPv4-mapped forms included)."""
+    from server.pure.oauth import _public_address
     try:
-        ip = ipaddress.ip_address(ip_str)
+        return not _public_address(ip_str)
     except ValueError:
         return True
-    return (ip.is_private or ip.is_loopback or ip.is_link_local
-            or ip.is_multicast or ip.is_reserved or ip.is_unspecified)
 
 
-def _validate_remote_url(url: str) -> None:
+def _validate_remote_url(url: str):
     """Guards the SSRF surface of node subscriptions (URL comes from a pasted
     atlas-node: link): require http/https and refuse any host resolving to a
-    private/loopback/link-local/reserved address. Raises ValueError if disallowed."""
-    import socket
-    from urllib.parse import urlsplit
+    private/loopback/link-local/reserved address. Raises ValueError if disallowed;
+    returns the vetted address to connect to (None when private remotes are allowed)."""
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https"):
         raise ValueError(f"unsupported scheme: {parts.scheme!r}")
@@ -164,7 +203,7 @@ def _validate_remote_url(url: str) -> None:
     if not host:
         raise ValueError("missing host")
     if getattr(_s.CONFIG, "allow_private_remotes", False):
-        return  # opt-in: localhost/LAN hive — scheme still checked
+        return None  # opt-in: localhost/LAN hive — scheme still checked
     try:
         infos = socket.getaddrinfo(
             host, parts.port or (443 if parts.scheme == "https" else 80))
@@ -173,23 +212,45 @@ def _validate_remote_url(url: str) -> None:
     for info in infos:
         if _is_blocked_ip(info[4][0]):
             raise ValueError("host resolves to a non-routable address")
+    return infos[0][4][0]
+
+
+class _PinnedHTTP(http.client.HTTPConnection):
+    """Plain HTTP to `host` over a socket opened to the already-vetted `ip`."""
+
+    def __init__(self, host, ip, port, timeout):
+        super().__init__(host, port, timeout=timeout)
+        self._ip = ip
+
+    def connect(self):
+        self.sock = socket.create_connection((self._ip, self.port), self.timeout)
 
 
 def _http_get_bearer(url: str, token: str, timeout: float = 15.0) -> bytes:
     """Fetch a remote node URL with the Bearer token. Hardened against the hive SSRF
-    surface: scheme/host validated, redirects NOT followed (a redirect could escape
-    validation into an internal target), response capped at MAX_NODE_FILE_BYTES."""
-    import urllib.request
-    _validate_remote_url(url)
-
-    class _NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, *args, **kwargs):
-            return None  # never follow redirects (would bypass URL validation)
-
-    opener = urllib.request.build_opener(_NoRedirect)
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    with opener.open(req, timeout=timeout) as resp:
+    surface: scheme/host validated and the connection made to the address that was
+    vetted (a second DNS answer can't swap in an internal one), redirects NOT followed
+    (one could escape validation into an internal target), response capped at
+    MAX_NODE_FILE_BYTES."""
+    from server.pure.oauth import _PinnedHTTPS
+    parts = urlsplit(url)
+    ip = _validate_remote_url(url)
+    https = parts.scheme == "https"
+    port = parts.port or (443 if https else 80)
+    if ip is None:  # a LAN hive, opted in: by name
+        conn = (http.client.HTTPSConnection if https else http.client.HTTPConnection)(
+            parts.hostname, port, timeout=timeout)
+    else:
+        conn = (_PinnedHTTPS if https else _PinnedHTTP)(parts.hostname, ip, port, timeout)
+    try:
+        conn.request("GET", (parts.path or "/") + (f"?{parts.query}" if parts.query else ""),
+                     headers={"Authorization": f"Bearer {token}"})
+        resp = conn.getresponse()
         data = resp.read(_s.MAX_NODE_FILE_BYTES + 1)
+    finally:
+        conn.close()
+    if resp.status != 200:
+        raise ValueError(f"the remote node answered {resp.status}")
     if len(data) > _s.MAX_NODE_FILE_BYTES:
         raise ValueError("remote response exceeds size limit")
     return data

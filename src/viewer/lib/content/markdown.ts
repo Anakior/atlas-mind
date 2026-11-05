@@ -6,10 +6,14 @@ import { escapeHtml } from '../core/utils';
 import { BASE } from '../core/data-csrf';
 import { t } from '../core/i18n';
 import { wlMaps, WL_TARGET_EXTS } from './content-tree';
+import { sanitizeHtml } from './sanitize';
 
 export class Markdown {
   // The doc being rendered: a relative image or link in it points beside it, as on GitHub.
   private docPath: string | null = null;
+  // Rendering the editor's live preview: no language guessing for an unlabelled code block (hljs
+  // tries them all, ~190 ms for 300 lines, on every pause of the typing).
+  private live = false;
 
   constructor() {
     marked.use({
@@ -17,13 +21,34 @@ export class Markdown {
       walkTokens: (token: { type: string; href?: string }) => {
         if ((token.type === 'image' || token.type === 'link') && token.href) token.href = this.besideDoc(token.href);
       },
+      // marked ≥ v5 dropped the `highlight` option (silently ignored by the vendored v15), so highlight
+      // in a custom `code` renderer instead. The hljs output survives the sanitizer; the `hljs` class
+      // enables the vendored github-dark theme.
+      renderer: {
+        code: ({ text, lang }: { text: string; lang?: string }) => {
+          const language = (lang || '').trim().split(/\s+/)[0];
+          let html;
+
+          try {
+            html = language && hljs.getLanguage(language)
+              ? hljs.highlight(text, { language }).value
+              : this.live ? escapeHtml(text) : hljs.highlightAuto(text).value;
+          } catch (e) {
+            html = escapeHtml(text);
+          }
+
+          const cls = language ? ' language-' + escapeHtml(language) : '';
+
+          return '<pre><code class="hljs' + cls + '">' + html + '</code></pre>\n';
+        },
+      },
     });
   }
 
   // marked leaves raw HTML intact — a doc with <script>/<img onerror> would run in the innerHTML.
-  // The output goes through DOMPurify (vendored, inlined in the offline build); if it is missing
-  // that is a build bug, so show an error and NEVER render unsanitised HTML.
-  render(md: string, docPath: string | null = null): string {
+  // The output goes through the sanitizer (DOMPurify, vendored, inlined in the offline build); if it
+  // is missing that is a build bug, so show an error and NEVER render unsanitised HTML.
+  render(md: string, docPath: string | null = null, live = false): string {
     if (typeof DOMPurify === 'undefined') {
       console.error('DOMPurify absent : asset /vendor/purify.min.js manquant (bug de build).');
 
@@ -31,10 +56,12 @@ export class Markdown {
     }
 
     this.docPath = docPath;
+    this.live = live;
     try {
-      return DOMPurify.sanitize(marked.parse(md || ''));
+      return sanitizeHtml(marked.parse(md || ''));
     } finally {
       this.docPath = null;
+      this.live = false;
     }
   }
 

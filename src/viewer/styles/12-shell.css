@@ -55,7 +55,8 @@
 .side #tree, .side #search-results { font-size: 13.5px; padding-bottom: 118px; }
 .side:has(#user-bar.hidden) #tree, .side:has(#user-bar.hidden) #search-results { padding-bottom: 64px; }
 .side .tree-item { padding-top: 5px; padding-bottom: 5px; border-radius: 7px; }
-.side .tree-item.active { background: rgb(var(--line) / .08); box-shadow: inset 2px 0 0 rgb(var(--brand)); }
+.side .tree-row { border-radius: 7px; }
+.side .tree-item.active, .side .tree-row:has(> .tree-item.active) { background: rgb(var(--line) / .08); box-shadow: inset 2px 0 0 rgb(var(--brand)); }
 
 /* The foot: one "liquid glass" card floating over the end of the folder list and the brand glow — a
    frosted fill, a light sheen and a rim that catches the light top-left and again, softer,
@@ -101,6 +102,7 @@
 .todo-row { padding: 8px 14px; }
 .todo-row:hover { background: rgb(var(--line) / .035); }
 .todo-check { accent-color: rgb(var(--brand)); }
+.todo-del:focus-visible { opacity: 1; }
 .todo-input, .todo-edit { min-width: 0; height: 34px; padding: 0 11px; border-radius: 9px; border: 1px solid rgb(var(--line) / .1); background: rgb(var(--surface-2)); color: rgb(var(--ink-100)); font-size: 13.5px; }
 .todo-edit { height: 28px; padding: 0 8px; border-color: rgb(var(--brand) / .6); }
 .todo-input::placeholder { color: rgb(var(--ink-500)); }

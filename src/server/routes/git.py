@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import server as _s
 from server.pure import push_guard
@@ -38,9 +38,10 @@ def _token(authorization: str) -> str:
         return ""
 
 
-def _owner(handler):
+def _owner(handler, need):
     """The email behind the Basic password when it is an access token of the mind's only
-    account, None otherwise (the reason already sent)."""
+    account with the `need` scope (read to copy, write to push), None otherwise (the
+    reason already sent)."""
     token = _token(handler.headers.get("Authorization"))
     ident = _s.verify_api_bearer("Bearer " + token) if token else None
     if not ident:
@@ -56,6 +57,11 @@ def _owner(handler):
     if not owner or ident.get("acts_as") != owner:
         _plain(handler, 403, "Only the owner of a mind with a single account can copy it with git: "
                              "a copy carries every file and the whole history.")
+        return None
+    scopes = _s.viewer_ctx(ident).scopes
+    if scopes is not None and need not in scopes:
+        _plain(handler, 403, "This access token is limited to " + ", ".join(sorted(scopes))
+                             + (": it may not send changes." if need == "write" else ": it may not copy the mind."))
         return None
     return owner
 
@@ -133,10 +139,12 @@ def handle(handler):
     if _s.CONFIG.dev_mode or path_info not in _SERVICES or shutil.which("git") is None:
         _plain(handler, 404, "Not found.")
         return
-    email = _owner(handler)
+    # A push is announced on GET /info/refs (?service=) before its POST: both need write.
+    push = (path_info == "/git-receive-pack"
+            or "git-receive-pack" in parse_qs(urlsplit(handler.path).query).get("service", []))
+    email = _owner(handler, "write" if push else "read")
     if not email:
         return
-    push = path_info == "/git-receive-pack"
     with tempfile.TemporaryFile() as body:
         length = handler._spool_body_or_4xx(body, _MAX_PUSH_BYTES)
         if length is None:

@@ -317,7 +317,9 @@ def main() -> int:
     tree = walk(content_root, embed_content=False, _accum=accum,
                 excluded_names=excluded_names)
     html = render_template(
-        tree=tree,
+        # One shell for every account: the tree comes from /api/tree, filtered per
+        # viewer, so the page itself names no doc.
+        tree={**tree, "children": []},
         embed_content=None,
         embed_backlinks=None,
         embed_notes=None,
@@ -354,7 +356,7 @@ def main() -> int:
     backlinks_size = backlinks_data.stat().st_size
     print(
         f"Generated:\n"
-        f"  {out_online.name:24} {html_size:>10,} bytes  (shell + tree metadata)\n"
+        f"  {out_online.name:24} {html_size:>10,} bytes  (shell)\n"
         f"  {backlinks_data.name:24} {backlinks_size:>10,} bytes  ({len(backlinks)} entries)\n"
         f"  {notes_index_path.name:24} {notes_index_path.stat().st_size:>10,} bytes  ({len(notes_index)} annotated docs)"
     )

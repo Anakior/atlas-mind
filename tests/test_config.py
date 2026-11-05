@@ -8,6 +8,8 @@ Two levels:
   directory via ATLAS_MIND (the key decoupling test), atlas.toml taken into
   account end to end (todos, exclusions), boot cleanly refused on invalid toml.
 """
+import contextlib
+import io
 import os
 import shutil
 import subprocess
@@ -138,6 +140,14 @@ class TestEnvOverrides(ConfigTestBase):
         with self.assertRaises(config.AtlasConfigError):
             self.load(env={"SESSION_MAX_AGE": "-5"})
 
+    def test_git_pull_interval_has_a_floor(self):
+        # 0 would spin the pull loop with no pause between pulls; raised, the instance still starts.
+        for raw in ("0", "-5", "9"):
+            self.assertEqual(self.load(env={"GIT_PULL_INTERVAL": raw}).git_pull_interval, 10)
+        self.write_toml("[server]\ngit_pull_interval = 0\n")
+        self.assertEqual(self.load().git_pull_interval, 10)
+        self.assertEqual(self.load(env={"GIT_PULL_INTERVAL": "30"}).git_pull_interval, 30)
+
 
 
 class TestTomlConfig(ConfigTestBase):
@@ -256,6 +266,37 @@ excluded_names = ["secret.md"]
         self.assertIn("PORT", str(cm.exception))
 
 
+class TestMisplacedKeys(ConfigTestBase):
+    """A known key in the wrong place is ignored, but the warning says where it goes."""
+
+    def warning_for(self, text: str) -> str:
+        self.write_toml(text)
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.cfg = self.load()
+        return stderr.getvalue()
+
+    def test_section_key_at_the_top(self):
+        warning = self.warning_for("port = 9000\n")
+        self.assertIn("unknown key port ignored (did you mean [server] port?)", warning)
+        self.assertEqual(self.cfg.port, 8765)
+
+    def test_section_key_in_another_section(self):
+        warning = self.warning_for("[git]\nport = 9000\n")
+        self.assertIn("unknown key git.port ignored (did you mean [server] port?)", warning)
+
+    def test_root_key_after_a_section_header(self):
+        # TOML reads a key written below [server] as part of [server].
+        warning = self.warning_for('[server]\nport = 9000\nlang = "fr"\n')
+        self.assertIn("server.lang", warning)
+        self.assertIn("lang at the top of the file", warning)
+        self.assertEqual(self.cfg.lang, "en")
+
+    def test_a_typo_still_gets_the_close_match(self):
+        warning = self.warning_for("[server]\nauth_enable = true\n")
+        self.assertIn("(did you mean 'auth_enabled'?)", warning)
+
+
 class TestTrustedIpHeader(ConfigTestBase):
     """server.trusted_ip_header / ATLAS_TRUSTED_IP_HEADER: trusted header for
     the client IP behind a reverse proxy (de-fly-ization)."""
@@ -354,12 +395,9 @@ class TestSeparateMindServer(unittest.TestCase):
         resp = self.srv.get("/hello.md")
         self.assertEqual(resp.status, 200)
         self.assertEqual(resp.body, self.HELLO_MD.encode("utf-8"))
-        # The viewer (the mind's dist) references the mind's docs, not the decoy
-        # copied by the harness into <engine>/content/.
-        index = self.srv.get("/")
-        self.assertEqual(index.status, 200)
-        self.assertIn("hello.md", index.text)
-        self.assertNotIn("accueil.md", index.text)
+        # The viewer (the mind's dist) is served, and the tree lists the mind's docs, not
+        # the decoy copied by the harness into <engine>/content/.
+        self.assertEqual(self.srv.get("/").status, 200)
         tree = self.srv.get("/api/tree")
         self.assertEqual(tree.status, 200)
         self.assertIn("hello.md", tree.text)
@@ -471,10 +509,8 @@ class TestTomlEndToEnd(unittest.TestCase):
             self.assertEqual(tree.status, 200)
             self.assertNotIn("projets/beta.md", tree.text)
             self.assertIn(TODO_REL, tree.text)
-            # The harness build (dist/index.html) read the same atlas.toml.
-            index = srv.get("/")
-            self.assertNotIn("beta.md", index.text)
-            self.assertIn("quick.md", index.text)
+            # The harness build read the same atlas.toml: the links index skips beta too.
+            self.assertNotIn("projets/beta.md", srv.get("/_backlinks.json").text)
 
     def test_malformed_toml_fails_boot_with_clear_error(self):
         srv = TomlMindServer(atlas_toml="this is not [valid toml\n",

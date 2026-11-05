@@ -7,7 +7,7 @@
 import { IS_OFFLINE_BUILD, EMBED_NOTES } from '../../core/data-csrf';
 import { currentFile } from '../../core/state';
 import { LANG, t } from '../../core/i18n';
-import { setStatus } from '../../core/net';
+import { requestError, setStatus } from '../../core/net';
 import { copyToClipboard } from '../../admin/settings/settings-shared';
 import { Dialogs } from '../../modals/dialogs';
 import { docRenderer } from '../doc-renderer';
@@ -70,7 +70,7 @@ export class NotesStore {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
     } catch (e) {
       Dialogs.notifyError('noteSaveFailed', (e as Error).message);
 
@@ -100,7 +100,7 @@ export class NotesStore {
         },
       );
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
     } catch (e) {
       Dialogs.notifyError('actionFailed', (e as Error).message);
 
@@ -131,7 +131,7 @@ export class NotesStore {
         { method: 'DELETE' },
       );
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
     } catch (e) {
       Dialogs.notifyError('actionFailed', (e as Error).message);
 

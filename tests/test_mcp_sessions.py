@@ -155,16 +155,36 @@ class TestAgentRuns(_Server):
         self.assertTrue(err)
         self.assertIn("No run", text)
 
-    def test_a_human_run_is_listed_and_undone(self):
-        # Written with no AI named: what an agent committing from a clone without the
-        # trailer looks like.
+    def test_a_write_naming_no_ai_is_still_an_agents_run(self):
+        # A token writes for an agent, whether or not it says which: it is never taken for the
+        # person, and its run stays apart from theirs and undoable.
         self.call("edit_doc", path="projets/alpha.md", old_string="49", new_string="40")
+        _, data = self.call("agent_runs")
+        run = next(r for r in data["runs"] if any(d["path"] == "projets/alpha.md" for d in r["documents"]))
+        self.assertEqual((run["ai"], run["token"]), ("unknown", "claude"))
+        err, text = self.call("undo_run", run=run["id"], paths=["projets/alpha.md"], ai="claude")
+        self.assertFalse(err, text)
+        self.assertEqual(self.text("projets/alpha.md"), ALPHA)
+
+    def test_a_human_run_is_listed_and_undone(self):
+        # A commit with no trailer, as an agent committing from a clone writes it.
+        self.srv.path("projets/alpha.md").write_text(ALPHA.replace("49", "40"), encoding="utf-8", newline="")
+        self.srv.git("commit", "-qam", "edited: alpha")
         _, data = self.call("agent_runs")
         run = next(r for r in data["runs"] if any(d["path"] == "projets/alpha.md" for d in r["documents"]))
         self.assertIsNone(run["ai"])
         err, text = self.call("undo_run", run=run["id"], paths=["projets/alpha.md"], ai="claude")
         self.assertFalse(err, text)
         self.assertEqual(self.text("projets/alpha.md"), ALPHA)
+
+    def test_a_view_relayed_undo_is_the_persons_own(self):
+        # The run view relays the person's click without `ai`: theirs, not an agent's.
+        run = self._agent_session()
+        err, text = self.call("undo_run", run=run["id"], paths=["notes/new.md"])
+        self.assertFalse(err, text)
+        trailers = self.srv.git("log", "-1", "--format=%(trailers)").stdout
+        self.assertNotIn("X-Atlas", trailers)
+        self.assertEqual(self.srv.git("log", "-1", "--format=%ae").stdout.strip(), ADMIN_EMAIL)
 
     def test_undo_from_a_commit_keeps_what_came_before(self):
         run = self._agent_session()

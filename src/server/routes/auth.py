@@ -120,6 +120,13 @@ def login(handler):
 
 
 def logout(handler):
+    # Only a navigation signs out: an <img src="/logout"> in a note must not log its reader
+    # out (a browser without Fetch Metadata sends no header and keeps working).
+    if handler.headers.get("Sec-Fetch-Dest", "document") not in ("document", "empty"):
+        handler.send_response(403)
+        handler.send_header("Content-Length", "0")
+        handler.end_headers()
+        return
     handler.send_response(303)
     handler.send_header("Location", "/login")
     handler.send_header(

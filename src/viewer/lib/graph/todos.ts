@@ -88,10 +88,10 @@ export class Todos {
       .map(
         (item) => `
     <li class="todo-row group flex items-start gap-2.5" data-id="${item.id}">
-      <input type="checkbox" ${item.done ? 'checked' : ''}
+      <input type="checkbox" ${item.done ? 'checked' : ''} aria-label="${escapeHtml(item.text)}"
         class="todo-check mt-0.5 w-4 h-4 cursor-pointer">
       <span class="todo-text flex-1 text-sm leading-snug ${item.done ? 'line-through text-ink-500' : 'text-ink-100'} cursor-pointer">${escapeHtml(item.text)}</span>
-      <button class="todo-del opacity-0 group-hover:opacity-100 text-ink-500 hover:text-rose-400 text-base leading-none transition-opacity" data-tip="${escapeHtml(t('del'))}">&times;</button>
+      <button type="button" class="todo-del opacity-0 group-hover:opacity-100 text-ink-500 hover:text-rose-400 text-base leading-none transition-opacity" data-tip="${escapeHtml(t('del'))}" aria-label="${escapeHtml(t('deleteTodoNamed', item.text))}">&times;</button>
     </li>
   `,
       )
@@ -187,26 +187,23 @@ export class Todos {
     });
 
     if (!ok) return;
-    // Delete largest id first: the server indexes by position, so deleting N shifts
-    // all > N; descending order keeps the remaining indices valid.
-    const idsDesc = doneTodos.map((it) => it.id).sort((a: number, b: number) => b - a);
 
     try {
       setStatus(t('clearing'), 'info');
 
-      for (const id of idsDesc) {
-        setTodos(await api('DELETE', '/api/todos/' + id));
+      for (const it of doneTodos) {
+        setTodos(await api('DELETE', '/api/todos/' + it.id));
       }
 
       this.render();
-      setStatus(t('nCleared', idsDesc.length), 'ok');
+      setStatus(t('nCleared', doneTodos.length), 'ok');
     } catch (err) {
       setStatus(t('err', (err as Error).message), 'err');
     }
   }
 
-  // Swap the row's text span for a live <input>, commit on Enter/blur, revert on Escape. The bootstrap
-  // todos poll re-rendering mid-edit destroys this input — the keyed runtime port fixes that later.
+  // Swap the row's text span for a live <input>, commit on Enter/blur, revert on Escape. The todos
+  // poll leaves the list alone while this input is there (refresh below).
   private startInlineEdit(row: HTMLElement): void {
     const id = parseInt(row.dataset.id!);
     const item = todos.find((it) => it.id === id);
@@ -219,6 +216,7 @@ export class Todos {
 
     input.type = 'text';
     input.value = item.text;
+    input.setAttribute('aria-label', t('editTodo'));
     input.className =
       'todo-edit flex-1';
     textSpan.replaceWith(input);
@@ -265,7 +263,8 @@ export async function refresh(): Promise<void> {
 
   try {
     setTodos(await api('GET', '/api/todos'));
-    todosWidget.render();
+    // A todo being edited keeps its input: the commit renders the fresh list.
+    if (!document.querySelector('.todo-edit')) todosWidget.render();
     setStatus(t('synced'), 'info');
   } catch (err) {
     setStatus(t('offlinePrefix', (err as Error).message), 'err');

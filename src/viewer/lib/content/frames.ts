@@ -6,14 +6,16 @@
 // markdown pipeline, no editing chrome (TOC/backlinks/notes/todos are hidden, restored by the next
 // .md doc via DocRenderer.show).
 
-import { IS_OFFLINE_BUILD, EMBED_CONTENT, url } from '../core/data-csrf';
+import { IS_OFFLINE_BUILD, EMBED_CONTENT, docPath, docUrl, url } from '../core/data-csrf';
 import { escapeHtml } from '../core/utils';
 import { t } from '../core/i18n';
+import { requestError } from '../core/net';
 import { contentEl, btnEdit, btnSave, btnCancel, tocList, tocLinks, tocNotes, tocPanel } from '../core/dom-refs';
-import { currentFile } from '../core/state';
+import { currentView } from '../core/state';
 import { tocShow } from '../home/layout-chrome';
 import { renderSkeleton } from './skeleton';
 import { attachCopyButtons } from './content-decorators';
+import { sanitizeHtml } from './sanitize';
 
 export class Frames {
   // Shared iframe geometry: full-bleed minus the breadcrumb, dark backdrop.
@@ -57,28 +59,33 @@ export class Frames {
   }
 
   // .docx → HTML via mammoth, sanitized and injected into .prose. Read-only, client-side. Each
-  // currentFile guard drops a result whose page changed during the fetch/parse.
+  // currentView guard drops a result whose page changed during the fetch/parse.
   async renderDocx(file: FileNode): Promise<void> {
+    const view = currentView();
+
     this.enterFrameMode(false);
     contentEl.innerHTML = renderSkeleton(file);
 
     try {
       await this.loadScript(Frames.MAMMOTH_URL, () => !!window.mammoth);
 
-      const buf = await (await fetch(this.frameUrl(file), { cache: 'no-cache' })).arrayBuffer();
+      const res = await fetch(this.fetchPath(file), { cache: 'no-cache' });
 
-      if (currentFile !== file) return;
+      if (!res.ok) throw requestError(res.status);
+      const buf = await res.arrayBuffer();
+
+      if (currentView() !== view) return;
 
       const result = await window.mammoth!.convertToHtml({ arrayBuffer: buf });
 
-      if (currentFile !== file) return;
-      contentEl.innerHTML = '<div class="docx-doc">' + DOMPurify.sanitize(result.value) + '</div>';
+      if (currentView() !== view) return;
+      contentEl.innerHTML = '<div class="docx-doc">' + sanitizeHtml(result.value) + '</div>';
     } catch (e) {
-      if (currentFile !== file) return;
+      if (currentView() !== view) return;
       contentEl.innerHTML =
         '<div class="text-rose-400 text-sm">' +
         escapeHtml(t('docxError', (e as Error).message)) +
-        ' <a href="' + escapeHtml(this.encodePath(file)) + '" class="text-sky-400 hover:underline">' +
+        ' <a href="' + escapeHtml(docUrl(file.path)) + '" class="text-sky-400 hover:underline">' +
         escapeHtml(file.name) + '</a></div>';
     }
   }
@@ -86,6 +93,8 @@ export class Frames {
   // An image fitted to the pane over a checkerboard (so transparency shows); a click toggles its
   // natural size. Shown through <img>, so an .svg never runs a script.
   renderImage(file: FileNode): void {
+    const view = currentView();
+
     this.enterFrameMode(true);
 
     const u = escapeHtml(this.frameUrl(file));
@@ -103,7 +112,7 @@ export class Frames {
     const img = box.querySelector('img') as HTMLImageElement;
 
     img.addEventListener('load', () => {
-      if (currentFile !== file) return;
+      if (currentView() !== view) return;
       const label = contentEl.querySelector('[data-banner-label]');
 
       if (label) label.textContent = t('imageDocBanner') + ' · ' + t('imageSize', img.naturalWidth, img.naturalHeight);
@@ -111,7 +120,7 @@ export class Frames {
       box.classList.toggle('image-doc--zoomable', img.naturalWidth > img.clientWidth || img.naturalHeight > img.clientHeight);
     });
     img.addEventListener('error', () => {
-      if (currentFile !== file) return;
+      if (currentView() !== view) return;
       box.innerHTML = '<p class="text-rose-400 text-sm">' + escapeHtml(t('imageError')) + ' <a href="' + u + '" class="text-sky-400 hover:underline">' + escapeHtml(file.name) + '</a></p>';
     });
     img.addEventListener('click', () => {
@@ -122,6 +131,8 @@ export class Frames {
   // A .json pretty-printed and highlighted, under a one-line summary (an array's length, an
   // object's keys, the size). Invalid JSON is shown as is, under the parse error.
   async renderJson(file: FileNode): Promise<void> {
+    const view = currentView();
+
     this.enterFrameMode(false);
 
     const u = escapeHtml(this.frameUrl(file));
@@ -136,17 +147,17 @@ export class Frames {
     let text: string;
 
     try {
-      const res = await fetch(this.frameUrl(file));
+      const res = await fetch(this.fetchPath(file));
 
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw requestError(res.status);
       text = await res.text();
     } catch (e) {
-      if (currentFile !== file) return;
+      if (currentView() !== view) return;
       contentEl.innerHTML = '<div class="text-rose-400 text-sm">' + escapeHtml(t('loadError', (e as Error).message)) + '</div>';
 
       return;
     }
-    if (currentFile !== file) return;
+    if (currentView() !== view) return;
 
     let shown = text;
     let summary: string;
@@ -210,14 +221,14 @@ export class Frames {
     document.getElementById('todo-widget')?.classList.add('hidden');
   }
 
-  // Content-relative path → an absolute, percent-encoded URL (no cache-buster).
-  private encodePath(file: FileNode): string {
-    return url('/' + file.path.split('/').map(encodeURIComponent).join('/'));
+  // The doc's address with its mtime cache-buster: fetchPath for fetch() (which adds the base path),
+  // frameUrl for an iframe/img src or a link.
+  private fetchPath(file: FileNode): string {
+    return docPath(file.path) + (file.mtime ? '?v=' + file.mtime : '');
   }
 
-  // Same, plus the mtime cache-buster used for the live fetch / iframe src.
   private frameUrl(file: FileNode): string {
-    return this.encodePath(file) + (file.mtime ? '?v=' + file.mtime : '');
+    return url(this.fetchPath(file));
   }
 
   // Load a vendor <script> once, cached by URL; resolve when onload fires AND ready() confirms the

@@ -31,6 +31,33 @@
   @media (max-width: 767px) {
     .pill-banner { left: .75rem; right: .75rem; transform: none; max-width: none; border-radius: 13px; font-size: .74rem; }
   }
+  /* ui/toast.ts: a notice at the bottom that goes away by itself, the pill banner's glass. */
+  .atlas-toast {
+    position: fixed; left: 50%; bottom: 1.5rem; z-index: 70;
+    max-width: min(28rem, calc(100vw - 1.5rem));
+    padding: .55rem 1rem;
+    font-family: 'Manrope', system-ui, sans-serif; font-size: .8rem; line-height: 1.4;
+    color: rgb(var(--ink-100));
+    background: rgb(var(--navy-800) / .9);
+    backdrop-filter: blur(14px) saturate(180%); -webkit-backdrop-filter: blur(14px) saturate(180%);
+    border: 1px solid rgb(var(--line) / calc(var(--line-a) * 2)); border-radius: 12px;
+    box-shadow: 0 12px 34px -10px rgba(0,0,0,.6);
+    opacity: 0; transform: translateX(-50%) translateY(8px); pointer-events: none;
+    transition: opacity .2s, transform .2s;
+  }
+  .atlas-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { .atlas-toast { transition: none; } }
+  /* A list that couldn't load (Inbox, Santé): said plainly, with a way to try again. */
+  .load-failed {
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding: .55rem .75rem; border-radius: 10px; font-size: .8rem; color: rgb(var(--ink-300));
+    background: rgb(var(--ink-100) / .04); border: 1px solid rgb(var(--line) / var(--line-a));
+  }
+  .load-retry {
+    flex-shrink: 0; padding: .15rem .45rem; border: 0; border-radius: 6px; background: none; cursor: pointer;
+    font: inherit; font-weight: 600; color: rgb(var(--accent));
+  }
+  .load-retry:hover { background: rgb(var(--accent) / .12); }
   .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--ink-100) / 0.1); border-radius: 3px; }
   .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgb(var(--ink-100) / 0.18); }

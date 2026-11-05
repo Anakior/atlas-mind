@@ -30,7 +30,7 @@ class RemoteSync:
         cannot corrupt the same mirror concurrently."""
         from server import (_remote_mirror_root, _is_safe_node_name,
                             _mirror_is_under_remotes, _http_get_bearer,
-                            _atomic_write_bytes, _prune_empty_dirs)
+                            _atomic_write_bytes, _prune_empty_dirs, writing)
         store = self._store
         name = remote["name"]
         url = (remote.get("url") or "").rstrip("/")
@@ -52,12 +52,17 @@ class RemoteSync:
                 wanted = {}
                 for f in files:
                     rel = f.get("path", "")
-                    if not rel or rel.startswith("/") or ".." in rel.split("/"):
-                        continue  # anti-traversal guard on paths coming from the remote
+                    # A node publishes docs only: anything else, a hidden segment or a way out
+                    # of the mirror is the publisher's doing, never written here.
+                    if (not rel.endswith((".md", ".html")) or rel.startswith("/")
+                            or any(part.startswith(".") for part in rel.split("/"))):
+                        continue
                     wanted[rel] = f.get("sha256", "")
                 mirror.mkdir(parents=True, exist_ok=True)
                 mirror_resolved = mirror.resolve()
-                # 1. Download the delta (file missing or sha differs).
+                # 1. Download the delta (file missing or sha differs), outside the mind's
+                #    write lock: the publisher may be slow.
+                fetched = {}
                 for rel, sha in wanted.items():
                     dest = mirror / rel
                     try:
@@ -66,23 +71,26 @@ class RemoteSync:
                         continue
                     if dest.exists() and hashlib.sha256(dest.read_bytes()).hexdigest() == sha:
                         continue
-                    body = _http_get_bearer(url + "/api/node/file?path=" + quote(rel), token)
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    _atomic_write_bytes(dest, body)
-                # 2. Delete locally whatever disappeared from the remote manifest.
+                    fetched[dest] = _http_get_bearer(url + "/api/node/file?path=" + quote(rel), token)
+                # 2. Write it, and delete whatever disappeared from the remote manifest,
+                #    under the write lock: a commit or a pull never sees a half-synced mirror.
                 #    Guard: an empty manifest while the mirror still holds files is
                 #    almost always a transient publisher error — keep the last good
                 #    copy (else the deletion gets committed/pushed). Self-heals on
                 #    the next good sync.
-                existing = [p for p in mirror.rglob("*") if p.is_file()]
-                if wanted or not existing:
-                    for path in existing:
-                        if path.relative_to(mirror).as_posix() not in wanted:
-                            path.unlink()
-                    _prune_empty_dirs(mirror)
-                else:
-                    print(f"[sync] {name}: empty manifest, keeping "
-                          f"{len(existing)} existing file(s)", file=sys.stderr)
+                with writing():
+                    for dest, body in fetched.items():
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        _atomic_write_bytes(dest, body)
+                    existing = [p for p in mirror.rglob("*") if p.is_file()]
+                    if wanted or not existing:
+                        for path in existing:
+                            if path.relative_to(mirror).as_posix() not in wanted:
+                                path.unlink()
+                        _prune_empty_dirs(mirror)
+                    else:
+                        print(f"[sync] {name}: empty manifest, keeping "
+                              f"{len(existing)} existing file(s)", file=sys.stderr)
                 store.update_remote_status(name, {
                     "last_sync_at": int(time.time()),
                     "last_manifest_hash": manifest_hash,

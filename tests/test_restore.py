@@ -79,6 +79,34 @@ class TestRestore(unittest.TestCase):
         self.assertIn("a v2", _git(self.new, "log", "--format=%s"))
         self.assertEqual(_git(self.new, "rev-parse", restore.BEFORE).strip(), before)
 
+    def test_each_restore_keeps_the_history_it_replaced(self):
+        first = _git(self.new, "rev-parse", "HEAD").strip()
+        backup = self.zip(_export(self.old))
+        bundle, _, _ = restore.read_backup(backup)
+        restore.restore_history(self.new, backup, bundle)
+        restore.restore_history(self.new, backup, bundle)
+        kept = _git(self.new, "for-each-ref", "--format=%(objectname)", "refs/atlas/").split()
+        self.assertIn(first, kept)
+
+    def test_a_history_carrying_the_instance_folder_is_refused(self):
+        (self.old / ".atlas" / "extensions").mkdir(parents=True)
+        (self.old / ".atlas" / "extensions" / "run.py").write_bytes(b"print('boot')\n")
+        _git(self.old, "add", "-f", ".atlas")
+        _git(self.old, "commit", "-qm", "sneak an extension")
+        backup = self.zip(_export(self.old))
+        bundle, _, _ = restore.read_backup(backup)
+        with self.assertRaises(restore.RestoreError):
+            restore.restore_history(self.new, backup, bundle)
+        self.assertFalse((self.new / ".atlas").exists())
+
+    def test_a_damaged_registry_is_refused_before_anything_changes(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("my-atlas/a.md", "# A\n")
+            z.writestr("my-atlas/.atlas/users.json", "{not json")
+        with self.assertRaises(restore.RestoreError):
+            restore.read_backup(self.zip(buf.getvalue()))
+
     def test_without_history_the_files_are_laid_over(self):
         backup = self.zip(_export(self.old, history=False))
         bundle, files, _ = restore.read_backup(backup)

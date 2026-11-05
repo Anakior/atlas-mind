@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+import unittest
 from pathlib import Path
 
 _ESBUILD = Path(__file__).resolve().parent.parent / "src" / "viewer" / "build" / "node_modules" / "esbuild"
@@ -20,7 +21,10 @@ _cache: dict[tuple, Path] = {}
 def requirable(module: Path, expose: tuple[str, ...] = ()) -> Path:
     """Path to a node-importable ESM build of a viewer module: esbuild bundles the .ts (with its
     transitive imports inlined) into a temp .mjs that re-exports the entry's named symbols. The
-    caller `import()`s the returned .mjs and reads those exports. Cached per (module, expose)."""
+    caller `import()`s the returned .mjs and reads those exports. Cached per (module, expose).
+    Skips the calling test when the viewer's build tools were never installed."""
+    if not _ESBUILD.is_dir():
+        raise unittest.SkipTest("the viewer's build tools are missing: run npm ci in src/viewer/build")
     module = module.resolve()
     key = (module, tuple(expose))
     if key not in _cache:

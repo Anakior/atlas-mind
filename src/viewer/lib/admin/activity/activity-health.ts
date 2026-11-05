@@ -10,6 +10,7 @@ import { escapeHtml } from '../../core/utils';
 
 export class ActivityHealth {
   private health: { stale: StaleDoc[]; cands: ContradictionCand[] } | null = null;
+  private failed = false; // the lists never came: say so, never "nothing stale"
   private healthExpanded = false;
   private candExpanded = false;
   // 13c: persisted Santé sub-view.
@@ -35,12 +36,23 @@ export class ActivityHealth {
           fetch('/api/contradictions?limit=50'),
         ]);
 
+        // 403: lists this account doesn't get (not the mind's owner), so empty indeed.
+        this.failed = [rs, rc].some((r) => !r.ok && r.status !== 403);
         if (rs.ok) stale = (await rs.json()).stale || [];
         if (rc.ok) cands = (await rc.json()).candidates || [];
-      } catch (_) {}
+      } catch (_) {
+        this.failed = true;
+      }
     }
     this.health = { stale, cands };
     container.innerHTML = this.html();
+  }
+
+  retry(host: HTMLElement): void {
+    this.health = null;
+    this.failed = false;
+    host.innerHTML = this.html();
+    void this.load(host);
   }
 
   html(): string {
@@ -52,7 +64,9 @@ export class ActivityHealth {
       + tab(this.healthTab === 'cont', 'cont', t('healthTabCont'))
       + `</div>`;
     // Keep the sub-toggle stable; only the body swaps skeleton → content on fetch.
-    const body = !this.health ? this.ctx.skelRows(3) : (this.healthTab === 'stale' ? this.staleHtml() : this.contHtml());
+    const body = !this.health ? this.ctx.skelRows(3)
+      : this.failed ? `<div class="load-failed" role="alert"><span>${t('loadFailed')}</span><button type="button" class="load-retry" data-hretry>${t('retry')}</button></div>`
+        : this.healthTab === 'stale' ? this.staleHtml() : this.contHtml();
 
     return toggle + body;
   }

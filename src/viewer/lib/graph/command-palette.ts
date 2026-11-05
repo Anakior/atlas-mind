@@ -53,10 +53,7 @@ export class CommandPalette {
         label: t('actHome'),
         hint: t('actHomeHint'),
         icon: 'home',
-        action: () => {
-          homeView.showWelcome();
-          history.replaceState(null, '', location.pathname);
-        },
+        action: () => homeView.goHome(),
       },
       { kind: 'action', label: t('actSidebar'), hint: 'Ctrl+B', icon: 'sidebar', action: () => layoutChrome.toggleSidebar() },
       { kind: 'action', label: t('actToc'), hint: 'Ctrl+J', icon: 'toc', action: () => layoutChrome.toggleToc() },
@@ -181,16 +178,16 @@ export class CommandPalette {
         }
 
         this.content = extra;
-        this.paint();
+        this.paint(false); // appended below: the row the person is on stays theirs
       }, 160);
     }
   }
 
-  private paint(): void {
+  private paint(fromTop = true): void {
     const items = this.nav.concat(this.content);
 
     this.items = items.slice(0, 30);
-    this.idx = 0;
+    this.idx = fromTop ? 0 : Math.min(this.idx, this.items.length - 1);
     this.count.textContent =
       items.length > 30 ? t('paletteResultsCapped', items.length) : t('nResults', items.length);
     this.list.innerHTML = this.items
@@ -208,7 +205,7 @@ export class CommandPalette {
             : '';
 
         return `
-    <li data-idx="${i}" class="palette-item flex items-center gap-3 px-4 py-2.5 cursor-pointer ${i === 0 ? 'palette-active' : ''}">
+    <li id="palette-opt-${i}" role="option" data-idx="${i}" class="palette-item flex items-center gap-3 px-4 py-2.5 cursor-pointer">
       <span class="text-ink-400">${this.iconSvg(item.icon || (item.kind === 'file' ? 'file' : 'edit'))}</span>
       <div class="flex-1 min-w-0">
         <div class="text-sm text-ink-100 truncate">${escapeHtml(item.label)}</div>
@@ -225,15 +222,22 @@ export class CommandPalette {
       });
       el.addEventListener('click', () => this.select(i));
     });
+    this.updateHighlight();
   }
 
   private updateHighlight(): void {
     this.list.querySelectorAll('.palette-item').forEach((li, i) => {
       li.classList.toggle('palette-active', i === this.idx);
+      li.setAttribute('aria-selected', i === this.idx ? 'true' : 'false');
     });
     const active = this.list.querySelector('.palette-active');
 
-    if (active) active.scrollIntoView({ block: 'nearest' });
+    if (active) {
+      active.scrollIntoView({ block: 'nearest' });
+      this.input.setAttribute('aria-activedescendant', active.id);
+    } else {
+      this.input.removeAttribute('aria-activedescendant');
+    }
   }
 
   private select(i: number): void {
@@ -243,10 +247,7 @@ export class CommandPalette {
     this.close();
 
     if (item.kind === 'action') item.action!();
-    else if (item.kind === 'file') {
-      docRenderer.show(item.file!, item.query);
-      history.replaceState(null, '', '#' + encodeURIComponent(item.file!.path));
-    }
+    else if (item.kind === 'file') void docRenderer.open(item.file!, item.query);
   }
 
   private onInputKey(e: KeyboardEvent): void {

@@ -6,12 +6,23 @@
 import { currentFile, editMode } from '../core/state';
 import { searchEl } from '../core/dom-refs';
 import { editor } from '../editor/editor';
+import { canEdit } from '../content/doc-renderer';
+import { openOverlay } from '../ui/overlay-focus';
 import { layoutChrome } from '../home/layout-chrome';
 import { historyOverlay, historyPanel } from '../content/history-panel';
 import { commandPalette } from './command-palette';
 import { tasksOverlay } from './tasks-overlay';
 import { sidePanels } from '../home/side-panels';
 import { mindGraph } from './graph-boot';
+
+// A one-key shortcut (e, n, /) stands down while the person types (a field, a list, an editable
+// region), holds a modifier, or an overlay is open over the page.
+export function shortcutsHeld(e: KeyboardEvent): boolean {
+  const active = document.activeElement;
+
+  return e.ctrlKey || e.metaKey || e.altKey || !!openOverlay()
+    || !!active?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+}
 
 export class KeyboardRouter {
   constructor() {
@@ -73,14 +84,14 @@ export class KeyboardRouter {
       return;
     }
 
-    if (e.key === '/') {
+    if (e.key === '/' && !shortcutsHeld(e)) {
       e.preventDefault();
       searchEl.focus();
     }
 
-    if (e.key === 'e' && currentFile && !editMode && !window.__viewerMode) {
+    if (e.key === 'e' && !editMode && canEdit(currentFile) && !shortcutsHeld(e)) {
       e.preventDefault();
-      editor.enterEditMode();
+      void editor.enterEditMode();
     }
 
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') {

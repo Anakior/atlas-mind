@@ -12,6 +12,9 @@ from pathlib import Path
 INDEX_URL = "https://pypi.org/simple"
 _PACKAGE = Path(__file__).resolve().parents[2]  # the atlas_mind package this code runs from
 _busy = threading.Lock()
+# The pip command that puts the running release back, set when the update could not do it
+# itself: the files on disk are then neither release, and the next restart may not start.
+needs_repair = None
 
 
 def install_kind() -> str:
@@ -54,26 +57,37 @@ def _installed_version() -> str:
     return done.stdout.strip() if done.returncode == 0 else ""
 
 
+def _pip(version: str) -> subprocess.CompletedProcess:
+    try:
+        return _pip_install(version)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess([], 1, "", "pip timed out")
+
+
 def update(target: str, current: str) -> tuple:
     """Install `target` in place of `current`. (True, "") once it is installed and imports;
-    (False, why) otherwise, with `current` put back. A second click while one runs is refused."""
+    (False, why) otherwise, with `current` put back and checked the same way. When even that
+    fails, `why` says so and gives the command that repairs it. A second click while one runs
+    is refused."""
+    global needs_repair
     if not _busy.acquire(blocking=False):
         return False, "an update is already running"
-    try:
-        result = _pip_install(target)
-    except subprocess.TimeoutExpired:
-        result = subprocess.CompletedProcess([], 1, "", "pip timed out")
+    result = _pip(target)
     if result.returncode == 0 and _installed_version() == target:
+        needs_repair = None
         return True, ""  # keeps _busy: the restart follows
     why = next((ln.strip() for ln in reversed(result.stderr.splitlines()) if ln.strip()),
-               "the new version did not start")
-    print(f"[update] {target} failed, back to {current}: {why}", file=sys.stderr, flush=True)
-    try:
-        _pip_install(current)
-    except subprocess.TimeoutExpired:
-        pass
+               "the new version did not start")[:300]
+    if _pip(current).returncode == 0 and _installed_version() == current:
+        needs_repair = None
+        print(f"[update] {target} failed, back on {current}: {why}", file=sys.stderr, flush=True)
+    else:
+        needs_repair = f"{sys.executable} -m pip install atlas-mind=={current}"
+        why = (f"{why}. Putting {current} back failed too: the install needs a manual repair "
+               f"before the next restart: {needs_repair}")
+        print(f"[update] {target} failed: {why}", file=sys.stderr, flush=True)
     _busy.release()
-    return False, why[:300]
+    return False, why
 
 
 def restart(flush) -> None:

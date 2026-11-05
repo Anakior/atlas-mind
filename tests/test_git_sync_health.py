@@ -212,24 +212,30 @@ class TestHealth(unittest.TestCase):
         self.assertEqual((self.repo / "README.md").read_text(encoding="utf-8"), "ours\n")
 
     def test_a_save_does_not_wait_for_the_network(self):
-        # A slow remote (a fetch hanging on GitHub) must not hold the repo while it waits.
+        # A fetch hanging on GitHub must not hold the repo: here it hangs until the save is
+        # done, so the save has to commit while it waits.
         self._add_remote()
-        fetching, real_net = threading.Event(), self.gs._net
+        fetching, released, real_net = threading.Event(), threading.Event(), self.gs._net
 
-        def slow_net(*args):
+        def hanging_net(*args):
             fetching.set()
-            time.sleep(3)
+            released.wait(60)
             return real_net(*args)
 
-        self.gs._net = slow_net
+        self.gs._net = hanging_net
         backstop = threading.Thread(target=self.gs.pull_and_rebuild)
         backstop.start()
-        self.assertTrue(fetching.wait(5))
-        self._write("A.md", "alpha\n")
-        start = time.time()
-        self.gs.commit_change("created: A", ["A.md"])
-        self.assertLess(time.time() - start, 1.5)
-        backstop.join()
+        try:
+            self.assertTrue(fetching.wait(30))
+            self._write("A.md", "alpha\n")
+            save = threading.Thread(target=self.gs.commit_change, args=("created: A", ["A.md"]))
+            save.start()
+            save.join(30)
+            self.assertFalse(save.is_alive(), "the save waited for the fetch")
+            self.assertIn("created: A", _git(self.repo, "log", "--format=%s"))
+        finally:
+            released.set()
+            backstop.join()
         _wait_push_idle(self.gs)
 
 

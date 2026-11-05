@@ -8,6 +8,7 @@ import json
 import time
 
 import server as _s
+from server.pure.docs import renamed
 
 VERDICTS = ("holds", "outdated")
 _MAX_STREAK = 4  # at stale's 6 months: then 1, 2 and at most 4 years between reviews
@@ -27,6 +28,20 @@ def load() -> dict:
     return {e["path"]: e for e in entries or [] if isinstance(e, dict) and e.get("path")}
 
 
+def _save(entries: dict):
+    _file().write_text(json.dumps({"version": 1, "attestations": [entries[p] for p in sorted(entries)]},
+                                  ensure_ascii=False, indent=1), encoding="utf-8")
+    return _file()
+
+
+def repoint(old: str, new: str) -> list:
+    """Carry the confirmations of `old` (a doc or a folder) to `new`; the file, if it changed."""
+    entries = load()
+    moved = {(renamed(p, old, new) or p): {**e, "path": renamed(p, old, new) or p}
+             for p, e in entries.items()}
+    return [_save(moved)] if moved != entries else []
+
+
 def current(entry, text: str):
     """The entry while the doc still reads as it did when confirmed, else None."""
     return entry if entry and entry.get("hash") == _s.doc_hash(text) else None
@@ -42,9 +57,7 @@ def record(path: str, text: str, verdict: str, by: str, note: str = ""):
         streak = min((previous.get("streak", 1) if held else 0) + 1, _MAX_STREAK)
     entries[path] = {"path": path, "verdict": verdict, "hash": _s.doc_hash(text), "by": by,
                      "note": (note or "")[:500], "at": int(time.time()), "streak": streak}
-    _file().write_text(json.dumps({"version": 1, "attestations": [entries[p] for p in sorted(entries)]},
-                                  ensure_ascii=False, indent=1), encoding="utf-8")
-    return _file()
+    return _save(entries)
 
 
 def fresh_until(entry, threshold: int) -> int:

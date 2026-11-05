@@ -17,7 +17,7 @@ export class ActivityJournal {
 
   private row(e: ActivityItem): string {
     const ty = this.ctx.TY(e.type);
-    const via = e.ai ? `<span class="text-ink-500 text-xs">· via ${escapeHtml(e.ai)}</span>` : '';
+    const via = e.ai ? `<span class="text-ink-500 text-xs">· ${escapeHtml(t('actVia', e.ai))}</span>` : '';
     const undo = !IS_OFFLINE_BUILD && e.sha && e.agoMin < RUN_WINDOW_MIN
       ? `<button type="button" class="act-undo" data-sha="${escapeHtml(e.sha)}" data-tip="${escapeHtml(t('actUndo'))}" aria-label="${escapeHtml(t('actUndo'))}">${ActivityUndo.ICON}</button>`
       : '';

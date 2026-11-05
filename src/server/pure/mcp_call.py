@@ -1,5 +1,6 @@
 """MCP tool dispatch (read-side queries live in pure/queries.py, git parsing in pure/git_history.py)."""
 import base64
+import collections
 import contextvars
 import datetime
 import difflib
@@ -8,6 +9,7 @@ import json
 import mimetypes
 import posixpath
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -15,15 +17,20 @@ from pathlib import Path
 import server as _s
 from store import slugify_token_label, slugify_title
 from server.pure.queries import (
-    _visible, _visible_at, _touched_visible, _doc_corpus, _links_graph, _tags_for, _api_search, _api_recent,
-    _api_stale, _api_outdated, _activity_events, _headings, _strip_content, _MONTH_SECONDS,
+    _visible, _visible_at, _touched_visible, _readable, _doc_corpus, _links_graph, _tags_for, _api_search,
+    _api_recent, _api_stale, _api_outdated, _activity_feed, _headings, _strip_content, _MONTH_SECONDS,
+    _OVERFETCH,
 )
-from server.pure import attestations, contradictions, docs, file_links, file_text, provenance, resources
+from server.pure import (
+    attestations, contradictions, docs, file_links, file_text, grep_lines, provenance, resources,
+)
+from server.pure.acl import ViewerCtx
+from server.pure.hive import _mind_rel, _top_dir
 from server.pure.uploads import clean_path
 from server.pure.git_history import (
     _capped, _fmt_commit, _git_doc_records, _safe_path_prefix, _parse_namestatus_log,
     _scrub_commits, _doc_diff_between, _parse_blame, _EMPTY_TREE, _MAX_BLAME_LINES,
-    _attributed_log, _name_status,
+    _MAX_OUTPUT_CHARS, _attributed_log, _name_status,
 )
 from server.pure.params import clamp_int
 
@@ -64,7 +71,8 @@ def trash_doc(target: Path, ctx, ai=None) -> str:
         store.delete_shares_for_path(rel)
     except Exception as e:
         print(f"[delete cleanup] {e}", file=sys.stderr)
-    _s.commit_change(ctx, f"deleted: {target.stem}", target, _s.CONFIG.content_root / trashed, ai=ai)
+    _s.commit_change(ctx, f"deleted: {target.stem}", target, _s.CONFIG.content_root / trashed,
+                     *_s._repoint_sidecars(rel, trashed), ai=ai)
     return trashed
 
 
@@ -92,10 +100,9 @@ def _near_paths(rel: str, ctx, n: int = 3) -> list:
     """Visible doc paths closest to `rel`: the same filename in another folder first, then
     near spellings of the whole path."""
     by_path, by_name = {}, {}
-    for p, _ in _s._iter_doc_files():
-        if _visible(p, ctx):
-            by_path[p.lower()] = p
-            by_name.setdefault(posixpath.basename(p).lower(), []).append(p)
+    for p, _ in _readable(ctx):
+        by_path[p.lower()] = p
+        by_name.setdefault(posixpath.basename(p).lower(), []).append(p)
     rel = rel.lower()
     near = [p for m in difflib.get_close_matches(posixpath.basename(rel), by_name, n, 0.6)
             for p in by_name[m]]
@@ -116,9 +123,9 @@ _PASSAGE_MAX_LINES = 15
 _DIFF_MAX_LINES = 60
 
 
-def _closest_passage(text: str, needle: str) -> str:
-    """Where `needle` most likely sits in `text` (its first line fuzzily matched), quoted
-    verbatim so the agent can copy the real text instead of re-reading the whole doc."""
+def _closest_passage(text: str, needle: str, rel: str) -> str:
+    """Where `needle` most likely sits in `text` (doc `rel`, its first line fuzzily matched),
+    quoted verbatim so the agent can copy the real text instead of re-reading the whole doc."""
     first = next((ln.strip() for ln in needle.splitlines() if ln.strip()), "")
     lines = text.splitlines()
     stripped = [ln.strip() for ln in lines]
@@ -127,7 +134,7 @@ def _closest_passage(text: str, needle: str) -> str:
         return " No similar passage either: read_doc it to see the current text."
     lo = stripped.index(match[0])
     hi = min(len(lines), lo + min(max(1, len(needle.splitlines())), _PASSAGE_MAX_LINES))
-    return f" Closest passage (lines {lo + 1}-{hi}):\n" + "\n".join(lines[lo:hi])
+    return f" Closest passage (lines {lo + 1}-{hi}):\n" + provenance.fence("\n".join(lines[lo:hi]), rel)
 
 
 def _occurrence_lines(text: str, needle: str, cap: int = 10) -> list:
@@ -139,42 +146,61 @@ def _occurrence_lines(text: str, needle: str, cap: int = 10) -> list:
     return out
 
 
-def _diff(old: str, new: str) -> str:
-    """Unified diff of an edit (one line of context), capped: enough for the agent to check
-    its change without reading the doc back."""
+def _diff(old: str, new: str, rel: str) -> str:
+    """Unified diff of an edit to doc `rel` (one line of context), capped: enough for the agent
+    to check its change without reading the doc back."""
     lines = list(difflib.unified_diff(old.splitlines(), new.splitlines(), n=1, lineterm=""))[2:]
     if len(lines) > _DIFF_MAX_LINES:
         lines = lines[:_DIFF_MAX_LINES] + [f"… ({len(lines) - _DIFF_MAX_LINES} more diff lines)"]
-    return "\n".join(lines)
+    return provenance.fence("\n".join(lines), rel)
 
 
 _STALE_MONTHS = 6  # the stale tool's default threshold
 
 
-def _last_commits(rels) -> dict:
-    """{rel: (unix ts, author, AI family or None)} of the latest commit touching each doc,
-    from a single git log."""
-    if not rels:
-        return {}
-    # One doc (read_doc): the first commit listed is the one, and walking on costs ~1 s on a
-    # mind with a few thousand commits.
-    limit = ["-n", "1"] if len(rels) == 1 else []
-    result = _s.git("--literal-pathspecs", "log", *limit, "--no-renames", "--name-only", "-z",
-                    "--format=%x1e%ct%x1f%an%x1f%(trailers:key=X-Atlas-Author,valueonly)",
-                    "--", *("content/" + r for r in rels))
-    last = {}
+# The latest commit of every doc, read once per HEAD: each search walked the history of its
+# hits again. A lone doc (read_doc) asks git for its own latest commit only, which is quick.
+_LAST_AT_HEAD = {"head": None, "all": None, "one": {}}
+
+
+def _latest_commits(*log_args) -> dict:
+    """{rel: (unix ts, author, AI family or None)} of the latest commit of each doc a git log
+    over `log_args` lists, in its order: newest first."""
+    result = _s.git("--literal-pathspecs", "log", "--no-renames", "--name-only", "-z",
+                    "--format=%x1e%ct%x1f%an%x1f%(trailers:key=X-Atlas-Author,valueonly)", *log_args)
+    found = {}
     if result.returncode != 0:
-        return last
+        return found
     for rec in result.stdout.split("\x1e"):
-        head, _, files = rec.partition("\x00")
-        ts, author, trailer = (head.split("\x1f") + ["", ""])[:3]
+        meta, _, files = rec.partition("\x00")
+        ts, author, trailer = (meta.split("\x1f") + ["", ""])[:3]
         if not ts.strip().isdigit():
             continue
         for f in files.split("\x00"):
             rel = _strip_content(f.strip("\n"))
-            if rel and rel not in last:
-                last[rel] = (int(ts), author, _s.parse_ai_trailer(trailer))
-    return last
+            if rel and rel not in found:
+                found[rel] = (int(ts), author, _s.parse_ai_trailer(trailer))
+    return found
+
+
+def _last_commits(rels) -> dict:
+    """{rel: (unix ts, author, AI family or None)} of the latest commit touching each doc, in
+    git log's order (newest first: it settles two commits of the same second)."""
+    if not rels:
+        return {}
+    memo = _LAST_AT_HEAD
+    head = _s.git("rev-parse", "--verify", "--quiet", "HEAD").stdout.strip()
+    if memo["head"] != head:
+        memo.update(head=head, all=None, one={})
+    if len(rels) == 1 and memo["all"] is None:
+        rel = rels[0]
+        if rel not in memo["one"]:
+            memo["one"][rel] = _latest_commits("-n", "1", "--", "content/" + rel).get(rel)
+        return {rel: memo["one"][rel]} if memo["one"][rel] else {}
+    if memo["all"] is None:
+        memo["all"] = _latest_commits("--", "content")
+    wanted = set(rels)
+    return {rel: last for rel, last in memo["all"].items() if rel in wanted}
 
 
 def _contested(paths: set, ctx) -> dict:
@@ -282,14 +308,29 @@ def _tool_search_docs(args, ctx):
     return result
 
 
-_GREP_LINE_MAX = 1000  # matched per line: bounds what a pathological regex can backtrack over
+_REGEX_TIMEOUT_S = 10
+
+
+def _regex_hits(pattern, flags, docs, limit):
+    """grep_lines.line_hits for an agent's regex, run in a child (see grep_lines), or None when
+    it ran past _REGEX_TIMEOUT_S and was killed there."""
+    try:
+        done = subprocess.run([sys.executable, "-I", "-X", "utf8", grep_lines.__file__],
+                              input=json.dumps([pattern, flags, limit, docs]), capture_output=True,
+                              text=True, encoding="utf-8", errors="replace", timeout=_REGEX_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return None
+    if done.returncode != 0:
+        print(f"[mcp] grep_docs regex child: {done.stderr.strip()[-500:]}", file=sys.stderr)
+        raise ValueError("the search failed")
+    return [tuple(hit) for hit in json.loads(done.stdout)]
 
 
 def _tool_grep_docs(args, ctx):
     pattern = args.get("pattern")
     if not isinstance(pattern, str) or not pattern.strip():
         return text_result("Error: missing 'pattern' parameter", is_error=True)
-    prefix = _safe_path_prefix(args.get("path_prefix") or "")
+    prefix = _safe_path_prefix(_folder_arg(args))
     if prefix is None:
         return text_result("Invalid 'path_prefix'", is_error=True)
     limit = clamp_int(args.get("limit"), 50, 1, 200)
@@ -298,17 +339,21 @@ def _tool_grep_docs(args, ctx):
         rx = re.compile(pattern if args.get("regex") else re.escape(pattern), flags)
     except re.error as e:
         return text_result(f"Invalid regex: {e}", is_error=True)
-    matches = []
-    for rel, _name, text in sorted(_doc_corpus(ctx)):
-        if prefix and rel != prefix and not rel.startswith(prefix + "/"):
-            continue
-        for n, line in enumerate(text.splitlines(), 1):
-            if rx.search(line[:_GREP_LINE_MAX]):
-                if len(matches) == limit:
-                    return json_result({"pattern": pattern, "matches": matches, "truncated": True})
-                matches.append({"path": rel, **provenance.mark(rel), "line": n,
-                                "text": line.strip()[:240]})
-    payload = {"pattern": pattern, "matches": matches, "truncated": False}
+    docs = [(rel, text) for rel, _name, text in sorted(_doc_corpus(ctx))
+            if not prefix or rel == prefix or rel.startswith(prefix + "/")]
+    if args.get("regex"):
+        try:
+            hits = _regex_hits(pattern, flags, docs, limit)
+        except ValueError as e:
+            return text_result(f"Error: {e}", is_error=True)
+        if hits is None:
+            return text_result(f"This regex ran over {_REGEX_TIMEOUT_S} s (it backtracks): simplify it "
+                               "(no nested repeats like (a+)+), or narrow path_prefix.", is_error=True)
+    else:  # a literal matches in linear time: no child needed
+        hits = grep_lines.line_hits(rx, docs, limit)
+    matches = [{"path": rel, **provenance.mark(rel), "line": n, "text": text}
+               for rel, n, text in hits[:limit]]
+    payload = {"pattern": pattern, "matches": matches, "truncated": len(hits) > limit}
     # Agents write `a|b` and forget regex=true (seen in the evals): say so rather than let an
     # empty literal search pass for "the mind doesn't mention it". Never retried as a regex
     # on our own: a literal like `| 29 |` would then match every line.
@@ -333,6 +378,18 @@ def _file_text(target):
     if ext in _PLAIN_TEXT:
         return target.read_text(encoding="utf-8", errors="replace")
     return None
+
+
+def _read_cut(body: str, start: int, total: int):
+    """`body`, read from line `start` of `total`, cut to whole lines within _MAX_OUTPUT_CHARS, and
+    the scope saying where to read on: a doc of megabytes would fill the agent's context alone."""
+    cut = body[:_MAX_OUTPUT_CHARS]
+    if "\n" in cut:
+        cut = cut.rsplit("\n", 1)[0]
+        last = start + cut.count("\n")
+        return cut, f"lines {start}-{last} of {total}, cut to fit: read on with start_line={last + 1}"
+    more = f": read on with start_line={start + 1}" if start < total else ""
+    return cut, f"line {start} of {total}, cut after {_MAX_OUTPUT_CHARS} characters{more}"
 
 
 def _file_pointer(rel, target):
@@ -373,7 +430,8 @@ def _tool_read_doc(args, ctx):
         if span is None:
             titles = [title for _, _, title in _headings(lines)][:30]
             return text_result(f"No section matching '{section}' in {rel}. Its headings: "
-                               + ("; ".join(titles) if titles else "none"), is_error=True)
+                               + (provenance.fence("; ".join(titles), rel) if titles else "none"),
+                               is_error=True)
         start, end = span
     if start or end:
         start, end = max(start, 1), min(end or len(lines), len(lines))
@@ -382,7 +440,10 @@ def _tool_read_doc(args, ctx):
                                is_error=True)
         body, scope = "\n".join(lines[start - 1:end]), f"lines {start}-{end} of {len(lines)}"
     else:
+        start, end = 1, len(lines)
         body, scope = text, f"{len(lines)} lines"
+    if len(body) > _MAX_OUTPUT_CHARS:
+        body, scope = _read_cut(body, start, len(lines))
     hit = {"path": rel, "mtime": target.stat().st_mtime}
     _add_trust_signals([hit], ctx)
     footer = " · ".join([rel, scope, *_signal_notes(hit), kind or f"version {_version(text)}"])
@@ -427,18 +488,76 @@ def _with_sync_warning(payload):
     return payload
 
 
+def _folder_arg(args) -> str:
+    """The folder a tool is scoped to, under any name tools have given it: path_prefix (the one
+    documented), prefix or path."""
+    for key in ("path_prefix", "prefix", "path"):
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
+
+
+# Nodes list_tree returns before it folds folders: the whole tree of a mind of a few hundred
+# docs, as before, and a page an agent can read of a mind of thousands (1 MB unfolded at 3,000).
+_TREE_MAX_NODES = 250
+
+
+def _subtree(tree, folder):
+    """The node of `folder` in `tree`, or None."""
+    node = tree
+    for name in folder.split("/"):
+        node = next((c for c in node["children"] if c["type"] == "dir" and c["name"] == name), None)
+        if node is None:
+            return None
+    return node
+
+
+def _fold(tree, folder) -> int:
+    """Fold, in place, the folders of `tree` (at `folder`) past _TREE_MAX_NODES, the top levels
+    opened first: a folded one keeps its name, gives its `path` and its count of `files`, and
+    loses its children. Returns how many were folded."""
+    def files(node):
+        return sum(1 if c["type"] == "file" else files(c) for c in node.get("children", []))
+
+    queue, listed, folded = collections.deque([(tree, folder)]), 0, 0
+    while queue:
+        node, path = queue.popleft()
+        if node is not tree and listed + len(node["children"]) > _TREE_MAX_NODES:
+            node.update(path=path, files=files(node), folded=True)
+            del node["children"]
+            folded += 1
+            continue
+        listed += len(node["children"])
+        queue.extend((c, posixpath.join(path, c["name"])) for c in node["children"] if c["type"] == "dir")
+    return folded
+
+
 def _tool_list_tree(args, ctx):
+    prefix = _safe_path_prefix(_folder_arg(args))
+    if prefix is None:
+        return text_result("Invalid 'path_prefix'", is_error=True)
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
-        if ctx is not None:
-            tree = _s._filter_tree(tree, lambda p: _s.can_read(p, ctx))
+        if ctx is not None:  # the walk's paths are spelled as on disk: no canonical one to look up
+            tree = _s._filter_tree(tree, lambda p: _s._acl_can_read(p, ctx))
         inbox = _inbox_tree(ctx)
         if inbox:
             tree["children"].append(inbox)
-        return json_result(_with_sync_warning(tree or {}))
     except Exception as e:
         print(f"[mcp] list_tree failed: {e}", file=sys.stderr)
         return text_result("Error listing the tree", is_error=True)
+    if prefix:
+        tree = _subtree(tree, prefix)
+        if tree is None:
+            return text_result(f"No folder {prefix} that you can see: list_tree without "
+                               "path_prefix shows the top folders.", is_error=True)
+    provenance.mark_tree(tree, prefix)
+    folded = _fold(tree, prefix)
+    if folded:
+        tree["hint"] = (f"{folded} folder(s) are folded into their count of `files` to keep this "
+                        "short: list_tree with path_prefix set to a folded folder's `path` opens it.")
+    return json_result(_with_sync_warning(tree))
 
 
 def _tool_recent_docs(args, ctx):
@@ -455,7 +574,7 @@ def _create_doc_impl(rel, content, ai, ctx, subject=None):
     target = _s._validate_doc_path(rel)
     if not target:
         return text_result("Invalid path (must be a relative .md or .html, no '..')", is_error=True)
-    rel = posixpath.normpath(rel)  # canonical ACL key (matches effective_level)
+    rel = _mind_rel(rel)  # canonical ACL key (matches effective_level), however it was spelled
     if _s._is_readonly_path(rel):
         return text_result("Read-only location (remote node mirror) — choose another path.", is_error=True)
     if ctx is not None and not _s.can_create(rel, ctx):
@@ -483,18 +602,18 @@ def _tool_create_doc(args, ctx):
     # The inbox is managed (per-person, owned lanes): it must be filled via create_inbox_item,
     # never planted directly here. A direct create under inbox/ would stamp NO owner (api =>
     # commons), leaving the item readable by every authenticated user via the activity feed.
-    if posixpath.normpath(rel).split("/")[0] == "inbox":
+    if _top_dir(_mind_rel(rel)) == "inbox":
         return text_result("The inbox is managed: use create_inbox_item, not create_doc, to drop "
                            "an item there.", is_error=True)
     return _create_doc_impl(rel, args.get("content", ""), args.get("ai"), ctx)
 
 
-def _inbox_dupe(user, dk):
-    """First non-trashed item in inbox/<user>/ already carrying this dedupe_key, or None. Best-effort
+def _inbox_dupe(lane, dk):
+    """First non-trashed item in the `lane` folder already carrying this dedupe_key, or None. Best-effort
     (a scan failure must never block a drop): honours the idempotency the tool promises agents, so a
     re-run with the same key returns the existing item instead of creating a duplicate."""
     try:
-        base = _s.CONFIG.content_root / "inbox" / user
+        base = _s.CONFIG.content_root / lane
         if not base.is_dir():
             return None
         inbox_meta = _s._import_build()._inbox_meta
@@ -510,6 +629,29 @@ def _inbox_dupe(user, dk):
     return None
 
 
+def _inbox_lane(user, owner) -> str:
+    """inbox/<user>, or inbox/<user>-2, -3… when another person's email gives the same slug: a
+    lane belongs to its person and is never taken over. A lane is the owner's, or new."""
+    store, lane, n = _s.get_store(), f"inbox/{user}", 2
+    while True:
+        held = (store.get_acl(lane) or {}).get("owner")
+        if held == owner or (held is None and not (_s.CONFIG.content_root / lane).exists()):
+            return lane
+        lane, n = f"inbox/{user}-{n}", n + 1
+
+
+def _fm_value(value) -> str:
+    """A frontmatter value on one line: a line break would start a key of its own (a forged
+    source or confidence) or close the frontmatter."""
+    return " ".join(str(value).split())
+
+
+def _fm_list(values) -> str:
+    """A frontmatter list of one-line items, without the brackets and commas that delimit it."""
+    items = (_fm_value(re.sub(r"[\[\],]", " ", str(v))) for v in values)
+    return "[" + ", ".join(v for v in items if v) + "]"
+
+
 def _tool_create_inbox_item(args, ctx):
     """Drop an item into your USER's inbox (the on-ramp to the mind).
 
@@ -523,7 +665,7 @@ def _tool_create_inbox_item(args, ctx):
     args: title (required), content, type?, confidence?, suggest_dest?, suggest_tags?, dedupe_key?.
     `type` is the optional KIND of item (note/task/idea/question/reference/alert…), used by the human
     to sort their inbox; it is normalized to a lowercase slug and defaults to "note" when absent."""
-    title = (args.get("title") or "").strip()
+    title = _fm_value(args.get("title") or "")  # one line: the H1
     if not title:
         return text_result("'title' is required", is_error=True)
     content = args.get("content", "")
@@ -565,17 +707,17 @@ def _tool_create_inbox_item(args, ctx):
     lines = ["---", "origin: inbox", f"source: {source}", f"type: {item_type}",
              f"captured_at: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
              f"confidence: {conf}"]
-    dest = (args.get("suggest_dest") or "").strip()
+    dest = _fm_value(args.get("suggest_dest") or "")
     if dest:
         lines.append(f"suggest_dest: {dest}")
     tags = args.get("suggest_tags")
-    if isinstance(tags, list):
-        clean = [str(t).strip() for t in tags if str(t).strip()]
-        if clean:
-            lines.append("suggest_tags: [" + ", ".join(clean) + "]")
-    dk = (args.get("dedupe_key") or "").strip()
+    if isinstance(tags, list) and (clean := _fm_list(tags)) != "[]":
+        lines.append("suggest_tags: " + clean)
+    folder = _inbox_lane(user, owner if email else None)
+    # Read back the way it is written, quotes stripped, so a re-run finds it.
+    dk = _fm_value(args.get("dedupe_key") or "").strip("'\"")
     if dk:
-        existing = _inbox_dupe(user, dk)  # idempotent: a re-run with the same key returns the existing item
+        existing = _inbox_dupe(folder, dk)  # idempotent: a re-run with the same key returns the existing item
         if existing:
             return text_result(f"Already in your inbox (dedupe_key match): {existing}")
         lines.append(f"dedupe_key: {dk}")
@@ -583,7 +725,6 @@ def _tool_create_inbox_item(args, ctx):
     # No date in the filename: the capture instant already lives in `captured_at` + the git log,
     # and the date prefix only made the staging stem (and the activity feed) noisier. Collisions
     # fall back to a -N suffix.
-    folder = f"inbox/{user}"
     rel = f"{folder}/{source}/{slug}.md"
     n = 2
     while (_s.CONFIG.content_root / rel).exists():
@@ -593,6 +734,7 @@ def _tool_create_inbox_item(args, ctx):
     # reads them without re-scanning the corpus. Best-effort: never fail the drop on a scan error.
     try:
         rels = [nb["rel"] for nb in _s.find_doc_neighbors(rel, f"# {title}\n{content}", ctx, top=3)]
+        rels = [r for r in rels if _fm_list([r]) == f"[{r}]"]  # a path the list can't hold is left out
         if rels:
             lines.append("neighbors: [" + ", ".join(rels) + "]")
     except Exception as e:
@@ -639,7 +781,7 @@ def _tool_edit_doc(args, ctx):
         count = current.count(old_string)
         if count == 0:
             return text_result("'old_string' not found in the document."
-                               + _closest_passage(current, old_string), is_error=True)
+                               + _closest_passage(current, old_string, rel), is_error=True)
         if count > 1:
             where = ", ".join(map(str, _occurrence_lines(current, old_string)))
             return text_result(f"'old_string' appears {count} times (lines {where}): it must be "
@@ -655,13 +797,13 @@ def _tool_edit_doc(args, ctx):
         return text_result(f"No change: {rel} already reads like that (version {_version(current)}).")
     if args.get("dry_run"):
         return text_result(f"Dry run, nothing written. {rel} would change like this:\n"
-                           + _diff(current, new))
+                           + _diff(current, new, rel))
     target.write_text(new, encoding="utf-8")
     subject = _s._clean_subject(args.get("commit_message")) or f"edited: {target.stem}"
     _s.commit_change(ctx, subject, target, ai=args.get("ai"))
     # Versioned as read_doc will read it back (newlines normalized).
     now = target.read_text(encoding="utf-8")
-    return text_result(f"{done}: {rel} (now version {_version(now)})\n" + _diff(current, now))
+    return text_result(f"{done}: {rel} (now version {_version(now)})\n" + _diff(current, now, rel))
 
 
 def _move_folder(src_rel, dst_rel, ctx, args):
@@ -686,6 +828,8 @@ def _tool_move_doc(args, ctx):
         return text_result("'from' and 'to' are required", is_error=True)
     if _s._is_readonly_path(src_rel) or _s._is_readonly_path(dst_rel):
         return text_result("Read-only location (remote node mirror) — \"Appropriate\" it first to get an editable copy.", is_error=True)
+    if _top_dir(_mind_rel(dst_rel)) == "inbox":  # like create_doc: the inbox fills through its owned lanes
+        return text_result("The inbox is managed: use create_inbox_item to drop an item there.", is_error=True)
     if (_s.CONFIG.content_root / src_rel).is_dir():
         return _move_folder(src_rel, dst_rel, ctx, args)
     if ctx is not None and not _visible(src_rel, ctx):
@@ -715,12 +859,12 @@ def _tool_move_doc(args, ctx):
                            + (f"rewrite {payload['links_updated']} incoming wikilink(s) in: {relinked}."
                               if rewrites else "need no wikilink fix."))
     # Repoint the ACL + shares BEFORE the git sync (privacy travels with the doc).
-    _s._repoint_doc(payload["from"], payload["to"])
+    extras = _s._repoint_doc(payload["from"], payload["to"])
     touched = [payload["from"], payload["to"], *(r["path"] for r in rewrites)]
     subject = (f"moved: {posixpath.splitext(payload['from'])[0]}"
                f" → {posixpath.splitext(payload['to'])[0]}")
     _s.commit_change(ctx, subject,
-                     *(_s.CONFIG.content_root / p for p in touched), ai=args.get("ai"))
+                     *(_s.CONFIG.content_root / p for p in touched), *extras, ai=args.get("ai"))
     msg = f"Moved: {payload['from']} -> {payload['to']}."
     msg += (f" {payload['links_updated']} incoming wikilink(s) rewritten in: {relinked}."
             if rewrites else " No incoming wikilink to fix.")
@@ -874,9 +1018,17 @@ def _tool_doc_at(args, ctx):
     if show.returncode != 0:
         return text_result(f"Revision not found: {rev}", is_error=True)
     date = _s.git("show", "-s", "--format=%aI", rev_sha).stdout.strip()
-    content, truncated = _capped(show.stdout)
-    header = (f"[doc_at] {rel} @ {rev_sha[:8]} ({date})"
-              + ("  [truncated — see /api/revision for the full blob]" if truncated else ""))
+    lines = show.stdout.splitlines()
+    start = clamp_int(args.get("start_line"), 1, 1)
+    end = min(clamp_int(args.get("end_line"), len(lines), 1), len(lines))
+    if lines and start > end:
+        return text_result(f"Line range out of bounds: {rel} had {len(lines)} lines then.", is_error=True)
+    content = "\n".join(lines[start - 1:end])
+    scope = (f"{len(lines)} lines" if (start, end) == (1, len(lines))
+             else f"lines {start}-{end} of {len(lines)}")
+    if len(content) > _MAX_OUTPUT_CHARS:
+        content, scope = _read_cut(content, start, len(lines))
+    header = f"[doc_at] {rel} @ {rev_sha[:8]} ({date}) · {scope}"
     return text_result(header + "\n\n" + provenance.fence(content, rel))
 
 
@@ -927,7 +1079,7 @@ def _tool_search_history(args, ctx):
     if not query:
         return text_result("Error: missing 'query' parameter", is_error=True)
     regex = bool(args.get("regex"))
-    prefix = _safe_path_prefix(args.get("path_prefix") or "")
+    prefix = _safe_path_prefix(_folder_arg(args))
     if prefix is None:
         return text_result("Invalid 'path_prefix'", is_error=True)
     limit = clamp_int(args.get("limit"), 20, 1, 50)
@@ -936,38 +1088,48 @@ def _tool_search_history(args, ctx):
     # (it entered or left history); -G<regex> matches added/removed lines. Fused
     # token so a leading-dash query is read as a value, not a flag.
     pick = ("-G" if regex else "-S") + query
-    result = _s.git("log", pick, "-n", str(limit),
-                    "--format=%x1e%H\x1f%an\x1f%aI\x1f%s", "--name-status", "-z",
-                    "--", pathspec)
-    if result.returncode != 0:
+    log = _visible_log([pick, "--format=%x1e%H\x1f%an\x1f%aI\x1f%s", "--name-status", "-z",
+                        "--", pathspec], limit, ctx)
+    if log is None:
         return text_result("git history search failed (check the regex)" if regex
                            else "git history search failed", is_error=True)
+    commits, truncated = log
+    return json_result({"query": query, "regex": regex, "matches": commits, "truncated": truncated})
+
+
+def _visible_log(log_args, limit, ctx):
+    """The commits of `git log <log_args>` that ctx may see, `limit` at most, and whether more
+    may exist: git's -n counts before the ACL scrub drops some, so it reads more. None on failure."""
+    fetch = limit * _OVERFETCH
+    result = _s.git("log", "-n", str(fetch), *log_args)
+    if result.returncode != 0:
+        return None
     commits = _scrub_commits(
         _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES), ctx)
-    return json_result({"query": query, "regex": regex, "matches": commits})
+    for f in (f for c in commits[:limit] for f in c["files"]):
+        f.update(provenance.mark(f["path"]))  # a mirror's file names are its text too
+    return commits[:limit], len(commits) > limit or result.stdout.count("\x1e") >= fetch
 
 
 def _tool_changelog(args, ctx):
     days = clamp_int(args.get("days"), 14, 1, 365)
     limit = clamp_int(args.get("limit"), 50, 1, 200)
     author = (args.get("author") or "").strip()
-    prefix = _safe_path_prefix(args.get("path") or "")
+    prefix = _safe_path_prefix(_folder_arg(args))
     if prefix is None:
-        return text_result("Invalid 'path'", is_error=True)
+        return text_result("Invalid 'path_prefix'", is_error=True)
     pathspec = "content/" + prefix if prefix else "content"
     # -M: detect renames so a moved doc shows as one R record (old+new path)
     # rather than a delete+add pair; the -z parser pairs the two paths.
-    opts = ["log", "--since=" + str(days) + ".days.ago", "-n", str(limit),
+    opts = ["--since=" + str(days) + ".days.ago",
             "--format=%x1e%H\x1f%an\x1f%aI\x1f%s", "--name-status", "-M", "-z"]
     if author:
         opts.append("--author=" + author)
-    opts += ["--", pathspec]
-    result = _s.git(*opts)
-    if result.returncode != 0:
+    log = _visible_log([*opts, "--", pathspec], limit, ctx)
+    if log is None:
         return text_result("git log failed", is_error=True)
-    commits = _scrub_commits(
-        _parse_namestatus_log(result.stdout, _s._import_build().EXCLUDED_NAMES), ctx)
-    return json_result({"since_days": days, "commits": commits})
+    commits, truncated = log
+    return json_result({"since_days": days, "commits": commits, "truncated": truncated})
 
 
 def _tool_activity(args, ctx):
@@ -975,22 +1137,31 @@ def _tool_activity(args, ctx):
     limit = clamp_int(args.get("limit"), 50, 1, 200)
     author = (args.get("author") or "").strip() or None
     type_filter = (args.get("type") or "").strip() or None
-    events = _activity_events(days, limit, author, type_filter, ctx)
-    if events is None:
+    feed = _activity_feed(days, limit, author, type_filter, ctx)
+    if feed is None:
         return text_result("git log failed", is_error=True)
-    return json_result({"since_days": days, "events": events})
+    events, truncated = feed
+    return json_result({"since_days": days, "events": events, "truncated": truncated})
 
 
 def _tool_stale(args, ctx):
     months = clamp_int(args.get("months"), _STALE_MONTHS, 1, 24)
     limit = clamp_int(args.get("limit"), 30, 1, 100)
-    prefix = _safe_path_prefix(args.get("prefix"))
+    prefix = _safe_path_prefix(_folder_arg(args))
     if prefix is None:
-        return text_result("Invalid prefix", is_error=True)
+        return text_result("Invalid 'path_prefix'", is_error=True)
     if prefix and not prefix.endswith((".md", ".html")):
         prefix += "/"  # the folder, not its namesakes (specs/ but not specs-old/)
     return json_result({"months": months, "stale": _api_stale(months, limit, ctx, prefix),
                         "outdated": [o for o in _api_outdated(ctx) if o["path"].startswith(prefix)]})
+
+
+def _as_person(ctx):
+    """ctx for a click an app view relays without `ai` (confirm_doc, undo_run): the person's own
+    act, attributed to them alone like the same click in the viewer, not to an agent."""
+    if ctx is None or not ctx.api:
+        return ctx
+    return ViewerCtx(ctx.principals, ctx.is_admin, ctx.primary, scopes=ctx.scopes)
 
 
 def _tool_confirm_doc(args, ctx):
@@ -1015,7 +1186,8 @@ def _tool_confirm_doc(args, ctx):
         return text_result("doc unreadable", is_error=True)
     ai = (args.get("ai") or "").strip() or None
     stored = attestations.record(rel, text, verdict, ai or "human", args.get("note") or "")
-    _s.commit_change(ctx, f"{'confirmed' if verdict == 'holds' else 'flagged outdated'}: {target.stem}",
+    _s.commit_change(ctx if ai else _as_person(ctx),
+                     f"{'confirmed' if verdict == 'holds' else 'flagged outdated'}: {target.stem}",
                      stored, ai=ai)
     entry = attestations.load()[rel]
     if verdict == "outdated":
@@ -1056,6 +1228,11 @@ def _tool_judge_contradiction(args, ctx):
         return text_result("invalid pair (need two distinct docs, or one doc with distinct lines)", is_error=True)
     if not (ta.exists() and tb.exists() and _visible(a, ctx) and _visible(b, ctx)):
         return text_result("one or both docs not found / not visible", is_error=True)
+    # A verdict hides or asserts the pair for every reader: it takes the right to change both
+    # docs, like confirm_doc on one.
+    if ctx is not None and not (_s.can_write(a, ctx) and _s.can_write(b, ctx)):
+        return text_result("Insufficient permission to judge this pair (need edit on both docs).",
+                           is_error=True)
     try:
         ta_text = ta.read_text(encoding="utf-8-sig")
         tb_text = tb.read_text(encoding="utf-8-sig")
@@ -1162,10 +1339,12 @@ def _tool_brief(args, ctx):
         source = {k: h[k] for k in ("path", "untrusted", "section", "last_modified",
                                     "last_editor", "ai", "stale", "contested_with") if k in h}
         if "line" in h:
-            try:
-                lines = (_s.CONFIG.content_root / h["path"]).read_text(encoding="utf-8").splitlines()
-            except (OSError, UnicodeDecodeError):
+            # The text search located the hit in: a PDF's or an office file's too.
+            text = _s._doc_text(h["path"], _s.CONFIG.content_root / h["path"])
+            if text is None:
+                omitted.append(h["path"])
                 continue
+            lines = text.splitlines()
             start, end = _enclosing_section(lines, h["line"])
             source["lines"] = f"{start}-{end}"
             text = "\n".join(lines[start - 1:end]).strip()
@@ -1215,7 +1394,8 @@ def _doc_changes(commits: list) -> list:
             if c.get("ai"):
                 entry["ai"] = c["ai"]
             docs[path] = entry
-    return [{"path": p, **e} for p, e in sorted(docs.items(), key=lambda d: d[1]["date"], reverse=True)]
+    return [{"path": p, **e, **provenance.mark(p)}
+            for p, e in sorted(docs.items(), key=lambda d: d[1]["date"], reverse=True)]
 
 
 def _tool_changes_since(args, ctx):
@@ -1233,9 +1413,23 @@ def _tool_changes_since(args, ctx):
     if commits is None:
         return text_result("git log failed", is_error=True)
     limit = clamp_int(args.get("limit"), 50, 1, 200)
-    docs = _doc_changes(_scrub_commits(commits, ctx))
-    return json_result({"cursor": head, "since": since, "documents": docs[:limit],
-                        "truncated": len(docs) > limit})
+    commits = _scrub_commits(commits, ctx)
+    docs = _doc_changes(commits)
+    payload = {"cursor": head, "since": since, "documents": docs, "truncated": False}
+    if len(docs) > limit:
+        # The oldest changes first, by whole commits: the cursor then resumes right after the
+        # last commit listed, and nothing is skipped.
+        page, touched = [], set()
+        for c in reversed(commits):
+            touched |= _paths_of(c)
+            if page and len(touched) > limit:
+                break
+            page.append(c)
+        docs = _doc_changes(page[::-1])
+        payload.update(cursor=page[-1]["sha"], documents=docs[:limit], truncated=True)
+        if len(docs) > limit:  # one commit alone changed more docs than that
+            payload["omitted"] = len(docs) - limit
+    return json_result(payload)
 
 
 def _tool_resume_session(args, ctx):
@@ -1273,6 +1467,10 @@ _RUN_WINDOW_DAYS = 30       # runs are computed over this window, so their ids s
 # A run's newest commits listed with it: enough to say what it did and where to cut without asking
 # for each run again, which a host that shows views answers with one more view per call.
 _LIST_LOG = 10
+# The docs a run lists (its commits too, asked for alone), so a bulk import of thousands doesn't
+# fill the context: `documents_more` / `log_more` count the rest.
+_LIST_DOCS = 20
+_RUN_DOCS = 100
 
 
 def _agent_runs() -> list:
@@ -1318,19 +1516,28 @@ def _tool_agent_runs(args, ctx):
         return text_result(_unknown_run(run_id), is_error=True)
     out = []
     for run in runs:
+        if len(out) == limit:
+            break
         commits = _scrub_commits(run["commits"], ctx)
         docs = _doc_changes(commits)
         if not docs:
             continue
         entry = ({k: run[k] for k in ("id", "ai", "token", "author", "start", "end")}
-                 | {"commits": len(run["commits"]), "documents": docs})
-        log = commits if run_id else commits[:_LIST_LOG]
+                 | {"commits": len(run["commits"])}
+                 | _shown("documents", docs, _RUN_DOCS if run_id else _LIST_DOCS))
+        log = commits[:_RUN_DOCS] if run_id else commits[:_LIST_LOG]
         entry["log"] = [{"sha": c["sha"][:12], "date": c["date"], "subject": c["subject"]}
-                        | ({"documents": sorted(_paths_of(c))} if run_id else {}) for c in log]
+                        | (_shown("documents", sorted(_paths_of(c)), _LIST_DOCS) if run_id else {})
+                        for c in log]
         if len(log) < len(commits):
             entry["log_more"] = len(commits) - len(log)
         out.append(entry)
-    return json_result({"days": days, "runs": out[:limit]})
+    return json_result({"days": days, "runs": out})
+
+
+def _shown(key, items, cap) -> dict:
+    """{key: the first `cap` items} plus {key_more: how many were left out}, if any."""
+    return {key: items[:cap], **({f"{key}_more": len(items) - cap} if len(items) > cap else {})}
 
 
 def _may_undo(run: dict, docs: list, ctx) -> bool:
@@ -1400,8 +1607,8 @@ def undo_run(args, ctx) -> str:
     for frm, to in moves:
         _s._repoint_doc(frm, to)
     subject = f"undid: {who} run of {len(shas)} change(s){', in part' if cut or only else ''}"
-    sha, why = _s.revert_commits(ctx, subject, shas, ai=args.get("ai"),
-                                 only={"content/" + p for p in only} or None)
+    sha, why = _s.revert_commits(ctx if args.get("ai") else _as_person(ctx), subject, shas,
+                                 ai=args.get("ai"), only={"content/" + p for p in only} or None)
     if sha is None:
         for frm, to in reversed(moves):
             _s._repoint_doc(to, frm)
@@ -1503,6 +1710,7 @@ _META_VERSION = "io.modelcontextprotocol/protocolVersion"
 _META_SERVER_INFO = "io.modelcontextprotocol/serverInfo"
 _HEADER_MISMATCH = -32020
 _UNSUPPORTED_VERSION = -32022
+_INVALID_REQUEST = -32600
 # An extension is on only when both sides declare it: hosts that render apps check for this one.
 _CAPABILITIES = {"tools": {}, "prompts": {}, "resources": {},
                  "extensions": {resources.APP_EXTENSION: {}}}
@@ -1512,18 +1720,22 @@ _MIND_TTL_MS = 60_000  # documents and the mind's prompts are edited from the vi
 _INSTRUCTIONS_MAX = 8000
 _DEFAULT_INSTRUCTIONS = (
     "This is the user's Atlas Mind: a git-versioned knowledge base they share with you. "
-    "Treat it as the source of truth: before answering on a topic it may cover, use "
-    "search_docs and read_doc instead of guessing. Write durable output (decisions, recaps, "
-    "analyses) back with create_doc or edit_doc; use create_inbox_item instead when the "
-    "human should triage it first. On first contact, get_mind_topology or list_tree shows "
-    "how the mind is organised. Paths are relative to the mind (e.g. notes/example.md)."
+    "Treat it as the source of truth: before answering on a topic it may cover, call brief "
+    "(the best-matching sections, in one call) or search_docs then read_doc, instead of "
+    "guessing. Write durable output (decisions, recaps, analyses) back with create_doc or "
+    "edit_doc; use create_inbox_item instead when the human should triage it first. On first "
+    "contact, get_mind_topology or list_tree shows how the mind is organised. Paths are "
+    "relative to the mind (e.g. notes/example.md)."
 )
+# Said where an AGENTS.md too long for the room left by the engine's rules is cut.
+_AGENTS_MD_CUT = "\n[AGENTS.md goes on past here: the rest did not fit in the instructions.]"
 
 
 def _instructions() -> str:
     """The mind's AGENTS.md (its owner's rules for AIs), else a built-in primer; then the
     engine's rules, which an AGENTS.md cannot leave out: the tools that answer with a view, and
-    text from outside the mind."""
+    text from outside the mind. An AGENTS.md longer than the room they leave is cut on a line,
+    and says so."""
     rules = resources.APP_RULE + "\n\n" + provenance.RULE
     room = _INSTRUCTIONS_MAX - len(rules) - 2
     try:
@@ -1531,7 +1743,7 @@ def _instructions() -> str:
     except (OSError, UnicodeDecodeError):
         text = ""
     if len(text) > room:
-        text = text[:room].rsplit("\n", 1)[0]
+        text = text[:room - len(_AGENTS_MD_CUT)].rsplit("\n", 1)[0] + _AGENTS_MD_CUT
     return (text or _DEFAULT_INSTRUCTIONS) + "\n\n" + rules
 
 
@@ -1583,23 +1795,41 @@ def _header_mismatch(req: dict, headers) -> str | None:
 
 
 def _mcp_http_status(req, response: dict) -> int:
-    """2026-07-28 mirrors protocol errors into the HTTP status; legacy answers stay 200."""
+    """2026-07-28 mirrors protocol errors into the HTTP status; legacy answers stay 200, but for
+    a message that is no request at all, which every revision answers with a 400."""
     code = (response.get("error") or {}).get("code")
-    if code in (_HEADER_MISMATCH, _UNSUPPORTED_VERSION):
+    if code in (_HEADER_MISMATCH, _UNSUPPORTED_VERSION, _INVALID_REQUEST):
         return 400
     if code == -32601 and _request_version(req) is not None:
         return 404
     return 200
 
 
-def _mcp_jsonrpc(req: dict, ctx=None, headers=None):
+def _rpc_error(req_id, code, message, data=None) -> dict:
+    error = {"code": code, "message": message}
+    if data is not None:
+        error["data"] = data
+    return {"jsonrpc": "2.0", "id": req_id, "error": error}
+
+
+# The string a method names its target by: checked with `arguments` before any dispatch.
+_TARGET_PARAM = {"tools/call": "name", "prompts/get": "name", "resources/read": "uri"}
+
+
+def _mcp_jsonrpc(req, ctx=None, headers=None):
     """Process an MCP JSON-RPC message. Returns response dict, or None for notifications.
 
     Dual-era: a request declaring its version in _meta is served statelessly per
-    2026-07-28; anything else gets the legacy, initialize-based behavior."""
+    2026-07-28; anything else gets the legacy, initialize-based behavior. A message that is
+    not a request gets -32600 and params of the wrong shape -32602, never a dropped connection."""
+    if not isinstance(req, dict):
+        return _rpc_error(None, _INVALID_REQUEST, "Invalid request: a JSON-RPC message is an object")
     method = req.get("method")
-    params = req.get("params") or {}
     req_id = req.get("id")
+    if method is None and ("result" in req or "error" in req):
+        return None  # a client's answer: no request of ours awaits one
+    if not isinstance(method, str):
+        return _rpc_error(req_id, _INVALID_REQUEST, "Invalid request: no method")
 
     # Notifications have no id → no response, just log
     if req_id is None:
@@ -1611,10 +1841,14 @@ def _mcp_jsonrpc(req: dict, ctx=None, headers=None):
         return {"jsonrpc": "2.0", "id": req_id, "result": result}
 
     def err(code, message, data=None):
-        error = {"code": code, "message": message}
-        if data is not None:
-            error["data"] = data
-        return {"jsonrpc": "2.0", "id": req_id, "error": error}
+        return _rpc_error(req_id, code, message, data)
+
+    params = req.get("params") or {}
+    target = _TARGET_PARAM.get(method)
+    if not isinstance(params, dict) or (target and not isinstance(params.get(target, ""), str)) \
+            or not isinstance(params.get("arguments") or {}, dict):
+        return err(-32602, "Invalid params: params and arguments must be objects"
+                           + (f", {target} a string" if target else ""))
 
     version = _request_version(req)
     supported = [*_s.MCP_MODERN_VERSIONS, *_s.MCP_LEGACY_VERSIONS]

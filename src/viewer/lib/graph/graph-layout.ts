@@ -14,6 +14,8 @@ const SEED_SPACING = 20; // px between the seeded docs of a folder, about the di
 export const SIM_TICKS = 480; // the organic layout's whole run; it is at rest by the last tick
 
 export class GraphLayout {
+  private readonly repulsion = new Repulsion();
+
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly palette: GraphPalette,
@@ -429,25 +431,9 @@ export class GraphLayout {
     // close docs push each other further than the gap between them, every tick, until the last one.
     const cool = Math.max(0.02, 1 - st.ticks / SIM_TICKS);
 
-    for (let i = 0; i < nodes.length; i++) {
-      const a = nodes[i];
+    this.repulsion.apply(nodes, REP, SOFT);
 
-      for (let j = i + 1; j < nodes.length; j++) {
-        const b = nodes[j];
-        let dx = a.x - b.x,
-          dy = a.y - b.y,
-          d2 = dx * dx + dy * dy || 0.01,
-          d = Math.sqrt(d2);
-        const f = REP / (d2 + SOFT),
-          fx = (f * dx) / d,
-          fy = (f * dy) / d;
-
-        a.vx += fx;
-        a.vy += fy;
-        b.vx -= fx;
-        b.vy -= fy;
-      }
-
+    for (const a of nodes) {
       // Folder gravity: pull each node toward its subfolder (or folder) anchor so folders settle into
       // distinct spatial zones. GRAVITY < SPRING, so wikilinks still bend the clusters and the layout
       // stays organic. Tags + root docs (no anchor) keep the old weak center pull.
@@ -485,5 +471,152 @@ export class GraphLayout {
       n.x += Math.max(-25, Math.min(25, n.vx * cool));
       n.y += Math.max(-25, Math.min(25, n.vy * cool));
     }
+  }
+}
+
+const THETA2 = 0.64; // Barnes-Hut opening angle 0.8, squared
+const LEAF = 8; // nodes a cell holds before it splits
+const EXACT = 300; // up to this many nodes the graph is a single leaf: every pair exact, as before
+
+// Node-node repulsion, Barnes-Hut style: over a k-d tree of the positions, rebuilt every tick, a far
+// cell (side under 0.8 × its distance) pushes as all its nodes from their centre of mass, so a tick
+// costs O(n log n) instead of O(n²). Leaves are summed pair by pair: near pairs keep the exact force.
+export class Repulsion {
+  private xs = new Float64Array(0);
+  private ys = new Float64Array(0);
+  private order = new Int32Array(0); // node indices, grouped so that every cell owns a slice
+  // Per cell, in preorder (a cell's first child is the next cell): its slice of `order`, centre of
+  // mass, longer side, and second child (-1 on a leaf).
+  private lo = new Int32Array(0);
+  private hi = new Int32Array(0);
+  private mx = new Float64Array(0);
+  private my = new Float64Array(0);
+  private side = new Float64Array(0);
+  private second = new Int32Array(0);
+  private stack = new Int32Array(0); // cells still to visit on a walk
+  private cells = 0;
+  private leaf = LEAF;
+  private rep = 0;
+  private soft = 0;
+  private fx = 0;
+  private fy = 0;
+
+  // Adds to each node's velocity its push away from all the others, rep / (d² + soft) per pair.
+  apply(nodes: MindNode[], rep: number, soft: number): void {
+    const n = nodes.length;
+
+    if (this.order.length !== n) {
+      this.xs = new Float64Array(n);
+      this.ys = new Float64Array(n);
+      this.order = new Int32Array(n);
+      // Every split leaves two non-empty halves, so the tree (and a walk's stack) has under 2n cells.
+      this.lo = new Int32Array(2 * n);
+      this.hi = new Int32Array(2 * n);
+      this.mx = new Float64Array(2 * n);
+      this.my = new Float64Array(2 * n);
+      this.side = new Float64Array(2 * n);
+      this.second = new Int32Array(2 * n);
+      this.stack = new Int32Array(2 * n);
+    }
+
+    for (let i = 0; i < n; i++) {
+      this.xs[i] = nodes[i].x;
+      this.ys[i] = nodes[i].y;
+      this.order[i] = i;
+    }
+
+    this.rep = rep;
+    this.soft = soft;
+    this.leaf = n > EXACT ? LEAF : n;
+    this.cells = 0;
+    this.build(0, n);
+
+    for (let k = 0; k < n; k++) {
+      const node = nodes[this.order[k]];
+
+      this.push(k);
+      node.vx += this.fx;
+      node.vy += this.fy;
+    }
+  }
+
+  // Makes the cell of order[lo..hi) and its subtree: halves its bounding box's longer side.
+  private build(lo: number, hi: number): number {
+    const { xs, ys, order } = this;
+    const c = this.cells++;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, sx = 0, sy = 0;
+
+    for (let k = lo; k < hi; k++) {
+      const x = xs[order[k]],
+        y = ys[order[k]];
+
+      sx += x;
+      sy += y;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+    this.lo[c] = lo;
+    this.hi[c] = hi;
+    this.mx[c] = sx / (hi - lo);
+    this.my[c] = sy / (hi - lo);
+    this.side[c] = Math.max(x1 - x0, y1 - y0);
+    this.second[c] = -1;
+    if (hi - lo <= this.leaf) return c;
+
+    const onX = x1 - x0 >= y1 - y0,
+      mid = onX ? (x0 + x1) / 2 : (y0 + y1) / 2;
+    let m = lo;
+
+    for (let k = lo; k < hi; k++) {
+      const j = order[k];
+
+      if ((onX ? xs[j] : ys[j]) < mid) {
+        order[k] = order[m];
+        order[m++] = j;
+      }
+    }
+    if (m === lo || m === hi) return c; // halving can't part (near-)coincident nodes: one leaf
+
+    this.build(lo, m);
+    this.second[c] = this.build(m, hi);
+
+    return c;
+  }
+
+  // Sums into fx/fy the push on the node at slot k of `order`, walking the tree from the root. A
+  // cell holding that node is never taken as one mass: it would push the node with itself.
+  private push(k: number): void {
+    const { xs, ys, order, lo, hi, mx, my, side, second, stack } = this;
+    const x = xs[order[k]],
+      y = ys[order[k]];
+    let top = 0;
+
+    this.fx = this.fy = 0;
+    stack[top++] = 0;
+    while (top) {
+      const c = stack[--top];
+      const dx = x - mx[c],
+        dy = y - my[c];
+
+      if ((k < lo[c] || k >= hi[c]) && side[c] * side[c] < THETA2 * (dx * dx + dy * dy)) {
+        this.add(dx, dy, hi[c] - lo[c]);
+      } else if (second[c] < 0) {
+        for (let s = lo[c]; s < hi[c]; s++) if (s !== k) this.add(x - xs[order[s]], y - ys[order[s]], 1);
+      } else {
+        stack[top++] = second[c];
+        stack[top++] = c + 1;
+      }
+    }
+  }
+
+  // The push of `mass` nodes on a node (dx, dy) away from them. Coincident nodes push nothing.
+  private add(dx: number, dy: number, mass: number): void {
+    const d2 = dx * dx + dy * dy || 0.01,
+      f = (mass * this.rep) / (d2 + this.soft) / Math.sqrt(d2);
+
+    this.fx += f * dx;
+    this.fy += f * dy;
   }
 }

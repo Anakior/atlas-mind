@@ -16,7 +16,7 @@ import { docRenderer } from './doc-renderer';
 
 export class TagBrowsePage {
   showTag(tag: string): void {
-    if (editMode) editor.exitEditMode(false);
+    if (editMode) editor.leaveEditMode();
     setCurrentFile(null);
     document.querySelector('main')!.scrollTop = 0;
     const docs = Object.values(fileMap)
@@ -52,10 +52,7 @@ export class TagBrowsePage {
         e.preventDefault();
         const f = fileMap[(a as HTMLElement).dataset.tagdoc!];
 
-        if (f) {
-          docRenderer.show(f);
-          history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-        }
+        if (f) void docRenderer.open(f);
       }),
     );
     breadcrumbPath.textContent = '#' + tag;

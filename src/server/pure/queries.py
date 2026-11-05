@@ -1,12 +1,14 @@
 """Read-side aggregates over the doc corpus, shared by REST routes and MCP tools."""
 import datetime
 import math
+import os
 import posixpath
 import re
+import threading
 import time
 
 import server as _s
-from server.pure import attestations, file_text
+from server.pure import attestations, file_text, provenance
 
 
 def _visible(rel, ctx):
@@ -26,27 +28,143 @@ def _touched_visible(rel, sha, ctx):
     return _visible_at(rel, sha + "^", ctx) and _visible_at(rel, sha, ctx)
 
 
-def _doc_corpus(ctx=None):
-    """[(rel, name, text)] for every doc readable by `ctx`, each file read once.
-    THE choke-point: search/topology/tags/links all iterate here, so filtering
-    once propagates to every derived aggregate. utf-8-sig tolerates a BOM."""
-    out = []
-    for rel, path in _s._iter_doc_files():
-        if not _visible(rel, ctx):
-            continue
+# What a reader sees of the mind, memoized: checking and reading every doc on each call took
+# seconds on a few thousand. A memo holds while no file under content/ changes (one scandir walk,
+# tens of ms), the ACL registry stays the same and none of the reader's grants expires. Texts are
+# kept once for every reader and read again only when their file changes.
+_MEMO_READERS = 8
+_memos: dict = {}
+_texts: dict = {}  # str(path) -> ((mtime_ns, size), text)
+_memo_lock = threading.Lock()
+
+
+def _content_stamp() -> dict:
+    """{rel: (mtime_ns, size)} of every file under content/ outside dot folders."""
+    root = _s.CONFIG.content_root
+    stamp, folders = {}, [""]
+    while folders:
+        folder = folders.pop()
         try:
-            out.append((rel, path.name, path.read_text(encoding="utf-8-sig")))
-        except (OSError, UnicodeDecodeError):
+            entries = list(os.scandir(root / folder))
+        except OSError:
             continue
-    return out
+        for entry in entries:
+            if entry.name.startswith("."):
+                continue
+            rel = f"{folder}/{entry.name}" if folder else entry.name
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    folders.append(rel)
+                else:
+                    st = entry.stat()
+                    stamp[rel] = (st.st_mtime_ns, st.st_size)
+            except OSError:
+                continue
+    return stamp
+
+
+def _registry_stamp() -> tuple:
+    """The ACL registry (its rights and share links) as it stands."""
+    store, stamp = _s.get_store(), []
+    for name in (store.ACL_FILE, store.SHARES_FILE):
+        try:
+            st = os.stat(store.base / name)
+            stamp.append((st.st_mtime_ns, st.st_size))
+        except OSError:
+            stamp.append(None)
+    return tuple(stamp)
+
+
+def _reader_memo(ctx) -> dict:
+    """The memo of what `ctx` may read, rebuilt when the content or the rights changed. Rights
+    already checked are kept across a content change (an edit re-checks no other doc)."""
+    files = _content_stamp()
+    access = None if ctx is None else _registry_stamp()
+    key = (str(_s.CONFIG.content_root),
+           None if ctx is None else (ctx.principals, ctx.is_admin, ctx.superuser, ctx.api))
+    memo = _memos.get(key)
+    rights_hold = memo and memo["access"] == access and time.time() < memo["until"]
+    if rights_hold and memo["files"] == files:
+        return memo
+    # A grant lives through the second it expires at (best_grant): the memo holds no longer.
+    until = math.inf if ctx is None else min(
+        (g["expires_at"] + 1 for g in _s.get_store().list_docs_shared_with(ctx.principals)
+         if g["expires_at"]), default=math.inf)
+    memo = {"files": files, "access": access, "until": until, "seen": memo["seen"] if rights_hold else {},
+            "lists": {}, "corpus": None, "graph": None}
+    with _memo_lock:
+        _memos.pop(key, None)
+        _memos[key] = memo
+        while len(_memos) > _MEMO_READERS:
+            _memos.pop(next(iter(_memos)))
+    return memo
+
+
+def _listing(memo, ctx, suffixes) -> list:
+    """[(rel, Path)] of the files with one of `suffixes` that the reader of `memo` may read."""
+    found = memo["lists"].get(suffixes)
+    if found is None:
+        seen = memo["seen"]
+        found = []
+        for rel, path in _s._iter_doc_files(suffixes):
+            if rel not in seen:
+                # The walk gives the spelling on disk: no canonical path to look up (seconds on Windows).
+                seen[rel] = ctx is None or _s._acl_can_read(rel, ctx)
+            if seen[rel]:
+                found.append((rel, path))
+        memo["lists"][suffixes] = found
+    return found
+
+
+def _readable(ctx=None, suffixes=(".md", ".html")) -> list:
+    """[(rel, Path)] of the files with one of `suffixes` that `ctx` may read (_iter_doc_files' set)."""
+    return list(_listing(_reader_memo(ctx), ctx, suffixes))
+
+
+def _text(rel, path, files):
+    """The text of doc `path`, read again only when its file changed. utf-8-sig tolerates a BOM."""
+    stamp, key = files.get(rel), str(path)
+    kept = _texts.get(key)
+    if kept and stamp and kept[0] == stamp:
+        return kept[1]
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        _texts.pop(key, None)
+        return None
+    _texts[key] = (stamp, text)
+    return text
+
+
+def _corpus(memo, ctx) -> list:
+    """The corpus of the reader of `memo`, memoized with it."""
+    if memo["corpus"] is None:
+        files = memo["files"]
+        memo["corpus"] = [(rel, path.name, text) for rel, path in _listing(memo, ctx, (".md", ".html"))
+                          if (text := _text(rel, path, files)) is not None]
+        live = {str(_s.CONFIG.content_root / rel) for rel in files}
+        for key in [k for k in _texts if k not in live]:
+            _texts.pop(key, None)
+    return memo["corpus"]
+
+
+def _doc_corpus(ctx=None):
+    """[(rel, name, text)] for every doc readable by `ctx`.
+    THE choke-point: search/topology/tags/links all iterate here, so filtering
+    once propagates to every derived aggregate."""
+    return list(_corpus(_reader_memo(ctx), ctx))
 
 
 def _links_graph(ctx=None):
     """Wikilink graph {path: {"out": [...], "in": [...]}} over the docs readable by
     `ctx`. Built on the filtered corpus so the graph never exposes a private doc as
-    a node; callers still scrub `out` edges that point at a private target."""
-    return _s._import_build().build_links_index(
-        [{"path": rel, "name": name, "body": text} for rel, name, text in _doc_corpus(ctx)])
+    a node; callers still scrub `out` edges that point at a private target. Shared
+    between calls: read it, never change it."""
+    memo = _reader_memo(ctx)
+    if memo["graph"] is None:
+        memo["graph"] = _s._import_build().build_links_index(
+            [{"path": rel, "name": name, "body": text} for rel, name, text in _corpus(memo, ctx)])
+    return memo["graph"]
 
 
 def _tags_for(build, rel: str, text: str) -> list:
@@ -159,8 +277,8 @@ def _api_search(q: str, limit: int, ctx=None, only=None) -> list:
     if not tokens:
         return []
     entries = []
-    for rel, path in _s._iter_doc_files(SEARCHED):
-        if not _visible(rel, ctx) or (only is not None and rel not in only):
+    for rel, path in _readable(ctx, SEARCHED):
+        if only is not None and rel not in only:
             continue
         e = _s._doc_entry(rel, path)
         if e is not None:
@@ -206,15 +324,23 @@ def _api_search(q: str, limit: int, ctx=None, only=None) -> list:
 
 
 def _api_recent(days: int, limit: int, ctx=None) -> list:
-    """Documents modified within the window, from most recent to oldest."""
+    """Documents changed within the window, from most recent to oldest, dated by their last
+    commit like _api_stale: a cloud clone's file dates are its boot time. A file git doesn't
+    know yet goes by its mtime. A preview from outside the mind carries `untrusted`."""
     cutoff = time.time() - days * 86400
+    dates = _s._import_build()._git_commit_dates(_s.CONFIG.root)
+    recent = []
+    for rel, path in _readable(ctx):
+        ts = dates.get(rel)
+        if ts is None:
+            try:
+                ts = path.stat().st_mtime
+            except OSError:
+                continue
+        if ts >= cutoff:
+            recent.append((-ts, rel, path))
     items = []
-    for rel, path in _s._iter_doc_files():
-        if not _visible(rel, ctx):
-            continue
-        st = path.stat()
-        if st.st_mtime < cutoff:
-            continue
+    for ts, rel, path in sorted(recent)[:limit]:
         try:
             content = path.read_text(encoding="utf-8")
             preview = content[:160].replace("\n", " ").strip()
@@ -227,10 +353,10 @@ def _api_recent(days: int, limit: int, ctx=None) -> list:
             "name": path.name,
             "score": 0,
             "snippet": preview,
-            "mtime": int(st.st_mtime),
+            "mtime": int(-ts),
+            **provenance.mark(rel),
         })
-    items.sort(key=lambda h: -h["mtime"])
-    return items[:limit]
+    return items
 
 
 _MONTH_SECONDS = 2629800  # 30.4375 days
@@ -246,8 +372,8 @@ def _api_stale(months: int, limit: int, ctx=None, prefix: str = "") -> list:
     dates = _s._import_build()._git_commit_dates(_s.CONFIG.root)
     confirmed = attestations.load()
     items = []
-    for rel, path in _s._iter_doc_files():
-        if not rel.startswith(prefix) or not _visible(rel, ctx):
+    for rel, path in _readable(ctx):
+        if not rel.startswith(prefix):
             continue
         ts = dates.get(rel)
         if ts is None:
@@ -269,7 +395,7 @@ def _api_stale(months: int, limit: int, ctx=None, prefix: str = "") -> list:
         if due >= now:
             continue
         item = {"path": rel, "name": path.name, "last_modified": int(ts),
-                "months_ago": round((now - ts) / _MONTH_SECONDS, 1)}
+                "months_ago": round((now - ts) / _MONTH_SECONDS, 1), **provenance.mark(rel)}
         if entry:
             item["confirmed"] = entry["at"]
         items.append((due, item))
@@ -373,14 +499,26 @@ _ACTIVITY_VERB_TYPE = {
 _ACTIVITY_STATUS_TYPE = {"A": "create", "M": "edit", "D": "delete", "R": "move", "C": "move"}
 
 
+# Commits read per event asked for: the type filter and the ACL scrub drop some after git's -n.
+_OVERFETCH = 4
+
+
 def _activity_events(days, limit, author, type_filter, ctx):
+    """The events of _activity_feed, or None on git failure."""
+    feed = _activity_feed(days, limit, author, type_filter, ctx)
+    return None if feed is None else feed[0]
+
+
+def _activity_feed(days, limit, author, type_filter, ctx):
     """Corpus-wide activity feed: git log over content/ carrying the X-Atlas-Author
     trailer + author email, mapped to the CDC event model
-    {sha, short_sha, author, email, ai, date (UTC), type, title, subject, paths}.
-    ACL-scrubbed per `ctx` (None = unfiltered/internal). Returns None on git failure."""
+    {sha, short_sha, author, email, ai, date (UTC), type, title, subject, paths, untrusted?}.
+    ACL-scrubbed per `ctx` (None = unfiltered/internal). Returns (events, truncated), truncated
+    when more events than `limit` may exist in the window, or None on git failure."""
     fmt = ("%x1e%H\x1f%an\x1f%ae\x1f%aI\x1f%s\x1f"
            "%(trailers:key=X-Atlas-Author,valueonly)")
-    opts = ["log", "--since=" + str(days) + ".days.ago", "-n", str(limit),
+    fetch = limit * _OVERFETCH
+    opts = ["log", "--since=" + str(days) + ".days.ago", "-n", str(fetch),
             "--format=" + fmt, "--name-status", "-M", "-z"]
     if author:
         opts.append("--author=" + author)
@@ -389,11 +527,11 @@ def _activity_events(days, limit, author, type_filter, ctx):
     if result.returncode != 0:
         return None
     excluded = _s._import_build().EXCLUDED_NAMES
+    records = [rec for rec in (r.strip("\n") for r in result.stdout.split("\x1e")) if rec]
     events = []
-    for rec in result.stdout.split("\x1e"):
-        rec = rec.strip("\n")
-        if not rec:
-            continue
+    for rec in records:
+        if len(events) > limit:
+            break
         head, _, rest = rec.partition("\x00")
         sha, an, ae, aI, subj, trailer = (head.split("\x1f") + [""] * 6)[:6]
         if not sha:
@@ -430,10 +568,13 @@ def _activity_events(days, limit, author, type_filter, ctx):
             date = datetime.datetime.fromisoformat(aI).astimezone(datetime.timezone.utc).isoformat()
         except (ValueError, TypeError):
             date = aI
+        paths = [f["path"] for f in files]
         events.append({
             "sha": sha, "short_sha": sha[:7], "author": an, "email": ae,
             "ai": ai, "date": date, "type": typ,
-            "title": posixpath.splitext(posixpath.basename(files[0]["path"]))[0],
-            "subject": subj, "paths": [f["path"] for f in files],
+            "title": posixpath.splitext(posixpath.basename(paths[0]))[0],
+            "subject": subj, "paths": paths,
+            # File names written outside the mind (a mirror's) are its text too.
+            **next(filter(None, map(provenance.mark, paths)), {}),
         })
-    return events
+    return events[:limit], len(events) > limit or len(records) >= fetch

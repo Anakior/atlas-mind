@@ -5,6 +5,7 @@
  *
  * Stratégies :
  *   - navigations (shell HTML)       → network-first
+ *   - index vivants (_tasks-index, _backlinks, _notes-index .json) → network-first
  *   - assets /vendor/ / .md / JSON   → stale-while-revalidate
  *   - /api/*, login, share, SSE      → bypass (jamais caché : dynamique / auth)
  *
@@ -53,6 +54,8 @@ const PRECACHE = [
 
 // Préfixes same-origin jamais cachés (dynamique, auth-sensible, ou streaming SSE).
 const BYPASS = ['/api/', '/login', '/logout', '/s/', '/f/', '/git/', '/mcp/', '/webhook/', '/.well-known/'];
+// Index calculés à chaque écriture : réseau d'abord (voir 2b).
+const LIVE_INDEXES = ['/_tasks-index.json', '/_backlinks.json', '/_notes-index.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -124,11 +127,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2b. Rollup des tâches : muté à chaque coche, calculé live côté serveur. En
-  // stale-while-revalidate le SW resservait la copie périmée (la tâche réapparaît
-  // non cochée à la réouverture de la vue), d'où network-first : frais en ligne,
-  // fallback cache hors-ligne.
-  if (sameOrigin && url.pathname === BASE + '/_tasks-index.json') {
+  // 2b. Index vivants (rollup des tâches, liens entrants, badges de notes) : changés
+  // à chaque écriture, calculés live côté serveur. En stale-while-revalidate le SW
+  // resservait la copie périmée (une tâche cochée réapparaît non cochée, un badge
+  // en retard d'une écriture), d'où network-first : frais en ligne, fallback cache
+  // hors-ligne.
+  if (sameOrigin && LIVE_INDEXES.some((p) => url.pathname === BASE + p)) {
     event.respondWith(
       fetch(req)
         .then((res) => {

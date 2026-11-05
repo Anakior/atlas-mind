@@ -13,8 +13,9 @@ import { IS_OFFLINE_BUILD } from '../core/data-csrf';
 import { AtlasCombobox } from '../ui/combobox';
 import { currentFile } from '../core/state';
 import { fileMap } from '../core/tree';
-import { contentCache } from '../content/content-tree';
-import { setStatus } from '../core/net';
+import { forgetContent } from '../content/content-tree';
+import { docHash, replaceRoute } from '../core/route';
+import { requestError, setStatus } from '../core/net';
 import { getAllDirs, refreshTreeOrReload } from './new-file-modal';
 
 // ── Confirm / alert / prompt (the native-dialog replacements) ────────────────────────────────
@@ -65,7 +66,7 @@ export class Dialogs {
         if (e.key === 'Escape') {
           e.preventDefault();
           onCancel();
-        } else if (e.key === 'Enter') {
+        } else if (e.key === 'Enter' && !Dialogs.onButton(Dialogs.backdrop)) {
           e.preventDefault();
           onOk();
         }
@@ -119,6 +120,13 @@ export class Dialogs {
       Dialogs.backdrop.addEventListener('click', onBackdrop);
       document.addEventListener('keydown', onKey);
     });
+  }
+
+  // The focus is on one of the dialog's buttons: Enter presses that one (Cancel included), natively.
+  private static onButton(backdrop: HTMLElement): boolean {
+    const active = document.activeElement;
+
+    return active instanceof HTMLButtonElement && backdrop.contains(active);
   }
 
   // In an OFFLINE build every server-backed action is disabled, so show one clear "disabled offline"
@@ -180,7 +188,7 @@ export class Dialogs {
         if (e.key === 'Escape') {
           e.preventDefault();
           onCancel();
-        } else if (e.key === 'Enter') {
+        } else if (e.key === 'Enter' && !Dialogs.onButton(backdrop)) {
           e.preventDefault();
           onOk();
         }
@@ -304,23 +312,13 @@ export class RenameModal {
         body: JSON.stringify({ from: currentFile!.path, to: newPath }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-
-        throw new Error(err.error || 'HTTP ' + res.status);
-      }
+      // 409: the place is taken (the server's own reason is English).
+      if (!res.ok) throw res.status === 409 ? new Error(t('fileExistsAt')) : requestError(res.status);
 
       this.close();
-      // Move the content cache to the new path to avoid a needless re-fetch.
-      const cached = contentCache.get(currentFile!.path);
-
-      if (cached !== undefined) {
-        contentCache.delete(currentFile!.path);
-        contentCache.set(newPath, cached);
-      }
-
+      forgetContent(currentFile!.path);
       currentFile!.path = newPath;
-      location.hash = '#' + encodeURIComponent(newPath);
+      replaceRoute(docHash(newPath));
       setStatus(renameMode === 'move' ? t('docMoved') : t('docRenamed'), 'ok');
       await refreshTreeOrReload();
     } catch (err) {

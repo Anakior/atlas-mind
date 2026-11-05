@@ -9,7 +9,7 @@
 import { searchEl, searchResultsEl, treeEl } from '../core/dom-refs';
 import { t } from '../core/i18n';
 import { fileMap, docLabel } from '../core/tree';
-import { EMBED_CONTENT, IS_OFFLINE_BUILD, url } from '../core/data-csrf';
+import { EMBED_CONTENT, IS_OFFLINE_BUILD, docUrl, url } from '../core/data-csrf';
 import { escapeHtml } from '../core/utils';
 import { docRenderer } from '../content/doc-renderer';
 
@@ -165,6 +165,11 @@ export class Search {
       .split(/\s+/)
       .filter(Boolean);
     const highlightRe = tokens.length ? new RegExp('(' + tokens.join('|') + ')', 'gi') : null;
+    // Matched on the raw text, each piece escaped after: matching inside the escaped HTML would cut
+    // an entity (it's → it&#39;s, then a search for "s" breaks it). split() with the one capturing
+    // group puts the matches at the odd indexes.
+    const highlight = (text: string): string =>
+      text.split(highlightRe!).map((part, i) => (i % 2 ? '<mark class="bg-blue-500/30 text-blue-200 rounded px-0.5">' + escapeHtml(part) + '</mark>' : escapeHtml(part))).join('');
 
     for (const m of top) {
       const file = fileMap[m.path];
@@ -177,12 +182,7 @@ export class Search {
       const snippet = m.snippet;
       const snippetHtml =
         snippet && highlightRe
-          ? '<div class="text-[11px] text-ink-400 mt-0.5 leading-snug">' +
-            escapeHtml(snippet).replace(
-              highlightRe,
-              '<mark class="bg-blue-500/30 text-blue-200 rounded px-0.5">$1</mark>',
-            ) +
-            '</div>'
+          ? '<div class="text-[11px] text-ink-400 mt-0.5 leading-snug">' + highlight(snippet) + '</div>'
           : '';
 
       a.innerHTML =
@@ -196,10 +196,10 @@ export class Search {
       if (file.ext === '.md' || file.ext === '.html') {
         a.addEventListener('click', (e) => {
           e.preventDefault();
-          docRenderer.show(file, q);
+          void docRenderer.open(file, q);
         });
       } else {
-        a.href = encodeURI(file.path);
+        a.href = docUrl(file.path);
       }
 
       searchResultsEl.appendChild(a);

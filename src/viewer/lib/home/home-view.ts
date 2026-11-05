@@ -1,8 +1,9 @@
 import { fileMap, docLabel } from '../core/tree';
 import { escapeHtml, relativeDate } from '../core/utils';
 import { sharedSection, sharedList, contentEl, breadcrumbPath, breadcrumbDate, breadcrumbActions, tocPanel } from '../core/dom-refs';
-import { IS_OFFLINE_BUILD, SITE_PREFIX, TAGLINE, url as withBase } from '../core/data-csrf';
+import { IS_OFFLINE_BUILD, SITE_PREFIX, TAGLINE, docUrl } from '../core/data-csrf';
 import { t, LANG } from '../core/i18n';
+import { pushRoute, replaceRoute } from '../core/route';
 import { currentFile, setCurrentFile, mdCount } from '../core/state';
 import { todos, loadContent } from '../content/content-tree';
 import { docRenderer, isViewable } from '../content/doc-renderer';
@@ -12,7 +13,7 @@ import { newFileModal } from '../modals/new-file-modal';
 import { tocShow } from './layout-chrome';
 import { settingsPage } from '../admin/settings/settings-page';
 
-// Home dashboard + the viewer's hash router. The home view stays imperative innerHTML, NOT the keyed
+// Home dashboard + the viewer's router (popstate → routeFromHash). The home view stays imperative innerHTML, NOT the keyed
 // runtime: contentEl is co-owned by other content renderers (showMarkdown, renderHtmlFrame,
 // openHistory), so a render()-based home would desync the runtime's per-container child map. HomeView
 // is stateless; its entry points (showWelcome / routeFromHash / showNotFound) are public
@@ -59,12 +60,15 @@ export class HomeView {
         const path = a.dataset.path;
         const f = path ? fileMap[path] : undefined;
 
-        if (f) {
-          docRenderer.show(f);
-          history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-        }
+        if (f) void docRenderer.open(f);
       });
     });
+  }
+
+  // The home as a page of its own: Back returns to the doc before it.
+  goHome(): void {
+    pushRoute('');
+    this.showWelcome();
   }
 
   showNotFound(path: string): void {
@@ -91,10 +95,7 @@ export class HomeView {
       '<p class="text-[11px] text-ink-500 font-mono mb-6 break-all">' + escapeHtml(path) + '</p>' +
       '<button id="nf-home" class="px-3 py-1.5 text-sm bg-accent hover:brightness-110 text-white rounded font-medium">' +
       escapeHtml(t('notFoundHome')) + '</button></div>';
-    document.getElementById('nf-home')?.addEventListener('click', () => {
-      history.replaceState(null, '', location.pathname);
-      this.showWelcome();
-    });
+    document.getElementById('nf-home')?.addEventListener('click', () => this.goHome());
   }
 
   routeFromHash(): void {
@@ -109,7 +110,7 @@ export class HomeView {
     }
     // Something shared to the installed app (sw.js share target): a quick capture to keep.
     if (hash.startsWith('capture=')) {
-      history.replaceState(null, '', location.pathname);
+      replaceRoute('');
       this.showWelcome();
       newFileModal.openCapture(hash.slice('capture='.length));
 
@@ -264,7 +265,7 @@ export class HomeView {
       </section>
 
       <div class="home-keys">
-        ${kbd('Ctrl+K', t('hintPalette'))}${kbd('/', t('hintSearch'))}${kbd('Ctrl+B', t('hintSidebar'))}${kbd('Ctrl+J', t('hintToc'))}${kbd('E', t('hintEdit'))}${kbd('N', t('hintNewTodo'))}
+        ${kbd('Ctrl+K', t('hintPalette'))}${kbd('/', t('hintSearch'))}${kbd('Ctrl+B', t('hintSidebar'))}${kbd('Ctrl+J', t('hintToc'))}${kbd('E', t('hintEdit'))}${kbd('N', t('hintNewDoc'))}
       </div>
     </div>
   `;
@@ -274,10 +275,7 @@ export class HomeView {
         const path = a.dataset.recentPath;
         const f = path ? fileMap[path] : undefined;
 
-        if (f) {
-          docRenderer.show(f);
-          history.replaceState(null, '', '#' + encodeURIComponent(f.path));
-        }
+        if (f) void docRenderer.open(f);
       });
     });
     contentEl.querySelector('#home-card-tags')!.addEventListener('click', (e) => {
@@ -309,12 +307,10 @@ export const homeView = new HomeView();
 
 homeView.renderSharedWithMe();
 
-window.addEventListener('atlas:route', () => homeView.routeFromHash());
+// Back, Forward, a fragment typed in the address bar: the page the URL names.
+window.addEventListener('popstate', () => homeView.routeFromHash());
 
-document.getElementById('home-link')!.addEventListener('click', () => {
-  homeView.showWelcome();
-  history.replaceState(null, '', location.pathname);
-});
+document.getElementById('home-link')!.addEventListener('click', () => homeView.goHome());
 
 // Download the current doc as a file. Doc-action glue parked here pending relocation to the
 // breadcrumb-action surface (plan item B15).
@@ -326,10 +322,9 @@ document.getElementById('btn-download')!.addEventListener('click', async () => {
   // Non-.md: download the ORIGINAL served as-is — loadContent would return text and corrupt a
   // binary .pdf/.docx.
   if (file.ext !== '.md') {
-    const fileUrl = withBase('/' + file.path.split('/').map(encodeURIComponent).join('/'));
     const a = document.createElement('a');
 
-    a.href = fileUrl;
+    a.href = docUrl(file.path);
     a.download = file.name;
     document.body.appendChild(a);
     a.click();

@@ -1,9 +1,17 @@
 # Build context = repo root. The image bundles the SELF-CONTAINED engine:
-# src/ (code + web/ viewer & vendored assets + templates/ skeletons) and
-# requirements.txt. The content (the "mind") arrives at runtime via git clone
-# into /app/repo — NOT via the image. So everything else is excluded: a minimal
-# context, and above all .git (whose .git/config may hold the GitHub PAT) kept
-# out of the image.
+# src/ (code + viewer/ assets + templates/ skeletons) and requirements.txt. The
+# content (the "mind") arrives at runtime via git clone into /app/repo — NOT via
+# the image. So everything else is excluded: a minimal context, and above all
+# .git (whose .git/config may hold the GitHub PAT) kept out of the image.
 *
 !src
 !requirements.txt
+# The viewer's dev toolchain (its node_modules alone is ~80 MB) and sources stay out,
+# like in the wheel (pyproject.toml exclude-package-data): the image needs only the
+# built viewer.
+src/viewer/build
+src/viewer/tailwind
+src/viewer/jsfmt
+src/viewer/lib
+**/node_modules
+**/__pycache__

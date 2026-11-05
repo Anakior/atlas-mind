@@ -105,8 +105,9 @@ class GitSync:
         )
 
     def _build_command(self) -> list:
-        """The ENGINE's build (`python -m build`), never a mind-shipped one."""
-        return [sys.executable, "-m", "build"]
+        """The ENGINE's build (`python -m build`), never a mind-shipped one: -P keeps a
+        build/ at the mind's root, its working directory, off the import path."""
+        return [sys.executable, "-P", "-m", "build"]
 
     def _build_env(self) -> dict:
         env = os.environ.copy()
@@ -121,14 +122,20 @@ class GitSync:
         (B) both land here, and two concurrent `python -m build` would race on
         web/vendor/app.bundle.js — esbuild rewrites it while another render reads it."""
         with self._build_lock:
-            return subprocess.run(
-                self._build_command(),
-                cwd=str(self._config.root),
-                env=self._build_env(),
-                capture_output=True,
-                text=text,
-                timeout=timeout,
-            )
+            try:
+                return subprocess.run(
+                    self._build_command(),
+                    cwd=str(self._config.root),
+                    env=self._build_env(),
+                    capture_output=True,
+                    text=text,
+                    timeout=timeout,
+                )
+            except subprocess.TimeoutExpired as e:
+                # A failed build, not a stop for what follows it (the push).
+                why = f"build timed out after {timeout}s"
+                print(f"[build] {why}", file=sys.stderr, flush=True)
+                return subprocess.CompletedProcess(e.cmd, 1, "" if text else b"", why if text else why.encode())
 
     def _dev_rebuild(self) -> None:
         """Coalesced dev live-rebuild: at most ONE build runs at a time; a burst of writes
@@ -292,18 +299,22 @@ class GitSync:
         return "ok" if self._note("push", result) else "failed"
 
     def _pull(self, *, build=True) -> bool:
-        """Fetch outside the repo lock, then rebase onto the upstream under it, and
-        rebuild when that brought something. A rebase that cannot apply is undone: the
-        mind stays as it was. True when the mind now holds the remote's commits."""
+        """Fetch outside the repo lock, then, under it, commit what is left over and
+        rebase onto the upstream, and rebuild when that brought something. No
+        --autostash: a stash that fails to apply back counts as a success and leaves
+        conflict markers in the notes. A rebase that cannot apply is undone: the mind
+        stays as it was. True when the mind now holds the remote's commits."""
         fetched = self._net("fetch", "--quiet")
         if fetched.returncode:
             self._note("pull", fetched)
             return False
         with self._lock:
+            self.recover()  # one a crash or a failed abort left: never pull on top of it
+            self._commit_stray()
             before = self.run("rev-parse", "HEAD").stdout
-            result = self.run("rebase", "--autostash", "--quiet")
+            result = self.run("rebase", "--quiet")
             if result.returncode:
-                self.run("rebase", "--abort")
+                self._abort("rebase")
             if not self._note("pull", result):
                 return False
             if build and self.run("rev-parse", "HEAD").stdout != before:
@@ -428,6 +439,41 @@ class GitSync:
             if self._error and self._error["op"] != "commit":
                 self._error = None
 
+    def recover(self) -> None:
+        """Undo a rebase, merge or revert left in progress by a crash or a restart
+        mid-pull: until then HEAD may be detached, notes may show conflict markers and
+        nothing reaches the remote. Boot runs it before any other git work."""
+        with self._lock:
+            for op in self._in_progress():
+                print(f"[git] a {op} was left in progress: undoing it", file=sys.stderr, flush=True)
+                self._abort(op)
+
+    def _in_progress(self) -> list:
+        """The git operations a repo is in the middle of (rebase, merge, revert…)."""
+        git_dir = Path(self.run("rev-parse", "--absolute-git-dir").stdout.strip() or ".git")
+        return [op for marker, op in (("rebase-merge", "rebase"), ("rebase-apply", "rebase"),
+                                      ("MERGE_HEAD", "merge"), ("REVERT_HEAD", "revert"),
+                                      ("CHERRY_PICK_HEAD", "cherry-pick"))
+                if (git_dir / marker).exists()]
+
+    def _abort(self, op) -> None:
+        """`git <op> --abort`, retried: a git read elsewhere may hold index.lock an instant, and
+        an abort that fails leaves the mind on a detached HEAD, its changes no longer sent."""
+        for _ in range(10):
+            if self.run(op, "--abort").returncode == 0 or op not in self._in_progress():
+                return
+            time.sleep(0.2)
+
+    def catch_up(self) -> None:
+        """At boot, on a repo kept from the last run: pull what the remote has before
+        the first build, the same careful way as the pull loop. Best-effort: an offline
+        remote must not keep the server down."""
+        try:
+            if self._has_upstream():
+                self._pull(build=False)
+        except Exception as e:
+            print(f"[boot] git pull skipped: {e}", file=sys.stderr, flush=True)
+
     def _commit_stray(self) -> None:
         """Record tracked changes not yet committed (lock held)."""
         self.run("add", "-u")
@@ -485,13 +531,14 @@ class GitSync:
 
         def _sync():
             try:
+                with self._lock:  # committed before the pull, which then has nothing to stash
+                    self.run("add", "-A")
+                    self._note("commit", self.run("commit", "-m", "docs: update via viewer", "--quiet"))
                 upstream = self._has_upstream()
                 if upstream:
                     self._pull(build=False)
                 with self._lock:
                     self.build()
-                    self.run("add", "-A")
-                    self._note("commit", self.run("commit", "-m", "docs: update via viewer", "--quiet"))
                 if upstream:
                     self._push()
             except Exception as e:

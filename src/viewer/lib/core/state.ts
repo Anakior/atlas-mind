@@ -19,9 +19,22 @@ export function setTocHasNotes(v: boolean): void {
 }
 
 export let currentFile: FileNode | null = null;
+// Bumped by each navigation: an async render started for an earlier page compares it and drops its
+// result. A live reload that hands in the fresher tree node of the SAME doc keeps it
+// (refreshCurrentFile), so that doc's own loads still land.
+let view = 0;
 
 export function setCurrentFile(v: FileNode | null): void {
   currentFile = v;
+  view++;
+}
+
+export function refreshCurrentFile(v: FileNode): void {
+  currentFile = v;
+}
+
+export function currentView(): number {
+  return view;
 }
 
 export let editMode = false;

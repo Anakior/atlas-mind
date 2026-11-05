@@ -16,9 +16,8 @@ import { t } from '../core/i18n';
 import { raw, h, createApp } from '../runtime/atlas-dom';
 import { folderTagsOf } from '../content/tags';
 import { AtlasCombobox } from '../ui/combobox';
+import { toast } from '../ui/toast';
 import { getAllDirs } from '../modals/new-file-modal';
-
-export const esc = escapeHtml;
 
 export class Inbox {
   // ---- icons (Heroicons v2 outline, the viewer's set) ----
@@ -40,6 +39,7 @@ export class Inbox {
 
   // ---- state ----
   private inbox: InboxItemEdited[] | null = null; // the queue | []
+  private loadFailed = false; // the last load never got the list: say so, never "inbox zero"
   private activePath: string | null = null; // the focused item's path; null falls back to the first in queue
   private filter: Set<string> | null = null; // enabled source keys (null = all on)
   private typeFilter: Set<string> | null = null; // enabled type keys (null = all on)
@@ -220,12 +220,12 @@ export class Inbox {
     const out: VNode[] = [];
 
     for (const tg of fset) {
-      out.push(h('span', { key: 'f:' + tg, class: 'doc-tag doc-tag-folder', title: esc(t('folderTagTitle')) }, '#' + tg));
+      out.push(h('span', { key: 'f:' + tg, class: 'doc-tag doc-tag-folder', title: t('folderTagTitle') }, '#' + tg));
     }
     for (const tg of custom) {
       out.push(
         h('span', { key: 'c:' + tg, class: 'doc-tag' }, '#' + tg,
-          h('button', { class: 'doc-tag-x ibx-rmtag', title: esc(t('removeTag')), onClick: () => this.removeTag(it, tg) }, '×')),
+          h('button', { type: 'button', class: 'doc-tag-x ibx-rmtag', title: t('removeTagNamed', tg), onClick: () => this.removeTag(it, tg) }, '×')),
       );
     }
     out.push(
@@ -245,7 +245,7 @@ export class Inbox {
             },
             onBlur: () => setTimeout(() => { if (this.editingTag) this.commitTag(it); }, 150),
           })
-        : h('button', { key: 'addtag', type: 'button', class: 'doc-tag-add ibx-addtag', title: esc(t('addTag')), onClick: () => { this.editingTag = true; this.draw(); } }, '+'),
+        : h('button', { key: 'addtag', type: 'button', class: 'doc-tag-add ibx-addtag', title: t('addTag'), onClick: () => { this.editingTag = true; this.draw(); } }, '+'),
     );
 
     return out;
@@ -419,7 +419,14 @@ export class Inbox {
     this.subTypes = types;
   }
 
+  private failedView(): VNode {
+    return h('div', { key: 'failed', class: 'load-failed', role: 'alert' },
+      h('span', null, t('loadFailed')),
+      h('button', { type: 'button', class: 'load-retry', onClick: () => void this.load(true) }, t('retry')));
+  }
+
   private view(): Child {
+    if (this.loadFailed) return this.failedView();
     if (this.inbox === null) return this.skelView();
     if (!this.editing()) this.refreshSub();
 
@@ -462,11 +469,25 @@ export class Inbox {
 
     let inbox: InboxItemEdited[] = [];
 
+    if (this.loadFailed) {
+      this.loadFailed = false; // a retry: the skeleton while it loads
+      this.draw();
+    }
     try {
       const r = await fetch('/api/inbox?limit=200');
 
+      // 403: an account with no inbox of its own, which is empty indeed. Anything else is a failure.
       if (r.ok) inbox = (await r.json()).inbox || [];
-    } catch (_) {}
+      else if (r.status !== 403) this.loadFailed = true;
+    } catch (_) {
+      this.loadFailed = true;
+    }
+    if (this.loadFailed) {
+      this.inbox = null;
+      this.draw();
+
+      return;
+    }
     inbox.forEach((it) => this.applyOverride(it));
     this.inbox = inbox;
     this.updateBadge();
@@ -584,8 +605,10 @@ export class Inbox {
 
   // Undo an optimistic Keep/Trash/Snooze when /action fails. Idempotent: re-inserts the item at its
   // old slot only if it was already dropped (a slow failure), otherwise just cancels the pending
-  // swipe-out removal (a fast failure, before the drop) — never duplicating the row. Silent, as before.
+  // swipe-out removal (a fast failure, before the drop) — never duplicating the row. And says so: the
+  // card coming back alone reads as nothing having happened.
   private restoreItem(it: InboxItemEdited, homeIdx: number, kind: 'keep' | 'trash' | 'snooze'): void {
+    toast(t('inboxActionFailed'));
     if (this.inbox && !this.inbox.some((x) => x.path === it.path)) {
       const arr = this.inbox.slice();
 

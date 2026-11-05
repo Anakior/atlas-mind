@@ -272,7 +272,21 @@ class AtlasServer:
             self.stop()
             raise
 
+    def restart(self) -> None:
+        """Stop the server and start it again on the same mind, as a deploy does."""
+        self._stop_process()
+        self._launch_with_retries()
+
     def stop(self) -> None:
+        self._stop_process()
+        if self.root is not None and not os.environ.get("ATLAS_TEST_KEEP"):
+            # Robust retry: a git/build started by trigger_sync may still hold handles
+            # right after the kill, and read-only git files break a plain rmtree on
+            # Windows — both used to leak the tmp dir.
+            _rmtree_best_effort(self.root)
+            self.root = None
+
+    def _stop_process(self) -> None:
         if self.proc is not None:
             if self.proc.poll() is None:
                 self.proc.terminate()
@@ -285,12 +299,6 @@ class AtlasServer:
         if self._log_file is not None:
             self._log_file.close()
             self._log_file = None
-        if self.root is not None and not os.environ.get("ATLAS_TEST_KEEP"):
-            # Robust retry: a git/build started by trigger_sync may still hold handles
-            # right after the kill, and read-only git files break a plain rmtree on
-            # Windows — both used to leak the tmp dir.
-            _rmtree_best_effort(self.root)
-            self.root = None
 
     # ── internal setup ───────────────────────────────────────────────────────
 

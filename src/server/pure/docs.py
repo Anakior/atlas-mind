@@ -17,12 +17,19 @@ from pathlib import PurePosixPath
 import server as _s
 
 
+def hidden_segment(rel: str) -> bool:
+    """Whether `rel` goes up ('..') or through a hidden folder (.trash, .notes…: the
+    engine's own), which a doc path never does. A '.' segment is only a spelling."""
+    return any(part.startswith(".") and part != "." for part in rel.split("/"))
+
+
 def validate_doc_path(rel: str, content_root):
     """Returns the resolved Path inside content_root, or None if invalid.
 
-    Rejects '..', absolute paths, paths outside content_root, and any extension
+    Rejects '..', absolute paths, paths outside content_root, a hidden segment (.trash,
+    .notes…: the engine's own, which a doc path must never reach), and any extension
     other than .md or .html (both are first-class documents)."""
-    if not rel or rel.startswith("/") or ".." in rel.split("/"):
+    if not rel or rel.startswith("/") or hidden_segment(rel):
         return None
     # No HTML-injection or control characters in a document path: the viewer inlines doc
     # names/paths into markup, so a name like `<img src=x onerror=...>.md` would be a
@@ -38,6 +45,16 @@ def validate_doc_path(rel: str, content_root):
         return target
     except (ValueError, OSError):
         return None
+
+
+def renamed(path: str, old: str, new: str):
+    """`path` once `old` (a doc, or a folder and everything in it) is renamed `new`, or None
+    when the rename leaves it where it is."""
+    if path == old:
+        return new
+    if path.startswith(old + "/"):
+        return new + path[len(old):]
+    return None
 
 
 def content_file(rel: str, content_root):
@@ -140,6 +157,9 @@ def _linking(index, moved, files):
             if rel not in graph:
                 return None
             wanted.update(graph[rel].get("in", []))
+        elif rel not in graph:  # a path the index has not seen (a folder renamed since): keeps its old mtime
+            wanted.add(rel)
+            continue
         try:
             if path.stat().st_mtime >= since:
                 wanted.add(rel)
@@ -148,16 +168,18 @@ def _linking(index, moved, files):
     return wanted
 
 
-def _relink(md_files, by_path, by_stem, build, moves: dict, skip=frozenset()) -> list:
+def _relink(md_files, by_path, by_stem, build, moves: dict, skip=frozenset(),
+            may_relink=None) -> list:
     """The new body of each doc whose [[links]] reach a moved doc: [(path, body, count)].
     `moves` maps a doc's old path (lowercase) to its new one. A link by path takes the new
-    path; a link by name only changes when the name does."""
-    def replacer(counter):
+    path; a link by name only changes when the name does. `may_relink(linking, old, new)`,
+    when given, says whether that doc may show the moved doc's new name."""
+    def replacer(counter, linking):
         def _replace(m):
             whole, inner = m.group(0), m.group(1)
             resolved = build._resolve_wikilink(inner, by_path, by_stem)
             new = moves.get(resolved.lower()) if resolved else None
-            if not new:
+            if not new or (may_relink and not may_relink(linking, resolved, new)):
                 return whole
             target_part, sep, alias = inner.partition("|")
             t = target_part.strip()
@@ -179,13 +201,13 @@ def _relink(md_files, by_path, by_stem, build, moves: dict, skip=frozenset()) ->
         if f["path"] in skip:
             continue
         counter = [0]
-        body = build._WIKILINK_RE.sub(replacer(counter), f["body"])
+        body = build._WIKILINK_RE.sub(replacer(counter, f["path"]), f["body"])
         if counter[0]:
             pending.append((f["path"], body, counter[0]))
     return pending
 
 
-def move_dir_with_relink(src, dst, content_root, build, index=None) -> list:
+def move_dir_with_relink(src, dst, content_root, build, index=None, may_relink=None) -> list:
     """Rename the folder `src` to `dst` (absolute, both checked by the caller) and rewrite
     every [[link]] that reaches a doc inside it by its path; a link by name still resolves.
     Links are read before the rename, and each rewritten body is written where its doc
@@ -200,7 +222,7 @@ def move_dir_with_relink(src, dst, content_root, build, index=None) -> list:
     md_files, by_path, by_stem = _link_index(content_root, build, index, moved)
 
     moves = {low: new + rel[len(old):] for low, rel in by_path.items() if moved(rel)}
-    pending = _relink(md_files, by_path, by_stem, build, moves)
+    pending = _relink(md_files, by_path, by_stem, build, moves, may_relink=may_relink)
     dst.parent.mkdir(parents=True, exist_ok=True)
     src.rename(dst)
     rewrites = []
@@ -215,7 +237,7 @@ def move_dir_with_relink(src, dst, content_root, build, index=None) -> list:
 
 
 def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run=False,
-                        index=None):
+                        index=None, may_relink=None):
     """Move/rename a .md AND rewrite the incoming [[wikilinks]] that target it.
 
     The disk rename is the priority operation; relinking is best-effort on top.
@@ -239,7 +261,8 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run
     # Index wikilinks BEFORE the move (the source still resolves to its old path); the
     # moved doc's own outgoing links don't change.
     pending = _relink(*_link_index(content_root, build, index, lambda rel: rel == src_canon),
-                      build, {src_canon.lower(): dst_canon}, skip={src_canon})
+                      build, {src_canon.lower(): dst_canon}, skip={src_canon},
+                      may_relink=may_relink)
     if dry_run:
         rewrites = [{"path": rel, "count": count} for rel, _, count in pending]
         return ("ok", {"from": src_canon, "to": dst_canon, "rewrites": rewrites,

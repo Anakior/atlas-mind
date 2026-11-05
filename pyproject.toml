@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools>=64.0"]
+# 77: the SPDX `license` string (PEP 639).
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +9,8 @@ dynamic = ["version"]
 description = "Self-hostable, git-native knowledge base & AI memory (MCP) — your notes stay plain files in your own git repo. No database."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "AGPL-3.0-or-later" }
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "The Atlas Mind authors" }]
 keywords = [
     "knowledge-base", "wiki", "markdown", "self-hosted", "mcp", "mcp-server",
@@ -18,11 +20,11 @@ keywords = [
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Environment :: Web Environment",
     "Intended Audience :: End Users/Desktop",
