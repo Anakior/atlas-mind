@@ -34,6 +34,10 @@ def _local_host_allowed(host: str) -> bool:
         return False
 
 
+def _loopback(host: str) -> bool:
+    return host.rsplit(":", 1)[0] in ("localhost", "127.0.0.1", "[::1]")
+
+
 # The body types a cross-site <form> can send without a CORS preflight: refused for uploads.
 _FORM_TYPES = ("", "application/x-www-form-urlencoded", "multipart/form-data", "text/plain")
 
@@ -87,6 +91,16 @@ class Handler(SimpleHTTPRequestHandler):
         another site must not reach it through a name resolving to 127.0.0.1."""
         if not super().parse_request():
             return False
+        if self._came_in_clear():
+            # Online, Atlas is https only (Secure cookies, HSTS): over http a sign-in loops on
+            # the login page. A link in the host's admin (alwaysdata) opens the http address.
+            self.send_response(308)
+            public = _s.CONFIG.public_url or ""
+            origin = public if public.startswith("https://") else "https://" + self.headers["Host"]
+            super().send_header("Location", origin + self.path)
+            super().send_header("Content-Length", "0")
+            self.end_headers()
+            return False
         base = _s.CONFIG.base_path
         if base and self.path.split("?", 1)[0] == base:
             # The page's relative links need it to end with a slash.
@@ -101,6 +115,13 @@ class Handler(SimpleHTTPRequestHandler):
                             "Local mode answers to localhost or an IP address only.")
             return False
         return True
+
+    def _came_in_clear(self) -> bool:
+        """Whether the proxy in front says this request reached it over plain http."""
+        host = self.headers.get("Host", "")
+        if not _s.CONFIG.auth_enabled or _s.CONFIG.dev_mode or not host or _loopback(host):
+            return False
+        return self.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower() == "http"
 
     def send_header(self, keyword, value):
         """A local redirect, and a cookie's scope, carry the base path (the routes write
@@ -376,8 +397,7 @@ class Handler(SimpleHTTPRequestHandler):
         host = self.headers.get("Host", "")
         if not host:
             return suffix
-        loopback = host.rsplit(":", 1)[0] in ("localhost", "127.0.0.1", "[::1]")
-        scheme = ("https" if _s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode and not loopback
+        scheme = ("https" if _s.CONFIG.auth_enabled and not _s.CONFIG.dev_mode and not _loopback(host)
                   else "http")
         return f"{scheme}://{host}{suffix}"
 

@@ -8,6 +8,18 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-11-09
+
+A fix for signing in through an http address. An Atlas on 2.2.0 or later gets this one from
+Settings › About.
+
+### Fixed
+- **Signing in through an http address no longer loops on the login page.** Online, Atlas's
+  cookies are https only, and a host's link (alwaysdata's admin) can open the http address:
+  a request the proxy says came in over http (`X-Forwarded-Proto`) is now sent to https, to
+  `server.public_url` when it is set. The alwaysdata install script also turns on the host's
+  own Force HTTPS (`ssl_force`).
+
 ## [2.5.1] - 2026-11-05
 
 A hardening release, after a full audit of 2.5.0: access rights on every path to a document, git

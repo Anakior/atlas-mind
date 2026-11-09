@@ -4,6 +4,7 @@
 #     type: user_program
 #     working_directory: '{INSTALL_PATH_RELATIVE}'
 #     command: './start.sh'
+#     ssl_force: true
 # requirements:
 #     disk: 60
 # form:
