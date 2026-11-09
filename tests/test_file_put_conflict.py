@@ -64,6 +64,12 @@ class TestFilePutConflict(unittest.TestCase):
                           "base_content": "# Shared\r\n\r\nwindows\r\n"})
         self.assertEqual(resp.status, 200)
 
+    def test_save_writes_lf(self):
+        # A text-mode write turns \n into os.linesep: on Windows every line came back CRLF.
+        self._seed("# Shared\n\nv1\n")
+        self._put({"path": DOC, "content": "# Shared\n\nv2\n", "base_content": "# Shared\n\nv1\n"})
+        self.assertEqual((self.srv.content_root / DOC).read_bytes(), b"# Shared\n\nv2\n")
+
     def test_without_base_nothing_changes(self):
         self._seed("# Shared\n\nanything\n")
         resp = self._put({"path": DOC, "content": "# Shared\n\noverwritten\n"})

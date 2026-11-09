@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 import server as _s
 import store
-from server.pure import docs, export
+from server.pure import docs, export, quotes
 from server.pure.docs import move_file
 from server.pure.queries import _touched_visible
 from server.pure.uploads import clean_path
@@ -71,7 +71,7 @@ def file_put(handler):
             handler._send_json(409, {"error": "changed since it was opened", "current": current})
             return
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8")
+    target.write_text(content, encoding="utf-8", newline="\n")
     if not existed and ctx.primary:  # new doc → stamp creator + default visibility
         try:
             # Clean ACL slate first, so a path recycled after a delete can't inherit a
@@ -313,6 +313,28 @@ def stale(handler):
     handler._send_json(200, {"months": months, "stale": items})
 
 
+def quote_marks(handler):
+    """GET /api/quotes?path= — the huissier on a note: each quotation and where the files the
+    reader may see have it (found / altered / missing). `cites_files` when one comes from a file
+    that is not a note (a PDF, slides…): only then are the missing ones worth marking."""
+    rel = (handler._query().get("path", [""])[0] or "").strip()
+    if not rel.endswith(".md") or _s._validate_doc_path(rel) is None:
+        handler._send_json(400, {"error": "invalid path"})
+        return
+    ctx = handler._viewer_ctx()  # an unreadable doc is "not found" (no existence oracle)
+    if not ctx.superuser and not _s.can_read(rel, ctx):
+        handler._send_json(404, {"error": "not found"})
+        return
+    try:
+        text = (_s.CONFIG.content_root / rel).read_text(encoding="utf-8-sig")
+    except OSError:
+        handler._send_json(404, {"error": "not found"})
+        return
+    checked = quotes.check(rel, text, None if ctx.superuser else ctx)
+    cites = any(r["state"] != "missing" and not r["source"]["path"].endswith(".md") for r in checked)
+    handler._send_json(200, {"quotes": checked, "cites_files": cites})
+
+
 def inbox_list(handler):
     """GET /api/inbox?limit=: pending inbox items (the agents' on-ramp), highest
     confidence first. AUTH and private: only the owner (primary/superuser) sees the inbox,
@@ -456,7 +478,7 @@ def revert(handler):
         handler._send_json(404, {"error": "revision not found"})
         return
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(show.stdout, encoding="utf-8")
+    target.write_text(show.stdout, encoding="utf-8", newline="\n")
     short = _s.git("rev-parse", "--short", rev).stdout.strip() or rev[:8]
     _s.commit_change(ctx, f"reverted: {target.stem} @ {short}", target)
     handler._send_json(200, {"ok": True})

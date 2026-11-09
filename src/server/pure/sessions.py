@@ -38,6 +38,13 @@ def _is_save(rel: str, text: str) -> bool:
             and _RESUME_RE.search(text) is not None)
 
 
+def _may_be_save(rel: str, path) -> bool:
+    """Whether a doc may be a save, from the search cache, which holds every doc folded: only a
+    likely one is worth reading in full."""
+    entry = _s._doc_entry(rel, path) if rel.endswith(".md") else None
+    return bool(entry) and ("comment reprendre" in entry["content_n"] or "how to resume" in entry["content_n"])
+
+
 def _clean(text: str, limit: int = 240) -> str:
     """Markdown as one plain line: [[a|b]] → b, [[a]] → a, no emphasis or code marks."""
     text = re.sub(r"\[\[([^\]|\n]+)\|([^\]\n]+)\]\]", r"\2", text)
@@ -202,9 +209,7 @@ def _find_saves(ctx) -> tuple:
     docs = _readable(ctx)
     saves = {}
     for rel, path in docs:
-        # The search cache already holds every doc folded: only a likely save is read in full.
-        entry = _s._doc_entry(rel, path) if rel.endswith(".md") else None
-        if entry and ("comment reprendre" in entry["content_n"] or "how to resume" in entry["content_n"]):
+        if _may_be_save(rel, path):
             text = path.read_text(encoding="utf-8")
             if _is_save(rel, text):
                 saves[rel] = text

@@ -421,8 +421,9 @@ export class Editor {
     }
   }
 
-  // The doc changed since the session opened it (an AI edit, another tab): never overwrite it.
-  // Keep both — this version goes next to it as a new doc — or go back to editing.
+  // The doc changed since the session opened it (an AI edit, another tab): never overwrite it
+  // unasked. Keep both — this version goes next to it as a new doc — or keep editing, and the
+  // next save replaces the version that came in, as the dialog says.
   private async keepBoth(file: FileNode, mine: string, current: string): Promise<void> {
     const copy = Editor.copyPath(file.path);
     const copyName = copy.slice(copy.lastIndexOf('/') + 1);
@@ -433,7 +434,11 @@ export class Editor {
       cancelLabel: t('conflictKeepEditing'),
     });
 
-    if (!keep) return;
+    if (!keep) {
+      this.editBase = current; // else every later save hits the same 409
+
+      return;
+    }
     await putDoc({ path: copy, content: mine }); // a new doc: nothing to conflict with
     Editor.writeDraft(file.path, null);
     rememberContent(file, current);

@@ -712,10 +712,19 @@ def schedule_warm(delay: float = _WARM_DELAY_S) -> None:
         _warm_timer.start()
 
 
+def _living(corpus) -> list:
+    """The corpus without its records (kinds): June's report and today's plan don't contradict
+    each other, they tell two moments."""
+    from server.pure import attestations, kinds  # lazy: kinds → sessions → queries
+    confirmed = attestations.load()
+    return [(rel, name, text) for rel, name, text in corpus
+            if kinds.as_of(rel, text, confirmed=confirmed) is None]
+
+
 def _warm():
     from server.pure import queries  # lazy: avoids an import cycle at module load
     queries.warm_search()
-    _candidates(sorted(queries._doc_corpus(None)))
+    _candidates(_living(sorted(queries._doc_corpus(None))))
 
 
 def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = False,
@@ -730,7 +739,7 @@ def find_contradictions(ctx=None, limit: int = 50, include_dismissed: bool = Fal
     to render, so they stay the AI's on-demand substrate (via the MCP `contradictions` tool),
     not a permanent human feed."""
     from server.pure import queries  # lazy: avoids an import cycle at module load
-    corpus = sorted(queries._doc_corpus(ctx))  # RAW; sorted so output is identical across machines
+    corpus = _living(sorted(queries._doc_corpus(ctx)))  # RAW; sorted so output is identical across machines
     cands = _apply_verdicts(_candidates(corpus), corpus, include_dismissed)
     if solid_only:
         cands = [c for c in cands if c["confidence"] == "high" or c.get("verdict") == "real"]

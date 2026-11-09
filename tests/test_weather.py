@@ -1,6 +1,7 @@
 """Tests of mind_weather: the mind region by region (activity, fog, storms, the AI's share), the
 periodic docs gone missing and the docs flagged outdated. The mind's first commit is dated 2025, so
-everything starts in the fog; its monthly reports are named relative to today, so one is late.
+everything but its monthly reports (records, never out of date) starts in the fog; they are named
+relative to today, so one is late.
 """
 import datetime as dt
 import sys
@@ -64,10 +65,11 @@ class TestWeather(unittest.TestCase):
         data = self.call("mind_weather")
         self.assertEqual((data["weeks"], data["months"]), (4, 3))
         self.assertEqual(data["totals"]["docs"], 7)
-        self.assertEqual(data["totals"]["fog"], 7)  # nothing looked at since 2025
+        self.assertEqual(data["totals"]["fog"], 4)  # nothing looked at since 2025
         regions = self.regions(data)
         self.assertEqual({p: regions[p]["docs"] for p in ("specs", "specs/api", "rapports", "")},
                          {"specs": 3, "specs/api": 1, "rapports": 3, "": 1})
+        self.assertEqual(regions["rapports"]["fog"], 0)  # monthly reports: records, never out of date
         specs = next(r for r in data["regions"] if r["path"] == "specs")
         self.assertEqual([c["path"] for c in specs["children"]], ["specs/api"])
 
@@ -79,7 +81,7 @@ class TestWeather(unittest.TestCase):
         self.assertEqual((specs["commits"], specs["changed"], specs["ai_share"]), (1, 1, 1.0))
         self.assertEqual((specs["fog"], specs["outdated"]), (1, 1))  # api/auth only: edited, flagged
         self.assertEqual([d["path"] for d in data["outdated"]], ["specs/tarifs.md"])
-        self.assertEqual(data["totals"]["fog"], 5)
+        self.assertEqual(data["totals"]["fog"], 2)
 
     def test_a_late_report(self):
         late = self.call("mind_weather")["missed"]

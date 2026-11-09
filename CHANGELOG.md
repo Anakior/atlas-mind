@@ -8,6 +8,45 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-09
+
+Records, the docs that tell a moment and never go out of date, and the huissier, which checks
+every quotation of a note against the files it quotes. Five MCP tool descriptions changed
+(search_docs, read_doc, edit_doc, stale, and confirm_doc's new `record` verdict): refresh the
+connector's tools in Claude. An Atlas on 2.2.0 or later gets this one from Settings › About.
+
+### Added
+- **Records: a doc that tells a moment.** A session save, a report with its period in the name
+  (`bilan-juin-2026`, `revue-q2-2026`) and anything in an `archive/` folder are records, sorted
+  without asking. A record never goes out of date: it leaves the stale audit and the weather's fog,
+  and the contradiction scan no longer sets June's report against today's plan. An AI reading one
+  is told the date it speaks for (`as_of` in search_docs and brief, "a record as of …, not the
+  current state" in read_doc) instead of taking it for the current state. confirm_doc gets a third
+  verdict, `record`, for the ones no signal catches (minutes, recaps, reviews), and the weather's
+  review deck a button for it (keys now 1 still true, 2 snapshot, 3 needs an update, 4 trash);
+  `holds` or `outdated` makes a doc living again.
+- **The huissier: every quotation checked against the files it quotes.** A passage between « »,
+  “ ” or quotes, four words or more, is compared word for word with the other files of the mind,
+  the text inside PDFs, slides and office files included: found (the file, its page or section,
+  its line), altered (a file says nearly the same with words dropped or added, and here is what
+  it really says; two texts that only swap a few words are two messages of one template, not a
+  quotation) or nowhere. A link on the quoting line names the source to look in first.
+  In the viewer, a dot after each quotation (green, orange; a grey ring for one found nowhere,
+  only in a note that quotes files); a click tells where and opens the file on the passage. An
+  AI gets the same: read_doc tells it, and create_doc and edit_doc tell it about the quotations
+  it just wrote. Only the files the reader may open count: a private source stays unknown.
+
+### Fixed
+- **On alwaysdata, an http address goes to https too, without Force HTTPS.** Its proxy marks
+  https requests only (`X-Forwarded-Proto: https`) and leaves http ones bare: through it
+  (`Via: alproxy`), a request without the mark came in over http and is sent to https.
+- **"Keep editing" after a save conflict no longer loops.** Every later save hit the same conflict;
+  now the next save replaces the version that came in, as the dialog says.
+- **A Windows instance writes LF.** Every save of a doc (viewer, MCP, API, revert, move), of
+  `.attestations.json`, the notes, the todo file and `atlas.toml`, and the files `atlas init` and
+  `atlas deploy` write, went through text mode: on Windows, each one came back with every line in
+  CRLF.
+
 ## [2.5.2] - 2026-11-09
 
 A fix for signing in through an http address. An Atlas on 2.2.0 or later gets this one from
@@ -16,9 +55,10 @@ Settings › About.
 ### Fixed
 - **Signing in through an http address no longer loops on the login page.** Online, Atlas's
   cookies are https only, and a host's link (alwaysdata's admin) can open the http address:
-  a request the proxy says came in over http (`X-Forwarded-Proto`) is now sent to https, to
-  `server.public_url` when it is set. The alwaysdata install script also turns on the host's
-  own Force HTTPS (`ssl_force`).
+  a request the proxy says came in over http (`X-Forwarded-Proto: http`, as nginx or Caddy
+  send it) is now sent to https, to `server.public_url` when it is set. alwaysdata's proxy does
+  not say it: there, the host's own Force HTTPS does the job. The install script now turns it
+  on (`ssl_force`); on an existing install, tick it in Web › Sites › SSL.
 
 ## [2.5.1] - 2026-11-05
 

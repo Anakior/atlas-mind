@@ -24,9 +24,10 @@ class TestWeatherView(ViewTestCase):
     def test_the_fog_is_cleared(self):
         report = self.host({}, theme="dark")
         self.assertEqual(report["title"], "The Atlas weather")
-        # The folders ranked by their fog, each with its number: all of the mind is in it.
+        # The folders ranked by their fog, each with its number; the monthly reports are records,
+        # so their folder is clear.
         self.assertEqual(report["regions"][-1], "root")
-        self.assertEqual(set(report["regions"]), {"specs", "rapports", "root"})
+        self.assertEqual(set(report["regions"]), {"specs", "root"})
         self.assertEqual(report["values"][-1], "1 of 1")
         self.assertTrue(report["missed"])  # the late monthly report
         calls = [m["params"] for m in self.sent(report, "tools/call")]

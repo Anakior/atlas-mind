@@ -36,9 +36,16 @@ class TestHttpsRedirect(unittest.TestCase):
         post = self.srv.post("/login", data=b"", headers={"Host": HOST, "X-Forwarded-Proto": "http"})
         self.assertEqual(post.status, 308)  # the method and its body go along
 
+    def test_alwaysdata_marks_https_only(self):
+        # What its proxy sent a probe site on 2026-11-09: over http, no X-Forwarded-Proto at all.
+        resp = self.get("/login", Via="1.1 alproxy")
+        self.assertEqual((resp.status, resp.headers["Location"]), (308, f"https://{HOST}/login"))
+        self.assertEqual(self.get("/login", Via="1.1 alproxy", **{"X-Forwarded-Proto": "https"}).status, 200)
+
     def test_left_alone(self):
         self.assertEqual(self.get("/login", **{"X-Forwarded-Proto": "https"}).status, 200)
         self.assertEqual(self.get("/login").status, 200)  # no proxy said anything
+        self.assertEqual(self.get("/login", Via="1.1 nginx").status, 200)  # proves nothing
         loopback = self.srv.get("/login", headers={"X-Forwarded-Proto": "http"})
         self.assertEqual(loopback.status, 200)
 

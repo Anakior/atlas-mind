@@ -587,7 +587,7 @@ def _scaffold_file(path: Path, content: str, created: list, kept: list) -> None:
         kept.append(path)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8", newline="\n")
     created.append(path)
 
 
@@ -1119,7 +1119,7 @@ def _seed_activity(server, docs) -> int:
         if target.exists():
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(f"# {doc['title']}\n\n{doc['body']}\n", encoding="utf-8")
+        target.write_text(f"# {doc['title']}\n\n{doc['body']}\n", encoding="utf-8", newline="\n")
         when = time.strftime("%Y-%m-%d %H:%M:%S",
                              time.localtime(time.time() - doc.get("days_ago", 0) * 86400))
         # GitSync.run inherits os.environ, so these set the commit's author/committer date.
@@ -1583,7 +1583,7 @@ def cmd_deploy(args) -> int:
             kept.append(path)
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="\n")
         written.append(path)
 
     print(f"Deployment files for target '{args.target}':")

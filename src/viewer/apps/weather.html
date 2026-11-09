@@ -79,13 +79,13 @@ __KIT_CSS__
   .preview pre { font: 12px var(--mono); white-space: pre-wrap; }
   .preview .link { margin-top: 4px; }
   .ask { margin: 20px 0 8px; font-size: 13px; font-weight: 600; }
-  .verdicts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .verdicts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .verdicts button { position: relative; display: grid; align-content: start; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: none; text-align: left; transition: border-color .12s, background .12s; }
   .verdicts b { display: flex; align-items: center; gap: 7px; font-size: 13.5px; }
   .verdicts b svg { color: var(--tone); }
   .verdicts small { color: var(--text-3); font-size: 12px; line-height: 1.35; }
   .verdicts button:hover { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 8%, transparent); }
-  .verdicts .holds { --tone: var(--added); } .verdicts .outdated { --tone: var(--warn); } .verdicts .gone { --tone: var(--removed); }
+  .verdicts .holds { --tone: var(--added); } .verdicts .record { --tone: var(--accent); } .verdicts .outdated { --tone: var(--warn); } .verdicts .gone { --tone: var(--removed); }
   .verdicts kbd { position: absolute; top: 9px; right: 10px; }
   kbd { padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-3); font: 10.5px/16px var(--mono); }
   @media (hover: none) { kbd { display: none; } }
@@ -335,7 +335,7 @@ __KIT_CSS__
   // ── the review deck ───────────────────────────────────────────────────────
 
   function tally() {
-    var n = { holds: 0, outdated: 0, gone: 0 };
+    var n = { holds: 0, record: 0, outdated: 0, gone: 0 };
     state.decisions.forEach(function (d) { n[d.verdict]++; });
     return t('tally', n);
   }
@@ -425,7 +425,7 @@ __KIT_CSS__
     var card = add(el('div', 'card'), el('p', 'note', t('loading_doc')));
     var where = add(el('span', 'where'), el('b', null, review.prefix || t('root')), ' · ', t('progress', { i: review.at + 1, n: n }));
     app.replaceChildren(add(el('div', 'deck-top'), back, where), add(el('div', 'progress'), bar), card);
-    var choices = [['holds', 'check', '1'], ['outdated', 'clock', '2'], ['gone', 'trash', '3']];
+    var choices = [['holds', 'check', '1'], ['record', 'archive', '2'], ['outdated', 'clock', '3'], ['gone', 'trash', '4']];
     function decide(verdict) {
       document.onkeydown = null;
       var next = function () { review.at++; showCard(review); };
@@ -465,7 +465,7 @@ __KIT_CSS__
         box, el('p', 'ask', t('ask')), verdicts, add(el('div', 'later'), later));
       if (text.scrollHeight <= text.clientHeight + 2) more.click();  // short enough to read whole
       document.onkeydown = function (e) {
-        var key = { '1': 'holds', '2': 'outdated', '3': 'gone', ArrowRight: 'skip', ' ': 'skip' }[e.key];
+        var key = { '1': 'holds', '2': 'record', '3': 'outdated', '4': 'gone', ArrowRight: 'skip', ' ': 'skip' }[e.key];
         if (key) { e.preventDefault(); decide(key); }
       };
     }, function (e) {

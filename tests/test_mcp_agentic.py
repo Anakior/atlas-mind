@@ -155,6 +155,11 @@ class TestAgenticWrites(unittest.TestCase):
         reported = text.split("now version ", 1)[1].split(")", 1)[0]
         self.assertEqual(reported, _version(self.srv, self.token, "projets/alpha.md"))
 
+    def test_edit_writes_lf(self):
+        err, text = self._edit(old_string="49 euros", new_string="45 euros")
+        self.assertFalse(err, text)
+        self.assertNotIn(b"\r\n", self.srv.path("projets/alpha.md").read_bytes())
+
     def test_stale_base_version_is_refused(self):
         seen = _version(self.srv, self.token, "projets/alpha.md")
         self._edit(old_string="Rien.", new_string="Une suite.")  # someone else's change

@@ -22,7 +22,8 @@ from server.pure.queries import (
     _OVERFETCH,
 )
 from server.pure import (
-    attestations, contradictions, docs, file_links, file_text, grep_lines, provenance, resources,
+    attestations, contradictions, docs, file_links, file_text, grep_lines, kinds, provenance, quotes,
+    resources,
 )
 from server.pure.acl import ViewerCtx
 from server.pure.hive import _mind_rel, _top_dir
@@ -229,12 +230,13 @@ def _contested(paths: set, ctx) -> dict:
 
 def _add_trust_signals(hits: list, ctx) -> None:
     """What an agent needs to weigh each hit: date and author of its last edit (and the AI
-    behind it, if any), staleness, the docs it was judged to contradict, and where it came
-    from when written outside the mind. Replaces mtime, which is the boot time on a cloud
-    clone."""
+    behind it, if any), staleness, or the date a record speaks for (kinds), the docs it was
+    judged to contradict, and where it came from when written outside the mind. Replaces
+    mtime, which is the boot time on a cloud clone."""
     paths = [h["path"] for h in hits]
     last, contested = _last_commits(paths), _contested(set(paths), ctx)
     stale_before = time.time() - _STALE_MONTHS * _MONTH_SECONDS
+    confirmed = attestations.load()
     for h in hits:
         ts, author, ai = last.get(h["path"], (h["mtime"], None, None))
         del h["mtime"]
@@ -243,7 +245,9 @@ def _add_trust_signals(hits: list, ctx) -> None:
             h["last_editor"] = author
         if ai:
             h["ai"] = ai
-        if ts < stale_before:
+        if as_of := kinds.doc_as_of(h["path"], _s.CONFIG.content_root / h["path"], ts, confirmed):
+            h["as_of"] = as_of
+        elif ts < stale_before:
             h["stale"] = True
         if h["path"] in contested:
             h["contested_with"] = contested[h["path"]]
@@ -258,6 +262,8 @@ def _signal_notes(hit: dict) -> list:
     if "ai" in hit:
         edited += f" (AI {hit['ai']})"
     notes = [edited]
+    if "as_of" in hit:
+        notes.append(f"a record as of {hit['as_of']}, not the current state")
     if hit.get("stale"):
         notes.append(f"untouched for {_STALE_MONTHS}+ months")
     if "contested_with" in hit:
@@ -446,10 +452,14 @@ def _tool_read_doc(args, ctx):
         body, scope = _read_cut(body, start, len(lines))
     hit = {"path": rel, "mtime": target.stat().st_mtime}
     _add_trust_signals([hit], ctx)
-    footer = " · ".join([rel, scope, *_signal_notes(hit), kind or f"version {_version(text)}"])
+    checked = quotes.check(rel, text, ctx, (start, end)) if kind is None and rel.endswith(".md") else []
+    footer = " · ".join([rel, scope, *_signal_notes(hit), *([quotes.tally(checked)] if checked else []),
+                         kind or f"version {_version(text)}"])
     # Its own block, so the version never gets copied into an edit along with the text.
-    return {"content": [{"type": "text", "text": provenance.fence(body, rel)},
-                        {"type": "text", "text": f"[{footer}]"}]}
+    content = [{"type": "text", "text": provenance.fence(body, rel)}, {"type": "text", "text": f"[{footer}]"}]
+    if said := quotes.report(checked):
+        content.append({"type": "text", "text": said})
+    return {"content": content}
 
 
 def _inbox_tree(ctx):
@@ -585,7 +595,7 @@ def _create_doc_impl(rel, content, ai, ctx, subject=None):
     if not isinstance(content, str):
         return text_result("'content' must be a string", is_error=True)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8")
+    target.write_text(content, encoding="utf-8", newline="\n")
     # On create: stamp the creator + default visibility (a human member's doc is
     # private; an admin's or an API token's stays in the commons).
     if ctx is not None and ctx.primary:
@@ -594,7 +604,19 @@ def _create_doc_impl(rel, content, ai, ctx, subject=None):
         except Exception as e:
             print(f"[create_doc owner] {e}", file=sys.stderr)
     _s.commit_change(ctx, subject or f"created: {target.stem}", target, ai=ai)
-    return text_result(f"Document created: {rel} (version {_version(target.read_text(encoding='utf-8'))})")
+    written = target.read_text(encoding="utf-8")
+    return text_result(f"Document created: {rel} (version {_version(written)})" + _huissier(rel, written, "", ctx))
+
+
+def _huissier(rel: str, text: str, before: str, ctx) -> str:
+    """What the huissier says of the quotes a write just added to a note: none on the others."""
+    if not rel.endswith(".md"):
+        return ""
+    checked = quotes.check(rel, text, ctx, skip={q["text"] for q in quotes.extract(before)})
+    if not checked:
+        return ""
+    said = quotes.report(checked, nowhere=True)
+    return f"\nNew {quotes.tally(checked)}" + (f"\n{said}" if said else "")
 
 
 def _tool_create_doc(args, ctx):
@@ -798,12 +820,13 @@ def _tool_edit_doc(args, ctx):
     if args.get("dry_run"):
         return text_result(f"Dry run, nothing written. {rel} would change like this:\n"
                            + _diff(current, new, rel))
-    target.write_text(new, encoding="utf-8")
+    target.write_text(new, encoding="utf-8", newline="\n")
     subject = _s._clean_subject(args.get("commit_message")) or f"edited: {target.stem}"
     _s.commit_change(ctx, subject, target, ai=args.get("ai"))
     # Versioned as read_doc will read it back (newlines normalized).
     now = target.read_text(encoding="utf-8")
-    return text_result(f"{done}: {rel} (now version {_version(now)})\n" + _diff(current, now, rel))
+    return text_result(f"{done}: {rel} (now version {_version(now)})\n" + _diff(current, now, rel)
+                       + _huissier(rel, now, current, ctx))
 
 
 def _move_folder(src_rel, dst_rel, ctx, args):
@@ -1165,8 +1188,9 @@ def _as_person(ctx):
 
 
 def _tool_confirm_doc(args, ctx):
-    """A reader's verdict on a doc they reviewed: it still holds, or it is outdated. Without
-    `ai`, the user's own click relayed by an app view: attributed to them."""
+    """A reader's verdict on a doc they reviewed: it still holds, it is outdated, or it is the
+    record of a moment. Without `ai`, the user's own click relayed by an app view: attributed
+    to them."""
     rel = (args.get("path") or "").strip()
     verdict = (args.get("verdict") or "").strip()
     if verdict not in attestations.VERDICTS:
@@ -1186,12 +1210,14 @@ def _tool_confirm_doc(args, ctx):
         return text_result("doc unreadable", is_error=True)
     ai = (args.get("ai") or "").strip() or None
     stored = attestations.record(rel, text, verdict, ai or "human", args.get("note") or "")
-    _s.commit_change(ctx if ai else _as_person(ctx),
-                     f"{'confirmed' if verdict == 'holds' else 'flagged outdated'}: {target.stem}",
-                     stored, ai=ai)
+    done = {"holds": "confirmed", "outdated": "flagged outdated", "record": "filed as a record"}[verdict]
+    _s.commit_change(ctx if ai else _as_person(ctx), f"{done}: {target.stem}", stored, ai=ai)
     entry = attestations.load()[rel]
     if verdict == "outdated":
         return json_result({"path": rel, "verdict": verdict})
+    if verdict == "record":
+        ts = _last_commits([rel]).get(rel, (target.stat().st_mtime,))[0]
+        return json_result({"path": rel, "verdict": verdict, "as_of": kinds.as_of(rel, text, ts)})
     due = attestations.fresh_until(entry, _STALE_MONTHS * _MONTH_SECONDS)
     return json_result({"path": rel, "verdict": verdict, "in_a_row": entry["streak"],
                         "next_review": datetime.datetime.fromtimestamp(due, datetime.timezone.utc).strftime("%Y-%m-%d")})
@@ -1296,7 +1322,7 @@ def _tool_doc_revert(args, ctx):
     if show.returncode != 0:
         return text_result(f"Revision not found: {rev}", is_error=True)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(show.stdout, encoding="utf-8")
+    target.write_text(show.stdout, encoding="utf-8", newline="\n")
     short = _s.git("rev-parse", "--short", rev).stdout.strip() or rev[:8]
     _s.commit_change(ctx, f"reverted: {target.stem} @ {short}", target, ai=args.get("ai"))
     return text_result(f"Reverted {rel} to revision {rev[:8]} "
@@ -1337,7 +1363,7 @@ def _tool_brief(args, ctx):
             omitted.append(h["path"])
             continue
         source = {k: h[k] for k in ("path", "untrusted", "section", "last_modified",
-                                    "last_editor", "ai", "stale", "contested_with") if k in h}
+                                    "last_editor", "ai", "as_of", "stale", "contested_with") if k in h}
         if "line" in h:
             # The text search located the hit in: a PDF's or an office file's too.
             text = _s._doc_text(h["path"], _s.CONFIG.content_root / h["path"])

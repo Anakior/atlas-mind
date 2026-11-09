@@ -87,7 +87,7 @@ def _write_todos_md(todos):
                     m="x" if t["done"] else " ", txt=t["text"], id=t["id"]))
         parts.append("\n")
     _s.CONFIG.todo_file.parent.mkdir(parents=True, exist_ok=True)
-    _s.CONFIG.todo_file.write_text(TODO_HEADER + "".join(parts), encoding="utf-8")
+    _s.CONFIG.todo_file.write_text(TODO_HEADER + "".join(parts), encoding="utf-8", newline="\n")
 
 
 def _load_todos_md():

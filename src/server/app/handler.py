@@ -121,7 +121,12 @@ class Handler(SimpleHTTPRequestHandler):
         host = self.headers.get("Host", "")
         if not _s.CONFIG.auth_enabled or _s.CONFIG.dev_mode or not host or _loopback(host):
             return False
-        return self.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower() == "http"
+        proto = self.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+        if proto:
+            return proto == "http"
+        # alwaysdata's proxy marks https requests only (measured, unlike its doc): through it,
+        # no mark is plain http. Another proxy without the header proves nothing.
+        return "alproxy" in self.headers.get("Via", "")
 
     def send_header(self, keyword, value):
         """A local redirect, and a cookie's scope, carry the base path (the routes write

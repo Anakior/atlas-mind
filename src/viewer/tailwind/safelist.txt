@@ -170,6 +170,7 @@ alors
 alphabetic
 already
 also
+altered
 always
 an
 anciens
@@ -407,6 +408,7 @@ cantLoadDoc
 canvas
 cappedSuffix
 capture
+capture,
 car.
 card
 card,
@@ -438,6 +440,7 @@ changements
 changent
 changer
 changes
+changes.
 changing
 chaque
 characters
@@ -446,6 +449,7 @@ chargement
 charger
 chars
 check
+check.
 checkbox
 checkbox),
 checked
@@ -462,6 +466,12 @@ ci-dessous
 ci-dessous,
 ci-dessus).
 cinq
+citeAltered
+citeFound
+citeLine
+citeMissing
+citeMissingHint
+citeSays
 class
 classer
 claude
@@ -570,6 +580,7 @@ contentCache).
 contenu
 contient
 continue
+continues
 contradiction
 contradictions
 contradictions.
@@ -789,6 +800,7 @@ edited
 edited).
 edited:
 editing
+editing,
 editor
 ee
 either
@@ -816,6 +828,7 @@ end
 ended
 ended:
 enregistre
+enregistrement
 enroll
 ensuite
 entier
@@ -1079,6 +1092,7 @@ hideDone
 hier
 high
 highlight
+highlights
 historique
 historique,
 historique.
@@ -1314,6 +1328,7 @@ items-start
 its
 itself
 itself.
+iu
 jamais
 job,
 joindre
@@ -1336,6 +1351,10 @@ justNow
 justify-between
 kb-annot
 kb-annot-active
+kb-cite
+kb-cite-
+kb-cite-dot
+kb-cite-pop
 kb-note-add
 kb-note-pop
 kb-orphan
@@ -1407,6 +1426,7 @@ ligne,
 lignes
 like
 like.
+line
 line-through
 lineHeight
 lines
@@ -1555,6 +1575,7 @@ modif
 modification
 modification,
 modifications
+modifications.
 modified
 modifiedAgo
 moi
@@ -1838,6 +1859,7 @@ pas
 pas,
 pas.
 passage
+passage:
 passe
 passe,
 passe.
@@ -1888,6 +1910,7 @@ phoneHint
 phoneLocal
 photo
 photo.png
+phrase
 pick
 pin
 pinned-list
@@ -1929,6 +1952,7 @@ previewOfflineHint
 pris
 private
 problem
+prochain
 proches.
 profile
 profileSaved
@@ -2203,8 +2227,10 @@ saved
 saves
 saving
 say
+says:
 scan
 screen
+screenshot,
 script
 scrollbar-thin
 se
@@ -2240,6 +2266,7 @@ send
 sending
 sending:
 sent
+sentence
 sera
 seras
 seront
@@ -2459,6 +2486,7 @@ son
 sont
 souci
 source
+source,
 source.
 sous
 space-y-0.5

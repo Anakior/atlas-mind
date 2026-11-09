@@ -70,6 +70,7 @@ GET_ROUTES = [
     router.Route(_RK.EXACT_NOQUERY, "/api/activity", docs.activity, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/run", docs.run, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/stale", docs.stale, _G.AUTH),
+    router.Route(_RK.EXACT_NOQUERY, "/api/quotes", docs.quote_marks, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/inbox", docs.inbox_list, _G.AUTH),
     router.Route(_RK.EXACT_NOQUERY, "/api/contradictions", docs.contradictions, _G.AUTH),
     router.Route(_RK.EXACT, "/api/account/profile", account.profile_get, _G.AUTH),

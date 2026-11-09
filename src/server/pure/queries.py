@@ -367,7 +367,9 @@ def _api_stale(months: int, limit: int, ctx=None, prefix: str = "") -> list:
     first. A look is an edit (dated by the doc's last git commit, which survives clone/pull
     unlike mtime, the fallback without git) or a confirmation that the doc still holds, each
     one in a row doubling the wait. A doc flagged outdated waits for an edit, not a review:
-    _api_outdated lists it instead. `prefix` keeps one folder. Deterministic, ACL-scrubbed per ctx."""
+    _api_outdated lists it instead. A record (kinds) is never due. `prefix` keeps one folder.
+    Deterministic, ACL-scrubbed per ctx."""
+    from server.pure import kinds  # lazy: kinds → sessions → queries
     threshold, now = months * _MONTH_SECONDS, time.time()
     dates = _s._import_build()._git_commit_dates(_s.CONFIG.root)
     confirmed = attestations.load()
@@ -392,7 +394,7 @@ def _api_stale(months: int, limit: int, ctx=None, prefix: str = "") -> list:
             continue
         if entry:
             due = max(due, attestations.fresh_until(entry, threshold))
-        if due >= now:
+        if due >= now or kinds.doc_as_of(rel, path, ts, confirmed):
             continue
         item = {"path": rel, "name": path.name, "last_modified": int(ts),
                 "months_ago": round((now - ts) / _MONTH_SECONDS, 1), **provenance.mark(rel)}

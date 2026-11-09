@@ -129,11 +129,18 @@ export const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
     conflictMessage: (name) =>
       'Ton IA ou quelqu’un d’autre l’a modifiée depuis que tu l’as ouverte. « Garder les deux » enregistre ta version à côté, dans « ' +
       name +
-      ' », sans rien écraser.',
+      ' », sans rien écraser. Si tu continues l’édition, ton prochain enregistrement remplacera ses modifications.',
     conflictKeepBoth: 'Garder les deux',
     conflictKeepEditing: 'Continuer l’édition',
     conflictSavedAs: (name) => 'Ta version est enregistrée dans « ' + name + ' ».',
     myVersionSuffix: 'ma version',
+    citeFound: 'Pièce trouvée',
+    citeAltered: 'Citation retouchée',
+    citeMissing: 'Introuvable dans l’Atlas',
+    citeSays: 'La pièce dit :',
+    citeLine: (n) => 'ligne ' + n,
+    citeMissingHint:
+      'Aucun fichier de l’Atlas ne contient ce passage : une capture, une source extérieure, ou une phrase à vérifier.',
     draftRestoreTitle: 'Brouillon non enregistré',
     draftRestoreMessage: 'Une version non enregistrée de cette note est restée sur cet appareil. La reprendre ?',
     draftRestore: 'Reprendre',
@@ -1032,11 +1039,17 @@ export const STRINGS: Record<'fr' | 'en', Record<string, I18nValue>> = {
     conflictMessage: (name) =>
       'Your AI or someone else edited it since you opened it. “Keep both” saves your version next to it, as “' +
       name +
-      '”, without overwriting anything.',
+      '”, without overwriting anything. If you keep editing, your next save replaces their changes.',
     conflictKeepBoth: 'Keep both',
     conflictKeepEditing: 'Keep editing',
     conflictSavedAs: (name) => 'Your version was saved as “' + name + '”.',
     myVersionSuffix: 'my version',
+    citeFound: 'Source found',
+    citeAltered: 'Altered quote',
+    citeMissing: 'Not in the Atlas',
+    citeSays: 'The source says:',
+    citeLine: (n) => 'line ' + n,
+    citeMissingHint: 'No file of the Atlas holds this passage: a screenshot, an outside source, or a sentence to check.',
     draftRestoreTitle: 'Unsaved draft',
     draftRestoreMessage: 'An unsaved version of this note was left on this device. Restore it?',
     draftRestore: 'Restore',

@@ -229,7 +229,7 @@ def move_dir_with_relink(src, dst, content_root, build, index=None, may_relink=N
     for rel, body, count in pending:
         rel = new + rel[len(old):] if moved(rel) else rel
         try:
-            (content_root / rel).write_text(body, encoding="utf-8")
+            (content_root / rel).write_text(body, encoding="utf-8", newline="\n")
             rewrites.append({"path": rel, "count": count})
         except OSError as e:
             print(f"[move folder] relink write failed {rel}: {e}", file=sys.stderr)
@@ -279,7 +279,7 @@ def move_md_with_relink(src_rel: str, dst_rel: str, content_root, build, dry_run
     rewrites = []
     for rel, new_body, count in pending:
         try:
-            (content_root / rel).write_text(new_body, encoding="utf-8")
+            (content_root / rel).write_text(new_body, encoding="utf-8", newline="\n")
             rewrites.append({"path": rel, "count": count})
         except OSError as e:
             print(f"[move_doc] relink write failed {rel}: {e}", file=sys.stderr)

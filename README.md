@@ -61,7 +61,7 @@ Thirty-four tools, in six groups:
 
 | Group | Tools | For |
 | --- | --- | --- |
-| **Read** | `brief` · `search_docs` · `grep_docs` · `read_doc` · `list_tree` · `recent_docs` · `changes_since` · `resume_session` | A context pack on a topic within a token budget; ranked search where each hit says how far to trust it (last editor, AI or human, stale, contested); picking up a saved work session. |
+| **Read** | `brief` · `search_docs` · `grep_docs` · `read_doc` · `list_tree` · `recent_docs` · `changes_since` · `resume_session` | A context pack on a topic within a token budget; ranked search where each hit says how far to trust it (last editor, AI or human, stale, contested, or a record of a past date); every quotation of a note checked against the file it quotes; picking up a saved work session. |
 | **Write** | `create_doc` · `edit_doc` · `move_doc` · `delete_doc` | Edits return their diff and can refuse to overwrite a concurrent change; moves rewrite the `[[links]]` that point at a note. |
 | **Graph** | `get_links` · `get_backlinks` · `list_by_tag` · `get_mind_topology` | Walking the mind by its links and tags. |
 | **Time travel** | `doc_history` · `doc_at` · `doc_diff` · `search_history` · `then_and_now` · `show_shift` · `changelog` · `doc_blame` · `doc_revert` | Your mind is a git repo: what a note said on any date, and what you thought then next to what you think now, claim by claim, each quote checked against the version it cites. |
@@ -85,7 +85,7 @@ There is also a **REST API v1** (Bearer tokens) with a published **OpenAPI 3.1**
   <img alt="The Mind: a real mind of some 460 notes, each folder a region, links between them" width="900" src="https://atlas-mind.anakior.app/assets/the-mind.jpg" />
 </p>
 
-- **Read**: GitHub-flavoured Markdown with a table of contents and `[[wikilinks]]`, and PDF, `.docx`, HTML decks, images and JSON previewed inline. Full-text search, a command palette (Ctrl-K), backlinks, tags, pinned notes.
+- **Read**: GitHub-flavoured Markdown with a table of contents and `[[wikilinks]]`, and PDF, `.docx`, HTML decks, images and JSON previewed inline. A dot after each quotation tells whether the file it quotes really says it, and a click opens that file on the passage. Full-text search, a command palette (Ctrl-K), backlinks, tags, pinned notes.
 - **The Mind**: every note and tag a node, every folder a region, recent notes glowing, orphans dimmed. Above: a real mind, some 460 notes.
 - **Write and organise**: create, edit, rename and move notes and whole folders (links follow), templates, drag and drop from your computer, a bin you can restore from or empty, a mind-wide task list.
 - **History and activity**: every note versioned, with clean diffs and restore; a home with the week at a glance, a journal of who changed what with the AI's share, and an undo for what one writer did in one go.

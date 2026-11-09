@@ -112,7 +112,7 @@ def post(handler):
         handler._send_json(400, {"error": "content must be a string"})
         return
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8")
+    target.write_text(content, encoding="utf-8", newline="\n")
     if ctx.primary:  # stamp creator + default visibility (member → private, admin/api → commons)
         try:
             _s._stamp_new_doc(rel, ctx)

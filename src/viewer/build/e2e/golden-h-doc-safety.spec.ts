@@ -10,7 +10,8 @@ import { test, expect, type Page } from '@playwright/test';
 //   - a note can't draw a form or lift itself over the page;
 //   - leaving the editor renders the doc through the normal path (no frontmatter as a heading);
 //   - Enter on a dialog's Cancel cancels; `e` does nothing on a mirror of another atlas;
-//   - the todos poll leaves an inline edit alone.
+//   - the todos poll leaves an inline edit alone;
+//   - Keep editing after a save conflict lets the next save through, on top of the new version.
 
 // A fetch made by the service worker skips page.route: no worker, so every doc comes from the mocks.
 test.use({ serviceWorkers: 'block' });
@@ -178,4 +179,31 @@ test('H8 — the todos poll leaves a todo being edited alone', async ({ page }) 
   await page.waitForTimeout(10_500); // past one 10 s poll
 
   await expect(input).toHaveValue('buy bread and milk');
+});
+
+test('H9 — Keep editing after a conflict: the next save goes on top of the version that came in', async ({ page }) => {
+  const current = '# C\n\ntext\n\nA line the AI added.\n';
+  const sent: { base_content?: string }[] = [];
+
+  await mind(page, { 'docs/c.md': '# C\n\ntext\n' });
+  await page.route('**/api/file', (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    sent.push(route.request().postDataJSON());
+
+    return sent.length === 1
+      ? route.fulfill({ status: 409, json: { error: 'changed since it was opened', current } })
+      : route.fulfill({ json: { ok: true, mtime: 1781890100 } });
+  });
+  await open(page, 'docs/c.md');
+  await page.keyboard.press('e');
+  await page.locator('#md-editor').fill('# C\n\nmine\n');
+  await page.locator('#btn-save').click();
+  await expect(page.locator('#confirm-backdrop')).toBeVisible();
+
+  await page.locator('#confirm-cancel').click();
+  await expect(page.locator('#md-editor')).toHaveValue('# C\n\nmine\n');
+  await page.locator('#btn-save').click();
+
+  await expect(page.locator('#md-editor')).toHaveCount(0);
+  expect(sent.map((b) => b.base_content)).toEqual(['# C\n\ntext\n', current]);
 });

@@ -66,5 +66,5 @@ def save_notes(rel: str, notes: list) -> bool:
         return True
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"version": 1, "notes": notes},
-                            ensure_ascii=False, indent=1), encoding="utf-8")
+                            ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
     return True

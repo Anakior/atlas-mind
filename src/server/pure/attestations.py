@@ -2,7 +2,8 @@
 touch stops reading as outdated. A git-tracked JSON at ROOT/.attestations.json, like the
 contradiction verdicts: an entry binds to the text it confirmed and falls when that text
 changes. 'holds' counts as a fresh look for the stale audit, and each confirmation in a row
-doubles the time before the next one; 'outdated' flags the doc for an update until it is edited.
+doubles the time before the next one; 'outdated' flags the doc for an update until it is edited;
+'record' files it as a record of a moment (kinds), and that one outlives edits.
 Pure IO; CONFIG read at call time."""
 import json
 import time
@@ -10,7 +11,7 @@ import time
 import server as _s
 from server.pure.docs import renamed
 
-VERDICTS = ("holds", "outdated")
+VERDICTS = ("holds", "outdated", "record")
 _MAX_STREAK = 4  # at stale's 6 months: then 1, 2 and at most 4 years between reviews
 
 
@@ -30,7 +31,7 @@ def load() -> dict:
 
 def _save(entries: dict):
     _file().write_text(json.dumps({"version": 1, "attestations": [entries[p] for p in sorted(entries)]},
-                                  ensure_ascii=False, indent=1), encoding="utf-8")
+                                  ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
     return _file()
 
 

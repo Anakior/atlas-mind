@@ -279,7 +279,7 @@ def _promote_inbox_item(src_rel, dest, ctx, tags=None, ai=None):
             else body.lstrip("\n")
     else:
         new_text = body.lstrip("\n")
-    (CONFIG.content_root / payload["to"]).write_text(new_text, encoding="utf-8")
+    (CONFIG.content_root / payload["to"]).write_text(new_text, encoding="utf-8", newline="\n")
     extras = _repoint_doc(payload["from"], payload["to"])  # privacy travels BEFORE the git sync
     touched = [payload["from"], payload["to"], *(r["path"] for r in payload["rewrites"])]
     commit_change(ctx, f"kept: {stem} -> {dest or '/'}",
@@ -301,7 +301,7 @@ def _set_inbox_status(src_rel, updates, ctx, subject, ai=None):
         return False, "Insufficient permission."
     build = _import_build()
     src.write_text(build._rewrite_inbox_fm(src.read_text(encoding="utf-8"), updates),
-                   encoding="utf-8")
+                   encoding="utf-8", newline="\n")
     commit_change(ctx, subject, src, ai=ai)
     return True, src_rel
 
@@ -508,7 +508,7 @@ def set_identity(values: dict, ctx) -> None:
     from config import set_toml_root_keys
     toml = CONFIG.root / "atlas.toml"
     text = toml.read_text(encoding="utf-8") if toml.exists() else ""
-    toml.write_text(set_toml_root_keys(text, values), encoding="utf-8")
+    toml.write_text(set_toml_root_keys(text, values), encoding="utf-8", newline="\n")
     CONFIG.set_identity(**values)
     commit_change(ctx, "appearance: " + ", ".join(sorted(values)), toml)
 

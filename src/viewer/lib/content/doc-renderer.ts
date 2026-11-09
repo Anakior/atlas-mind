@@ -28,6 +28,7 @@ import { attachCopyButtons, highlightFirstMatch } from './content-decorators';
 import { taskCheckboxes } from './task-checkboxes';
 import { renderBacklinksFor } from './backlinks';
 import { notesPanel } from './notes/notes-panel';
+import { quoteMarks } from './quote-marks';
 
 export const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg', '.bmp', '.ico'];
 const VIEWABLE_EXTS = new Set(['.md', '.html', '.pdf', '.docx', '.json', ...IMAGE_EXTS]);
@@ -185,6 +186,7 @@ export class DocRenderer {
     renderBacklinksFor(file);
     toc.buildToc();
     notesPanel.renderNotesFor(file);
+    void quoteMarks.decorate(file);
     // Extensions hook: the doc has just been rendered (path + markdown without frontmatter).
     // Extensions listen to decorate / track the current doc.
     document.dispatchEvent(
