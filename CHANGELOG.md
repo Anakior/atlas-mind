@@ -8,6 +8,27 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-11-11
+
+An AI can now launch Atlas itself on a folder of your computer: no server to run, no token,
+one line in Claude Desktop, Cursor or any MCP client. MCP directories that read the official
+registry now generate that line instead of a config that could not start.
+
+### Added
+- **`atlas mcp <dir>`: MCP over stdio.** The client starts it and stops it
+  (`uvx atlas-mind mcp ~/my-mind`); a missing or empty folder becomes a new mind. The AI gets
+  every tool with the local viewer's rights, and its writes are still an agent's: the
+  `ai/<family>` trailer, the `stdio` run name, undo in one click. Its inbox items land in the
+  shared inbox. A cloud mind is refused: an AI reaches it at its `/mcp` address, signed in.
+- **The registry entry declares the PyPI package** (`uvx atlas-mind mcp <dir>`, stdio) beside
+  the two remote addresses, so a directory has a config that starts.
+
+### Fixed
+- **A machine with no git identity commits again.** On a fresh computer or in a container,
+  every save was written but never committed (git asked who you are), so the history stayed
+  empty. A local mind's commits are now signed by the mind's bot there, without touching your
+  git configuration.
+
 ## [2.6.0] - 2026-11-09
 
 Records, the docs that tell a moment and never go out of date, and the huissier, which checks

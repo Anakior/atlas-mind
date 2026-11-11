@@ -970,6 +970,8 @@ def run() -> None:
                 # Repo persisted on the volume: refresh now instead of waiting for the pull loop.
                 _CTX.git_sync.catch_up()
         _CTX.git_sync.build()
+    else:
+        _CTX.git_sync.ensure_identity()
 
     # Mind's server extensions, loaded once at boot. A broken one is reported on
     # stderr and ignored — the server still starts.
@@ -1024,3 +1026,25 @@ def run() -> None:
     except KeyboardInterrupt:
         print("\nStopped.")
         sys.exit(0)
+
+
+def run_stdio(stdin, stdout) -> None:
+    """Boot a local mind for `atlas mcp` and answer MCP over stdin/stdout, no HTTP server:
+    the client launches it and stops it. Local only: a cloud mind has accounts and ACL, which
+    an AI reaches through /mcp, signed in."""
+    global CONFIG, _CTX
+    try:
+        CONFIG = AtlasConfig.load(root=resolve_mind_root())
+    except AtlasConfigError as e:
+        sys.exit(f"FATAL: {e}")
+    if CONFIG.auth_enabled:
+        sys.exit("FATAL: atlas mcp serves a local mind; an AI reaches a cloud one at its /mcp "
+                 "URL, signed in.")
+    _CTX = AppContext.build(CONFIG, build_store(CONFIG))
+    _CTX.git_sync.ensure_identity()
+    os.chdir(CONFIG.root)
+    migrate_legacy_format()
+    schedule_warm()
+    from server import stdio
+    stdio.serve(stdin, stdout)
+    _CTX.git_sync.drain(30)

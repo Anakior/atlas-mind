@@ -11,7 +11,7 @@ Atlas Mind is a self-hosted wiki / knowledge-base engine and an external brain y
 ## Project
 - [GitHub repository](https://github.com/Anakior/atlas-mind): source (Python, standard library only), install and self-hosting documentation, AGPL-3.0.
 - [PyPI package](https://pypi.org/project/atlas-mind/): install with `uv tool install atlas-mind` or `pipx install atlas-mind`, then `atlas serve ~/my-mind`.
-- [MCP server](https://registry.modelcontextprotocol.io/): published as `app.anakior/atlas-mind`: 34 tools to read, write, triage, map, rewind and audit a knowledge base over MCP.
+- [MCP server](https://registry.modelcontextprotocol.io/): published as `app.anakior/atlas-mind`: 34 tools to read, write, triage, map, rewind and audit a knowledge base over MCP. A client can launch it on a local folder over stdio (`uvx atlas-mind mcp ~/my-mind`, no server, no token) or connect to a running instance at `https://<your-atlas>/mcp`.
 
 ## What it does
 - Multi-format: Markdown is first-class (rendered, linked, searched); standalone HTML decks, PDF, Word `.docx`, images and JSON are previewed inline, rendered in the browser.

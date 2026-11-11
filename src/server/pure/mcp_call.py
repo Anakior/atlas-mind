@@ -694,12 +694,13 @@ def _tool_create_inbox_item(args, ctx):
     if not isinstance(content, str):
         return text_result("'content' must be a string", is_error=True)
     # The owning person = the acts_as principal. An unbound API token carries only its own
-    # <slug>@<hash>.api.local identity (no person), so it has no inbox.
+    # <slug>@<hash>.api.local identity (no person), so it has no inbox. A local agent (stdio)
+    # works for the mind's single operator: the shared inbox.
     owner = getattr(ctx, "primary", None)
     email = owner[5:] if owner and owner.startswith("user:") else ""
     domain = email.rsplit("@", 1)[-1] if "@" in email else ""
     is_token_identity = domain == "api.local" or domain.endswith(".api.local")  # not a real person
-    if ctx is not None and ctx.api and (not email or is_token_identity):
+    if ctx is not None and ctx.api and not ctx.superuser and (not email or is_token_identity):
         return text_result("This token is not bound to a person, so it has no inbox. Create it "
                            "with `atlas token create --acts-as <email>`.", is_error=True)
     try:
@@ -1184,7 +1185,8 @@ def _as_person(ctx):
     act, attributed to them alone like the same click in the viewer, not to an agent."""
     if ctx is None or not ctx.api:
         return ctx
-    return ViewerCtx(ctx.principals, ctx.is_admin, ctx.primary, scopes=ctx.scopes)
+    return ViewerCtx(ctx.principals, ctx.is_admin, ctx.primary, superuser=ctx.superuser,
+                     scopes=ctx.scopes)
 
 
 def _tool_confirm_doc(args, ctx):

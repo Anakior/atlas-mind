@@ -252,6 +252,25 @@ class GitSync:
                 self._pusher = threading.Thread(target=self._push_loop, daemon=True)
                 self._pusher.start()
 
+    def ensure_identity(self) -> None:
+        """A machine with no git identity (a fresh laptop, a container) fails every commit: the
+        mind's bot signs them instead, for this process only, never in a git config."""
+        try:
+            known = all(self.run("var", f"GIT_{who}_IDENT").returncode == 0
+                        for who in ("AUTHOR", "COMMITTER"))
+        except OSError:  # no git at all: nothing will commit
+            return
+        if not known:
+            for who in ("AUTHOR", "COMMITTER"):
+                os.environ.setdefault(f"GIT_{who}_NAME", self._config.git_author_name)
+                os.environ.setdefault(f"GIT_{who}_EMAIL", self._config.git_author_email)
+
+    def drain(self, timeout: float) -> None:
+        """Wait for the rebuild + push a last write woke, before a short-lived process exits."""
+        pusher = self._pusher
+        if pusher is not None:
+            pusher.join(timeout)
+
     def _push_loop(self) -> None:
         retries = iter(self._retry_s)
         while True:

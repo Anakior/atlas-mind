@@ -2,12 +2,37 @@
     "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "name": "app.anakior/atlas-mind",
     "description": "Self-hosted git-native knowledge base with an MCP endpoint your AI reads, writes and rewinds",
-    "version": "2.6.0",
+    "version": "2.7.0",
     "website_url": "https://atlas-mind.anakior.app/",
     "repository": {
         "url": "https://github.com/Anakior/atlas-mind",
         "source": "github"
     },
+    "packages": [
+        {
+            "registryType": "pypi",
+            "identifier": "atlas-mind",
+            "version": "2.7.0",
+            "runtimeHint": "uvx",
+            "transport": {
+                "type": "stdio"
+            },
+            "packageArguments": [
+                {
+                    "type": "positional",
+                    "value": "mcp"
+                },
+                {
+                    "type": "positional",
+                    "valueHint": "mind_dir",
+                    "isRequired": true,
+                    "format": "filepath",
+                    "default": "~/my-mind",
+                    "description": "Folder of your mind, on this machine. A missing or empty one becomes a new mind; an existing one is used as is."
+                }
+            ]
+        }
+    ],
     "remotes": [
         {
             "type": "streamable-http",

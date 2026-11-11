@@ -6,6 +6,7 @@ Usage:
 
     python3 src/cli.py init <dir> [--force] [--lang en|fr] [--prefix P] [--tagline T] [--yes]
     python3 src/cli.py serve <dir> [--port N]
+    python3 src/cli.py mcp <dir>                              # MCP over stdio, the client launches it
     python3 src/cli.py dev [--port N] [--fresh] [--reset]
     python3 src/cli.py dev seed [<dir>]                       # DEV-ONLY sample data
     python3 src/cli.py dev inbox "<title>" [<dir>]            # DEV-ONLY single item
@@ -776,18 +777,23 @@ def cmd_init(args) -> int:
 # ─── serve / build ─────────────────────────────────────────────────────────────
 
 
-def cmd_serve(args) -> int:
-    target = Path(args.dir).expanduser().resolve()
+def _ready_mind(raw: str) -> tuple:
+    """The mind to serve and its config. "Try it once": a folder that does not exist yet, or
+    an empty one, becomes a new mind."""
+    target = Path(raw).expanduser().resolve()
     if not target.exists() or (target.is_dir() and not any(target.iterdir())):
-        # "Try it once": a folder that does not exist yet, or an empty one, becomes a new mind.
         print(f"No mind at {target} yet: creating one (atlas init).")
         init_mind(target, "en")
-    mind = _require_mind(args.dir)
+    mind = _require_mind(raw)
     if not (mind / "content").is_dir():
         raise CliError(
             f"{mind} has no content/ directory — is this really a "
-            f"mind? (run `atlas init {args.dir}` to scaffold one)")
-    config = _load_config(mind)  # human error if atlas.toml is broken
+            f"mind? (run `atlas init {raw}` to scaffold one)")
+    return mind, _load_config(mind)  # human error if atlas.toml is broken
+
+
+def cmd_serve(args) -> int:
+    mind, config = _ready_mind(args.dir)
     if not config.index_file.exists():
         print("dist/index.html missing: initial build of the viewer…")
         if _run_build(mind) != 0:
@@ -816,6 +822,20 @@ def cmd_serve(args) -> int:
     os.execve(sys.executable,
               [sys.executable, "-P", "-m", "server"], env)
     return 0  # unreachable
+
+
+def cmd_mcp(args) -> int:
+    # stdout carries the protocol alone: everything else (a new mind's scaffold, the logs, a
+    # child's output) goes to stderr, down to the file descriptor a child inherits.
+    sys.stdout.flush()
+    protocol = os.fdopen(os.dup(sys.stdout.fileno()), "wb")
+    os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+    sys.stdout = sys.stderr
+    mind, _ = _ready_mind(args.dir)
+    os.environ["ATLAS_MIND"] = str(mind)
+    import server
+    server.run_stdio(sys.stdin.buffer, protocol)
+    return 0
 
 
 def cmd_build(args) -> int:
@@ -2381,6 +2401,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--port", type=int, default=None,
                          help="Listening port (default: atlas.toml or 8765).")
     p_serve.set_defaults(func=cmd_serve)
+
+    p_mcp = subparsers.add_parser(
+        "mcp", help="Serve this mind to an AI over stdio, for a client that launches it "
+                    "(Claude Desktop, Cursor…): no server, no token.")
+    p_mcp.add_argument("dir", nargs="?", default=".",
+                       help="Directory of the mind (default: current directory); "
+                            "a missing or empty one becomes a new mind.")
+    p_mcp.set_defaults(func=cmd_mcp)
 
     p_dev = subparsers.add_parser(
         "dev", help="Local CLOUD sandbox: login/share/2FA/admin with NO git "

@@ -52,6 +52,13 @@ Requires **Python 3.11+** and **git**. `init` never overwrites: it refuses a non
 
   then `/mcp`, pick `atlas` and sign in. Prompts read `/atlas:weekly-review`, a document attaches as `@atlas:doc://notes/x.md`. `atlas init` also installs a git hook so the commits Claude Code makes in a clone count as Claude's.
 - **Any other MCP client**: give it `https://<your-atlas>/mcp`. Clients that can't do OAuth take a token instead, from **Settings › AI assistants** or `atlas token create ~/my-mind --label my-agent`.
+- **A mind on your computer, no server**: let the client launch Atlas itself (Claude Desktop, Cursor, VS Code…). No token, no sign-in: the AI gets the folder you name, and an empty or missing one becomes a new mind.
+
+  ```json
+  { "mcpServers": { "atlas": { "command": "uvx", "args": ["atlas-mind", "mcp", "~/my-mind"] } } }
+  ```
+
+  Its writes are committed as an agent's like any other, and `atlas serve ~/my-mind` opens the same mind in the viewer.
 
 Every access shows in **Settings › AI assistants**, with when it was last used, and can be revoked. An access can be limited to `read`, `inbox` and/or `write`: an agent that reads your mail never needs to edit a note. Your `AGENTS.md` reaches every client as its instructions, so an assistant follows your conventions the moment it connects.
 
