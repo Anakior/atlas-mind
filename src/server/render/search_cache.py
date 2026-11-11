@@ -28,23 +28,28 @@ def _doc_text(rel: str, path):
     return content if rel.lower().endswith(".md") else content[:file_text.MAX_CHARS]
 
 
-def _doc_entry(rel: str, path):
+def _doc_entry(rel: str, path, stamp=None):
     """Returns a cached {content_n, name_n, tokens, length, mtime}, reloaded only if the
-    file's mtime has changed. None if the file cannot be read. The text itself is not kept:
-    it was a third of the cache, and only the few hits of a search read it (_doc_text)."""
-    try:
-        mtime = path.stat().st_mtime
-    except OSError:
-        return None
+    file changed. `stamp` is its (mtime_ns, size) when the caller already has it from the walk
+    of the content: a stat per file per search was most of a search's time on Windows. None if
+    the file cannot be read. The text itself is not kept: it was a third of the cache, and
+    only the few hits of a search read it (_doc_text)."""
+    if stamp is None:
+        try:
+            st = path.stat()
+        except OSError:
+            return None
+        stamp = (st.st_mtime_ns, st.st_size)
     ent = _DOC_CACHE.get(rel)
-    if ent is not None and ent["mtime"] == mtime:
+    if ent is not None and ent["stamp"] == stamp:
         return ent
     content = _doc_text(rel, path)
     if content is None:
         return None
     content_n = _s._normalize_text(content)
     ent = {
-        "mtime": mtime,
+        "stamp": stamp,
+        "mtime": stamp[0] / 1e9,
         "content_n": content_n,
         "name_n": _s._normalize_text(path.name),
         # The typo-correction vocabulary. A word is stored once for all docs (interned), and

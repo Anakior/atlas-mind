@@ -1,5 +1,6 @@
 """Read-side aggregates over the doc corpus, shared by REST routes and MCP tools."""
 import datetime
+import difflib
 import math
 import os
 import posixpath
@@ -266,36 +267,63 @@ def warm_search():
     file_text.prune()  # every file seen: the texts kept for the others can go
 
 
+_TYPO_CUTOFF = 0.78
+
+
+def _vocabulary(entries) -> dict:
+    """The typo-correction vocabulary of `entries`, every word once: joined, so one C-level `in`
+    tells whether any word holds a token, and bucketed by length."""
+    words = set()
+    for _, _, e in entries:
+        words |= e["tokens"]
+    by_len: dict = {}
+    for w in words:
+        by_len.setdefault(len(w), []).append(w)
+    return {"joined": "\n".join(words), "by_len": by_len, "fixed": {}}
+
+
+def _corrected(t: str, vocab: dict) -> str:
+    """`t`, or the closest vocabulary word when no word holds it (4+ letters only). Only the
+    lengths that can reach the cutoff are compared: difflib's own first check
+    (real_quick_ratio, the same formula) would reject every other word anyway."""
+    if len(t) < 4 or t in vocab["joined"]:
+        return t
+    fixed = vocab["fixed"]
+    if t not in fixed:
+        n = len(t)
+        near = [w for m, ws in vocab["by_len"].items()
+                if 2.0 * min(n, m) / (n + m) >= _TYPO_CUTOFF for w in ws]
+        match = difflib.get_close_matches(t, near, n=1, cutoff=_TYPO_CUTOFF)
+        fixed[t] = match[0] if match else t
+    return fixed[t]
+
+
 def _api_search(q: str, limit: int, ctx=None, only=None) -> list:
     """BM25 ranking (an occurrence in the filename weighs three in the body), with typo
     tolerance (a token that can't be found is corrected to the closest word in the
     vocabulary). Tokens match as substrings, so 'auth' still finds 'authentication'.
     `only` (a set of paths) ranks those docs among themselves. Content read via the
     _doc_entry in-memory cache."""
-    import difflib
     tokens = [t for t in _s._normalize_text(q).split() if t]
     if not tokens:
         return []
+    memo = _reader_memo(ctx)
+    files = memo["files"]
     entries = []
-    for rel, path in _readable(ctx, SEARCHED):
+    for rel, path in _listing(memo, ctx, SEARCHED):
         if only is not None and rel not in only:
             continue
-        e = _s._doc_entry(rel, path)
+        e = _s._doc_entry(rel, path, files.get(rel))
         if e is not None:
             entries.append((rel, path, e))
     # Typo tolerance: a 4+-letter token absent from the vocabulary (as a substring)
     # is replaced by the closest known word — restores MiniSearch's client-side fuzz.
-    vocab = set()
-    for _, _, e in entries:
-        vocab |= e["tokens"]
-    corrected = []
-    for t in tokens:
-        if len(t) < 4 or any(t in w for w in vocab):
-            corrected.append(t)
-        else:
-            near = difflib.get_close_matches(t, vocab, n=1, cutoff=0.78)
-            corrected.append(near[0] if near else t)
-    tokens = corrected
+    vocab = memo.get("vocab") if only is None else None
+    if vocab is None:
+        vocab = _vocabulary(entries)
+        if only is None:  # the whole readable mind: kept until the content changes
+            memo["vocab"] = vocab
+    tokens = [_corrected(t, vocab) for t in tokens]
     scored = []
     for rel, path, e in entries:
         tf = [e["name_n"].count(t) * _NAME_WEIGHT + e["content_n"].count(t) for t in tokens]

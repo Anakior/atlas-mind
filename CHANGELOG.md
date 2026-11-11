@@ -8,6 +8,36 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-11-11
+
+The MCP surface, polished: every tool says when to use it rather than its neighbour and what
+each parameter means, and search answers three times faster with the same rankings. Its quality
+is now measured on a public benchmark. The 34 tool descriptions changed: refresh the
+connector's tools in Claude. An Atlas on 2.2.0 or later gets this one from Settings › About.
+
+### Changed
+- **Every MCP tool says when to use it rather than its neighbour, and what each parameter
+  means.** The 34 tool definitions were reviewed against what an agent needs to pick the right
+  tool and call it right the first time: each names the tools it is confused with and when to
+  prefer them (`recent_docs`, `changes_since`, `activity`, `changelog`; `search_docs`,
+  `grep_docs`, `brief`; `doc_history`, `doc_at`, `doc_diff`, `doc_blame`…), states the order
+  and caps of its results, and every parameter now carries its meaning (15 had none, mostly
+  `limit`). Also said plainly: `HEAD~N` counts the whole mind's commits, so a sha from
+  doc_history is safer; a deleted doc comes back with undo_run, not doc_revert. About 1,100
+  more tokens in the tool list. Refresh the connector's tools in Claude.
+- **Search is three times faster, with the same results.** A search no longer checks the date
+  of every file a second time (the walk of the content already read it: on Windows that was
+  over half of a search), keeps its typo-correction vocabulary until the content changes, and
+  compares an unknown word only with the words long enough to come close. On 5,000 notes:
+  1.2 s down to 0.35 s a search, every ranking identical.
+
+### Added
+- **`evals/beir.py`: search quality on a public benchmark.** A BEIR dataset (SciFact by
+  default) becomes a mind, its test queries go to search_docs over stdio, and the standard
+  metrics come out beside the BM25 baseline the BEIR paper published. No model is called. On
+  SciFact: nDCG@10 0.653 against BM25's 0.665; without the typo correction it falls to 0.618,
+  as the correction also folds plurals and inflections onto the corpus' words.
+
 ## [2.7.0] - 2026-11-11
 
 An AI can now launch Atlas itself on a folder of your computer: no server to run, no token,

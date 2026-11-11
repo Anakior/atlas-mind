@@ -62,8 +62,23 @@ python3 evals/run.py --model opus --only week,stale
 ```
 
 It needs `claude` on your PATH and runs on its login (no API key). A full run is
-about 25 sessions; the results land in `evals/results/` (gitignored). Run it when
-you change a tool's description, its output or the server instructions.
+37 sessions, about 8 minutes; the results land in `evals/results/` (gitignored). Run it
+when you change a tool's description, its output or the server instructions.
+
+### Search benchmark
+
+`evals/beir.py` measures the search ranking alone on a public BEIR dataset (SciFact by
+default, downloaded once into `~/.cache/atlas-evals/beir/`): each document becomes a note,
+each test query goes to `search_docs` over `atlas mcp`, and nDCG@10, Recall@10/@50 and
+MRR@10 come out beside the BM25 baseline of the BEIR paper. No model is called; SciFact
+takes a minute or two.
+
+```bash
+python3 evals/beir.py                         # SciFact, notes named after their titles
+python3 evals/beir.py --dataset nfcorpus --names id
+```
+
+Run it when you change the search: a refactor must give every query the same result.
 
 ## Trying your change
 

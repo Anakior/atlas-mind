@@ -395,6 +395,16 @@ class TestBrowseDiskState(unittest.TestCase):
         self.assertEqual(files["notes/brouillon.md"]["mtime"],
                          int(target.stat().st_mtime))
 
+    def test_typo_correction_learns_the_words_of_a_doc_written_since(self):
+        # The correction vocabulary is kept from one search to the next: a doc written in
+        # between must still bring its words.
+        self.assertEqual(_quoted_search(self.srv, "zorglubyne").json(), [])
+        target = self.srv.path("notes/zorg.md")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# Zorg\n\nLa zorglubine du laboratoire.\n", encoding="utf-8")
+        hits = _quoted_search(self.srv, "zorglubyne").json()
+        self.assertEqual([h["path"] for h in hits], ["notes/zorg.md"])
+
     def test_tree_uses_git_commit_date_but_search_uses_stat_mtime(self):
         # Characterization: the two endpoints do not mean the same "mtime".
         # /api/tree = date of the last git commit touching the file (fallback to

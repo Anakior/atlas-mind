@@ -109,7 +109,7 @@ There is also a **REST API v1** (Bearer tokens) with a published **OpenAPI 3.1**
 - **Network**: by default Atlas only reaches out to read an MCP client's public metadata when you connect that client over OAuth (`[oauth] client_metadata_fetch = false` turns it off), and to ask PyPI for the latest version when an admin opens About (and at most once a day for the admin's update banner with `[server] update_check = true`, which the alwaysdata install turns on).
 - **Configuration**: one small `atlas.toml`: the name and line under the logo, the language, the port, accounts, the sub-path.
 - **Updates**: from **Settings › About** on a pip install (alwaysdata), `atlas update --target …` for a deployment, `uv tool upgrade atlas-mind` on your computer. The engine and your notes update separately: upgrading never touches a note.
-- **Commands**: `atlas --help` lists them: `init`, `serve`, `build`, `deploy`, `update`, `user`, `token`, `share`, `inbox`, `import`, `export`, `sync`, `backup`, `restore`, `hook`, `setup-code`, `doctor`.
+- **Commands**: `atlas --help` lists them: `init`, `serve`, `mcp`, `build`, `deploy`, `update`, `user`, `token`, `share`, `inbox`, `import`, `export`, `sync`, `backup`, `restore`, `hook`, `setup-code`, `doctor`.
 
 ## Documentation
 
