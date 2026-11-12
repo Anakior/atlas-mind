@@ -8,6 +8,21 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.9.1] - 2026-11-12
+
+Seven tool descriptions rewritten so an agent reads them right the first time. Refresh the
+connector's tools in Claude. An Atlas on 2.2.0 or later gets this one from Settings › About.
+
+### Changed
+- **Seven MCP tools say plainly what they do and what their parameters change.** The
+  descriptions that read worst are rewritten: `confirm_doc` lists its three verdicts and says
+  when to edit the doc instead; `stale`, `contradictions`, `doc_blame`, `get_links`,
+  `mind_weather` and `then_and_now` open on what they return, give their defaults and caps
+  (`doc_blame` stops at 600 lines without a filter) and say how their filters combine.
+  `contradictions` now describes each pair in its output schema (`a`, `b`, `kind`,
+  `confidence`, `evidence`, `verdict`…), and `confirm_doc`'s names `as_of`. Refresh the
+  connector's tools in Claude.
+
 ## [2.9.0] - 2026-11-12
 
 Fewer tools for the same answers: four MCP tools that gave a second view of another tool's

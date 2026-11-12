@@ -686,7 +686,7 @@
   },
   {
     "name": "get_links",
-    "description": "The [[wikilinks]] around a document: `links`, the docs it points to, and `backlinks`, the docs that point to it, e.g. to find what relies on a doc before changing or moving it. A doc you may not read is left out. Use get_mind_topology for the whole graph's shape, brief to read the sections linked around a topic.",
+    "description": "List the [[wikilinks]] around a document: `links`, the docs it points to, and `backlinks`, the docs that point to it, e.g. to find what relies on a doc before changing or moving it. Works on .md and .html docs. `direction` keeps one side, to spare a long list: out for `links` only, in for `backlinks` only (default both). A doc you may not read is left out. Use get_mind_topology for the whole graph's shape, brief to read the sections linked around a topic.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1010,7 +1010,7 @@
   },
   {
     "name": "then_and_now",
-    "description": "What the mind said about a topic at a past date, next to what it says now. For 'what did I think of X (in June, before)', 'did I change my mind on Y', 'when did we decide Z': call this with the date; without one, call it with the topic alone first, to get the days the topic moved and pick the date. Then call show_shift with the claims paired: it is how the user sees the answer, so call it rather than writing the comparison out. Returns each doc's passages on the topic then and now (docs since deleted or moved included) and the days the topic moved.",
+    "description": "Compare what the mind's docs said about a topic at a past date with what they say now, for 'what did I think of X (in June, before)', 'did I change my mind on Y', 'when did we decide Z'.\n1. Without `at`, it returns only `moments`, the days the topic moved: pick the date there. With a date from the user, skip this step.\n2. With `at` (YYYY-MM-DD), it returns each doc's passages on the topic then and now, docs since deleted or moved included.\n3. Call show_shift with the claims paired: it is how the user sees the answer, so call it rather than writing the comparison out.\n`topic` is a few words, matched like a search_docs query.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1388,7 +1388,7 @@
   },
   {
     "name": "stale",
-    "description": "Docs nobody has looked at for N+ months, the longest overdue first: a maintenance pass on notes and decisions that may be outdated. Records of a moment (saves, monthly reports, archives) never are. A look is an edit, or a confirmation that the doc still holds (confirm_doc), each one in a row doubling the wait. Docs a reader flagged as outdated come apart, in `outdated`: they wait for an edit, not a review. Use mind_weather for the overview by folder.",
+    "description": "List the docs nobody has looked at for `months` or more (default 6), the longest overdue first: a maintenance pass on notes and decisions that may be outdated. A look is an edit or a confirm_doc 'holds', and each confirmation in a row doubles the wait before the doc comes back. Records of a moment (saves, monthly reports, archives, docs confirmed as 'record') are never listed. Docs a reader flagged as outdated come apart, in `outdated`: they need an edit, not a review. Narrow with path_prefix (one folder) and limit (default 30, at most 100). Use mind_weather for the overview by folder, changes_since for what changed lately.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1443,7 +1443,7 @@
   },
   {
     "name": "mind_weather",
-    "description": "The mind's weather, for a weekly review or when the user asks how the mind is doing. Region by region (each top folder and its subfolders): the activity over the last `weeks` (sun), the docs nobody looked at for `months` (fog, as stale counts them), the contradictions worth settling (storms) and the AI's share of the commits (wind). Plus the periodic docs that went missing (`missed`: a monthly report not written since June…) and the docs flagged outdated. Call it first, then dig into a region with stale (prefix), contradictions or activity (path_prefix).",
+    "description": "Show how the whole mind is doing, folder by folder, as a weather map: for a weekly review or when the user asks how the mind is doing. Read-only, one call for the whole mind. Each region (a top folder and its subfolders) gets four readings: sun, its activity over the last `weeks` (default 4); fog, the docs nobody edited or confirmed for `months` (default 3), counted as stale counts them; storms, the contradictions worth settling; wind, the AI's share of the commits. Also returns `missed`, the periodic docs that stopped (a monthly report not written since June…), and `outdated`, the docs flagged as needing an update. Call it first, then dig into a region with stale or activity (path_prefix), or contradictions.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1571,7 +1571,7 @@
   },
   {
     "name": "contradictions",
-    "description": "Same-subject doc pairs that may conflict, the most confident first: topical clusters, plus detectors for drifting table rows (confidence 'high') and negation or status leads ('review'). Leads to read and judge, never assertions; each has a, b, kind, subject, confidence, evidence and any verdict, and `a_untrusted`/`b_untrusted` when a side comes from outside this mind. Pairs judged `none` are hidden unless include_dismissed. After reading both docs, record the verdict with judge_contradiction; for one doc changing its position over time, use then_and_now.",
+    "description": "List the document pairs on the same subject that may conflict, the most confident first (`limit`, default 15, at most 50). Each pair is a lead to read and judge, never an assertion. Four detectors find them: drifting table rows (confidence 'high'), negations, status changes within one doc, and topical clusters (confidence 'review'). Pairs already judged `none` stay hidden unless include_dismissed is true, to revisit a dismissal. After reading both docs, record the verdict with judge_contradiction. For one doc that changed its position over time, use then_and_now.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1595,7 +1595,65 @@
         "candidates": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "string",
+                "description": "One doc of the pair."
+              },
+              "b": {
+                "type": "string",
+                "description": "The other doc; equal to a for a conflict within one doc."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "table-drift",
+                  "polarity",
+                  "intra-status",
+                  "cluster"
+                ]
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "review"
+                ]
+              },
+              "subject": {
+                "type": "string",
+                "description": "What the pair is about: a shared term, or a table's column and row."
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "The lines that look conflicting: path, line, text, marker."
+              },
+              "verdict": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "'real' or 'none' once judged, null before."
+              },
+              "a_untrusted": {
+                "type": "string",
+                "description": "Only when a comes from outside this mind: 'remote:<node>' or 'inbox:<source>'."
+              },
+              "b_untrusted": {
+                "type": "string",
+                "description": "Only when b comes from outside this mind: 'remote:<node>' or 'inbox:<source>'."
+              }
+            },
+            "required": [
+              "a",
+              "b",
+              "kind",
+              "confidence"
+            ]
           }
         }
       },
@@ -1661,7 +1719,7 @@
   },
   {
     "name": "confirm_doc",
-    "description": "Record that you, or the user, reviewed a document: 'holds' (still true: it leaves the stale audit, for twice as long each time it is confirmed again) or 'outdated' (needs an update: listed in stale's `outdated` until someone edits it), both bound to the text reviewed: an edit clears them. Or 'record': it tells a moment (minutes, a recap, a review), so it never goes stale and reads as true at its date. Read the doc first.",
+    "description": "Record your review verdict on a document, after reading it. Three verdicts:\n- holds: still true. It leaves the stale audit, twice as long each time it is confirmed again in a row (`next_review` gives the date).\n- outdated: needs an update you are not making now. It stays in stale's `outdated` until someone edits it.\n- record: it tells a moment (minutes, a recap, a review), so it never goes stale and reads as true at its date (`as_of`).\nA verdict is bound to the text reviewed: any edit clears it. It is committed to the mind and takes edit rights on the doc. If you know the fix, edit_doc instead: an edit counts as a look too. Use stale to find the docs due for a review.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1706,6 +1764,9 @@
         },
         "next_review": {
           "type": "string"
+        },
+        "as_of": {
+          "type": "string"
         }
       },
       "required": [
@@ -1720,7 +1781,7 @@
   },
   {
     "name": "doc_blame",
-    "description": "Which commit, author and date last changed each line of a document: who wrote this exact fact. `pattern` blames only the lines containing it (no line numbers needed); start/end a range. Whole-file blame is capped. Use doc_history for the doc's revisions, search_history for when a text first appeared.",
+    "description": "Show which commit, author and date last changed each line of a document, at its current version: who wrote this exact fact. Two filters, which combine: `pattern` keeps the lines containing a text (no line numbers needed), `start`/`end` blame a line range only. With neither, the first 600 lines come back and `truncated` is true when the doc is longer: pass a pattern or a range to reach the rest. Use doc_history for the doc's revisions, search_history for when a text first appeared.",
     "inputSchema": {
       "type": "object",
       "properties": {
