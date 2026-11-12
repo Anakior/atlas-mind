@@ -17,7 +17,7 @@ sign in to your Atlas, see what it asks for (read, inbox, write), untick what yo
 don't want to grant, and allow it. You can also mint a token yourself (**Settings →
 Tokens**, or `atlas token create <mind>` locally) and use
 `https://<your-atlas>/mcp/<token>`. From then on the AI works your mind through
-**thirty-four tools**, grouped into six superpowers.
+**thirty tools**, grouped into six superpowers.
 
 ### 1. Reads your whole mind
 
@@ -27,9 +27,8 @@ Tokens**, or `atlas token create <mind>` locally) and use
 | `search_docs` | ranked search, each hit with its section and how far to trust it |
 | `grep_docs`   | find the exact lines that state a fact          |
 | `read_doc`    | read a document, a line range or one section     |
-| `list_tree`   | browse the folders, and what waits in your inbox |
-| `recent_docs` | see what changed lately                          |
-| `changes_since` | what changed since the AI last looked (a cursor it keeps) |
+| `list_tree`   | browse the folders, a tag's notes, and what waits in your inbox |
+| `changes_since` | what changed lately, or since the AI last looked (a cursor it keeps) |
 | `resume_session` | pick up a saved work session: resume command, open points, what moved since |
 
 ### 2. Writes it back
@@ -49,10 +48,8 @@ your work.
 
 | Tool                | What the AI does with it                          |
 |---------------------|----------------------------------------------------|
-| `get_links`         | the documents a note points to                     |
-| `get_backlinks`     | the documents that point back at it                |
+| `get_links`         | the documents a note points to, and those pointing back at it |
 | `get_mind_topology` | a bird's-eye map: hubs, orphans, top tags          |
-| `list_by_tag`       | every note carrying a tag                          |
 
 ### 4. Travels through time
 
@@ -67,7 +64,6 @@ a present-state index can't do:
 | `search_history` | find when a string entered or left history (even if since deleted) |
 | `then_and_now`   | what the mind said on a topic at a past date, next to what it says now |
 | `show_shift`     | show how a position moved, claim by claim, every quote checked word for word |
-| `changelog`      | recent commit-level activity across the whole mind         |
 | `doc_blame`      | trace each line to the commit that wrote it                |
 | `doc_revert`     | restore a document to a past revision                      |
 
@@ -81,7 +77,7 @@ mind carries an [[features/activity-and-attribution|activity layer]] the AI can 
 
 | Tool             | What the AI does with it                                       |
 |------------------|----------------------------------------------------------------|
-| `activity`       | the attributed feed: who changed what, when, AI or human       |
+| `activity`       | the attributed feed, commit by commit: who changed what, when, AI or human |
 | `agent_runs`     | work sessions, an agent's or a person's, with the documents each one changed |
 | `undo_run`       | undo a session in one commit: all of it, from a given commit on, or some documents only |
 | `mind_weather`   | the mind region by region: activity, what is being forgotten, contradictions, the AI's share, the reports gone missing |

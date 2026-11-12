@@ -38,7 +38,7 @@
       "@type": "SoftwareApplication",
       "@id": "https://atlas-mind.anakior.app/#app",
       "name": "Atlas Mind",
-      "description": "A self-hostable wiki / knowledge-base engine. Your notes stay plain files in your own private git repository, served by a single Python standard-library server with no database, sending your content nowhere. AI-native via MCP (Model Context Protocol): 34 tools give an AI a persistent, local read-and-write memory.",
+      "description": "A self-hostable wiki / knowledge-base engine. Your notes stay plain files in your own private git repository, served by a single Python standard-library server with no database, sending your content nowhere. AI-native via MCP (Model Context Protocol): 30 tools give an AI a persistent, local read-and-write memory.",
       "applicationCategory": "DeveloperApplication",
       "applicationSubCategory": "Knowledge base / Personal knowledge management",
       "operatingSystem": "Linux, macOS, Windows",
@@ -336,8 +336,8 @@
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
       <h3><span lang="en">AI-native by design</span><span lang="fr">Pensé pour l’IA</span></h3>
-      <p><span lang="en">Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with thirty-four tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects, and the rituals you write down become commands. Assistants sign in over <b>OAuth</b>: you choose what each may do, and revoke it in a click.</span><span lang="fr">Atlas est la mémoire que ton assistant lit et enrichit. Il expose un point d’accès <b>MCP</b> avec trente-quatre outils pour lire, écrire, trier, cartographier, remonter le temps et auditer ton esprit. <code>atlas init</code> pose tes conventions, que chaque assistant reçoit dès qu’il se connecte, et les rituels que tu écris deviennent des commandes. Les assistants se connectent par <b>OAuth</b> : tu choisis ce que chacun peut faire, et tu le retires en un clic.</span></p>
-      <div class="tag"><a href="#superpowers"><span lang="en">MCP · 34 tools · REST API →</span><span lang="fr">MCP · 34 outils · API REST →</span></a></div>
+      <p><span lang="en">Atlas is the memory your assistant reads and enriches. It exposes an <b>MCP</b> endpoint with thirty tools — read, write, triage, map, rewind and audit your mind — and <code>atlas init</code> scaffolds your conventions, which every assistant receives the moment it connects, and the rituals you write down become commands. Assistants sign in over <b>OAuth</b>: you choose what each may do, and revoke it in a click.</span><span lang="fr">Atlas est la mémoire que ton assistant lit et enrichit. Il expose un point d’accès <b>MCP</b> avec trente outils pour lire, écrire, trier, cartographier, remonter le temps et auditer ton esprit. <code>atlas init</code> pose tes conventions, que chaque assistant reçoit dès qu’il se connecte, et les rituels que tu écris deviennent des commandes. Les assistants se connectent par <b>OAuth</b> : tu choisis ce que chacun peut faire, et tu le retires en un clic.</span></p>
+      <div class="tag"><a href="#superpowers"><span lang="en">MCP · 30 tools · REST API →</span><span lang="fr">MCP · 30 outils · API REST →</span></a></div>
     </div>
     <div class="card">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M20 4c-7 0-13 4-13 11v3l11-11"/><path d="M7 18c-1.2 1.2-2 2.4-2.5 3.5"/><path d="M16 8.5 9.5 15"/></svg></div>
@@ -358,7 +358,7 @@
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></div>
       <h3><span lang="en">Reads your whole mind</span><span lang="fr">Lit tout ton esprit</span></h3>
       <p><span lang="en">Ask in plain language and your AI gets a ready-made <b>brief</b> on the topic — the right sections, within a token budget — finds the exact line that states a fact, and catches up on what changed since it last looked. Every hit says <b>how far to trust it</b>: who edited it last, whether an AI did, whether it went stale or was judged contradicted.</span><span lang="fr">Demande en langage courant et ton IA reçoit un <b>dossier</b> tout prêt sur le sujet, les bonnes sections dans un budget de tokens, retrouve la ligne exacte qui énonce un fait, et rattrape ce qui a changé depuis sa dernière visite. Chaque résultat dit <b>jusqu’où s’y fier</b> : qui l’a modifié en dernier, si c’était une IA, s’il a vieilli ou s’il a été jugé contredit.</span></p>
-      <div class="tools"><code>brief</code><code>search_docs</code><code>grep_docs</code><code>read_doc</code><code>list_tree</code><code>recent_docs</code><code>changes_since</code><code>resume_session</code></div>
+      <div class="tools"><code>brief</code><code>search_docs</code><code>grep_docs</code><code>read_doc</code><code>list_tree</code><code>changes_since</code><code>resume_session</code></div>
     </div>
 
     <div class="power">
@@ -372,14 +372,14 @@
       <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.7"/><circle cx="19" cy="6" r="1.7"/><circle cx="5" cy="18" r="1.7"/><circle cx="19" cy="18" r="1.7"/><path d="m10.3 10.6-3.9-3.3M13.7 10.6l3.9-3.3M10.3 13.4l-3.9 3.3M13.7 13.4l3.9 3.3"/></svg></div>
       <h3><span lang="en">Sees the connections</span><span lang="fr">Voit les liens</span></h3>
       <p><span lang="en">Your AI traverses the wikilink graph the way you do: forward links, backlinks, a bird's-eye map of hubs and orphans, every note under a tag. It reasons about your mind's <b>shape</b>, not just its words.</span><span lang="fr">Ton IA parcourt le graphe des liens comme toi : liens sortants, liens entrants, une vue d’ensemble des carrefours et des notes isolées, toutes les notes d’une étiquette. Elle raisonne sur la <b>forme</b> de ton esprit, pas seulement sur ses mots.</span></p>
-      <div class="tools"><code>get_links</code><code>get_backlinks</code><code>get_mind_topology</code><code>list_by_tag</code></div>
+      <div class="tools"><code>get_links</code><code>get_mind_topology</code></div>
     </div>
 
     <div class="power">
       <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 3v3.5h3.5"/><path d="M12 7.5V12l3 1.8"/></svg></div>
       <h3><span lang="en">Travels through time</span><span lang="fr">Voyage dans le temps</span></h3>
       <p><span lang="en">“When did we decide this — and what was it before?” Your AI reads any <b>past version</b> of a note, diffs two points in time, finds a sentence you <b>deleted months ago</b>, traces a line back to the commit that wrote it, sets <b>what you thought then</b> beside what you think now, claim by claim, follows a moving changelog, and restores a version in one move — powered by the git history your mind already carries.</span><span lang="fr">« Quand a-t-on décidé ça, et c’était quoi avant ? » Ton IA lit n’importe quelle <b>version passée</b> d’une note, compare deux moments, retrouve une phrase <b>effacée il y a des mois</b>, remonte une ligne jusqu’au commit qui l’a écrite, met <b>ce que tu pensais alors</b> à côté de ce que tu penses aujourd’hui, affirmation par affirmation, suit un journal des changements et restaure une version d’un geste, grâce à l’historique git que ton esprit porte déjà.</span></p>
-      <div class="tools"><code>doc_history</code><code>doc_at</code><code>doc_diff</code><code>search_history</code><code>then_and_now</code><code>show_shift</code><code>changelog</code><code>doc_blame</code><code>doc_revert</code></div>
+      <div class="tools"><code>doc_history</code><code>doc_at</code><code>doc_diff</code><code>search_history</code><code>then_and_now</code><code>show_shift</code><code>doc_blame</code><code>doc_revert</code></div>
     </div>
 
     <div class="power">

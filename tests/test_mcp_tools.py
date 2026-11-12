@@ -1,9 +1,9 @@
 """Tests of the AI-native MCP graph / tag / trash tools.
 
 Tools added on top of the original 7:
-- get_links / get_backlinks  — wikilink graph traversal
+- get_links                  — wikilink graph traversal, both directions
 - get_mind_topology          — aggregate bird's-eye overview
-- list_by_tag                — browse by tag (+ a tag filter on search_docs)
+- list_tree with `tag`       — browse by tag (+ a tag filter on search_docs)
 - delete_doc                 — SOFT delete to .trash/ (reversible, never erased)
 
 MCP requires an 'api'-role Bearer token, so these run under the cloud-mode
@@ -61,6 +61,12 @@ def _call(srv, token, tool, arguments=None):
         return is_error, text
 
 
+def _files(tree) -> set:
+    """The paths of a list_tree result's files."""
+    return {n["path"] for n in tree.get("children", []) if n["type"] == "file"} | {
+        p for n in tree.get("children", []) if n["type"] == "dir" for p in _files(n)}
+
+
 class TestMcpGraphAndTags(unittest.TestCase):
     """Read-only tools → one server shared per class."""
 
@@ -80,19 +86,29 @@ class TestMcpGraphAndTags(unittest.TestCase):
         resp = self.srv.post(f"/mcp/{self.token}", json_body={
             "jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = {t["name"] for t in resp.json()["result"]["tools"]}
-        for tool in ("get_links", "get_backlinks", "get_mind_topology",
-                     "list_by_tag", "delete_doc"):
+        for tool in ("get_links", "get_mind_topology", "list_tree", "delete_doc"):
             self.assertIn(tool, names)
+        self.assertFalse(names & {"get_backlinks", "list_by_tag"})  # merged, no longer listed
 
-    def test_get_links_returns_outgoing(self):
-        err, data = _call(self.srv, self.token, "get_links", {"path": "accueil.md"})
+    def test_get_links_returns_both_directions(self):
+        err, data = _call(self.srv, self.token, "get_links", {"path": "projets/alpha.md"})
+        self.assertFalse(err)
+        self.assertEqual(set(data["links"]), {"accueil.md", "projets/beta.md"})
+        self.assertEqual(data["backlinks"], ["accueil.md"])
+
+    def test_get_links_one_direction(self):
+        err, data = _call(self.srv, self.token, "get_links", {"path": "accueil.md", "direction": "out"})
         self.assertFalse(err)
         self.assertEqual(set(data["links"]), {"projets/alpha.md", "projets/beta.md"})
-
-    def test_get_backlinks_returns_incoming(self):
-        err, data = _call(self.srv, self.token, "get_backlinks", {"path": "projets/beta.md"})
+        self.assertNotIn("backlinks", data)
+        err, data = _call(self.srv, self.token, "get_links", {"path": "projets/beta.md", "direction": "in"})
         self.assertFalse(err)
         self.assertEqual(set(data["backlinks"]), {"accueil.md", "projets/alpha.md"})
+        self.assertNotIn("links", data)
+
+    def test_get_links_bad_direction_is_error(self):
+        err, _ = _call(self.srv, self.token, "get_links", {"path": "accueil.md", "direction": "up"})
+        self.assertTrue(err)
 
     def test_get_links_unknown_doc_is_error(self):
         err, _ = _call(self.srv, self.token, "get_links", {"path": "nope/missing.md"})
@@ -104,15 +120,25 @@ class TestMcpGraphAndTags(unittest.TestCase):
         self.assertFalse(err)
         self.assertEqual(data["links"], [])
 
-    def test_list_by_tag(self):
+    def test_list_tree_by_tag(self):
+        err, data = _call(self.srv, self.token, "list_tree", {"tag": "Projets"})
+        self.assertFalse(err)
+        self.assertEqual(_files(data), {"projets/alpha.md", "projets/beta.md"})
+
+    def test_list_tree_unknown_tag_is_empty(self):
+        err, data = _call(self.srv, self.token, "list_tree", {"tag": "does-not-exist"})
+        self.assertFalse(err)
+        self.assertEqual(data["children"], [])
+        self.assertIn("get_mind_topology", data["hint"])
+
+    def test_merged_tools_still_answer(self):
+        # A host that cached the 2.8 tool list calls the old names: they reach the new tools.
+        err, data = _call(self.srv, self.token, "get_backlinks", {"path": "projets/beta.md"})
+        self.assertFalse(err)
+        self.assertEqual(set(data["backlinks"]), {"accueil.md", "projets/alpha.md"})
         err, data = _call(self.srv, self.token, "list_by_tag", {"tag": "projets"})
         self.assertFalse(err)
-        self.assertEqual(set(data["documents"]), {"projets/alpha.md", "projets/beta.md"})
-
-    def test_list_by_tag_unknown_returns_none(self):
-        err, data = _call(self.srv, self.token, "list_by_tag", {"tag": "does-not-exist"})
-        self.assertFalse(err)
-        self.assertEqual(data, {"tag": "does-not-exist", "documents": []})
+        self.assertEqual(_files(data), {"projets/alpha.md", "projets/beta.md"})
 
     def test_mind_topology_overview(self):
         err, data = _call(self.srv, self.token, "get_mind_topology")

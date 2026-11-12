@@ -4,7 +4,7 @@
 - doc_at        — full content at a past revision (by SHA) or date (by 'at')
 - doc_diff      — what a commit changed (default base = the doc's previous version)
 - search_history— pickaxe across ALL history (finds since-deleted text)
-- changelog     — corpus-wide recent commit activity with the doc files touched
+- activity      — corpus-wide recent commits with the doc files touched (was changelog)
 - doc_blame     — per-line last-change attribution (+ pattern filter)
 - doc_revert    — restore a doc to a past revision (write), refused on remotes/
 
@@ -98,7 +98,7 @@ class TestTimeTravelReadTools(unittest.TestCase):
             "jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = {t["name"] for t in resp.json()["result"]["tools"]}
         for tool in ("doc_history", "doc_at", "doc_diff", "search_history",
-                     "changelog", "doc_blame", "doc_revert"):
+                     "activity", "doc_blame", "doc_revert"):
             self.assertIn(tool, names)
 
     def test_doc_history_lists_revisions_newest_first_with_lifecycle(self):
@@ -185,14 +185,28 @@ class TestTimeTravelReadTools(unittest.TestCase):
         self.assertTrue(err)
         self.assertIn("Invalid", text)
 
-    def test_changelog_lists_recent_doc_changes(self):
-        err, data = self._call("changelog", {"days": 365})
+    def test_activity_lists_recent_doc_changes(self):
+        err, data = self._call("activity", {"days": 365})
         self.assertFalse(err)
-        subjects = [c["subject"] for c in data["commits"]]
+        subjects = [c["subject"] for c in data["events"]]
         self.assertIn("edit: alpha zeta->omega", subjects)
-        omega = next(c for c in data["commits"] if c["subject"] == "edit: alpha zeta->omega")
+        omega = next(c for c in data["events"] if c["subject"] == "edit: alpha zeta->omega")
         edited = next(f for f in omega["files"] if f["path"] == _DOC)
         self.assertEqual(edited["status"], "M")  # parsed status, not a stray '\n'
+        self.assertNotIn("paths", omega)  # `files` names them already
+
+    def test_activity_path_prefix_scopes_to_a_folder(self):
+        err, data = self._call("activity", {"days": 365, "path_prefix": "projets"})
+        self.assertFalse(err)
+        self.assertTrue(data["events"])
+        self.assertTrue(all(f["path"].startswith("projets/")
+                            for e in data["events"] for f in e["files"]))
+        err, data = self._call("activity", {"days": 365, "path_prefix": "nowhere"})
+        self.assertFalse(err)
+        self.assertEqual(data["events"], [])
+        err, text = self._call("activity", {"path_prefix": "../etc"})
+        self.assertTrue(err)
+        self.assertIn("Invalid", text)
 
     def test_doc_blame_attributes_lines_and_pattern_filters(self):
         err, data = self._call("doc_blame", {"path": _DOC, "pattern": "OMEGAMARKER"})
@@ -257,18 +271,17 @@ class TestHistoryRenameParsing(unittest.TestCase):
     def tearDown(self):
         self.srv.stop()
 
-    def test_changelog_surfaces_a_rename_as_one_record(self):
+    def test_activity_surfaces_a_rename_as_one_record(self):
         _commit(self.srv, "projets/before.md", "# Before\n\nRENAMEMARK\n", "rn: add before")
         self.srv.git("mv", "content/projets/before.md", "content/projets/after.md")
         self.srv.git("commit", "-q", "-m", "rn: move before to after")
-        err, data = _call(self.srv, self.token, "changelog", {"days": 365})
+        err, data = _call(self.srv, self.token, "activity", {"days": 365})
         self.assertFalse(err)
-        move = next((c for c in data["commits"] if c["subject"] == "rn: move before to after"), None)
+        move = next((c for c in data["events"] if c["subject"] == "rn: move before to after"), None)
         self.assertIsNotNone(move)
-        renamed = move["files"][0]
-        self.assertEqual(renamed["status"], "R")
-        self.assertEqual(renamed["path"], "projets/after.md")
-        self.assertEqual(renamed["old_path"], "projets/before.md")
+        self.assertEqual(move["type"], "move")
+        self.assertEqual(move["files"], [{"status": "R", "path": "projets/after.md",
+                                          "from": "projets/before.md"}])
 
 
 if __name__ == "__main__":

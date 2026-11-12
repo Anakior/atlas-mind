@@ -304,7 +304,7 @@ class TestBrowseMind(unittest.TestCase):
     def test_api_recent_session_route_does_not_exist(self):
         # Characterization (surprising): there is NO session route /api/recent —
         # the feature exists only via Bearer (/api/v1/recent) and via MCP
-        # (recent_docs). The path falls back to the static handler →
+        # (changes_since). The path falls back to the static handler →
         # http.server's HTML 404 page, not JSON.
         resp = self.srv.get("/api/recent")
         self.assertEqual(resp.status, 404)

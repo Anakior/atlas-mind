@@ -263,11 +263,16 @@ class TestReads(unittest.TestCase):
     def call(self, tool, **args):
         return _call(self.srv, self.token, tool, args)
 
-    def test_recent_docs_go_by_commit_date_and_flag_outside_text(self):
-        err, data = self.call("recent_docs", days=7)
+    def test_recent_changes_go_by_commit_date_and_flag_outside_text(self):
+        err, data = self.call("changes_since", days=7, preview=True)
         self.assertFalse(err, data)
         self.assertEqual([(d["path"], d.get("untrusted")) for d in data["documents"]],
                          [("remotes/alice/tarifs.md", "remote:alice")])
+        self.assertTrue(data["documents"][0]["preview"])
+        _, plain = self.call("changes_since", days=7)
+        self.assertNotIn("preview", plain["documents"][0])
+        _, old = self.call("recent_docs", days=7)  # the 2.8 name, merged into changes_since
+        self.assertEqual(old["documents"], data["documents"])
 
     def test_list_tree_flags_outside_files_and_folds(self):
         err, tree = self.call("list_tree")
@@ -323,7 +328,7 @@ class TestReads(unittest.TestCase):
 
     def test_folder_filters_answer_to_every_name(self):
         for tool, args, folder in (("grep_docs", {"pattern": "tarif"}, "remotes"),
-                                   ("stale", {"months": 1}, "remotes"), ("changelog", {"days": 30}, "notes")):
+                                   ("stale", {"months": 1}, "remotes"), ("activity", {"days": 30}, "notes")):
             answers = {json.dumps(self.call(tool, **args, **{key: folder})[1], sort_keys=True)
                        for key in ("path_prefix", "prefix", "path")}
             self.assertEqual(len(answers), 1, tool)
@@ -374,7 +379,7 @@ class TestReads(unittest.TestCase):
         self.assertNotIn("/api/", json.dumps(tools["doc_at"]))
         self.assertIn("start_line", tools["doc_at"]["inputSchema"]["properties"])
         self.assertLess(len(json.dumps(tools["resume_session"]["outputSchema"])), 600)
-        for name in ("grep_docs", "search_history", "changelog", "stale", "list_tree"):
+        for name in ("grep_docs", "search_history", "activity", "stale", "list_tree"):
             self.assertIn("path_prefix", tools[name]["inputSchema"]["properties"], name)
 
 
@@ -509,12 +514,12 @@ class TestHistoryTools(_Writes):
             self.commit("accueil.md", f"# Accueil {n}\n" + "zorg\n" * (n + 1), f"edited: accueil {n}")
         err, data = self.call("activity", type="create", limit=1)
         self.assertFalse(err, data)
-        self.assertEqual([e["paths"] for e in data["events"]], [["notes/new.md"]])
+        self.assertEqual([[f["path"] for f in e["files"]] for e in data["events"]], [["notes/new.md"]])
         fs = file_store_of(self.srv)
         fs.set_owner("accueil.md", "user:" + ADMIN_EMAIL)
         reader = _token(self.srv, "reader@api.local", VIEWER_EMAIL, role="viewer")
-        _, data = self.call("changelog", token=reader, limit=1)
-        self.assertEqual([f["path"] for c in data["commits"] for f in c["files"]], ["notes/new.md"])
+        _, data = self.call("activity", token=reader, limit=1)
+        self.assertEqual([f["path"] for c in data["events"] for f in c["files"]], ["notes/new.md"])
         _, data = self.call("search_history", token=reader, query="zorg", limit=1)
         self.assertEqual([f["path"] for c in data["matches"] for f in c["files"]], ["notes/new.md"])
 

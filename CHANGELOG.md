@@ -8,6 +8,31 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-11-12
+
+Fewer tools for the same answers: four MCP tools that gave a second view of another tool's
+answer were merged into it, and their old names still work. The activity feed now reads a move
+and the trash the way the changelog did. Refresh the connector's tools in Claude. An Atlas on
+2.2.0 or later gets this one from Settings › About.
+
+### Changed
+- **Four MCP tools merged into their neighbours: 30 tools instead of 34.** Each one gave a second
+  view of what another tool already returned, so an agent had two tools to choose from for the same
+  question:
+  - `changelog` → `activity`, which takes `path_prefix` and lists each commit's `files` with
+    their status, a rename's `from` included;
+  - `recent_docs` → `changes_since`, whose `preview` adds the start of each doc;
+  - `get_backlinks` → `get_links`, which returns both directions (`direction`: out, in or
+    both);
+  - `list_by_tag` → `list_tree`, which takes a `tag` and lists only the files carrying it.
+
+  The old names still answer without being listed, so a client that kept the old tool list and
+  a prompt that names them both keep working. The tool list is 5% shorter. Refresh the
+  connector's tools in Claude.
+- **The activity feed reads a commit as changelog did**, in the tool and in the Activity
+  journal. A doc moved into the trash reads as deleted, a restored one as added, and a move
+  between a folder you can read and one you cannot is left out instead of naming the hidden end.
+
 ## [2.8.0] - 2026-11-11
 
 The MCP surface, polished: every tool says when to use it rather than its neighbour and what

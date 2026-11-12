@@ -64,14 +64,14 @@ Every access shows in **Settings › AI assistants**, with when it was last used
 
 ## What your AI can do
 
-Thirty-four tools, in six groups:
+Thirty tools, in six groups:
 
 | Group | Tools | For |
 | --- | --- | --- |
-| **Read** | `brief` · `search_docs` · `grep_docs` · `read_doc` · `list_tree` · `recent_docs` · `changes_since` · `resume_session` | A context pack on a topic within a token budget; ranked search where each hit says how far to trust it (last editor, AI or human, stale, contested, or a record of a past date); every quotation of a note checked against the file it quotes; picking up a saved work session. |
+| **Read** | `brief` · `search_docs` · `grep_docs` · `read_doc` · `list_tree` · `changes_since` · `resume_session` | A context pack on a topic within a token budget; ranked search where each hit says how far to trust it (last editor, AI or human, stale, contested, or a record of a past date); every quotation of a note checked against the file it quotes; picking up a saved work session. |
 | **Write** | `create_doc` · `edit_doc` · `move_doc` · `delete_doc` | Edits return their diff and can refuse to overwrite a concurrent change; moves rewrite the `[[links]]` that point at a note. |
-| **Graph** | `get_links` · `get_backlinks` · `list_by_tag` · `get_mind_topology` | Walking the mind by its links and tags. |
-| **Time travel** | `doc_history` · `doc_at` · `doc_diff` · `search_history` · `then_and_now` · `show_shift` · `changelog` · `doc_blame` · `doc_revert` | Your mind is a git repo: what a note said on any date, and what you thought then next to what you think now, claim by claim, each quote checked against the version it cites. |
+| **Graph** | `get_links` · `get_mind_topology` | Walking the mind by its links, both ways, and its tags. |
+| **Time travel** | `doc_history` · `doc_at` · `doc_diff` · `search_history` · `then_and_now` · `show_shift` · `doc_blame` · `doc_revert` | Your mind is a git repo: what a note said on any date, and what you thought then next to what you think now, claim by claim, each quote checked against the version it cites. |
 | **Activity** | `activity` · `agent_runs` · `undo_run` · `mind_weather` · `stale` · `confirm_doc` · `contradictions` · `judge_contradiction` | Who changed what, an agent's work undone in one commit (whole or for some notes), the folders being forgotten, the contradictions to settle. |
 | **Inbox** | `create_inbox_item` | An agent drops a ready-to-file item for you to keep, snooze or bin. |
 

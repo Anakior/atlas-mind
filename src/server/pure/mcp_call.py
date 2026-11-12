@@ -18,7 +18,7 @@ import server as _s
 from store import slugify_token_label, slugify_title
 from server.pure.queries import (
     _visible, _visible_at, _touched_visible, _readable, _doc_corpus, _links_graph, _tags_for, _api_search,
-    _api_recent, _api_stale, _api_outdated, _activity_feed, _headings, _strip_content, _MONTH_SECONDS,
+    _api_stale, _api_outdated, _activity_feed, _doc_preview, _headings, _strip_content, _MONTH_SECONDS,
     _OVERFETCH,
 )
 from server.pure import (
@@ -543,37 +543,51 @@ def _fold(tree, folder) -> int:
     return folded
 
 
+def _tagged_paths(node, tag) -> set:
+    """Paths of the tree's files carrying `tag`: their folders' and their frontmatter's, as
+    the walk tagged them for the viewer."""
+    paths = set()
+    for child in node["children"]:
+        if child["type"] == "dir":
+            paths |= _tagged_paths(child, tag)
+        elif tag in (t.lower() for t in child.get("tags", ())):
+            paths.add(child["path"])
+    return paths
+
+
 def _tool_list_tree(args, ctx):
     prefix = _safe_path_prefix(_folder_arg(args))
     if prefix is None:
         return text_result("Invalid 'path_prefix'", is_error=True)
+    tag = (args.get("tag") or "").strip().lower()
     try:
         tree = _s._import_build().walk(_s.CONFIG.content_root)
         if ctx is not None:  # the walk's paths are spelled as on disk: no canonical one to look up
             tree = _s._filter_tree(tree, lambda p: _s._acl_can_read(p, ctx))
-        inbox = _inbox_tree(ctx)
-        if inbox:
-            tree["children"].append(inbox)
+        if tag:
+            tree = _s._filter_tree(tree, _tagged_paths(tree, tag).__contains__)
+        else:
+            inbox = _inbox_tree(ctx)
+            if inbox:
+                tree["children"].append(inbox)
     except Exception as e:
         print(f"[mcp] list_tree failed: {e}", file=sys.stderr)
         return text_result("Error listing the tree", is_error=True)
     if prefix:
         tree = _subtree(tree, prefix)
         if tree is None:
-            return text_result(f"No folder {prefix} that you can see: list_tree without "
+            tagged = f" holding a file tagged {tag!r}" if tag else ""
+            return text_result(f"No folder {prefix} that you can see{tagged}: list_tree without "
                                "path_prefix shows the top folders.", is_error=True)
+    if tag and not tree["children"]:
+        tree["hint"] = (f"No document you can see carries the tag {tag!r}: get_mind_topology "
+                        "lists the most frequent tags.")
     provenance.mark_tree(tree, prefix)
     folded = _fold(tree, prefix)
     if folded:
         tree["hint"] = (f"{folded} folder(s) are folded into their count of `files` to keep this "
                         "short: list_tree with path_prefix set to a folded folder's `path` opens it.")
     return json_result(_with_sync_warning(tree))
-
-
-def _tool_recent_docs(args, ctx):
-    days = clamp_int(args.get("days"), 7, 1)
-    limit = clamp_int(args.get("limit"), 20, 1, 100)
-    return json_result({"days": days, "documents": _api_recent(days, limit, ctx)})
 
 
 def _create_doc_impl(rel, content, ai, ctx, subject=None):
@@ -895,22 +909,22 @@ def _tool_move_doc(args, ctx):
     return text_result(msg)
 
 
+# direction → (the graph's side, the key it answers under)
+_LINK_SIDES = {"out": [("out", "links")], "in": [("in", "backlinks")],
+               "both": [("out", "links"), ("in", "backlinks")]}
+
+
 def _tool_get_links(args, ctx):
     rel = (args.get("path") or "").strip()
+    sides = _LINK_SIDES.get((args.get("direction") or "both").strip().lower())
+    if sides is None:
+        return text_result("Invalid 'direction': out, in or both.", is_error=True)
     target = _s._validate_doc_path(rel)
     if not target or not target.exists() or not _visible(rel, ctx):
         return _not_found(rel, ctx)
     entry = _links_graph(ctx).get(rel) or {"out": [], "in": []}
-    return json_result({"path": rel, "links": [p for p in entry["out"] if _visible(p, ctx)]})
-
-
-def _tool_get_backlinks(args, ctx):
-    rel = (args.get("path") or "").strip()
-    target = _s._validate_doc_path(rel)
-    if not target or not target.exists() or not _visible(rel, ctx):
-        return _not_found(rel, ctx)
-    entry = _links_graph(ctx).get(rel) or {"out": [], "in": []}
-    return json_result({"path": rel, "backlinks": [p for p in entry["in"] if _visible(p, ctx)]})
+    return json_result({"path": rel, **{key: [p for p in entry[side] if _visible(p, ctx)]
+                                        for side, key in sides}})
 
 
 def _tool_get_mind_topology(args, ctx):
@@ -941,16 +955,6 @@ def _tool_get_mind_topology(args, ctx):
         "top_tags": top_tags,
     }
     return json_result(payload)
-
-
-def _tool_list_by_tag(args, ctx):
-    tag = (args.get("tag") or "").strip().lower()
-    if not tag:
-        return text_result("Error: missing 'tag' parameter", is_error=True)
-    build = _s._import_build()
-    matches = sorted(rel for rel, _, text in _doc_corpus(ctx)
-                     if tag in _tags_for(build, rel, text))
-    return json_result({"tag": tag, "documents": matches})
 
 
 def _tool_delete_doc(args, ctx):
@@ -1135,36 +1139,20 @@ def _visible_log(log_args, limit, ctx):
     return commits[:limit], len(commits) > limit or result.stdout.count("\x1e") >= fetch
 
 
-def _tool_changelog(args, ctx):
-    days = clamp_int(args.get("days"), 14, 1, 365)
-    limit = clamp_int(args.get("limit"), 50, 1, 200)
-    author = (args.get("author") or "").strip()
-    prefix = _safe_path_prefix(_folder_arg(args))
-    if prefix is None:
-        return text_result("Invalid 'path_prefix'", is_error=True)
-    pathspec = "content/" + prefix if prefix else "content"
-    # -M: detect renames so a moved doc shows as one R record (old+new path)
-    # rather than a delete+add pair; the -z parser pairs the two paths.
-    opts = ["--since=" + str(days) + ".days.ago",
-            "--format=%x1e%H\x1f%an\x1f%aI\x1f%s", "--name-status", "-M", "-z"]
-    if author:
-        opts.append("--author=" + author)
-    log = _visible_log([*opts, "--", pathspec], limit, ctx)
-    if log is None:
-        return text_result("git log failed", is_error=True)
-    commits, truncated = log
-    return json_result({"since_days": days, "commits": commits, "truncated": truncated})
-
-
 def _tool_activity(args, ctx):
     days = clamp_int(args.get("days"), 14, 1, 365)
     limit = clamp_int(args.get("limit"), 50, 1, 200)
     author = (args.get("author") or "").strip() or None
     type_filter = (args.get("type") or "").strip() or None
-    feed = _activity_feed(days, limit, author, type_filter, ctx)
+    prefix = _safe_path_prefix(_folder_arg(args))
+    if prefix is None:
+        return text_result("Invalid 'path_prefix'", is_error=True)
+    feed = _activity_feed(days, limit, author, type_filter, ctx, prefix)
     if feed is None:
         return text_result("git log failed", is_error=True)
     events, truncated = feed
+    for event in events:  # its `files` name the same paths, with their status
+        del event["paths"]
     return json_result({"since_days": days, "events": events, "truncated": truncated})
 
 
@@ -1457,6 +1445,10 @@ def _tool_changes_since(args, ctx):
         payload.update(cursor=page[-1]["sha"], documents=docs[:limit], truncated=True)
         if len(docs) > limit:  # one commit alone changed more docs than that
             payload["omitted"] = len(docs) - limit
+    if args.get("preview") is True:
+        for doc in payload["documents"]:
+            if doc["change"] != "deleted":
+                doc["preview"] = _doc_preview(_s.CONFIG.content_root / doc["path"])
     return json_result(payload)
 
 
@@ -1665,21 +1657,17 @@ _TOOLS = {
     "grep_docs": _tool_grep_docs,
     "read_doc": _tool_read_doc,
     "list_tree": _tool_list_tree,
-    "recent_docs": _tool_recent_docs,
     "create_doc": _tool_create_doc,
     "create_inbox_item": _tool_create_inbox_item,
     "edit_doc": _tool_edit_doc,
     "move_doc": _tool_move_doc,
     "get_links": _tool_get_links,
-    "get_backlinks": _tool_get_backlinks,
     "get_mind_topology": _tool_get_mind_topology,
-    "list_by_tag": _tool_list_by_tag,
     "delete_doc": _tool_delete_doc,
     "doc_history": _tool_doc_history,
     "doc_at": _tool_doc_at,
     "doc_diff": _tool_doc_diff,
     "search_history": _tool_search_history,
-    "changelog": _tool_changelog,
     "activity": _tool_activity,
     "stale": _tool_stale,
     "contradictions": _tool_contradictions,
@@ -1697,6 +1685,15 @@ _TOOLS = {
     "undo_run": _tool_undo_run,
 }
 
+# Tools merged into another in 2.9.0, still answered but no longer listed: a host that cached
+# the old list, or a prompt that names them, keeps working. old name → (tool, arguments added)
+_ALIASES = {
+    "recent_docs": ("changes_since", {"preview": True}),
+    "changelog": ("activity", {}),
+    "get_backlinks": ("get_links", {"direction": "in"}),
+    "list_by_tag": ("list_tree", {}),
+}
+
 
 def _tool_scope(tool: dict) -> str:
     """The scope a tool needs: read for the read-only ones, inbox for the inbox drop (so a
@@ -1708,6 +1705,7 @@ def _tool_scope(tool: dict) -> str:
 
 def _needed_scope(name: str):
     """The scope tool `name` needs, or None for an unknown tool."""
+    name = _ALIASES.get(name, (name,))[0]
     tool = next((t for t in _s._mcp_tools() if t["name"] == name), None)
     return _tool_scope(tool) if tool else None
 
@@ -1721,6 +1719,9 @@ def _allowed_tools(ctx) -> list:
 
 def _mcp_call_tool(name: str, args: dict, ctx=None) -> dict:
     """Dispatch an MCP tool to its handler. Returns MCP CallToolResult."""
+    if name in _ALIASES:
+        name, added = _ALIASES[name]
+        args = {**args, **added}
     fn = _TOOLS.get(name)
     if fn is None:
         return text_result(f"Unknown tool: {name}", is_error=True)

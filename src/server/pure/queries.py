@@ -367,24 +367,19 @@ def _api_recent(days: int, limit: int, ctx=None) -> list:
                 continue
         if ts >= cutoff:
             recent.append((-ts, rel, path))
-    items = []
-    for ts, rel, path in sorted(recent)[:limit]:
-        try:
-            content = path.read_text(encoding="utf-8")
-            preview = content[:160].replace("\n", " ").strip()
-            if len(content) > 160:
-                preview += "…"
-        except (OSError, UnicodeDecodeError):
-            preview = ""
-        items.append({
-            "path": rel,
-            "name": path.name,
-            "score": 0,
-            "snippet": preview,
-            "mtime": int(-ts),
-            **provenance.mark(rel),
-        })
-    return items
+    return [{"path": rel, "name": path.name, "score": 0, "snippet": _doc_preview(path),
+             "mtime": int(-ts), **provenance.mark(rel)}
+            for ts, rel, path in sorted(recent)[:limit]]
+
+
+def _doc_preview(path, size: int = 160) -> str:
+    """The first `size` characters of a doc on one line, '…' when cut; '' if unreadable."""
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+    preview = content[:size].replace("\n", " ").strip()
+    return preview + "…" if len(content) > size else preview
 
 
 _MONTH_SECONDS = 2629800  # 30.4375 days
@@ -539,10 +534,11 @@ def _activity_events(days, limit, author, type_filter, ctx):
     return None if feed is None else feed[0]
 
 
-def _activity_feed(days, limit, author, type_filter, ctx):
-    """Corpus-wide activity feed: git log over content/ carrying the X-Atlas-Author
-    trailer + author email, mapped to the CDC event model
-    {sha, short_sha, author, email, ai, date (UTC), type, title, subject, paths, untrusted?}.
+def _activity_feed(days, limit, author, type_filter, ctx, prefix=""):
+    """Activity feed over content/ (or its `prefix` folder): git log carrying the
+    X-Atlas-Author trailer + author email, mapped to the CDC event model
+    {sha, short_sha, author, email, ai, date (UTC), type, title, subject, paths,
+    files: [{status, path, from?}], untrusted?}.
     ACL-scrubbed per `ctx` (None = unfiltered/internal). Returns (events, truncated), truncated
     when more events than `limit` may exist in the window, or None on git failure."""
     fmt = ("%x1e%H\x1f%an\x1f%ae\x1f%aI\x1f%s\x1f"
@@ -552,7 +548,7 @@ def _activity_feed(days, limit, author, type_filter, ctx):
             "--format=" + fmt, "--name-status", "-M", "-z"]
     if author:
         opts.append("--author=" + author)
-    opts += ["--", "content"]
+    opts += ["--", "content/" + prefix if prefix else "content"]
     result = _s.git(*opts)
     if result.returncode != 0:
         return None
@@ -572,14 +568,17 @@ def _activity_feed(days, limit, author, type_filter, ctx):
         while i < len(tokens):
             status = tokens[i]
             if status[:1] in ("R", "C") and i + 2 < len(tokens):
-                new_rel = _strip_content(tokens[i + 2])
-                old_rel = _strip_content(tokens[i + 1])
-                # A soft-delete is a rename INTO .trash (excluded); keep the visible side
-                # so the event isn't dropped — its "deleted:" subject still types it.
-                rel = new_rel if (new_rel and _history_path_included(new_rel, excluded, False)) else old_rel
-                if (rel is not None and _history_path_included(rel, excluded, False)
-                        and _touched_visible(rel, sha, ctx)):
-                    files.append({"status": status[:1], "path": rel})
+                old_rel, new_rel = _strip_content(tokens[i + 1]), _strip_content(tokens[i + 2])
+                old_in, new_in = (rel is not None and _history_path_included(rel, excluded, False)
+                                  for rel in (old_rel, new_rel))
+                if old_in and new_in:  # a move inside the mind: for who sees both ends only
+                    if _touched_visible(old_rel, sha, ctx) and _touched_visible(new_rel, sha, ctx):
+                        files.append({"status": status[:1], "path": new_rel, "from": old_rel})
+                elif old_in or new_in:
+                    # A soft delete is a rename INTO .trash (excluded): a D; a restore, an A.
+                    rel = new_rel if new_in else old_rel
+                    if _touched_visible(rel, sha, ctx):
+                        files.append({"status": "A" if new_in else "D", "path": rel})
                 i += 3
             else:
                 rel = _strip_content(tokens[i + 1]) if i + 1 < len(tokens) else None
@@ -603,7 +602,7 @@ def _activity_feed(days, limit, author, type_filter, ctx):
             "sha": sha, "short_sha": sha[:7], "author": an, "email": ae,
             "ai": ai, "date": date, "type": typ,
             "title": posixpath.splitext(posixpath.basename(paths[0]))[0],
-            "subject": subj, "paths": paths,
+            "subject": subj, "paths": paths, "files": files,
             # File names written outside the mind (a mirror's) are its text too.
             **next(filter(None, map(provenance.mark, paths)), {}),
         })

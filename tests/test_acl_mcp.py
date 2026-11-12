@@ -111,7 +111,7 @@ class TestMcpBearerAcl(unittest.TestCase):
     def test_no_read_tool_leaks_private_content_to_bare_token(self):
         # Every path-addressed read tool: a bare token gets "not found", NEVER the
         # private content (the _visible gate fires before any git/blob read).
-        for tool in ("read_doc", "get_links", "get_backlinks",
+        for tool in ("read_doc", "get_links",
                      "doc_history", "doc_at", "doc_diff", "doc_blame"):
             out = self._mcp_text(self.bare_token, tool,
                                  {"path": "secret/private.md", "rev": "HEAD"})
@@ -124,9 +124,9 @@ class TestMcpBearerAcl(unittest.TestCase):
             ("search_docs", {"q": "terme-secret-prive"}),
             ("search_history", {"query": "terme-secret-prive"}),
             ("list_tree", {}),
-            ("recent_docs", {"days": 3650}),
-            ("list_by_tag", {"tag": "secret"}),
-            ("changelog", {"days": 3650}),
+            ("changes_since", {"days": 365, "preview": True}),
+            ("list_tree", {"tag": "secret"}),
+            ("activity", {"days": 365}),
             ("get_mind_topology", {}),
         ]
         for tool, args in cases:
