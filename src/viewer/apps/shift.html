@@ -55,7 +55,7 @@ __KIT_CSS__
 (function () {
   var app = document.getElementById('app');
   var kit = atlasKit(__I18N__, app);
-  var t = kit.t, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
+  var t = kit.t, count = kit.count, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
   var state = { data: null };
   var LABEL_GAP = 6;  // px between two day labels on the timeline
 
@@ -81,7 +81,7 @@ __KIT_CSS__
     return add(el('header'), el('h1', null, t('title', { topic: d.topic })),
       add(el('div', 'pills'), add(el('span', 'pill accent'), icon('clock'), t('then_pill', { date: long(d.at) })),
         add(el('span', 'pill'), icon('calendar'), t('now_pill', { date: long(d.today) })),
-        el('span', 'pill', t('claims', { n: d.shifts.length }))));
+        el('span', 'pill', count('claims', d.shifts.length))));
   }
 
   // A click on a day the topic moved asks to compare with that day.

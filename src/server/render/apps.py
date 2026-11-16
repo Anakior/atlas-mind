@@ -1,7 +1,8 @@
 """MCP Apps views (web/apps/<name>.html): one self-contained page per view, served as a ui://
-resource and rendered by the host inline in the conversation. At serve time the page gets the
-shared bridge (web/apps/bridge.js), the kit every view builds on (kit.css, kit.js) and its labels
-in the instance's language (the i18n keys app_<name>_*), so it loads nothing from anywhere.
+resource and rendered by the host in the conversation (or, on claude.ai, in its side panel). At
+serve time the page gets the shared bridge (web/apps/bridge.js), the kit every view builds on
+(kit.css, kit.js) and its labels in the instance's language (the i18n keys app_<name>_*), so it
+loads nothing from anywhere.
 Cache is module-level (the files ship with the package)."""
 import json
 

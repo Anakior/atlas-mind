@@ -34,6 +34,11 @@ window.atlasKit = function (T, app) {
     return (T[key] || key).replace(/\{(\w+)\}/g, function (_, k) { return vars && vars[k] != null ? vars[k] : ''; });
   }
 
+  // A count in words: the label's _one form for 1 ("1 commit"), when it has one.
+  function count(key, n, vars) {
+    return t(n === 1 && T[key + '_one'] ? key + '_one' : key, Object.assign({ n: n }, vars));
+  }
+
   function el(tag, cls, text) {
     var node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -92,6 +97,6 @@ window.atlasKit = function (T, app) {
     try { return JSON.parse(text); } catch (e) { throw new Error('?'); }
   }
 
-  return { lang: lang, t: t, el: el, add: add, icon: icon, day: day, ago: ago, docName: docName,
+  return { lang: lang, t: t, count: count, el: el, add: add, icon: icon, day: day, ago: ago, docName: docName,
            status: status, loading: loading, data: data };
 };

@@ -91,7 +91,7 @@ __KIT_CSS__
 (function () {
   var app = document.getElementById('app');
   var kit = atlasKit(__I18N__, app);
-  var t = kit.t, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
+  var t = kit.t, count = kit.count, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
   // list: the runs as the tool gave them; scene: the run opened, its commits oldest first, the
   // one picked, what was undone from here, the cut awaiting confirmation and the last outcome.
   var state = { list: null, scene: null };
@@ -124,7 +124,6 @@ __KIT_CSS__
     if (run.ai) return add(line, add(el('span', 'pill accent'), icon('spark'), who(run)));
     return add(line, el('span', 'name', who(run)));
   }
-  function count(key, n) { return t(n === 1 ? key + '_one' : key, { n: n }); }
   function busy(on) { app.classList.toggle('busy', on); }
   function fail(e) { busy(false); kit.status(t('error', { message: e.message }), 'error'); }
 
@@ -158,7 +157,7 @@ __KIT_CSS__
       section.lastChild.appendChild(row);
     });
     if (shown.length < runs.length) {
-      var more = el('button', 'link more', t('show_more', { n: runs.length - shown.length }));
+      var more = el('button', 'link more', count('show_more', runs.length - shown.length));
       more.onclick = function () { showList(true); };
       app.appendChild(more);
     }
@@ -259,7 +258,7 @@ __KIT_CSS__
           var c = line[0];
           return el('div', c === '+' ? 'add' : c === '-' ? 'del' : c === '@' ? 'hunk' : null, line);
         });
-        if (lines.length > 80) out.push(el('div', 'hunk', t('more_lines', { n: lines.length - 80 })));
+        if (lines.length > 80) out.push(el('div', 'hunk', count('more_lines', lines.length - 80)));
         return out.length ? out : [el('div', 'hunk', t('no_diff'))];
       };
       pre.replaceChildren.apply(pre, s.diffs[key]());

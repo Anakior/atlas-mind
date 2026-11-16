@@ -25,15 +25,17 @@ async function mcp(method, params) {
   return (await res.json()).result;
 }
 
+// FRAME_WIDTH: render the view at another width, such as claude.ai's side panel (320 px at least).
+const width = Number(process.env.FRAME_WIDTH) || 680;
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 720, height: 900 } });
+const page = await browser.newPage({ viewport: { width: width + 40, height: 900 } });
 await page.exposeFunction('callTool', (params) => mcp('tools/call', params));
 await page.setContent('<!doctype html><body style="margin:0;background:#888"></body>');
-await page.evaluate(({ html, tool, args, theme }) => {
+await page.evaluate(({ html, tool, args, theme, width }) => {
   window.__log = [];
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts');
-  frame.style.cssText = 'border:0;width:680px;height:860px;display:block;margin:20px';
+  frame.style.cssText = `border:0;width:${width}px;height:860px;display:block;margin:20px`;
   frame.srcdoc = html;
   document.body.appendChild(frame);
   const toView = (message) => frame.contentWindow.postMessage({ jsonrpc: '2.0', ...message }, '*');
@@ -59,7 +61,7 @@ await page.evaluate(({ html, tool, args, theme }) => {
       toView({ id: m.id, result: {} });
     }
   });
-}, { html: fs.readFileSync(viewFile, 'utf8'), tool, args: JSON.parse(argsJson), theme });
+}, { html: fs.readFileSync(viewFile, 'utf8'), tool, args: JSON.parse(argsJson), theme, width });
 
 const view = page.frameLocator('iframe');
 async function shot(suffix = '') {

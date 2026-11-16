@@ -108,7 +108,7 @@ __KIT_CSS__
 (function () {
   var app = document.getElementById('app');
   var kit = atlasKit(__I18N__, app);
-  var t = kit.t, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
+  var t = kit.t, count = kit.count, el = kit.el, add = kit.add, icon = kit.icon, docName = kit.docName;
   var state = { data: null, layer: 'fog', picked: null, showQuiet: false, decisions: [] };
 
   // What a folder weighs on each layer, and how its number reads. Counts bar against the longest
@@ -117,7 +117,7 @@ __KIT_CSS__
     fog: { icon: 'fog', value: function (r) { return r.fog; },
            label: function (r) { return t('of', { n: r.fog, total: r.docs }); } },
     sun: { icon: 'sun', value: function (r) { return r.commits; },
-           label: function (r) { return t('n_commits', { n: r.commits }); } },
+           label: function (r) { return count('n_commits', r.commits); } },
     storms: { icon: 'bolt', value: function (r) { return r.storms; },
               label: function (r) { return t('n_storms', { n: r.storms }); } },
     wind: { icon: 'wind', share: true, value: function (r) { return r.commits ? r.ai_share : 0; },
@@ -166,7 +166,8 @@ __KIT_CSS__
   }
 
   function stats(region) {
-    return t('region_stats', { docs: region.docs, changed: region.changed, commits: region.commits,
+    return t('region_stats', { docs: count('n_docs', region.docs), changed: count('n_changed', region.changed),
+                               commits: count('n_commits', region.commits),
                                ai: Math.round(region.ai_share * 100), fog: region.fog });
   }
 
@@ -187,7 +188,7 @@ __KIT_CSS__
       add(box, row, open ? details(region) : null);
     });
     if (quiet.length && !state.showQuiet) {
-      var more = el('button', 'more', t('quiet_' + state.layer, { n: quiet.length }));
+      var more = el('button', 'more', count('quiet_' + state.layer, quiet.length));
       more.onclick = function () { state.showQuiet = true; render(); };
       box.appendChild(more);
     }
@@ -202,7 +203,7 @@ __KIT_CSS__
       var row = add(el('button', 'sub'), el('span', 'name', regionName(sub.path)), bar(layer.value(sub), max),
         el('span', 'value', layer.label(sub)), sub.fog ? icon('chev') : el('span'));
       if (sub.fog) {
-        row.title = t('review_sub', { n: sub.fog });
+        row.title = count('review_sub', sub.fog);
         row.onclick = function () { deck(sub.path); };
       } else {
         row.disabled = true;
@@ -306,10 +307,10 @@ __KIT_CSS__
   function header() {
     var d = state.data, tot = d.totals;
     var pills = add(el('div', 'pills'),
-      add(el('span', 'pill'), icon('sun'), t('commits', { n: tot.commits, weeks: d.weeks })),
+      add(el('span', 'pill'), icon('sun'), count('commits', tot.commits, { weeks: d.weeks })),
       add(el('span', 'pill accent'), icon('wind'), t('ai', { n: Math.round(tot.ai_share * 100) })),
       add(el('span', 'pill'), icon('fog'), t('fog', { n: tot.fog })),
-      add(el('span', tot.storms ? 'pill warn' : 'pill'), icon('bolt'), tot.storms ? t('storms', { n: tot.storms }) : t('no_storm')));
+      add(el('span', tot.storms ? 'pill warn' : 'pill'), icon('bolt'), tot.storms ? count('storms', tot.storms) : t('no_storm')));
     return add(el('header'), el('h1', null, t('title')), pills);
   }
 
@@ -460,7 +461,7 @@ __KIT_CSS__
       var box = add(el('div', 'preview clipped'), text, more);
       more.onclick = function () { box.classList.remove('clipped'); more.remove(); };
       card.replaceChildren(el('h3', null, shown.title), el('p', 'path', doc.path),
-        add(el('div', 'meta'), el('span', 'pill warn', t('unread', { n: Math.round(doc.months_ago) })), el('span', null, editedLine(doc, footer)),
+        add(el('div', 'meta'), el('span', 'pill warn', count('unread', Math.round(doc.months_ago))), el('span', null, editedLine(doc, footer)),
           doc.confirmed ? el('span', null, t('confirmed_on', { date: new Date(doc.confirmed * 1000).toLocaleDateString(kit.lang) })) : null),
         box, el('p', 'ask', t('ask')), verdicts, add(el('div', 'later'), later));
       if (text.scrollHeight <= text.clientHeight + 2) more.click();  // short enough to read whole

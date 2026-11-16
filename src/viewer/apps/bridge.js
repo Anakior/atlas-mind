@@ -75,7 +75,8 @@
       return request('ui/initialize', {
         protocolVersion: '2026-01-26',
         appInfo: { name: name, version: '1' },
-        appCapabilities: { availableDisplayModes: ['inline'] },
+        // fullscreen: claude.ai then offers its expand button, which opens the side panel.
+        appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
       }).then(function (result) {
         applyContext(result && result.hostContext);
         notify('ui/notifications/initialized', {});

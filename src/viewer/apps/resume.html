@@ -117,7 +117,7 @@ __KIT_CSS__
   var ui = {};  // what follows the checkboxes: the count, the toggle, the resume button
 
   var kit = atlasKit(__I18N__, app);
-  var t = kit.t, el = kit.el, add = kit.add, icon = kit.icon, day = kit.day, ago = kit.ago, docName = kit.docName;
+  var t = kit.t, count = kit.count, el = kit.el, add = kit.add, icon = kit.icon, day = kit.day, ago = kit.ago, docName = kit.docName;
   var status = kit.status, loading = kit.loading;
 
   // ── a save ────────────────────────────────────────────────────────────────
@@ -205,12 +205,12 @@ __KIT_CSS__
   function changes(d) {
     var since = d.since;
     if (!since) return null;
-    var box = add(el('section'), add(el('h2'), t('changed'), el('span', 'end', t('commits', { n: since.commits }))));
+    var box = add(el('section'), add(el('h2'), t('changed'), el('span', 'end', count('commits', since.commits))));
     var parts = Object.keys(since.by_ai || {}).map(function (ai, i) {
       return { n: since.by_ai[ai], label: t('by_ai', { n: since.by_ai[ai], ai: ai }),
         color: 'color-mix(in srgb, var(--accent) ' + [100, 62, 38, 22][Math.min(i, 3)] + '%, var(--bg))' };
     });
-    parts.push({ n: since.by_humans || 0, label: t('by_humans', { n: since.by_humans || 0 }),
+    parts.push({ n: since.by_humans || 0, label: count('by_humans', since.by_humans || 0),
       color: 'color-mix(in srgb, var(--text-3) 60%, var(--bg))' });
     if (parts.some(function (p) { return p.n; })) {
       var bar = el('div', 'bar'), legend = el('div', 'legend');
@@ -232,7 +232,7 @@ __KIT_CSS__
     if (since.unchanged && since.unchanged.length) {
       notes.appendChild(el('div', null, t('unchanged', { docs: since.unchanged.map(docName).join(', ') })));
     }
-    if (since.elsewhere) notes.appendChild(el('div', null, t('elsewhere', { n: since.elsewhere })));
+    if (since.elsewhere) notes.appendChild(el('div', null, count('elsewhere', since.elsewhere)));
     Object.keys(since.contested || {}).forEach(function (path) {
       add(notes, add(el('div', 'warn'), icon('alert'), t('contested', { doc: docName(path), others: since.contested[path].map(docName).join(', ') })));
     });
@@ -314,10 +314,10 @@ __KIT_CSS__
     var saves = el('div', 'saves');
     var rows = d.saves.map(function (s) {
       var project = (s.project || '').split(/[\\/]/).filter(Boolean).pop();  // its folder's name
-      var meta = [day(s.last_commit), s.steps ? t('steps', { n: s.steps }) : null, project, s.machine, s.state];
+      var meta = [day(s.last_commit), s.steps ? count('steps', s.steps) : null, project, s.machine, s.state];
       var item = add(el('button', 'save'),
         add(el('div'), el('b', null, s.title), el('small', null, meta.filter(Boolean).join(' · '))),
-        s.open_points ? el('span', 'pill accent', t('open_count', { n: s.open_points })) : null, icon('chev'));
+        s.open_points ? el('span', 'pill accent', count('open_count', s.open_points)) : null, icon('chev'));
       item.onclick = function () { load({ path: s.path }); };
       item.dataset.find = fold([s.title, s.state, s.machine, s.project, s.path].join(' '));
       return saves.appendChild(item);

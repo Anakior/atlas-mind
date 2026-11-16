@@ -8,6 +8,23 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.9.2] - 2026-11-16
+
+Atlas's views can leave the conversation: on claude.ai they open beside it, in the side panel.
+No tool changes, so the connector needs no refresh. An Atlas on 2.2.0 or later gets this one from
+Settings › About.
+
+### Changed
+- **The four views open in claude.ai's side panel.** The resume, weather, change-of-mind and
+  editing-room views now tell the host they also work outside the conversation, so claude.ai
+  shows its expand button above them: the view moves into the side panel and the conversation
+  stays visible beside it (full screen where the panel can't open).
+
+### Fixed
+- **A count of one reads in the singular in the views.** "1 commit", "1 storm", "1 step",
+  "1 open point", "+ 1 quiet folder"… instead of "1 commits"; a weather region's line counts its
+  docs, changes and commits the same way.
+
 ## [2.9.1] - 2026-11-12
 
 Seven tool descriptions rewritten so an agent reads them right the first time. Refresh the
