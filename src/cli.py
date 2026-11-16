@@ -1788,7 +1788,7 @@ def cmd_user_list(args) -> int:
         note = ""
         if role == store.API_ROLE:
             label = user.get("label", "?")
-            state = "token active" if user.get("api_token_hash") else "token revoked"
+            state = "token active" if store.api_identity_live(user) else "token revoked"
             note = f"  (label {label}, {state})"
         print(f"{email}  {role}{note}")
     return 0
@@ -1882,7 +1882,7 @@ def cmd_token_list(args) -> int:
     for record in tokens:
         label = record.get("label", "?")
         email = record.get("email", "?")
-        state = "active" if record.get("api_token_hash") else "revoked"
+        state = "active" if store.api_identity_live(record) else "revoked"
         created = _format_timestamp(record.get("api_token_created_at"))
         scopes = ",".join(record.get("scopes") or store.API_SCOPES)
         print(f"{label}  {email}  {state}  {scopes}  created on {created}")
@@ -1899,13 +1899,10 @@ def cmd_token_revoke(args) -> int:
         return 0
     if record.get("role") != store.API_ROLE:
         raise CliError(f"{email} is not an API account (role {record.get('role')!r}).")
-    if not record.get("api_token_hash"):
+    if not store.api_identity_live(record):
         print(f"Token \"{args.label}\" already revoked: nothing to do.")
         return 0
-    file_store.upsert_user(email, {
-        "api_token_hash": None,
-        "api_token_revoked_at": int(time.time()),
-    })
+    file_store.revoke_api_identity(email)  # an OAuth grant's refresh tokens too
     print(f"Token \"{args.label}\" revoked: every call will now return 401.")
     print("To reissue: atlas token create <dir> --label " + args.label)
     return 0
@@ -1921,11 +1918,7 @@ def cmd_token_revoke_all(args) -> int:
     for record in file_store.list_users():
         if (record.get("role") == store.API_ROLE
                 and record.get("acts_as") == owner
-                and record.get("api_token_hash")):
-            file_store.upsert_user(record["email"], {
-                "api_token_hash": None,
-                "api_token_revoked_at": int(time.time()),
-            })
+                and file_store.revoke_api_identity(record["email"])):
             revoked += 1
     print(f"Revoked {revoked} active token(s) bound to {owner}: every call now returns 401.")
     return 0

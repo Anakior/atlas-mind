@@ -8,6 +8,22 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.9.3] - 2026-11-16
+
+Connecting Atlas from a second Claude account no longer disconnects the first. An Atlas on
+2.2.0 or later gets this one from Settings › About.
+
+### Fixed
+- **One mind, connected from two Claude accounts, stays connected on both.** claude.ai signs
+  in with the same client for every account, and Atlas kept one set of tokens per client and
+  person: connecting from a work account cut the personal one, and back. Each authorization
+  now has its own tokens, with the access it was granted, under the same line in Settings ›
+  Tokens. A refresh token used twice still revokes its own connection, no longer the others.
+  Revoking the line cuts them all. Connections made before this version keep working.
+- **`atlas token revoke` and `atlas token revoke-all` cut an OAuth connection for good.** They
+  cleared its access token but not its refresh token, so the client could renew its way back
+  within the hour.
+
 ## [2.9.2] - 2026-11-16
 
 Atlas's views can leave the conversation: on claude.ai they open beside it, in the side panel.

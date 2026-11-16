@@ -71,9 +71,10 @@ class _OAuth(unittest.TestCase):
         return self.srv.post("/oauth/token", data=urlencode(form).encode(),
                              headers={"Content-Type": "application/x-www-form-urlencoded"})
 
-    def grant(self, scopes=("read", "inbox", "write")):
-        """Run the whole flow; returns (client_id, token response)."""
-        client_id = self.register()
+    def grant(self, scopes=("read", "inbox", "write"), client_id=None):
+        """Run the whole flow, for a new client unless one is given; returns (client_id,
+        token response)."""
+        client_id = client_id or self.register()
         verifier, challenge = _pkce()
         resp = self.consent(self.authorize_params(client_id, challenge), grant=scopes)
         self.assertEqual(resp.status, 303)
@@ -86,6 +87,14 @@ class _OAuth(unittest.TestCase):
     def mcp(self, access, method="tools/list", params=None):
         return self.srv.post("/mcp", headers={"Authorization": f"Bearer {access}"}, json_body={
             "jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}})
+
+    def refresh(self, client_id, tok):
+        return self.token(grant_type="refresh_token", refresh_token=tok["refresh_token"],
+                          client_id=client_id)
+
+    def oauth_lines(self):
+        return [t for t in self.srv.get("/api/tokens", headers={"Cookie": self.cookie}).json()
+                if t["oauth"]]
 
 
 class TestDiscoveryAndChallenge(_OAuth):
@@ -193,20 +202,70 @@ class TestTokens(_OAuth):
         _, tok = self.grant()
         fs = file_store_of(self.srv)
         grant = next(u for u in fs.list_users() if u.get("oauth_client_id"))
-        fs.upsert_user(grant["email"], {"api_token_expires_at": int(time.time()) - 1})
+        sessions = [{**s, "access_expires_at": int(time.time()) - 1} for s in grant["oauth_sessions"]]
+        fs.upsert_user(grant["email"], {"oauth_sessions": sessions})
         self.assertEqual(self.mcp(tok["access_token"]).status, 401)
 
     def test_revoked_from_settings(self):
         client_id, tok = self.grant()
-        email = next(t["email"] for t in self.srv.get("/api/tokens", headers={"Cookie": self.cookie}).json()
-                     if t["oauth"])
+        _, other = self.grant(client_id=client_id)
+        email = self.oauth_lines()[0]["email"]
         resp = self.srv.request("DELETE", "/api/tokens", json_body={"id": email}, headers={
             "Cookie": self.cookie, "X-CSRF-Token": csrf_of(self.srv, self.cookie)})
         self.assertEqual(resp.status, 200)
-        self.assertEqual(self.mcp(tok["access_token"]).status, 401)
-        refresh = self.token(grant_type="refresh_token", refresh_token=tok["refresh_token"],
-                             client_id=client_id)
-        self.assertEqual(refresh.json()["error"], "invalid_grant")
+        for each in (tok, other):  # every session of the grant
+            self.assertEqual(self.mcp(each["access_token"]).status, 401)
+            self.assertEqual(self.refresh(client_id, each).json()["error"], "invalid_grant")
+        self.assertTrue(self.oauth_lines()[0]["revoked"])
+
+    def test_one_client_authorized_twice_keeps_both_connections(self):
+        # claude.ai has one client_id for every account: a work and a personal account
+        # connected to the same mind by the same person.
+        client_id, work = self.grant()
+        _, home = self.grant(scopes=("read",), client_id=client_id)
+        work = self.refresh(client_id, work).json()
+        home = self.refresh(client_id, home).json()
+        # Each connection keeps the scopes it was granted; Settings shows one line, all of them.
+        self.assertEqual((work["scope"], home["scope"]), ("read inbox write", "read"))
+        tools = {name: [t["name"] for t in self.mcp(tok["access_token"]).json()["result"]["tools"]]
+                 for name, tok in (("work", work), ("home", home))}
+        self.assertIn("edit_doc", tools["work"])
+        self.assertNotIn("edit_doc", tools["home"])
+        lines = self.oauth_lines()
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]["scopes"], ["read", "inbox", "write"])
+
+    def test_a_replay_revokes_its_own_connection_only(self):
+        client_id, work = self.grant()
+        _, home = self.grant(client_id=client_id)
+        renewed = self.refresh(client_id, work).json()
+        self.assertEqual(self.refresh(client_id, work).json()["error"], "invalid_grant")  # replay
+        self.assertEqual(self.mcp(renewed["access_token"]).status, 401)
+        self.assertEqual(self.mcp(home["access_token"]).status, 200)
+        self.assertEqual(self.refresh(client_id, home).status, 200)
+        self.assertFalse(self.oauth_lines()[0]["revoked"])
+
+    def test_a_grant_saved_before_sessions_keeps_working(self):
+        client_id, tok = self.grant()
+        fs = file_store_of(self.srv)
+        grant = next(u for u in fs.list_users() if u.get("oauth_client_id"))
+        [session] = grant["oauth_sessions"]
+        legacy = {k: v for k, v in grant.items() if k != "oauth_sessions"}
+        legacy.update(api_token_hash=session["access_hash"],
+                      api_token_expires_at=session["access_expires_at"],
+                      oauth_refresh_hash=session["refresh_hash"], oauth_refresh_prev_hash=None,
+                      oauth_refresh_expires_at=session["refresh_expires_at"])
+        users = [legacy if u.get("email") == grant["email"] else u for u in fs.list_users()]
+        with fs._rmw(fs.USERS_FILE):  # upsert_user merges: the sessions key must go
+            fs._write(fs.USERS_FILE, users)
+        self.assertEqual(self.mcp(tok["access_token"]).status, 200)
+        _, other = self.grant(client_id=client_id)  # the old session stays beside the new one
+        renewed = self.refresh(client_id, tok).json()
+        self.assertEqual(self.mcp(renewed["access_token"]).status, 200)
+        self.assertEqual(self.mcp(other["access_token"]).status, 200)
+        stored = next(u for u in fs.list_users() if u.get("oauth_client_id"))
+        self.assertEqual(len(stored["oauth_sessions"]), 2)
+        self.assertNotIn("api_token_hash", stored)
 
     def test_oauth_token_only_works_as_bearer_on_mcp(self):
         _, tok = self.grant()

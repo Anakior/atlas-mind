@@ -2,6 +2,7 @@
 token bound to a human at once (matched by acts_as, whatever the token's email scheme)."""
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -44,6 +45,25 @@ class TestTokenRevokeAll(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(self._active("alice@test.local"), [])    # both gone
         self.assertEqual(len(self._active("bob@test.local")), 1)  # bob untouched
+
+    def test_revoke_all_also_kills_an_oauth_grants_refresh_tokens(self):
+        # Before 2.9.3 it only cleared the access token: the client refreshed its way back.
+        _, _, refresh = self.fs.save_oauth_grant("https://claude.ai/client", "Claude", "alice@test.local",
+                                                 ["read"], "https://mind/mcp", 3600, 86400)
+        cli.cmd_token_revoke_all(SimpleNamespace(dir=".", acts_as="alice@test.local"))
+        self.assertIsNone(self.fs.rotate_oauth_refresh(store.hash_api_token(refresh),
+                                                       "https://claude.ai/client", 3600, 86400))
+
+    def test_oauth_sessions_are_capped(self):
+        def connect():
+            return self.fs.save_oauth_grant("https://claude.ai/client", "Claude", "bob@test.local",
+                                            ["read"], "https://mind/mcp", 3600, 86400)[1]
+        first = connect()
+        time.sleep(1.1)  # sessions are ordered by the second they were last used
+        for _ in range(store.MAX_OAUTH_SESSIONS):
+            last = connect()
+        self.assertIsNone(self.fs.find_api_identity(store.hash_api_token(first)))
+        self.assertIsNotNone(self.fs.find_api_identity(store.hash_api_token(last)))
 
     def test_argparse_wires_the_command(self):
         ns = cli.build_parser().parse_args(
