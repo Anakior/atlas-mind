@@ -15,12 +15,15 @@ from server.render.apps import render_app
 PAGE_SIZE = 200
 SCHEME = "doc://"
 APPS = {"ui://atlas/resume": "resume", "ui://atlas/weather": "weather", "ui://atlas/shift": "shift",
-        "ui://atlas/montage": "montage"}
+        "ui://atlas/montage": "montage", "ui://atlas/reader": "reader"}
+# Views claude.ai opens in its side panel without a click: a doc is read beside the conversation.
+_BESIDE = {"ui://atlas/reader"}
 APP_MIME = "text/html;profile=mcp-app"
 APP_EXTENSION = "io.modelcontextprotocol/ui"
 # Sent with the server instructions: a host with many connectors may look tools up by keyword,
 # and "did I change my mind" finds search_docs before then_and_now.
-APP_RULE = ("Some answers are views the user works in: resume_session to pick up saved work, "
+APP_RULE = ("Some answers are views the user works in: open_doc to show the user a doc and its "
+            "history, resume_session to pick up saved work, "
             "mind_weather for how the mind is doing, then_and_now then show_shift for what the "
             "user thought before or whether they changed their mind on something, and agent_runs for "
             "what was written lately (by an AI or not), to review it or undo part of it. For those "
@@ -73,9 +76,11 @@ def read_resource(uri: str, ctx) -> dict:
     """The document behind a doc:// URI, or an app's view. Raises ResourceError."""
     if uri in APPS:
         # Everything is inline (no domain to declare); the view copies a resume command.
+        ui = {"prefersBorder": True, "permissions": {"clipboardWrite": {}}}
+        if uri in _BESIDE:
+            ui["preferredDisplayMode"] = "fullscreen"  # claude.ai's extension: its side panel
         return {"contents": [{"uri": uri, "mimeType": APP_MIME, "text": render_app(APPS[uri]),
-                              "_meta": {"ui": {"prefersBorder": True,
-                                               "permissions": {"clipboardWrite": {}}}}}]}
+                              "_meta": {"ui": ui}}]}
     rel = unquote(uri[len(SCHEME):]) if (uri or "").startswith(SCHEME) else ""
     target = _s._validate_doc_path(rel)
     if not (target and target.exists() and _visible(rel, ctx)):

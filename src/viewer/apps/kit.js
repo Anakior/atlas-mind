@@ -12,12 +12,17 @@ window.atlasKit = function (T, app) {
     back: '<path d="m15 6-6 6 6 6"/>',
     bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
     calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4m6-4v4"/>',
+    chat: '<path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>',
     check: '<path d="m5 12 5 5L20 7"/>',
     chev: '<path d="m9 6 6 6-6 6"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+    expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
     fog: '<path d="M4 9h12M7 13h13M4 17h10"/>',
+    ghost: '<path d="M5 21V10a7 7 0 0 1 14 0v11l-2.5-2-2.5 2-2-2-2 2-2.5-2z"/><path d="M9.5 10h.01M14.5 10h.01"/>',
+    history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
     pause: '<path d="M9 5v14m6-14v14"/>',
+    play: '<path d="M8 5v14l11-7z"/>',
     scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9m6.4-1.4L20 20M8.1 8.1 12 12"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     spark: '<path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
@@ -28,6 +33,7 @@ window.atlasKit = function (T, app) {
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
     up: '<path d="M7 17 17 7M8 7h9v9"/>',
     wind: '<path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
   };
 
   function t(key, vars) {

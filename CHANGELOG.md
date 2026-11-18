@@ -8,6 +8,30 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-11-18
+
+A note opens beside the conversation, with its history laid on it. One tool is new: refresh
+the connector's tools in Claude. An Atlas on 2.2.0 or later gets this one from Settings › About.
+
+### Added
+- **`open_doc`: a note beside the conversation, with what happened to it.** On claude.ai it
+  opens in the side panel; elsewhere it shows in the conversation, with a button to move it
+  beside. The note reads as in the viewer, its history laid on it:
+  - **While you were away**: the passages changed since you last edited or confirmed the note,
+    and who changed them (you, someone else, or which AI), with a button to confirm it holds.
+  - **Ghosts**: the passages removed since, where they stood, to read again, have Claude
+    restore, or ask why they went.
+  - **The life of a passage**: when it was written, each rewording with what changed, and the
+    passage a rewrite put it in place of.
+  - **Strata**: each passage's age and author in the margin.
+  - **The wheel**: a bar per version, its height the size of the change and its colour the
+    author, to take the note back in time or replay it being written.
+
+  Selected text becomes a question to Claude, and Claude knows which section and which version
+  you are reading. A `[[link]]` opens the note it names in the same view. The model reads only
+  where the view stands (versions, what changed, the outline): `read_doc` still reads the text.
+  31 tools.
+
 ## [2.9.3] - 2026-11-16
 
 Connecting Atlas from a second Claude account no longer disconnects the first. An Atlas on

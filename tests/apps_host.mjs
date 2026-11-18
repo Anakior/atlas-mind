@@ -26,13 +26,19 @@ async function mcp(method, params) {
 }
 
 // FRAME_WIDTH: render the view at another width, such as claude.ai's side panel (320 px at least).
+// DISPLAY_MODE=fullscreen: the view starts in the side panel, a frame of fixed height.
 const width = Number(process.env.FRAME_WIDTH) || 680;
+const displayMode = process.env.DISPLAY_MODE || 'inline';
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: width + 40, height: 900 } });
+// What breaks inside the view shows in a failed test's output.
+page.on('pageerror', (error) => process.stderr.write(`[view error] ${error.message}\n`));
+page.on('console', (msg) => msg.type() === 'error' && process.stderr.write(`[view console] ${msg.text()}\n`));
 await page.exposeFunction('callTool', (params) => mcp('tools/call', params));
 await page.setContent('<!doctype html><body style="margin:0;background:#888"></body>');
-await page.evaluate(({ html, tool, args, theme, width }) => {
+await page.evaluate(({ html, tool, args, theme, width, displayMode }) => {
   window.__log = [];
+  let mode = displayMode;
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts');
   frame.style.cssText = `border:0;width:${width}px;height:860px;display:block;margin:20px`;
@@ -47,21 +53,27 @@ await page.evaluate(({ html, tool, args, theme, width }) => {
       toView({ id: m.id, error: { code: -32602, message: 'Invalid params' } });  // as the SDK's schema does
     } else if (m.method === 'ui/initialize') {
       toView({ id: m.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'test-host', version: '0' },
-        hostCapabilities: { serverTools: {} }, hostContext: { theme, locale: 'en' } } });
+        hostCapabilities: { serverTools: {} },
+        hostContext: { theme, locale: 'en', displayMode: mode, availableDisplayModes: ['inline', 'fullscreen'] } } });
     } else if (m.method === 'ui/notifications/initialized') {
       toView({ method: 'ui/notifications/tool-input', params: { arguments: args } });
       toView({ method: 'ui/notifications/tool-result', params: await window.callTool({ name: tool, arguments: args }) });
     } else if (['ui/message', 'ui/update-model-context'].includes(m.method) && m.params.content && !Array.isArray(m.params.content)) {
       toView({ id: m.id, error: { code: -32602, message: 'Invalid params' } });  // content is a list of blocks
     } else if (m.method === 'ui/notifications/size-changed') {
-      frame.style.height = `${m.params.height}px`;
+      if (mode === 'inline') frame.style.height = `${m.params.height}px`;  // the side panel has its own height
+    } else if (m.method === 'ui/request-display-mode') {
+      mode = m.params.mode;
+      if (mode === 'fullscreen') frame.style.height = '860px';
+      toView({ id: m.id, result: { mode } });
+      toView({ method: 'ui/notifications/host-context-changed', params: { displayMode: mode } });
     } else if (m.method === 'tools/call') {
       toView({ id: m.id, result: await window.callTool(m.params) });
     } else if (m.id != null) {
       toView({ id: m.id, result: {} });
     }
   });
-}, { html: fs.readFileSync(viewFile, 'utf8'), tool, args: JSON.parse(argsJson), theme, width });
+}, { html: fs.readFileSync(viewFile, 'utf8'), tool, args: JSON.parse(argsJson), theme, width, displayMode });
 
 const view = page.frameLocator('iframe');
 async function shot(suffix = '') {
@@ -165,6 +177,47 @@ const scenarios = {
     await shot('-cut');
     await view.locator('.actions .primary').click();
     await page.waitForTimeout(200);
+  },
+  async open_doc(report) {
+    await view.locator('.u').first().waitFor();
+    report.title = await view.locator('.top h1').textContent();
+    report.passages = await view.locator('.u').count();
+    report.changed = await view.locator('.u.changed').count();
+    report.ghosts = await view.locator('.gone').count();
+    report.banner = await view.locator('.banner').textContent();
+    report.expand = await view.locator('.expand').count();
+    await shot();
+    // Every ghost shown, the first one unfolded.
+    await view.locator('.chip').nth(2).click();
+    report.all_ghosts = await view.locator('.gone').count();
+    await view.locator('.gone > button').first().click();
+    report.ghost_text = await view.locator('.ghost-text').first().textContent();
+    // The life of the first passage changed while away, then the wheel one version back.
+    await view.locator('.u.changed .life-btn').first().click();
+    await view.locator('.sheet .ev').first().waitFor();
+    report.life = await view.locator('.sheet .ev-top b').allTextContents();
+    await shot('-life');
+    await view.locator('.sheet .icon-btn').click();
+    await view.locator('.track').focus();
+    await page.keyboard.press('ArrowLeft');
+    report.past = await view.locator('.banner.past strong').textContent();
+    report.struck = await view.locator('.u.fate-r').count();
+    await shot('-past');
+    await page.keyboard.press('End');
+    // Asked for a summary, the doc confirmed, then a link followed in the same view.
+    await view.locator('.banner .primary').click();
+    await view.locator('.banner .row .ghost').nth(1).click();
+    await view.locator('.banner.done').waitFor();
+    report.validated = await view.locator('.banner.done strong').textContent();
+    await view.locator('a.wl').first().click();
+    await view.locator('.top h1', { hasText: 'Roadmap' }).waitFor();
+    report.followed = await view.locator('.top h1').textContent();
+    if (report.expand) {
+      await view.locator('.expand').click();
+      await view.locator('main.full').waitFor();
+      report.moved = await view.locator('main').getAttribute('class');
+    }
+    await page.waitForTimeout(1200);  // what the reader is looking at reaches Claude once they pause
   },
 };
 

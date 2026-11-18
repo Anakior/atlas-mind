@@ -28,7 +28,7 @@
    "answer": ["dashboard"]},
   {"id": "tool-count", "kind": "synthesis",
    "q": "How many MCP tools does Atlas Mind expose? Check whether the mind is consistent about it.",
-   "answer": ["30", "22"]},
+   "answer": ["31", "22"]},
   {"id": "notion", "kind": "synthesis",
    "q": "Why would someone pick Atlas Mind over Notion, according to this mind? Name the documents you used.",
    "answer": ["why-not-notion|own-your-data|why not just use notion|own your data"]},
@@ -82,7 +82,7 @@
   {"id": "fix-number", "kind": "write",
    "q": "The note 'Atlas Mind by the numbers' has an outdated MCP tools count. Fix it to match the up-to-date figure found elsewhere in the mind.",
    "tools": ["edit_doc"],
-   "after": [{"path": "notes/atlas-by-the-numbers.md", "contains": ["mcp tools exposed \\| 30"]}]},
+   "after": [{"path": "notes/atlas-by-the-numbers.md", "contains": ["mcp tools exposed \\| 31"]}]},
   {"id": "rename", "kind": "write",
    "q": "Rename guides/markdown-showcase.md to guides/markdown-tour.md, keeping the links to it working.",
    "tools": ["move_doc"],
@@ -145,5 +145,11 @@
              {"path": "welcome.md", "lacks": ["\\[\\[guides/markdown-showcase"]},
              {"path": "multi-formats.md", "lacks": ["\\[\\[guides/markdown-showcase"]},
              {"path": "guides/install-and-setup.md", "lacks": ["\\[\\[guides/markdown-showcase"]},
-             {"path": "features/the-mind-graph.md", "lacks": ["\\[\\[guides/markdown-showcase"]}]}
+             {"path": "features/the-mind-graph.md", "lacks": ["\\[\\[guides/markdown-showcase"]}]},
+  {"id": "open-doc", "kind": "view",
+   "q": "Montre-moi le guide qui dit ce qu'il y a dans Atlas.",
+   "tools": ["open_doc"], "once": ["open_doc"]},
+  {"id": "read-not-open", "kind": "view",
+   "q": "What does the note on the AI-native features say about how an assistant signs in?",
+   "answer": ["oauth"], "forbid": ["open_doc"]}
 ]

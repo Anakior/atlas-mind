@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+__KIT_CSS__
+
+  /* Who wrote what: the reader, an AI by family, another person. */
+  :root { --you: var(--accent); --claude: #b8641a; --chatgpt: #17806f; --ai: #7a5bc4; --human: #6b6a76;
+          --prose: "Lora", Georgia, "Times New Roman", serif; }
+  :root[data-theme="dark"] { --claude: #e9a34f; --chatgpt: #4cc4ad; --ai: #a98bf0; --human: #9b9aa6; }
+  .tone-you { --who: var(--you); } .tone-claude { --who: var(--claude); } .tone-chatgpt { --who: var(--chatgpt); }
+  .tone-ai { --who: var(--ai); } .tone-human { --who: var(--human); }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--who); }
+
+  /* The page: the doc's head, a tool row (layers, the wheel through the versions), the doc. In
+     the side panel the page scrolls and the tool row stays; in the conversation the doc scrolls
+     in its own box so the view keeps a reasonable height. */
+  main { padding: 16px 0 0; }
+  .top { padding: 0 20px; }
+  .crumbs { color: var(--text-3); font-size: 12px; }
+  .crumbs span { margin: 0 3px; opacity: .6; }
+  .title-row { display: flex; align-items: flex-start; gap: 10px; }
+  .title-row h1 { flex: 1; margin: 3px 0 8px; font-size: 19px; }
+  .tools { z-index: 2; display: grid; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .full .tools { position: sticky; top: 0; }
+  .inline .doc-wrap { max-height: 520px; overflow-y: auto; }
+  .layers { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-2); font-size: 12.5px; font-weight: 600; }
+  .chip:hover { color: var(--text); }
+  .chip[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--tint); color: var(--accent); }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .chip .n { font-weight: 500; font-variant-numeric: tabular-nums; }
+
+  .wheel { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 10px; }
+  .play { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 50%; background: var(--bg); color: var(--text-2); }
+  .play:hover { border-color: var(--accent); color: var(--accent); }
+  .play svg { fill: currentColor; stroke: none; }
+  .track { position: relative; height: 34px; cursor: pointer; touch-action: none; }
+  .track::before { content: ""; position: absolute; left: 0; right: 0; bottom: 6px; height: 1px; background: var(--border); }
+  .notch { position: absolute; bottom: 6px; width: 3px; margin-left: -1.5px; border-radius: 2px 2px 0 0; background: var(--who); opacity: .45; }
+  .notch.on { opacity: .95; }
+  .gap { position: absolute; bottom: 10px; transform: translateX(-50%); color: var(--text-3); font: 500 9.5px var(--mono); white-space: nowrap; }
+  .look { position: absolute; bottom: 0; height: 30px; border-left: 1px dashed var(--you); opacity: .8; }
+  .thumb { position: absolute; bottom: 2px; width: 2px; height: 32px; margin-left: -1px; border-radius: 2px; background: var(--text); transition: left .12s; }
+  .thumb::after { content: ""; position: absolute; left: 50%; bottom: -1px; width: 10px; height: 10px; margin-left: -5px; border: 2px solid var(--text); border-radius: 50%; background: var(--bg); }
+  .wheel-label { grid-column: 2; display: flex; gap: 8px; min-width: 0; margin-top: 6px; color: var(--text-3); font-size: 11.5px; }
+  .wheel-label b { flex: none; color: var(--text-2); font-weight: 600; }
+  .wheel-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .banner { display: grid; gap: 8px; margin: 14px 20px 4px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-2); }
+  .banner .head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .banner .head strong { font-size: 13.5px; }
+  .banner .head .note { margin: 0; font-size: 12px; }
+  .banner p { margin: 0; color: var(--text-2); font-size: 13px; }
+  .banner ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+  .banner li { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text-2); font-size: 12.5px; }
+  .banner li time { flex: none; color: var(--text-3); font: 500 11px var(--mono); }
+  .banner li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .banner.past { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); background: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
+  .banner.done { border-color: color-mix(in srgb, var(--added) 40%, var(--border)); background: color-mix(in srgb, var(--added) 8%, var(--bg)); }
+  .banner.done strong { color: var(--added); }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .gone .n, .row .n { color: var(--text-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .banner .primary { padding: 6px 12px; font-size: 12.5px; }
+
+  /* The doc: a row per passage, its gutter carrying the layers. */
+  .doc { padding: 8px 20px 96px 4px; color: var(--text); font: 15px/1.68 var(--prose); }
+  .u { display: grid; grid-template-columns: 84px minmax(0, 1fr); border-radius: 8px; }
+  .gutter { position: relative; display: flex; justify-content: flex-end; align-items: flex-start; gap: 4px; padding: 7px 12px 0 0; }
+  .gutter::after { content: ""; position: absolute; top: 4px; bottom: 4px; right: 3px; width: 3px; border-radius: 2px; background: var(--who); opacity: 0; }
+  .when { display: none; color: var(--text-3); font: 500 10px/1.3 var(--mono); text-align: right; white-space: pre; }
+  .life-btn { display: grid; place-items: center; width: 22px; height: 22px; margin-top: -2px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--text-3); opacity: 0; }
+  .u:hover .life-btn, .life-btn:focus-visible, .u.open .life-btn { opacity: 1; }
+  .life-btn:hover { background: var(--bg-2); color: var(--text); }
+  .body { min-width: 0; padding: 4px 10px 4px 8px; overflow-wrap: anywhere; }
+  .body > :first-child { margin-top: 0; } .body > :last-child { margin-bottom: 0; }
+  .body p { margin: 0; }
+  .body h1, .body h2, .body h3, .body h4 { display: block; margin: 0; color: var(--text); font-family: var(--sans); font-weight: 700; letter-spacing: -.01em; line-height: 1.3; text-transform: none; }
+  .body h1 { font-size: 21px; } .body h2 { font-size: 17px; color: var(--accent); } .body h3, .body h4 { font-size: 15px; }
+  .k-h1 { margin-top: 8px; } .k-h2 { margin-top: 22px; } .k-h3 { margin-top: 12px; }
+  .k-p, .k-quote, .k-table, .k-code { margin-top: 6px; } .k-li { margin-top: 4px; } .k-li + .k-li, .k-quote + .k-quote { margin-top: 0; }
+  .body ul, .body ol { margin: 0; padding-left: 1.3em; }
+  .body blockquote { margin: 0; padding: 2px 0 2px 14px; border-left: 3px solid color-mix(in srgb, var(--accent) 55%, var(--border)); color: var(--text-2); }
+  .body hr { margin: 10px 0; border: 0; border-top: 1px solid var(--border); }
+  .body code { padding: 1px 5px; border-radius: 4px; background: var(--bg-2); font: .82em var(--mono); }
+  .body pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg-2); overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  .body pre code { padding: 0; background: none; }
+  .body table { display: block; overflow-x: auto; border-collapse: collapse; font: 13px/1.45 var(--sans); }
+  .body th, .body td { padding: 5px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  .body img { max-width: 100%; border-radius: 6px; }
+  .body .alt { color: var(--text-3); font: italic 13px var(--sans); }
+  .body a { color: var(--accent); }
+  .wl { padding: 0 4px; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 5px; background: var(--tint); color: var(--accent); cursor: pointer; font: 500 .86em var(--sans); text-decoration: none; white-space: nowrap; }
+  span.wl { cursor: default; opacity: .7; }
+
+  .since .u.changed { background: color-mix(in srgb, var(--who) 9%, transparent); }
+  .since .u.changed .gutter::after { opacity: 1; }
+  .strata .u .gutter::after { opacity: var(--age); }
+  .strata .u.run .when { display: block; }
+  .u.open { background: var(--tint); }
+  .u.focus { animation: focus 1.4s ease-out; }
+  @keyframes focus { from { box-shadow: 0 0 0 2px var(--accent); } to { box-shadow: 0 0 0 2px transparent; } }
+  .u.fate-r .body { opacity: .5; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--removed) 60%, transparent); }
+  .u.fate-r .gutter::after { opacity: .9; background: var(--removed); }
+  .u.fate-c .gutter::after { opacity: .9; background: repeating-linear-gradient(to bottom, var(--text-3) 0 3px, transparent 3px 6px); }
+  .u.enter { animation: enter .9s ease-out; }
+  @keyframes enter { from { background: color-mix(in srgb, var(--who) 26%, transparent); } to { background: transparent; } }
+
+  .gone { margin: 6px 0 6px 84px; }
+  .gone > button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 10px; border: 1px dashed color-mix(in srgb, var(--removed) 45%, var(--border)); border-radius: 8px; background: none; color: var(--text-2); font: 500 12.5px var(--sans); text-align: left; }
+  .gone > button:hover { background: color-mix(in srgb, var(--removed) 6%, transparent); }
+  .gone > button > svg:first-child { color: var(--removed); }
+  .gone > button .n { margin-left: auto; white-space: nowrap; font-size: 11.5px; }
+  .gone[open] > button .chev { transform: rotate(90deg); }
+  .ghost-body { margin: 6px 0 4px; padding: 10px 12px; border-left: 2px dashed color-mix(in srgb, var(--removed) 50%, transparent); font-family: var(--sans); }
+  .ghost-text { max-height: 340px; overflow-y: auto; color: var(--text-2); opacity: .85; font: 14px/1.6 var(--prose); }
+  .ghost-text > * { margin: 0 0 8px; }
+  .ghost-text h1, .ghost-text h2, .ghost-text h3 { display: block; color: var(--text-2); font: 700 14px/1.3 var(--sans); letter-spacing: 0; text-transform: none; }
+  .ghost-text ul, .ghost-text ol { padding-left: 1.2em; }
+
+  /* The life of a passage, over the bottom of the view. */
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; max-height: 62%; overflow-y: auto; padding: 14px 20px 18px; border-top: 1px solid var(--border); border-radius: 14px 14px 0 0; background: var(--bg); box-shadow: 0 -10px 30px rgb(0 0 0 / .14); }
+  .sheet-head { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+  .sheet-head strong { flex: 1; font-size: 14px; }
+  .icon-btn { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-2); }
+  .quote { margin: 0 0 12px; padding-left: 12px; border-left: 2px solid var(--border); color: var(--text-2); font: italic 13.5px/1.55 var(--prose); }
+  .ai-note { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--who) 11%, transparent); color: var(--text-2); font-size: 12.5px; }
+  .life { display: grid; margin: 0 0 4px; padding: 0; list-style: none; }
+  .ev { position: relative; display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; padding-bottom: 12px; }
+  .ev::before { content: ""; position: absolute; left: 7px; top: 14px; bottom: 0; width: 2px; background: var(--border); }
+  .ev:last-child::before { display: none; }
+  .ev .dot { width: 10px; height: 10px; margin: 5px 0 0 2px; box-shadow: 0 0 0 3px var(--bg); }
+  .ev-top { color: var(--text-2); font-size: 12.5px; }
+  .ev-top b { color: var(--text); }
+  .ev small { display: block; color: var(--text-3); font-size: 12px; }
+  .diff { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-2); color: var(--text-2); font: 13px/1.6 var(--prose); }
+  .diff del { background: color-mix(in srgb, var(--removed) 12%, transparent); color: var(--removed); }
+  .diff ins { background: color-mix(in srgb, var(--added) 12%, transparent); color: var(--added); text-decoration: none; }
+
+  .ask { position: absolute; z-index: 5; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 0; border-radius: 8px; background: var(--text); color: var(--bg); font-size: 12.5px; font-weight: 600; box-shadow: 0 4px 16px rgb(0 0 0 / .18); transform: translate(-50%, -100%); }
+
+  /* A narrow panel: the gutter keeps its bar only. */
+  @media (max-width: 470px) {
+    .u { grid-template-columns: 22px minmax(0, 1fr); }
+    .gutter { padding-right: 6px; }
+    .life-btn, .strata .u.run .when, .gap { display: none; }
+    .gone { margin-left: 22px; }
+    .top, .tools { padding-left: 14px; padding-right: 14px; }
+    .banner { margin-left: 14px; margin-right: 14px; }
+    .doc { padding-right: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>__BRIDGE__</script>
+<script>__KIT__</script>
+<script>__MARKED__</script>
+<script>__PURIFY__</script>
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var kit = atlasKit(__I18N__, app);
+  var t = kit.t, count = kit.count, el = kit.el, add = kit.add, icon = kit.icon;
+  var AI = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini', mistral: 'Mistral', copilot: 'Copilot' };
+  var DAY = 864e5;
+  // ver: the version on the wheel; layers on; the passage whose life is open; the next changed
+  // passage to jump to; the replay; where the view sits (the conversation or beside it).
+  var state = { d: null, ver: 0, layers: { since: true, strata: false, ghosts: false }, open: null,
+                cursor: -1, playing: null, mode: 'inline', modes: ['inline'], shown: {}, validated: false };
+
+  // ── text ─────────────────────────────────────────────────────────────
+  var rendered = {};
+  function md(raw) {
+    if (rendered[raw] != null) return rendered[raw];
+    var links = state.d.links;
+    var withLinks = raw.replace(/\[\[([^\[\]\n]+?)\]\]/g, function (_, inner) {
+      var parts = inner.split('|'), target = parts[0].trim(), label = (parts[1] || parts[0]).trim();
+      var path = links[target.toLowerCase()];
+      var text = label.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+      return path ? '<a class="wl" data-path="' + path.replace(/"/g, '&quot;') + '">' + text + '</a>'
+                  : '<span class="wl">' + text + '</span>';
+    });
+    // A doc can come from outside this mind: what it holds is shown, never run.
+    return (rendered[raw] = DOMPurify.sanitize(marked.parse(withLinks, { gfm: true, breaks: false })));
+  }
+  function body(raw) {
+    var node = el('div', 'body');
+    node.innerHTML = md(raw);
+    node.querySelectorAll('img').forEach(function (img) {
+      var src = state.d.images[img.getAttribute('src')];
+      if (src) img.src = src;
+      else img.replaceWith(el('span', 'alt', '[' + (img.alt || img.getAttribute('src')) + ']'));
+    });
+    return node;
+  }
+  function plain(raw) {
+    return raw.replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g, function (_, a, b) { return b || a; })
+              .replace(/\*\*|__|`/g, '').replace(/^[#>\s]+|^\s?([-*+]|\d+[.)])\s+/g, '').trim();
+  }
+  function clip(text, n) { return text.length > n ? text.slice(0, n - 1).trimEnd() + '…' : text; }
+  function kind(raw) {
+    return /^# /.test(raw) ? 'h1' : /^## /.test(raw) ? 'h2' : /^#{3,6} /.test(raw) ? 'h3'
+      : /^ ?([-*+]|\d+[.)])\s/.test(raw) ? 'li' : /^>/.test(raw) ? 'quote' : /^\|/.test(raw) ? 'table'
+      : /^(```|~~~)/.test(raw) ? 'code' : 'p';
+  }
+
+  // ── who and when ─────────────────────────────────────────────────────
+  function commit(i) { return i == null ? null : state.d.commits[i]; }
+  function who(c) {
+    if (!c) return '';
+    if (c.you) return t('you');
+    if (c.ai) return AI[c.ai] || c.ai.charAt(0).toUpperCase() + c.ai.slice(1);
+    return c.author;
+  }
+  function tone(c) {
+    if (!c) return 'tone-human';
+    if (c.you) return 'tone-you';
+    if (c.ai) return AI[c.ai] && (c.ai === 'claude' || c.ai === 'chatgpt') ? 'tone-' + c.ai : 'tone-ai';
+    return 'tone-human';
+  }
+  function date(ms) { return new Date(ms).toLocaleDateString(kit.lang, { day: 'numeric', month: 'short' }); }
+  function time(ms) { return new Date(ms).toLocaleTimeString(kit.lang, { hour: '2-digit', minute: '2-digit' }); }
+  function when(c) { return date(c.t * 1000) + ', ' + time(c.t * 1000); }
+  function head() { return state.d.versions.length - 1; }
+  function past() { return state.ver !== head(); }
+
+  // ── talking to the host ──────────────────────────────────────────────
+  function call(name, args) { return atlasApp.request('tools/call', { name: name, arguments: args }); }
+  function ask(text, quote) {
+    var said = (quote ? '« ' + clip(quote, 400) + ' »\n\n' : '') + text;
+    return atlasApp.request('ui/message', { role: 'user', content: [{ type: 'text', text: said }] });
+  }
+  var sentContext = '', contextTimer = null;
+  function context(text) {
+    if (text === sentContext) return;
+    clearTimeout(contextTimer);
+    contextTimer = setTimeout(function () {  // not on every scroll step
+      sentContext = text;
+      atlasApp.request('ui/update-model-context', { content: [{ type: 'text', text: text }] }).catch(function () {});
+    }, 900);
+  }
+  function reading() {
+    var top = state.mode === 'fullscreen' ? 160 : (document.querySelector('.doc-wrap') || app).getBoundingClientRect().top + 40;
+    var heading = null;
+    document.querySelectorAll('.u.k-h2, .u.k-h3').forEach(function (h) { if (h.getBoundingClientRect().top <= top) heading = h; });
+    var section = heading ? plain(heading.querySelector('.body').textContent) : t('top');
+    var c = commit(state.d.versions[state.ver].c);
+    context(t('context', { path: state.d.path, section: section })
+            + (past() ? ' ' + t('context_version', { date: when(c), who: who(c), subject: c.subject }) : ''));
+  }
+
+  // ── the page ─────────────────────────────────────────────────────────
+  function show(d) {
+    state.d = d;
+    state.ver = d.versions.length - 1;
+    state.open = null;
+    state.cursor = -1;
+    state.shown = {};
+    state.validated = false;
+    rendered = {};
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  // render: the whole page (a new doc, the view moved); paint: what the wheel and the layers
+  // change, the wheel itself updated in place so a drag keeps its pointer.
+  function render() {
+    var d = state.d;
+    if (!d.versions.length) return kit.status(t('no_history', { path: d.path }));
+    app.className = state.mode === 'fullscreen' ? 'full' : 'inline';
+    var docWrap = el('div', 'doc-wrap');
+    docWrap.addEventListener('scroll', onScroll);
+    app.replaceChildren(top(), tools(), el('div', 'banner-slot'), docWrap, el('aside', 'sheet'), askButton());
+    paint();
+  }
+
+  function paint() {
+    var wrap = app.querySelector('.doc-wrap'), scroll = wrap.scrollTop;
+    var layers = past() ? [] : Object.keys(state.layers).filter(function (k) {
+      return state.layers[k] && !(k === 'since' && state.validated);
+    });
+    var article = el('article', ['doc'].concat(layers).join(' '));
+    article.replaceChildren.apply(article, past() ? pastUnits() : headUnits());
+    wrap.replaceChildren(article);
+    wrap.scrollTop = scroll;
+    app.querySelector('.banner-slot').replaceChildren(banner());
+    app.querySelector('.sheet').replaceWith(sheet());
+    updateTools();
+    reading();
+  }
+
+  function top() {
+    var d = state.d, folders = d.path.split('/').slice(0, -1);
+    var crumbs = el('div', 'crumbs');
+    folders.forEach(function (f) { add(crumbs, f, el('span', null, '/')); });
+    add(crumbs, d.path.split('/').pop());
+    var row = add(el('div', 'title-row'), el('h1', null, d.title));
+    if (state.mode !== 'fullscreen' && state.modes.indexOf('fullscreen') >= 0) {
+      var expand = add(el('button', 'ghost expand'), icon('expand'), t('expand'));
+      expand.addEventListener('click', function () {
+        atlasApp.request('ui/request-display-mode', { mode: 'fullscreen' }).then(function (r) {
+          if (r && r.mode) { state.mode = r.mode; render(); }
+        }).catch(function () {});
+      });
+      row.appendChild(expand);
+    }
+    var tally = {};
+    d.versions.forEach(function (v) { var c = commit(v.c), k = who(c); tally[k] = tally[k] || { n: 0, c: c }; tally[k].n++; });
+    var pills = add(el('div', 'pills'), el('span', 'pill', count('versions', d.versions.length)));
+    Object.keys(tally).forEach(function (k) {
+      add(pills, add(el('span', 'pill ' + tone(tally[k].c)), el('i', 'dot'), k + ' · ' + tally[k].n));
+    });
+    add(pills, el('span', 'pill', t('changed_on', { date: date(commit(d.versions[head()].c).t * 1000) })));
+    return add(el('header', 'top'), crumbs, row, pills);
+  }
+
+  // ── layers and the wheel ─────────────────────────────────────────────
+  var ui = {};  // the tool row's live parts
+
+  function tools() {
+    var layers = el('div', 'layers');
+    ui.chips = {};
+    [['since', t('layer_since')], ['strata', t('layer_strata')], ['ghosts', t('layer_ghosts')]].forEach(function (l) {
+      var chip = add(el('button', 'chip'), l[1], el('span', 'n'));
+      chip.addEventListener('click', function () { state.layers[l[0]] = !state.layers[l[0]]; paint(); });
+      layers.appendChild(ui.chips[l[0]] = chip);
+    });
+    return add(el('div', 'tools'), layers, wheel());
+  }
+
+  function updateTools() {
+    var d = state.d, counts = { since: changedRows().length, strata: null, ghosts: d.ghosts.length };
+    Object.keys(ui.chips).forEach(function (k) {
+      var chip = ui.chips[k];
+      chip.setAttribute('aria-pressed', String(state.layers[k] && !past()));
+      chip.disabled = past() || (k === 'since' && d.look.at == null);
+      chip.lastChild.textContent = counts[k] == null ? '' : String(counts[k]);
+    });
+    ui.notches.forEach(function (n, i) { n.classList.toggle('on', i <= state.ver); });
+    ui.thumb.style.left = ui.pct(state.ver);
+    var c = commit(d.versions[state.ver].c);
+    ui.track.setAttribute('aria-valuenow', String(state.ver));
+    ui.track.setAttribute('aria-valuetext', when(c) + ', ' + who(c) + ' : ' + c.subject);
+    ui.label.replaceChildren(
+      el('b', null, (past() ? t('version_of', { i: state.ver + 1, n: d.versions.length }) : t('now')) + ' · ' + when(c)),
+      add(el('span', tone(c)), who(c) + ' — ' + c.subject));
+    ui.play.replaceChildren(icon(state.playing ? 'pause' : 'play'));
+    ui.play.setAttribute('aria-label', t(state.playing ? 'stop' : 'replay'));
+  }
+
+  function positions() {
+    var xs = [], x = 0, versions = state.d.versions;
+    versions.forEach(function (v, i) {
+      if (i && commit(v.c).t - commit(versions[i - 1].c).t > 2 * DAY / 1000) x += 2.2;
+      xs.push(x);
+      x += 1;
+    });
+    return xs;
+  }
+
+  function wheel() {
+    var d = state.d, xs = positions(), span = xs[xs.length - 1] || 1;
+    var pct = ui.pct = function (i) { return (xs[i] / span) * 100 + '%'; };
+    var track = ui.track = el('div', 'track');
+    track.setAttribute('role', 'slider');
+    track.setAttribute('tabindex', '0');
+    track.setAttribute('aria-label', t('wheel'));
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', String(head()));
+    ui.notches = d.versions.map(function (v, i) {
+      var c = commit(v.c);
+      var notch = el('i', 'notch ' + tone(c));
+      notch.style.left = pct(i);
+      notch.style.height = Math.round(4 + 2.6 * Math.log2(1 + (c.plus || 0) + (c.minus || 0))) + 'px';
+      track.appendChild(notch);
+      if (i && c.t - commit(d.versions[i - 1].c).t > 2 * DAY / 1000) {
+        var gap = el('span', 'gap', t('days', { n: Math.round((c.t - commit(d.versions[i - 1].c).t) * 1000 / DAY) }));
+        gap.style.left = 'calc((' + pct(i - 1) + ' + ' + pct(i) + ') / 2)';
+        track.appendChild(gap);
+      }
+      return notch;
+    });
+    var lookAt = lookVersion();
+    if (lookAt != null) {
+      var mark = el('i', 'look');
+      mark.style.left = pct(lookAt);
+      mark.title = t('look_mark');
+      track.appendChild(mark);
+    }
+    track.appendChild(ui.thumb = el('i', 'thumb'));
+
+    function nearest(clientX) {
+      var r = track.getBoundingClientRect(), x = (clientX - r.left) / r.width * span, best = 0;
+      xs.forEach(function (v, i) { if (Math.abs(v - x) < Math.abs(xs[best] - x)) best = i; });
+      return best;
+    }
+    track.addEventListener('pointerdown', function (e) {
+      stop();
+      track.setPointerCapture(e.pointerId);
+      go(nearest(e.clientX));
+      var move = function (ev) { go(nearest(ev.clientX)); };
+      track.addEventListener('pointermove', move);
+      track.addEventListener('pointerup', function () { track.removeEventListener('pointermove', move); }, { once: true });
+    });
+    track.addEventListener('keydown', function (e) {
+      var step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
+      if (step) { e.preventDefault(); stop(); go(Math.min(head(), Math.max(0, state.ver + step))); }
+      if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); stop(); go(e.key === 'Home' ? 0 : head()); }
+    });
+    ui.play = el('button', 'play');
+    ui.play.addEventListener('click', replay);
+    ui.label = el('div', 'wheel-label');
+    return add(el('div', 'wheel'), ui.play, track, ui.label);
+  }
+
+  function lookVersion() {
+    var d = state.d, look = d.look;
+    if (look.at == null) return null;
+    var at = null;
+    d.versions.forEach(function (v, i) { if (commit(v.c).t <= look.at) at = i; });
+    return at;
+  }
+
+  function go(v) {
+    if (v === state.ver) return;
+    state.ver = v;
+    state.open = null;
+    paint();
+  }
+  function stop() {
+    if (!state.playing) return;
+    clearInterval(state.playing);
+    state.playing = null;
+    paint();
+  }
+  function replay() {
+    if (state.playing) return stop();
+    var v = past() ? state.ver : 0;
+    state.ver = v;
+    state.playing = setInterval(function () {
+      v += 1;
+      if (v >= head()) { clearInterval(state.playing); state.playing = null; }
+      state.ver = Math.min(v, head());
+      paint();
+    }, 420);
+    paint();
+  }
+
+  // ── what changed while you were away, or which version is shown ──────
+  function changedRows() {
+    if (state.validated) return [];
+    return state.d.passages.map(function (p, i) { return p.since ? i : -1; }).filter(function (i) { return i >= 0; });
+  }
+
+  function banner() {
+    var d = state.d, look = d.look;
+    if (past()) {
+      var c = commit(d.versions[state.ver].c);
+      var back = add(el('button', 'primary'), t('back_now'));
+      back.addEventListener('click', function () { go(head()); });
+      var why = add(el('button', 'ghost'), icon('chat'), t('ask_version'));
+      why.addEventListener('click', function () {
+        sent(why, ask(t('ask_version_message', { path: d.path, date: when(c), who: who(c), subject: c.subject })));
+      });
+      return add(el('section', 'banner past'),
+        add(el('div', 'head'), icon('history'), el('strong', null, t('past_title', { date: when(c) })), el('span', 'note', who(c))),
+        el('p', null, t('past_body')), add(el('div', 'row'), back, why));
+    }
+    if (state.validated) {
+      return add(el('section', 'banner done'), add(el('div', 'head'), icon('check'), el('strong', null, t('validated_title'))),
+                 el('p', null, t('validated_body')));
+    }
+    if (look.at == null) return add(el('section', 'banner'), el('p', null, t('never')));
+    if (!state.layers.since) return el('div');
+    var since = look.how === 'confirm' ? t('since_confirm', { date: date(look.at * 1000) })
+                                       : t('since_edit', { date: date(look.at * 1000) + ', ' + time(look.at * 1000) });
+    var rows = changedRows(), removed = 0;
+    d.ghosts.forEach(function (g) { if (g.since) removed += g.s.length; });
+    var box = add(el('section', 'banner'), add(el('div', 'head'), icon('clock'), el('strong', null, t('since_title')), el('span', 'note', since)));
+    if (!rows.length && !removed) return add(box, el('p', null, t('nothing_since')));
+    var after = d.versions.map(function (v) { return v.c; }).filter(function (i) {
+      var c = commit(i);
+      return c.t > look.at && !c.you;
+    });
+    var names = [];
+    after.forEach(function (i) { var n = who(commit(i)); if (names.indexOf(n) < 0) names.push(n); });
+    add(box, el('p', null, t('since_body', { who: names.join(', ') || t('others'), commits: count('n_commits', after.length),
+                                             changed: count('n_changed', rows.length), removed: count('n_removed', removed) })));
+    var biggest = after.slice().sort(function (a, b) {
+      return (commit(b).plus + commit(b).minus) - (commit(a).plus + commit(a).minus);
+    }).slice(0, 3).sort(function (a, b) { return a - b; });
+    var list = el('ul');
+    biggest.forEach(function (i) {
+      var c = commit(i);
+      add(list, add(el('li', tone(c)), el('i', 'dot'), el('time', null, date(c.t * 1000) + ' ' + time(c.t * 1000)), el('span', null, c.subject)));
+    });
+    if (after.length > biggest.length) add(list, add(el('li'), el('span', 'note', count('more_commits', after.length - biggest.length))));
+    var summary = add(el('button', 'primary'), t('summary'));
+    summary.addEventListener('click', function () {
+      sent(summary, ask(t('summary_message', { path: d.path, since: since })));
+    });
+    var next = add(el('button', 'ghost'), t('next'), el('span', 'n', (state.cursor + 1) + '/' + rows.length));
+    next.addEventListener('click', function () {
+      state.cursor = (state.cursor + 1) % rows.length;
+      var node = document.querySelector('.u[data-i="' + rows[state.cursor] + '"]');
+      next.querySelector('.n').textContent = (state.cursor + 1) + '/' + rows.length;
+      if (!node) return;
+      node.classList.remove('focus'); void node.offsetWidth; node.classList.add('focus');
+      node.scrollIntoView({ block: 'center' });
+    });
+    var validate = add(el('button', 'ghost'), icon('check'), t('validate'));
+    validate.addEventListener('click', function () {
+      validate.disabled = true;
+      call('confirm_doc', { path: d.path, verdict: 'holds' }).then(kit.data).then(function () {
+        state.validated = true;
+        paint();
+        context(t('context_validated', { path: d.path }));
+      }).catch(function (e) { validate.disabled = false; validate.textContent = t('error', { message: e.message }); });
+    });
+    return add(box, list, add(el('div', 'row'), summary, next, validate));
+  }
+
+  function sent(button, promise) {
+    button.disabled = true;
+    promise.then(function (r) {
+      if (r && r.isError) throw new Error('?');
+      button.textContent = t('sent');
+    }).catch(function () { button.disabled = false; });
+  }
+
+  // ── the doc ──────────────────────────────────────────────────────────
+  function unit(raw, cls) {
+    return add(el('div', 'u k-' + kind(raw) + ' ' + cls), el('div', 'gutter'), body(raw));
+  }
+
+  function headUnits() {
+    var d = state.d, out = [], changed = {};
+    changedRows().forEach(function (i) { changed[i] = true; });
+    var first = Infinity, last = -Infinity;
+    d.commits.forEach(function (c) { first = Math.min(first, c.t); last = Math.max(last, c.t); });
+    var ghostsAt = {};
+    d.ghosts.forEach(function (g, k) {
+      if (state.layers.ghosts || (state.layers.since && g.since && !state.validated)) (ghostsAt[g.after] = ghostsAt[g.after] || []).push(k);
+    });
+    (ghostsAt[-1] || []).forEach(function (k) { out.push(ghost(k)); });
+    d.passages.forEach(function (p, i) {
+      var c = commit(p.c);
+      var run = i === 0 || d.passages[i - 1].c !== p.c;
+      var node = unit(d.strings[p.s], tone(c) + (changed[i] ? ' changed' : '') + (run ? ' run' : '')
+                      + (state.open === i ? ' open' : '') + (fresh(p.s) ? ' enter' : ''));
+      node.dataset.i = i;
+      node.style.setProperty('--age', c ? (.22 + .78 * (c.t - first) / ((last - first) || 1)).toFixed(2) : .22);
+      var lifeBtn = add(el('button', 'life-btn'), icon('history'));
+      lifeBtn.setAttribute('aria-label', t('life_title'));
+      lifeBtn.addEventListener('click', function () { openLife(i); });
+      add(node.firstChild, c ? el('span', 'when', date(c.t * 1000) + '\n' + who(c)) : null, lifeBtn);
+      out.push(node);
+      (ghostsAt[i] || []).forEach(function (k) { out.push(ghost(k)); });
+    });
+    state.shown = seen(d.passages.map(function (p) { return p.s; }));
+    return out;
+  }
+
+  function pastUnits() {
+    var d = state.d, v = d.versions[state.ver], c = commit(v.c);
+    var out = v.s.map(function (s, j) {
+      return unit(d.strings[s], 'fate-' + v.fate.charAt(j) + ' ' + tone(c) + (fresh(s) ? ' enter' : ''));
+    });
+    state.shown = seen(v.s);
+    return out;
+  }
+
+  function fresh(s) { return Object.keys(state.shown).length && !state.shown[s]; }
+  function seen(ids) { var map = {}; ids.forEach(function (s) { map[s] = true; }); return map; }
+
+  function ghost(k) {
+    var d = state.d, g = d.ghosts[k], c = commit(g.c), n = g.s.length;
+    var label = g.rewrite ? count('rewrite', n) : count('ghost', n);
+    var box = el('div', 'gone ' + tone(c));
+    var toggle = add(el('button'), icon('ghost'), el('span', null, label), el('span', 'n', date(c.t * 1000) + ' · ' + who(c)), icon('chev'));
+    toggle.setAttribute('aria-expanded', 'false');
+    var text = el('div', 'ghost-text');
+    var inner = add(el('div', 'ghost-body'), text);
+    inner.hidden = true;
+    toggle.addEventListener('click', function () {
+      if (!text.childNodes.length) g.s.forEach(function (s) { text.appendChild(body(d.strings[s])); });
+      inner.hidden = !inner.hidden;
+      toggle.setAttribute('aria-expanded', String(!inner.hidden));
+      box.toggleAttribute('open', !inner.hidden);
+    });
+    var removedText = g.s.map(function (s) { return d.strings[s]; }).join('\n\n');
+    var restore = add(el('button', 'ghost'), icon('undo'), t('restore'));
+    restore.addEventListener('click', function () {
+      sent(restore, ask(t('restore_message', { path: d.path, date: when(c), who: who(c) }), removedText));
+    });
+    var why = add(el('button', 'ghost'), icon('chat'), t('why_removed'));
+    why.addEventListener('click', function () {
+      sent(why, ask(t('why_removed_message', { path: d.path, date: when(c), who: who(c), subject: c.subject }), plain(d.strings[g.s[0]])));
+    });
+    add(inner, add(el('div', 'row'), restore, why));
+    return add(box, toggle, inner);
+  }
+
+  // ── a passage's life ─────────────────────────────────────────────────
+  function openLife(i) {
+    state.open = i;
+    document.querySelectorAll('.u.open').forEach(function (u) { u.classList.remove('open'); });
+    var node = document.querySelector('.u[data-i="' + i + '"]');
+    if (node) node.classList.add('open');
+    var sheetNode = document.querySelector('.sheet');
+    sheetNode.replaceWith(sheet());
+    var raw = state.d.strings[state.d.passages[i].s];
+    context(t('context_passage', { path: state.d.path, quote: clip(plain(raw), 120) }));
+  }
+
+  function sheet() {
+    var d = state.d, box = el('aside', 'sheet');
+    if (state.open == null || past()) { box.hidden = true; return box; }
+    var p = d.passages[state.open], raw = d.strings[p.s], last = commit(p.c);
+    var close = add(el('button', 'icon-btn'), icon('x'));
+    close.setAttribute('aria-label', t('close'));
+    close.addEventListener('click', function () {
+      state.open = null;
+      document.querySelectorAll('.u.open').forEach(function (u) { u.classList.remove('open'); });
+      box.hidden = true;
+      reading();
+    });
+    add(box, add(el('div', 'sheet-head'), icon('history'), el('strong', null, t('life_title')), close),
+        el('p', 'quote', clip(plain(raw), 220)));
+    if (last && last.ai) add(box, add(el('p', 'ai-note ' + tone(last)), icon('spark'), t('ai_note', { who: who(last) })));
+    var life = el('ol', 'life');
+    p.life.forEach(function (ev) {
+      var c = commit(ev.c);
+      var what = ev.born ? (c ? t('born') : t('born_before')) : ev.from != null ? t('replaced') : t('reworded');
+      var top = add(el('div', 'ev-top'), el('b', null, what), c ? ' · ' + when(c) + ' · ' + who(c) : '');
+      var item = add(el('li', 'ev ' + tone(c)), el('i', 'dot'), add(el('div'), top, c ? el('small', null, c.subject) : null));
+      if (ev.diff) {
+        var diff = el('p', 'diff');
+        ev.diff.forEach(function (run) {
+          var text = plain(run[1]);
+          add(diff, run[0] === '=' ? text : el(run[0] === '-' ? 'del' : 'ins', null, text), ' ');
+        });
+        item.lastChild.appendChild(diff);
+      }
+      life.appendChild(item);
+    });
+    var changedEver = p.life.length > 1;
+    var why = add(el('button', 'primary'), icon('chat'), t(changedEver ? 'why_changed' : 'where_from'));
+    why.addEventListener('click', function () {
+      sent(why, ask(t(changedEver ? 'why_changed_message' : 'where_from_message', { path: d.path }), plain(raw)));
+    });
+    var shift = add(el('button', 'ghost'), t('shift'));
+    shift.addEventListener('click', function () { sent(shift, ask(t('shift_message', { path: d.path }), plain(raw))); });
+    return add(box, life, add(el('div', 'row'), why, shift));
+  }
+
+  // ── a selection becomes a question ───────────────────────────────────
+  function askButton() {
+    var button = add(el('button', 'ask'), icon('chat'), t('ask'));
+    button.hidden = true;
+    button.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    button.addEventListener('click', function () {
+      ask(t('ask_message', { path: state.d.path }), button.dataset.q);
+      document.getSelection().removeAllRanges();
+      button.hidden = true;
+    });
+    return button;
+  }
+  document.addEventListener('selectionchange', function () {
+    var button = document.querySelector('.ask'), doc = document.querySelector('.doc');
+    if (!button || !doc) return;
+    var sel = document.getSelection(), text = sel && sel.toString().trim();
+    if (!text || !doc.contains(sel.anchorNode)) { button.hidden = true; return; }
+    var r = sel.getRangeAt(0).getBoundingClientRect();
+    button.style.left = Math.min(Math.max(r.left + r.width / 2, 90), window.innerWidth - 90) + 'px';
+    button.style.top = (r.top + window.scrollY - 8) + 'px';
+    button.dataset.q = text;
+    button.hidden = false;
+  });
+
+  // ── links ────────────────────────────────────────────────────────────
+  app.addEventListener('click', function (e) {
+    var wl = e.target.closest('a.wl[data-path]');
+    if (wl) {
+      e.preventDefault();
+      kit.loading(wl.dataset.path);
+      call('open_doc', { path: wl.dataset.path }).then(kit.data).then(show).catch(function (err) {
+        kit.status(t('error', { message: err.message }), 'error');
+      });
+      return;
+    }
+    var a = e.target.closest('.body a[href]');
+    if (a && /^https?:/.test(a.getAttribute('href'))) {
+      e.preventDefault();
+      atlasApp.request('ui/open-link', { url: a.getAttribute('href') }).catch(function () {});
+    }
+  });
+
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { ticking = false; if (state.open == null) reading(); });
+  }
+  window.addEventListener('scroll', onScroll);
+
+  // ── the host ─────────────────────────────────────────────────────────
+  function place(ctx) {
+    if (!ctx) return;
+    if (ctx.availableDisplayModes) state.modes = ctx.availableDisplayModes;
+    if (ctx.displayMode && ctx.displayMode !== state.mode) {
+      state.mode = ctx.displayMode;
+      if (state.d) render();
+    }
+  }
+  atlasApp.on('ui/notifications/host-context-changed', place);
+  atlasApp.on('ui/notifications/tool-input', function () { kit.loading(''); });
+  atlasApp.on('ui/notifications/tool-result', function (result) {
+    try { show(kit.data(result)); } catch (e) { kit.status(t('error', { message: e.message }), 'error'); }
+  });
+  atlasApp.on('ui/notifications/tool-cancelled', function () { kit.status(t('cancelled')); });
+  kit.loading('');
+  atlasApp.start('atlas-reader').then(function (r) { place(r && r.hostContext); })
+    .catch(function (e) { kit.status(t('error', { message: e.message }), 'error'); });
+})();
+</script>
+</body>
+</html>

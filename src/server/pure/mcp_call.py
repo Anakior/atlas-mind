@@ -1466,6 +1466,23 @@ def _tool_mind_weather(args, ctx):
                                        clamp_int(args.get("months"), 3, 1, 24), ctx))
 
 
+def _tool_open_doc(args, ctx):
+    from server.pure import reader  # lazy: the history walk and difflib
+    rel = (args.get("path") or "").strip()
+    target = _s._validate_doc_path(rel)
+    if target is None:
+        return text_result(f"Invalid path: {rel}", is_error=True)
+    if not target.exists() or not _visible(rel, ctx):
+        return _not_found(rel, ctx)
+    if not rel.lower().endswith(".md"):
+        return text_result(f"open_doc shows Markdown notes; read_doc reads {rel}.", is_error=True)
+    view = reader.open_doc(rel, _version(target.read_text(encoding="utf-8")), ctx)
+    # The model gets where the view is, the view the doc and its history: a doc from outside
+    # this mind keeps its title and headings fenced.
+    return {"content": [{"type": "text", "text": provenance.fence(reader.summary(view), rel)}],
+            "structuredContent": view}
+
+
 def _tool_then_and_now(args, ctx):
     from server.pure import shifts  # lazy: shifts reuses the search and the contradiction tokenizer
     try:
@@ -1656,6 +1673,7 @@ _TOOLS = {
     "search_docs": _tool_search_docs,
     "grep_docs": _tool_grep_docs,
     "read_doc": _tool_read_doc,
+    "open_doc": _tool_open_doc,
     "list_tree": _tool_list_tree,
     "create_doc": _tool_create_doc,
     "create_inbox_item": _tool_create_inbox_item,

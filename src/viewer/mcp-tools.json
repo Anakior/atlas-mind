@@ -323,6 +323,87 @@
     }
   },
   {
+    "name": "open_doc",
+    "description": "Show the user a note as a view beside the conversation (on claude.ai, the side panel): the doc rendered, with its history laid on it. What changed since the user last edited or confirmed it, and who changed it (a person, or which AI); the passages removed since that never came back, where they were; each passage's life back through its versions; a wheel through the versions. Call it when the user wants to see, open, show or display a doc, or see what happened to it. To read a doc yourself, use read_doc: this returns where the view stands (title, versions, what changed since, the outline), not the text. Markdown notes only. Then reply in a line or two: the view shows the rest.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "e.g. notes/cdc.md (search_docs or list_tree find paths)."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "look": {
+          "type": "object"
+        },
+        "commits": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "strings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "passages": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "ghosts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "images": {
+          "type": "object"
+        },
+        "links": {
+          "type": "object"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://atlas/reader"
+      }
+    }
+  },
+  {
     "name": "list_tree",
     "description": "List the tree of the knowledge base (metadata only, no content), to see how it is organized before navigating, or only the files carrying a `tag`. On a big mind, deep folders come `folded` into their count of `files`: pass one's `path` as path_prefix to list it. Your inbox items waiting for triage are under inbox/ (left out with `tag`). `untrusted` marks a file from outside this mind. Use get_mind_topology for the shape of the links and the tags in use, search_docs with `tag` to rank a tag's docs by words, changes_since for what changed lately.",
     "inputSchema": {

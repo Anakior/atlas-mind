@@ -25,5 +25,14 @@ def render_app(name: str) -> str:
             bridge=(apps / "bridge.js").read_text(encoding="utf-8"),
             kit=(apps / "kit.js").read_text(encoding="utf-8"),
             kit_css=(apps / "kit.css").read_text(encoding="utf-8"),
+            # The reader renders Markdown like the viewer does: marked, then DOMPurify.
+            marked=_vendor("marked.min.js") if name == "reader" else "",
+            purify=_vendor("purify.min.js") if name == "reader" else "",
             i18n=json.dumps(labels, ensure_ascii=False).replace("</", "<\\/"))
     return _APPS_CACHE[(name, lang)]
+
+
+def _vendor(name: str) -> str:
+    # A bundler's /* @__PURE__ */ hint reads like a marker left unfilled: it goes.
+    return ((_s.CONFIG.web_dir / "vendor" / name).read_text(encoding="utf-8")
+            .replace("/* @__PURE__ */", ""))
