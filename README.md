@@ -25,7 +25,7 @@ It is not a multi-tenant SaaS or a real-time collaborative editor: one focused m
 
 ## Get started
 
-**Without a terminal**, on [alwaysdata](https://www.alwaysdata.com/)'s free plan (no card, hosted in France): [seven steps, a few forms](https://atlas-mind.anakior.app/start/). From then on, Atlas updates from **Settings › About**.
+**Without a terminal**, on [alwaysdata](https://www.alwaysdata.com/)'s free plan (no card, hosted in France): [six steps, a few forms](https://atlas-mind.anakior.app/start/). From then on, Atlas updates from **Settings › About**.
 
 **On your computer**:
 

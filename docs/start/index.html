@@ -47,18 +47,6 @@
   .journey .btn{margin-top:14px;padding:10px 18px;font-size:14.5px}
   .journey .note{font-size:13.5px;color:var(--muted-2)}
   .journey code{white-space:nowrap}
-  .fields{margin-top:14px;display:grid;gap:8px}
-  .fields div{display:grid;grid-template-columns:minmax(0,13rem) minmax(0,1fr);gap:4px 14px;align-items:center}
-  .fields dt{font-size:13.5px;color:var(--muted-2)}
-  .fields dd{display:flex;align-items:center;gap:8px;min-width:0}
-  .fields dd code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-  .fields .muted{font-size:14px;color:var(--muted)}
-  .copy{flex-shrink:0;margin-left:auto;padding:4px 10px;border:1px solid var(--line-2);border-radius:8px;background:rgba(255,255,255,.03);
-    color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
-  .copy:hover{border-color:rgba(255,255,255,.3)}
-  .copy.copied{border-color:rgba(251,198,120,.5);color:var(--gold)}
-  .copy.copied::before{content:"✓ "}
-  @media(max-width:560px){.fields div{grid-template-columns:minmax(0,1fr)}}
   @media(max-width:560px){.journey li{padding:68px 20px 20px}.journey li::before{left:20px;top:20px}}
 
   .dev .codeblock{max-width:none}
@@ -120,7 +108,7 @@
 
 <section id="alwaysdata" class="center"><div class="wrap">
   <div class="kicker"><span lang="en">For everyone</span><span lang="fr">Pour tout le monde</span></div>
-  <h2><span lang="en">Seven steps, no terminal.</span><span lang="fr">Sept étapes, sans terminal.</span></h2>
+  <h2><span lang="en">Six steps, no terminal.</span><span lang="fr">Six étapes, sans terminal.</span></h2>
   <ol class="journey">
     <li>
       <h3><span lang="en">Create a free alwaysdata account</span><span lang="fr">Crée un compte alwaysdata gratuit</span></h3>
@@ -132,25 +120,12 @@
       <p class="note" lang="fr">L’offre gratuite est pour un usage personnel : 1 Go, sans carte. Connecte-toi à alwaysdata au moins tous les 120 jours la première année (puis tous les six mois), sinon le compte est suspendu.</p>
     </li>
     <li>
-      <h3><span lang="en">Add Atlas to your alwaysdata</span><span lang="fr">Ajoute Atlas à ton alwaysdata</span></h3>
-      <p lang="en">Atlas isn’t in alwaysdata’s catalogue: you add it yourself, once: in alwaysdata, <b>Web › Sites › Install an application › My application scripts › Add an application script</b>, then fill in the form with these values.</p>
-      <p lang="fr">Atlas n’est pas dans le catalogue d’alwaysdata : tu l’y ajoutes toi-même, une seule fois : dans alwaysdata, <b>Web › Sites › Installer une application › Mes scripts d’application › Ajouter un script d’application</b>, puis remplis le formulaire avec ces valeurs.</p>
-      <dl class="fields">
-        <div><dt><span lang="en">Application name</span><span lang="fr">Nom de l’application</span></dt><dd><code>Atlas Mind</code><button type="button" class="copy" data-copy="Atlas Mind"><span lang="en">Copy</span><span lang="fr">Copier</span></button></dd></div>
-        <div><dt><span lang="en">Application URL</span><span lang="fr">URL de l’application</span></dt><dd><code>https://atlas-mind.anakior.app/</code><button type="button" class="copy" data-copy="https://atlas-mind.anakior.app/"><span lang="en">Copy</span><span lang="fr">Copier</span></button></dd></div>
-        <div><dt><span lang="en">Author name</span><span lang="fr">Nom de l’auteur</span></dt><dd><code>Anakior</code><button type="button" class="copy" data-copy="Anakior"><span lang="en">Copy</span><span lang="fr">Copier</span></button></dd></div>
-        <div><dt><span lang="en">Author’s contact URI</span><span lang="fr">URI de contact de l’auteur</span></dt><dd><code>https://github.com/Anakior/atlas-mind/issues</code><button type="button" class="copy" data-copy="https://github.com/Anakior/atlas-mind/issues"><span lang="en">Copy</span><span lang="fr">Copier</span></button></dd></div>
-        <div><dt><span lang="en">Installation script</span><span lang="fr">Script d’installation</span></dt><dd><span class="muted"><span lang="en">the whole script</span><span lang="fr">le script entier</span></span><button type="button" class="copy" data-copy-from="https://raw.githubusercontent.com/Anakior/atlas-mind/main/deploy/alwaysdata/atlas.sh"><span lang="en">Copy</span><span lang="fr">Copier</span></button></dd></div>
-      </dl>
-      <p lang="en">Leave the other fields empty and <b>Public application</b> unticked, then <b>Submit</b>. Atlas then updates from Atlas itself, in <b>Settings › About</b>.</p>
-      <p lang="fr">Laisse les autres champs vides et <b>Application publique</b> décochée, puis <b>Valider</b>. Atlas se met ensuite à jour depuis Atlas même, dans <b>Paramètres › À propos</b>.</p>
-      <a class="btn btn-primary" href="https://admin.alwaysdata.com/site/application/script/add/" target="_blank" rel="noopener"><span lang="en">Open the form ↗</span><span lang="fr">Ouvrir le formulaire ↗</span></a>
-    </li>
-    <li>
       <h3><span lang="en">Install Atlas</span><span lang="fr">Installe Atlas</span></h3>
-      <p lang="en">In <b>Web › Sites › Install an application</b>, Atlas Mind now heads the list: click it. alwaysdata opens a form: your language, your email, and a password of 8 characters or more. For the address, keep <code>your-name.alwaysdata.net</code>.</p>
-      <p lang="fr">Dans <b>Web › Sites › Installer une application</b>, Atlas Mind est maintenant en tête de liste : clique dessus. alwaysdata ouvre un formulaire : ta langue, ton email, et un mot de passe de 8 caractères ou plus. Pour l’adresse, garde <code>ton-nom.alwaysdata.net</code>.</p>
-      <a class="btn btn-primary" href="https://admin.alwaysdata.com/site/application/" target="_blank" rel="noopener"><span lang="en">Open the applications ↗</span><span lang="fr">Ouvrir les applications ↗</span></a>
+      <p lang="en">Atlas Mind is in alwaysdata’s catalogue, and the button opens its install form: your language, your email, and a password of 8 characters or more. For the address, keep <code>your-name.alwaysdata.net</code>.</p>
+      <p lang="fr">Atlas Mind est dans le catalogue d’alwaysdata, et le bouton ouvre son formulaire d’installation : ta langue, ton email, et un mot de passe de 8 caractères ou plus. Pour l’adresse, garde <code>ton-nom.alwaysdata.net</code>.</p>
+      <a class="btn btn-primary" href="https://admin.alwaysdata.com/site/add/?application=583" target="_blank" rel="noopener"><span lang="en">Install Atlas ↗</span><span lang="fr">Installer Atlas ↗</span></a>
+      <p class="note" lang="en">Atlas then updates from Atlas itself, in <b>Settings › About</b>.</p>
+      <p class="note" lang="fr">Atlas se met ensuite à jour depuis Atlas même, dans <b>Paramètres › À propos</b>.</p>
     </li>
     <li>
       <h3><span lang="en">Open it</span><span lang="fr">Ouvre-le</span></h3>
@@ -257,25 +232,5 @@
 </div></footer>
 
 <script src="/assets/site.js"></script>
-<script>
-  // The script is copied from GitHub as it is now; where the clipboard refuses, it opens to copy by hand.
-  document.querySelectorAll('.copy').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var from = b.dataset.copyFrom;
-      var done = from
-        ? navigator.clipboard.write([new ClipboardItem({ 'text/plain': fetch(from).then(function (r) {
-            if (!r.ok) throw new Error(r.status);
-            return r.blob();
-          }) })])
-        : navigator.clipboard.writeText(b.dataset.copy);
-      done.then(function () {
-        b.classList.add('copied');
-        setTimeout(function () { b.classList.remove('copied'); }, 1600);
-      }, function () {
-        if (from) window.open(from, '_blank', 'noopener');
-      });
-    });
-  });
-</script>
 </body>
 </html>

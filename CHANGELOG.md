@@ -8,6 +8,10 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+### Added
+- **Atlas Mind is in alwaysdata's catalogue**: no script to add by hand any more, the start
+  page's button opens the install form (six steps instead of seven).
+
 ### Changed
 - **A shorter alwaysdata install form**: language, email and password only. The name before
   “Atlas” and the line under the logo are set afterwards in Settings › Appearance.
