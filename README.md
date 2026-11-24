@@ -1,6 +1,6 @@
 # Atlas Mind
 
-[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://atlas-mind.anakior.app/demo/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg)
+[![Live demo](https://img.shields.io/badge/live-demo-635bff.svg)](https://atlas-mind.anakior.app/demo/) [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg) ![Dependencies: standard library](https://img.shields.io/badge/deps-standard%20library-green.svg) ![Database: none](https://img.shields.io/badge/database-none-green.svg) [![Anakior/atlas-mind MCP server](https://glama.ai/mcp/servers/Anakior/atlas-mind/badges/score.svg)](https://glama.ai/mcp/servers/Anakior/atlas-mind)
 
 <!-- mcp-name: app.anakior/atlas-mind -->
 
