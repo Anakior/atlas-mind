@@ -25,22 +25,10 @@
 #     password:
 #         type: password
 #         label:
-#             en: Your password (8 characters or more)
-#             fr: Ton mot de passe (8 caractères ou plus)
+#             en: Your password
+#             fr: Ton mot de passe
 #         min_length: 8
 #         max_length: 128
-#     prefix:
-#         label:
-#             en: Name shown before "Atlas" (optional, your first name for instance)
-#             fr: Nom affiché avant « Atlas » (facultatif, ton prénom par exemple)
-#         required: false
-#         max_length: 40
-#     tagline:
-#         label:
-#             en: Line under the logo (optional)
-#             fr: Phrase sous le logo (facultatif)
-#         required: false
-#         max_length: 160
 
 # Atlas Mind from the alwaysdata marketplace: the engine in a virtualenv, a new mind on
 # the account's disk (no GitHub needed, one can be connected later), its first admin
@@ -54,12 +42,12 @@ python3 -m venv "$INSTALL_PATH/venv"
 "$INSTALL_PATH/venv/bin/pip" install --quiet --no-cache-dir --upgrade pip
 "$INSTALL_PATH/venv/bin/pip" install --quiet --no-cache-dir "$ATLAS_PIP_SPEC"
 
-"$INSTALL_PATH/venv/bin/atlas" init "$INSTALL_PATH/mind" --lang "$FORM_LANGUAGE" \
-    --prefix "${FORM_PREFIX:-}" --tagline "${FORM_TAGLINE:-}" --yes
+"$INSTALL_PATH/venv/bin/atlas" init "$INSTALL_PATH/mind" --lang "$FORM_LANGUAGE" --yes
 # Through stdin: a password in argv would show in the process list.
 printf '%s\n' "$FORM_PASSWORD" | "$INSTALL_PATH/venv/bin/atlas" user add "$INSTALL_PATH/mind" \
     --email "$FORM_EMAIL" --role admin --password -
 
+# Owner-only from creation: whoever reads this secret can forge a signed-in session.
 umask 077
 "$INSTALL_PATH/venv/bin/python" -c "import secrets; print(secrets.token_hex(32))" \
     > "$INSTALL_PATH/.session-secret"

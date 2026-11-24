@@ -8,6 +8,10 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+### Changed
+- **A shorter alwaysdata install form**: language, email and password only. The name before
+  “Atlas” and the line under the logo are set afterwards in Settings › Appearance.
+
 ## [2.10.0] - 2026-11-18
 
 A note opens beside the conversation, with its history laid on it. One tool is new: refresh
