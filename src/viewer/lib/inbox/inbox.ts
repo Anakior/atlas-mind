@@ -13,11 +13,14 @@
 
 import { escapeHtml } from '../core/utils';
 import { t } from '../core/i18n';
+import { docPath, docUrl } from '../core/data-csrf';
 import { raw, h, createApp } from '../runtime/atlas-dom';
-import { folderTagsOf } from '../content/tags';
+import { folderTagsOf, stripFrontmatter } from '../content/tags';
+import { markdown } from '../content/markdown';
 import { AtlasCombobox } from '../ui/combobox';
 import { toast } from '../ui/toast';
 import { getAllDirs } from '../modals/new-file-modal';
+import { sidePanels } from '../home/side-panels';
 
 export class Inbox {
   // ---- icons (Heroicons v2 outline, the viewer's set) ----
@@ -35,7 +38,10 @@ export class Inbox {
   private static readonly ITRASH = 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.1 48.1 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.1 48.1 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.96 51.96 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.67 48.67 0 0 0-7.5 0';
   private static readonly ISNOOZE = 'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5';
   private static readonly IPENCIL = 'm16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.931-8.931Zm0 0L19.5 7.125';
+  private static readonly IDOWN = 'm19.5 8.25-7.5 7.5-7.5-7.5';
+  private static readonly IUP = 'm4.5 15.75 7.5-7.5 7.5 7.5';
   private static readonly SKEY: Record<string, keyof SessionStats> = { keep: 'kept', trash: 'trashed', snooze: 'snoozed' };
+  private static readonly FOLD = 220; // px of the item shown before "read it all"
 
   // ---- state ----
   private inbox: InboxItemEdited[] | null = null; // the queue | []
@@ -50,6 +56,9 @@ export class Inbox {
   private box: Element | null = null; // the #activity-inbox container, owned after mount
   private app: { render(): void; unmount(): void } | null = null;
   private keyHandler: ((ev: KeyboardEvent) => void) | null = null;
+  private docs = new Map<string, string | null>(); // path -> the item rendered; null while it loads or if it can't
+  private reading = false; // the whole item shows, and keeps showing from one item to the next
+  private long = false; // the focused item runs past the fold
 
   // inline-editor state — replaces the old DOM-sniffing editing() guard
   private editingDest = false;
@@ -72,7 +81,26 @@ export class Inbox {
   }
 
   private draw(): void {
-    if (this.app) this.app.render();
+    if (!this.app) return;
+    this.app.render();
+
+    // Whether the item runs past the fold is only known once it is laid out.
+    const doc = this.box && this.box.querySelector('.ibx-doc');
+    const long = !!doc && doc.scrollHeight > Inbox.FOLD + 1;
+
+    if (long !== this.long) {
+      this.long = long;
+      this.app.render();
+    }
+  }
+
+  // The home's card sits in a row of cards: too narrow to read a whole item in.
+  private inHome(): boolean {
+    return !!this.box && this.box.id === 'activity-inbox';
+  }
+
+  private readingHere(): boolean {
+    return this.reading && !this.inHome();
   }
 
   // ---- small helpers ----
@@ -276,21 +304,38 @@ export class Inbox {
     return [h('span', { class: 'ibx-lbl' }, t('inboxFileUnder')), chip];
   }
 
+  // The item as it reads (headings, lists, links), folded to its first lines until asked. The flat
+  // preview of the list stands in while the file loads, or when it can't.
+  private docView(it: InboxItemEdited, open: boolean): VNode | null {
+    const html = this.docs.get(it.path);
+
+    if (html == null && !it.preview) return null;
+
+    return h('div', { class: 'ibx-docwrap' },
+      h('div', { class: 'ibx-doc' + (open ? '' : ' folded') + (this.long ? ' long' : ''), style: open ? null : 'max-height:' + Inbox.FOLD + 'px', onClick: (e: MouseEvent) => this.openLink(e) },
+        html != null ? raw(html) : h('p', null, it.preview)),
+      this.long
+        ? h('button', { type: 'button', class: 'ibx-more', onClick: () => this.toggleRead() },
+            this.svg(open ? Inbox.IUP : Inbox.IDOWN), t(open ? 'inboxReadLess' : 'inboxReadAll') + ' ', h('span', { class: 'k' }, 'O'))
+        : null);
+  }
+
   private focusView(it: InboxItemEdited): VNode {
     const tr = this.tier(it.confidence);
     const sd = this.suggestDest(it);
     const nb = it.neighbors && it.neighbors[0];
+    const open = this.readingHere();
 
     return h(
       'div',
-      { key: 'focus:' + it.path, class: 'ibx-focus' + (this.leaving ? ' ibx-leaving' : ' ibx-entering'), id: 'ibx-focus' },
+      { key: 'focus:' + it.path, class: 'ibx-focus' + (this.leaving ? ' ibx-leaving' : ' ibx-entering') + (open && this.long ? ' ibx-reading' : ''), id: 'ibx-focus' },
       h('div', { class: 'ibx-frow' },
         this.typeBadge(it),
         h('span', { class: 'ibx-pill ' + tr, title: Math.round(it.confidence * 100) + '%' }, this.tierLabel(it.confidence)),
         h('span', { class: 'ibx-spacer' }),
         h('span', { class: 'ibx-ago' }, this.ago(it))),
       h('div', { class: 'ibx-title' }, it.title),
-      it.preview ? h('p', { class: 'ibx-body' }, it.preview) : null,
+      this.docView(it, open),
       nb
         ? h('div', { class: 'ibx-signal' },
             h('span', { class: 'sic' }, this.svg(Inbox.ILINK)),
@@ -445,6 +490,8 @@ export class Inbox {
     // focus pin, it never reorders the list.
     const active = q[this.activeIdx(q)];
 
+    this.loadDoc(active.path);
+
     return [this.subView(), this.focusView(active), this.nextView(q, active.path), this.toastView()];
   }
 
@@ -521,6 +568,20 @@ export class Inbox {
       .catch(() => {});
   }
 
+  // The owner reads an item's file like any doc's; the title above it is its first heading.
+  private loadDoc(path: string): void {
+    if (this.docs.has(path)) return;
+    this.docs.set(path, null);
+    fetch(docPath(path))
+      .then((r) => (r.ok ? r.text() : null))
+      .then((text) => {
+        if (text == null) return;
+        this.docs.set(path, '<div class="prose prose-invert prose-sm max-w-none">' + markdown.render(stripFrontmatter(text).replace(/^# .*$/m, ''), path) + '</div>');
+        this.draw();
+      })
+      .catch(() => {});
+  }
+
   private startPoll(): void {
     this.stopPoll();
     this.poll();
@@ -557,6 +618,7 @@ export class Inbox {
     if (kind === 'next') {
       this.activePath = q[(idx + 1) % q.length].path; // advance the focus pin, cycling — no reorder
       this.draw();
+      this.revealFocus();
 
       return;
     }
@@ -594,6 +656,7 @@ export class Inbox {
       this.leaving = false;
       this.updateBadge();
       this.draw();
+      this.revealFocus();
     }, 180);
     fetch('/api/inbox/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then((r) => {
@@ -626,6 +689,37 @@ export class Inbox {
     if (!this.inbox || !this.inbox.some((x) => x.path === path)) return;
     this.activePath = path; // pin the focus on the clicked row, leaving the list order untouched
     this.draw();
+    this.revealFocus();
+  }
+
+  // After a long read, the next item would start above the screen.
+  private revealFocus(): void {
+    const el = this.box && this.box.querySelector('#ibx-focus');
+
+    if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: 'start' });
+  }
+
+  private toggleRead(): void {
+    if (this.inHome()) {
+      this.reading = true;
+      sidePanels.open('inbox');
+
+      return;
+    }
+    this.reading = !this.reading;
+    this.draw();
+  }
+
+  // A link in an item opens beside the triage, never in its place.
+  private openLink(e: MouseEvent): void {
+    const a = (e.target as Element).closest('a');
+
+    if (!a) return;
+    e.preventDefault();
+
+    const href = a.classList.contains('wikilink') ? a.dataset.path && docUrl(a.dataset.path) : a.getAttribute('href');
+
+    if (href && href[0] !== '#') window.open(href, '_blank', 'noopener');
   }
 
   private toggleFilter(src: string): void {
@@ -696,15 +790,26 @@ export class Inbox {
     this.draw();
   }
 
-  // ---- document keyboard shortcuts (K/X/S/J) ----
+  // ---- document keyboard shortcuts (K/X/S/J/O) ----
   private onKey(ev: KeyboardEvent): void {
     const ae = document.activeElement as HTMLElement | null;
 
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return; // Ctrl+S, Ctrl+X, Ctrl+J… are the browser's and the viewer's
     if (!this.box || this.box.classList.contains('hidden') || !this.queue().length) return;
 
     const k = ev.key.toLowerCase();
-    const a = k === 'k' ? 'keep' : k === 'x' ? 'trash' : k === 's' ? 'snooze' : k === 'j' || ev.key === 'ArrowDown' ? 'next' : null;
+
+    if (k === 'o') {
+      ev.preventDefault();
+      if (this.long) this.toggleRead();
+
+      return;
+    }
+
+    // While reading, the down arrow scrolls the item.
+    const next = k === 'j' || (ev.key === 'ArrowDown' && !this.readingHere());
+    const a = k === 'k' ? 'keep' : k === 'x' ? 'trash' : k === 's' ? 'snooze' : next ? 'next' : null;
 
     if (!a) return;
     ev.preventDefault();

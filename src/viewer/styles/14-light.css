@@ -111,11 +111,13 @@
 :root[data-theme="light"] .ibx-lbl,
 :root[data-theme="light"] .ibx-next-h,
 :root[data-theme="light"] .ibx-qa,
-:root[data-theme="light"] .ibx-btn .k { color: rgb(var(--ink-500)); }
+:root[data-theme="light"] .ibx-btn .k,
+:root[data-theme="light"] .ibx-more .k { color: rgb(var(--ink-500)); }
 :root[data-theme="light"] .ibx-pill.hi { color: #0b7a53; background: rgba(15, 138, 95, .1); }
 :root[data-theme="light"] .ibx-pill.md { color: rgb(var(--ink-400)); background: rgb(var(--line) / .06); }
 :root[data-theme="light"] .ibx-pill.lo { color: rgb(var(--ink-500)); background: rgb(var(--line) / .06); }
-:root[data-theme="light"] .ibx-body { color: rgb(var(--ink-300)); }
+:root[data-theme="light"] .ibx-doc { color: rgb(var(--ink-300)); }
+:root[data-theme="light"] .ibx-doc .prose a { color: #0f6f9e; }
 :root[data-theme="light"] .ibx-type { color: hsl(var(--th, 210) 60% 30%); background: hsl(var(--th, 210) 55% 50% / .1); border-color: hsl(var(--th, 210) 50% 42% / .3); }
 :root[data-theme="light"] .ibx-signal { color: rgb(var(--ink-200)); background: rgb(var(--line) / .04); }
 :root[data-theme="light"] .ibx-destchip { color: #0f6f9e; background: rgb(var(--accent) / .08); border-color: rgb(var(--accent) / .28); }

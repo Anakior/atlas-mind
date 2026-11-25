@@ -1172,7 +1172,6 @@ iPhone):
 ibx-actions
 ibx-addtag
 ibx-ago
-ibx-body
 ibx-btn
 ibx-chip
 ibx-chips
@@ -1181,6 +1180,8 @@ ibx-dest
 ibx-destchip
 ibx-destedit
 ibx-digest
+ibx-doc
+ibx-docwrap
 ibx-dpill
 ibx-entering
 ibx-focus
@@ -1190,6 +1191,7 @@ ibx-lbl
 ibx-leaving
 ibx-mark
 ibx-mini
+ibx-more
 ibx-next
 ibx-next-h
 ibx-next-rows
@@ -1197,6 +1199,7 @@ ibx-pill
 ibx-qa
 ibx-qrow
 ibx-qt
+ibx-reading
 ibx-rmtag
 ibx-signal
 ibx-skel
@@ -1257,6 +1260,8 @@ inboxNoMatch
 inboxPickFolderFirst
 inboxPickOrType
 inboxQueue
+inboxReadAll
+inboxReadLess
 inboxSameSubject
 inboxSnooze
 inboxSnoozed
@@ -1400,6 +1405,7 @@ left
 left.
 len
 les
+less
 let
 lets
 letterSpacing
@@ -1480,6 +1486,8 @@ lui
 lui.
 m14.74
 m16.862
+m19.5
+m4.5
 ma
 made
 made.
@@ -1513,6 +1521,7 @@ matches
 matters.
 max))
 max-h-64
+max-height:
 max-w-4xl
 max-w-md
 max-w-none
@@ -1711,6 +1720,7 @@ non
 non-contradictory
 none
 none)
+noopener
 nor
 normal
 not

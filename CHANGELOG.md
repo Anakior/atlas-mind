@@ -11,6 +11,14 @@ highlights, not every commit — and versioning tracks the PyPI package.
 ### Added
 - **Atlas Mind is in alwaysdata's catalogue**: no script to add by hand any more, the start
   page's button opens the install form (six steps instead of seven).
+- **Read an Inbox item in full before sorting it.** The card shows the item as it reads
+  (headings, lists, links) instead of three flat lines. “Read it all” (or O) unfolds it in the
+  Inbox panel, with Keep / Trash / Snooze kept at hand at the bottom while you read, and it
+  stays unfolded from one item to the next. Its links open in a new tab.
+
+### Fixed
+- **Ctrl+S, Ctrl+X and Ctrl+J no longer snooze, trash or skip the Inbox's item**: its one-key
+  shortcuts now ignore a key pressed with Ctrl, Cmd or Alt.
 
 ### Changed
 - **A shorter alwaysdata install form**: language, email and password only. The name before
