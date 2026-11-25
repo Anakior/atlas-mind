@@ -8,6 +8,11 @@ highlights, not every commit — and versioning tracks the PyPI package.
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-11-25
+
+An Inbox item reads in full before it is sorted, and Atlas installs from alwaysdata's catalogue.
+No tool changes. An Atlas on 2.2.0 or later gets this one from Settings › About.
+
 ### Added
 - **Atlas Mind is in alwaysdata's catalogue**: no script to add by hand any more, the start
   page's button opens the install form (six steps instead of seven).
